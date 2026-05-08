@@ -17,6 +17,18 @@ final class SessionStore {
         return prefs(context).getString("base_url", configured).replaceAll("/+$", "");
     }
 
+    static void saveBaseUrl(Context context, String baseUrl) {
+        prefs(context).edit()
+                .putString("base_url", normalizeBaseUrl(baseUrl))
+                .apply();
+    }
+
+    static String normalizeBaseUrl(String baseUrl) {
+        String value = baseUrl == null ? "" : baseUrl.trim();
+        if (value.endsWith("/")) value = value.replaceAll("/+$", "");
+        return value;
+    }
+
     static String getCookie(Context context) {
         return prefs(context).getString("cookie", "");
     }
@@ -38,6 +50,13 @@ final class SessionStore {
     }
 
     static void clear(Context context) {
-        prefs(context).edit().clear().apply();
+        String baseUrl = getBaseUrl(context);
+        prefs(context).edit()
+                .remove("cookie")
+                .remove("fullname")
+                .remove("role")
+                .remove("last_absence_notification")
+                .putString("base_url", baseUrl)
+                .apply();
     }
 }

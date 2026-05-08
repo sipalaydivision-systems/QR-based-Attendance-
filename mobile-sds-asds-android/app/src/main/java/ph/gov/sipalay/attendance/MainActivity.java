@@ -3,6 +3,7 @@ package ph.gov.sipalay.attendance;
 import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Typeface;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.widget.ImageView;
@@ -15,6 +16,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         showSplash();
+        applyConfigurationIntent(getIntent());
         new Thread(() -> {
             boolean valid = SessionStore.isLoggedIn(this);
             if (valid) {
@@ -60,5 +62,15 @@ public class MainActivity extends Activity {
         ProgressBar bar = new ProgressBar(this);
         root.addView(bar, Ui.marginLp(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 26, 0, 0));
         setContentView(root);
+    }
+
+    private void applyConfigurationIntent(Intent intent) {
+        if (intent == null || intent.getData() == null) return;
+        Uri uri = intent.getData();
+        String baseUrl = uri.getQueryParameter("base_url");
+        if (baseUrl != null && (baseUrl.startsWith("https://") || baseUrl.startsWith("http://"))) {
+            SessionStore.clear(this);
+            SessionStore.saveBaseUrl(this, baseUrl);
+        }
     }
 }

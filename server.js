@@ -89,18 +89,22 @@ app.get('/dashboard', (req, res) => {
 
 app.get('/mobile-app', (req, res) => {
     const apkPath = path.join(__dirname, 'public', 'downloads', 'school-attendance-division.apk');
+    const appBaseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
     res.render('mobile_app', {
         title: 'Download Mobile App',
-        apkAvailable: fs.existsSync(apkPath)
+        apkAvailable: fs.existsSync(apkPath),
+        appBaseUrl
     });
 });
 
 app.get('/download/mobile-app', (req, res) => {
     const apkPath = path.join(__dirname, 'public', 'downloads', 'school-attendance-division.apk');
     if (!fs.existsSync(apkPath)) {
+        const appBaseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
         return res.status(404).render('mobile_app', {
             title: 'Download Mobile App',
             apkAvailable: false,
+            appBaseUrl,
             error: 'The APK file has not been uploaded yet.'
         });
     }

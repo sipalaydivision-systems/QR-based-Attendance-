@@ -26,9 +26,9 @@ final class ApiClient {
             os.write(body.getBytes("UTF-8"));
         }
         String response = read(conn);
-        JSONObject json = parseJson(response, "Login failed. Please check the server connection.");
+        JSONObject json = parseJson(response, friendlyServerError(response));
         if (conn.getResponseCode() >= 400 || !json.optBoolean("success")) {
-            throw new IllegalArgumentException(json.optString("message", "Login failed."));
+            throw new IllegalArgumentException(json.optString("message", "Login failed. Please check your account."));
         }
         String cookie = extractCookie(conn.getHeaderFields());
         if (cookie.isEmpty()) throw new IllegalStateException("Server did not return a session cookie.");
@@ -60,8 +60,8 @@ final class ApiClient {
         URL url = new URL(SessionStore.getBaseUrl(context) + path);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod(method);
-        conn.setConnectTimeout(15000);
-        conn.setReadTimeout(15000);
+        conn.setConnectTimeout(30000);
+        conn.setReadTimeout(30000);
         conn.setRequestProperty("Accept", "application/json");
         conn.setRequestProperty("X-Requested-With", "SchoolAttendanceAndroid");
         conn.setRequestProperty("User-Agent", "SchoolAttendanceDivisionAndroid/1.0");
@@ -106,5 +106,16 @@ final class ApiClient {
         } catch (Exception e) {
             throw new IllegalStateException(fallback);
         }
+    }
+
+    private static String friendlyServerError(String response) {
+        String raw = response == null ? "" : response.toLowerCase();
+        if (raw.contains("application not found") || raw.contains("railway")) {
+            return "Wrong server URL. Open the web system, go to /mobile-app, then tap Connect App.";
+        }
+        if (raw.trim().startsWith("<!doctype") || raw.trim().startsWith("<html")) {
+            return "The app reached a web page instead of the login API. Check the server URL.";
+        }
+        return "Cannot connect to the attendance server. Check internet or server URL.";
     }
 }

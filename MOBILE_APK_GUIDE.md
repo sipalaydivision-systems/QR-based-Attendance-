@@ -49,6 +49,8 @@ GitHub Actions builds the Android APK and publishes it to:
 
 After the GitHub workflow finishes and Railway redeploys, users can open `/mobile-app` and tap `Download APK`.
 
+After installing the APK, open `/mobile-app` again on the phone and tap `Connect App`. This sends the current web server URL into the native app so mobile login uses the same Railway web app, MySQL database, and user accounts.
+
 ## Server URL
 
 The APK currently points to the Railway URL:

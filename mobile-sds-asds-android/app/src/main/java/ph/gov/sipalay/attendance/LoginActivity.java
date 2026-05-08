@@ -24,6 +24,7 @@ import org.json.JSONObject;
 public class LoginActivity extends Activity {
     private EditText username;
     private EditText password;
+    private EditText serverUrl;
     private Button signIn;
     private ProgressBar progress;
     private TextView helper;
@@ -69,10 +70,14 @@ public class LoginActivity extends Activity {
 
         username = field("Username", false);
         password = field("Password", true);
+        serverUrl = field("Server URL", false);
+        serverUrl.setText(SessionStore.getBaseUrl(this));
         card.addView(label("Username"));
         card.addView(username, fieldParams());
         card.addView(label("Password"));
         card.addView(password, fieldParams());
+        card.addView(label("Server"));
+        card.addView(serverUrl, fieldParams());
 
         signIn = new Button(this);
         signIn.setText("Sign In");
@@ -115,10 +120,18 @@ public class LoginActivity extends Activity {
     private void login() {
         final String u = username.getText().toString().trim();
         final String p = password.getText().toString();
+        final String server = SessionStore.normalizeBaseUrl(serverUrl.getText().toString());
         if (u.isEmpty() || p.isEmpty()) {
             Toast.makeText(this, "Enter username and password.", Toast.LENGTH_SHORT).show();
             return;
         }
+        if (!server.startsWith("https://") && !server.startsWith("http://")) {
+            Toast.makeText(this, "Enter the web system URL.", Toast.LENGTH_SHORT).show();
+            helper.setText("Server URL must start with https://");
+            helper.setTextColor(Ui.RED);
+            return;
+        }
+        SessionStore.saveBaseUrl(this, server);
         setLoading(true);
         new Thread(() -> {
             try {
@@ -149,7 +162,7 @@ public class LoginActivity extends Activity {
         progress.setVisibility(loading ? View.VISIBLE : View.GONE);
         signIn.setEnabled(!loading);
         signIn.setText(loading ? "Signing in..." : "Sign In");
-        helper.setText(loading ? "Connecting securely to Railway..." : "Use your SDS, ASDS, or admin account.");
+        helper.setText(loading ? "Connecting to " + SessionStore.getBaseUrl(this) : "Use the same account and database as the web system.");
         helper.setTextColor(Ui.MUTED);
     }
 

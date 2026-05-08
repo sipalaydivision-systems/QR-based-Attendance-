@@ -81,6 +81,12 @@
             box-shadow: 0 12px 28px rgba(79, 70, 229, 0.3);
         }
         .download:hover { background: var(--primary-dark); }
+        .connect {
+            background: #16a34a;
+            box-shadow: 0 12px 28px rgba(22, 163, 74, 0.25);
+            margin-left: 10px;
+        }
+        .connect:hover { background: #15803d; }
         .download.disabled {
             background: #94a3b8;
             box-shadow: none;
@@ -164,6 +170,7 @@
             <h1>SDS / ASDS Mobile Dashboard</h1>
             <p class="lead">Install the native Android app for division dashboard monitoring and 2-day absence notifications on your phone.</p>
             <a class="download <%= apkAvailable ? '' : 'disabled' %>" href="/download/mobile-app" download>Download APK</a>
+            <a class="download connect" href="schoolattendance://configure?base_url=<%= encodeURIComponent(appBaseUrl || '') %>">Connect App</a>
             <div class="status">
                 <% if (typeof error !== 'undefined' && error) { %>
                     <%= error %>
@@ -173,11 +180,16 @@
                     APK source is ready. Build the APK and place it in public/downloads/school-attendance-division.apk.
                 <% } %>
             </div>
+            <p class="lead" style="font-size:14px;margin-top:14px;margin-bottom:0;">
+                After installing the APK, return to this page and tap Connect App so mobile login uses this exact web server and MySQL database.
+            </p>
             <div class="features">
                 <div class="feature">Native SDS / ASDS sign in</div>
                 <div class="feature">Dashboard totals from MySQL</div>
                 <div class="feature">2-day absence alerts</div>
                 <div class="feature">Android phone notifications</div>
+                <div class="feature">Server: <%= appBaseUrl %></div>
+                <div class="feature">Use the same web accounts</div>
             </div>
         </section>
         <aside class="phone">
