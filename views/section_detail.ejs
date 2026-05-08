@@ -1,8 +1,19 @@
 <%- include('partials/header') %>
+<%
+var schoolsBackUrl = '/admin/schools';
+var schoolsBackLabel = 'All Schools';
+if (user && user.role === 'superintendent') {
+    schoolsBackUrl = '/admin/sds-dashboard';
+    schoolsBackLabel = 'Back to Dashboard';
+} else if (user && user.role === 'asst_superintendent') {
+    schoolsBackUrl = '/admin/asds-dashboard';
+    schoolsBackLabel = 'Back to Dashboard';
+}
+%>
 
 <!-- Breadcrumb -->
 <nav class="breadcrumb-nav">
-    <a href="/admin/schools"><i class="fa fa-school"></i> All Schools</a>
+    <a href="<%= schoolsBackUrl %>"><i class="fa fa-school"></i> <%= schoolsBackLabel %></a>
     <span class="breadcrumb-sep"><i class="fa fa-chevron-right"></i></span>
     <a href="/admin/school/<%= schoolId %>" id="bcSchool"><i class="fa fa-school"></i> School</a>
     <span class="breadcrumb-sep"><i class="fa fa-chevron-right"></i></span>

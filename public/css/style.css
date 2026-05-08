@@ -1121,12 +1121,26 @@ a:hover { color: var(--primary-dark); }
    BACK BUTTON / VIEW TITLE
    ============================================================ */
 .back-btn {
-    display: inline-flex; align-items: center; gap: 8px;
-    color: var(--primary); font-weight: 600; font-size: 0.875rem;
-    margin-bottom: 16px; padding: 7px 14px; border-radius: var(--radius);
-    background: var(--primary-bg); transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #4338ca;
+    font-weight: 700;
+    font-size: 0.875rem;
+    margin-bottom: 16px;
+    padding: 9px 14px;
+    border-radius: 12px;
+    border: 1px solid #c7d2fe;
+    background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%);
+    box-shadow: 0 4px 10px rgba(79, 70, 229, 0.12);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
-.back-btn:hover { background: var(--primary); color: #fff; }
+.back-btn:hover {
+    background: linear-gradient(180deg, #4f46e5 0%, #4338ca 100%);
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 16px rgba(79, 70, 229, 0.25);
+}
 
 .view-title { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
 .view-title h1 { font-size: 1.5rem; font-weight: 700; color: var(--gray-900); margin: 0; }
