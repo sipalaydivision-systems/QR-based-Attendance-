@@ -23,7 +23,12 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         showSplash();
         applyConfigurationIntent(getIntent());
-        handler.postDelayed(this::checkServerAndOpen, 650);
+        handler.postDelayed(() -> {
+            if (!openingDashboard && !serverUnavailableShown && !SessionStore.hasConfiguredBaseUrl(this)) {
+                showServerUnavailable();
+            }
+        }, 1200);
+        handler.postDelayed(this::checkServerAndOpen, 250);
     }
 
     @Override
@@ -45,7 +50,7 @@ public class MainActivity extends Activity {
                     return;
                 }
                 if (!serverUnavailableShown) showServerUnavailable();
-                handler.postDelayed(this::checkServerAndOpen, 5000);
+                handler.postDelayed(this::checkServerAndOpen, 3500);
             });
         }).start();
     }
@@ -91,6 +96,7 @@ public class MainActivity extends Activity {
     }
 
     private void showServerUnavailable() {
+        serverUnavailableShown = true;
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER);

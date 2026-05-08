@@ -91,8 +91,8 @@ final class ApiClient {
             if (!configUrl.startsWith("https://") && !configUrl.startsWith("http://")) return candidates;
             HttpURLConnection conn = (HttpURLConnection) new URL(configUrl).openConnection();
             conn.setRequestMethod("GET");
-            conn.setConnectTimeout(10000);
-            conn.setReadTimeout(10000);
+            conn.setConnectTimeout(4500);
+            conn.setReadTimeout(4500);
             conn.setRequestProperty("Accept", "application/json");
             String response = read(conn);
             if (conn.getResponseCode() >= 400) return candidates;
@@ -126,8 +126,8 @@ final class ApiClient {
         try {
             HttpURLConnection conn = (HttpURLConnection) new URL(normalized + "/api/app-info").openConnection();
             conn.setRequestMethod("GET");
-            conn.setConnectTimeout(10000);
-            conn.setReadTimeout(10000);
+            conn.setConnectTimeout(4500);
+            conn.setReadTimeout(4500);
             conn.setRequestProperty("Accept", "application/json");
             String response = read(conn);
             if (conn.getResponseCode() >= 400) return false;
@@ -137,8 +137,8 @@ final class ApiClient {
             try {
                 HttpURLConnection conn = (HttpURLConnection) new URL(normalized + "/login").openConnection();
                 conn.setRequestMethod("GET");
-                conn.setConnectTimeout(10000);
-                conn.setReadTimeout(10000);
+                conn.setConnectTimeout(4500);
+                conn.setReadTimeout(4500);
                 conn.setRequestProperty("Accept", "text/html");
                 String response = read(conn);
                 String body = response == null ? "" : response.toLowerCase();
