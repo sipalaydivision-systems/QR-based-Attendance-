@@ -18,7 +18,14 @@ final class SessionStore {
     }
 
     static String getBundledBaseUrl(Context context) {
-        return context.getString(context.getResources().getIdentifier("base_url", "string", context.getPackageName())).replaceAll("/+$", "");
+        int id = context.getResources().getIdentifier("base_url", "string", context.getPackageName());
+        if (id == 0) return "";
+        return context.getString(id).replaceAll("/+$", "");
+    }
+
+    static boolean hasConfiguredBaseUrl(Context context) {
+        String baseUrl = getBaseUrl(context);
+        return baseUrl.startsWith("https://") || baseUrl.startsWith("http://");
     }
 
     static void saveBaseUrl(Context context, String baseUrl) {

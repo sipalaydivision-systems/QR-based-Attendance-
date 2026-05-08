@@ -19,6 +19,9 @@ final class ApiClient {
 
     static JSONObject login(Context context, String username, String password) throws Exception {
         refreshBaseUrl(context);
+        if (!SessionStore.hasConfiguredBaseUrl(context)) {
+            throw new IllegalStateException("Connect the app from the web download page first.");
+        }
         String body = "username=" + enc(username) + "&password=" + enc(password);
         HttpURLConnection conn = open(context, "/app-login", "POST");
         conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
@@ -61,11 +64,12 @@ final class ApiClient {
         try {
             String current = SessionStore.getBaseUrl(context);
             String bundled = SessionStore.getBundledBaseUrl(context);
-            if (!current.equals(bundled)) return;
+            if (SessionStore.hasConfiguredBaseUrl(context) && !current.equals(bundled)) return;
 
             int configId = context.getResources().getIdentifier("config_url", "string", context.getPackageName());
             if (configId == 0) return;
             String configUrl = context.getString(configId);
+            if (!configUrl.startsWith("https://") && !configUrl.startsWith("http://")) return;
             HttpURLConnection conn = (HttpURLConnection) new URL(configUrl).openConnection();
             conn.setRequestMethod("GET");
             conn.setConnectTimeout(10000);
@@ -82,6 +86,9 @@ final class ApiClient {
     }
 
     private static HttpURLConnection open(Context context, String path, String method) throws Exception {
+        if (!SessionStore.hasConfiguredBaseUrl(context)) {
+            throw new IllegalStateException("Connect the app from the web download page first.");
+        }
         URL url = new URL(SessionStore.getBaseUrl(context) + path);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod(method);

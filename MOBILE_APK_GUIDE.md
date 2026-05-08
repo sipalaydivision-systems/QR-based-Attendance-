@@ -51,15 +51,11 @@ After the GitHub workflow finishes and Railway redeploys, users can open `/mobil
 
 After installing the APK, open `/mobile-app` again on the phone and tap `Connect App`. This sends the current web server URL into the native app so mobile login uses the same Railway web app, MySQL database, and user accounts.
 
-## Server URL
+## Server Connection
 
-The APK currently points to the Railway URL:
+The APK no longer depends on a hardcoded Railway URL.
 
-`https://web-production-5f74a.up.railway.app`
-
-To change it, edit:
-
-`mobile-sds-asds-android/app/src/main/res/values/strings.xml`
+Open `/mobile-app` from the live web system and tap `Connect App`. The app will use that exact web server and MySQL database.
 
 ## Notification Notes
 

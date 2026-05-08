@@ -28,6 +28,4 @@ The server URL is stored in:
 
 `app/src/main/res/values/strings.xml`
 
-Current value:
-
-`https://web-production-5f74a.up.railway.app`
+The app is connected from the live `/mobile-app` page instead of using a hardcoded Railway URL.
