@@ -1,3 +1,4 @@
 {
-  "base_url": ""
+  "base_url": "",
+  "fallback_urls": []
 }

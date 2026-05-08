@@ -115,11 +115,11 @@ public class WebAppActivity extends Activity {
         logo.setAdjustViewBounds(true);
         card.addView(logo, Ui.lp(92, 92));
 
-        TextView title = Ui.text(this, "Railway URL Needed", 24, Ui.INK, android.graphics.Typeface.BOLD);
+        TextView title = Ui.text(this, "Attendance Server Unavailable", 24, Ui.INK, android.graphics.Typeface.BOLD);
         title.setGravity(android.view.Gravity.CENTER);
         card.addView(title, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 18, 0, 8));
 
-        TextView message = Ui.text(this, "The saved URL is not opening the QR attendance system. Reopen the app and enter the Railway URL shown in your browser.", 15, Ui.MUTED, android.graphics.Typeface.NORMAL);
+        TextView message = Ui.text(this, "The saved server is not opening the QR attendance system. Install the latest APK from the attendance system download page, then reopen the app.", 15, Ui.MUTED, android.graphics.Typeface.NORMAL);
         message.setGravity(android.view.Gravity.CENTER);
         card.addView(message, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 

@@ -11,8 +11,11 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 final class ApiClient {
     private ApiClient() {}
@@ -64,25 +67,58 @@ final class ApiClient {
         try {
             String current = SessionStore.getBaseUrl(context);
             String bundled = SessionStore.getBundledBaseUrl(context);
-            if (SessionStore.hasConfiguredBaseUrl(context) && !current.equals(bundled)) return;
 
+            Set<String> candidates = new LinkedHashSet<>();
+            addCandidate(candidates, current);
+            addCandidate(candidates, bundled);
+            candidates.addAll(loadRemoteConfigCandidates(context));
+
+            for (String candidate : candidates) {
+                if (isAttendanceSystem(candidate)) {
+                    SessionStore.saveBaseUrl(context, candidate);
+                    return;
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    static List<String> loadRemoteConfigCandidates(Context context) {
+        List<String> candidates = new ArrayList<>();
+        try {
             int configId = context.getResources().getIdentifier("config_url", "string", context.getPackageName());
-            if (configId == 0) return;
+            if (configId == 0) return candidates;
             String configUrl = context.getString(configId);
-            if (!configUrl.startsWith("https://") && !configUrl.startsWith("http://")) return;
+            if (!configUrl.startsWith("https://") && !configUrl.startsWith("http://")) return candidates;
             HttpURLConnection conn = (HttpURLConnection) new URL(configUrl).openConnection();
             conn.setRequestMethod("GET");
             conn.setConnectTimeout(10000);
             conn.setReadTimeout(10000);
             conn.setRequestProperty("Accept", "application/json");
             String response = read(conn);
-            if (conn.getResponseCode() >= 400) return;
+            if (conn.getResponseCode() >= 400) return candidates;
             JSONObject config = new JSONObject(response);
-            String baseUrl = config.optString("base_url", "");
-            if ((baseUrl.startsWith("https://") || baseUrl.startsWith("http://")) && isAttendanceSystem(baseUrl)) {
-                SessionStore.saveBaseUrl(context, baseUrl);
+            addCandidate(candidates, config.optString("base_url", ""));
+            if (config.has("fallback_urls")) {
+                for (int i = 0; i < config.getJSONArray("fallback_urls").length(); i++) {
+                    addCandidate(candidates, config.getJSONArray("fallback_urls").optString(i, ""));
+                }
             }
         } catch (Exception ignored) {}
+        return candidates;
+    }
+
+    private static void addCandidate(Set<String> candidates, String baseUrl) {
+        String normalized = SessionStore.normalizeBaseUrl(baseUrl);
+        if (normalized.startsWith("https://") || normalized.startsWith("http://")) {
+            candidates.add(normalized);
+        }
+    }
+
+    private static void addCandidate(List<String> candidates, String baseUrl) {
+        String normalized = SessionStore.normalizeBaseUrl(baseUrl);
+        if ((normalized.startsWith("https://") || normalized.startsWith("http://")) && !candidates.contains(normalized)) {
+            candidates.add(normalized);
+        }
     }
 
     static boolean isAttendanceSystem(String baseUrl) {
@@ -116,7 +152,7 @@ final class ApiClient {
 
     private static HttpURLConnection open(Context context, String path, String method) throws Exception {
         if (!SessionStore.hasConfiguredBaseUrl(context)) {
-            throw new IllegalStateException("Connect the app from the web download page first.");
+            throw new IllegalStateException("The attendance server is not configured in this APK yet.");
         }
         URL url = new URL(SessionStore.getBaseUrl(context) + path);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();

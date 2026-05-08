@@ -22,6 +22,13 @@ app.set('views', path.join(__dirname, 'views'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.get('/mobile-config.json', (req, res) => {
+    res.json({
+        base_url: getPublicAppBaseUrl(req),
+        fallback_urls: []
+    });
+});
+
 // Static files
 app.use(express.static(path.join(__dirname, 'public')));
 
