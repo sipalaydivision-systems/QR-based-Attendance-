@@ -86,8 +86,9 @@ final class ApiClient {
     }
 
     static boolean isAttendanceSystem(String baseUrl) {
+        String normalized = baseUrl.replaceAll("/+$", "");
         try {
-            HttpURLConnection conn = (HttpURLConnection) new URL(baseUrl.replaceAll("/+$", "") + "/api/app-info").openConnection();
+            HttpURLConnection conn = (HttpURLConnection) new URL(normalized + "/api/app-info").openConnection();
             conn.setRequestMethod("GET");
             conn.setConnectTimeout(10000);
             conn.setReadTimeout(10000);
@@ -97,7 +98,19 @@ final class ApiClient {
             JSONObject info = new JSONObject(response);
             return "school-attendance-qr-based-systems".equals(info.optString("app"));
         } catch (Exception e) {
-            return false;
+            try {
+                HttpURLConnection conn = (HttpURLConnection) new URL(normalized + "/login").openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(10000);
+                conn.setReadTimeout(10000);
+                conn.setRequestProperty("Accept", "text/html");
+                String response = read(conn);
+                String body = response == null ? "" : response.toLowerCase();
+                return conn.getResponseCode() < 400
+                        && (body.contains("school attendance qr based systems") || body.contains("qr attendance system"));
+            } catch (Exception ignored) {
+                return false;
+            }
         }
     }
 
