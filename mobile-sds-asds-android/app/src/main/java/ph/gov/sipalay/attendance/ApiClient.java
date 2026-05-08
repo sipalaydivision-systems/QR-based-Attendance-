@@ -12,6 +12,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -72,6 +73,9 @@ final class ApiClient {
             addCandidate(candidates, current);
             addCandidate(candidates, bundled);
             candidates.addAll(loadRemoteConfigCandidates(context));
+            for (String known : getKnownBaseUrlCandidates()) {
+                addCandidate(candidates, known);
+            }
 
             for (String candidate : candidates) {
                 if (isAttendanceSystem(candidate)) {
@@ -84,27 +88,51 @@ final class ApiClient {
 
     static List<String> loadRemoteConfigCandidates(Context context) {
         List<String> candidates = new ArrayList<>();
-        try {
-            int configId = context.getResources().getIdentifier("config_url", "string", context.getPackageName());
-            if (configId == 0) return candidates;
-            String configUrl = context.getString(configId);
-            if (!configUrl.startsWith("https://") && !configUrl.startsWith("http://")) return candidates;
-            HttpURLConnection conn = (HttpURLConnection) new URL(configUrl).openConnection();
-            conn.setRequestMethod("GET");
-            conn.setConnectTimeout(4500);
-            conn.setReadTimeout(4500);
-            conn.setRequestProperty("Accept", "application/json");
-            String response = read(conn);
-            if (conn.getResponseCode() >= 400) return candidates;
-            JSONObject config = new JSONObject(response);
-            addCandidate(candidates, config.optString("base_url", ""));
-            if (config.has("fallback_urls")) {
-                for (int i = 0; i < config.getJSONArray("fallback_urls").length(); i++) {
-                    addCandidate(candidates, config.getJSONArray("fallback_urls").optString(i, ""));
+        for (String configUrl : getConfigUrls(context)) {
+            try {
+                HttpURLConnection conn = (HttpURLConnection) new URL(configUrl).openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(4500);
+                conn.setReadTimeout(4500);
+                conn.setRequestProperty("Accept", "application/json");
+                String response = read(conn);
+                if (conn.getResponseCode() >= 400) continue;
+                JSONObject config = new JSONObject(response);
+                addCandidate(candidates, config.optString("base_url", ""));
+                if (config.has("fallback_urls")) {
+                    for (int i = 0; i < config.getJSONArray("fallback_urls").length(); i++) {
+                        addCandidate(candidates, config.getJSONArray("fallback_urls").optString(i, ""));
+                    }
                 }
-            }
-        } catch (Exception ignored) {}
+            } catch (Exception ignored) {}
+        }
         return candidates;
+    }
+
+    private static List<String> getConfigUrls(Context context) {
+        LinkedHashSet<String> urls = new LinkedHashSet<>();
+        int configId = context.getResources().getIdentifier("config_url", "string", context.getPackageName());
+        if (configId != 0) {
+            String configured = SessionStore.normalizeBaseUrl(context.getString(configId));
+            if (configured.startsWith("https://") || configured.startsWith("http://")) {
+                urls.add(configured);
+            }
+        }
+        String bundledBaseUrl = SessionStore.getBundledBaseUrl(context);
+        if (bundledBaseUrl.startsWith("https://") || bundledBaseUrl.startsWith("http://")) {
+            urls.add(bundledBaseUrl + "/mobile-config.json");
+        }
+        for (String knownBaseUrl : getKnownBaseUrlCandidates()) {
+            urls.add(knownBaseUrl + "/mobile-config.json");
+        }
+        return new ArrayList<>(urls);
+    }
+
+    private static List<String> getKnownBaseUrlCandidates() {
+        return Arrays.asList(
+                "https://sdo-sipalay-website-production.up.railway.app",
+                "https://web-production-5f74a.up.railway.app"
+        );
     }
 
     private static void addCandidate(Set<String> candidates, String baseUrl) {
