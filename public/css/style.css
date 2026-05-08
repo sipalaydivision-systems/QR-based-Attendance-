@@ -825,13 +825,13 @@ a:hover { color: var(--primary-dark); }
 }
 .login-header { text-align: center; margin-bottom: 28px; }
 .login-logo {
-    width: 68px; height: 68px; border-radius: var(--radius-xl);
-    background: linear-gradient(135deg, var(--primary), var(--primary-light));
+    width: 72px; height: 72px; border-radius: 0;
+    background: transparent;
     display: flex; align-items: center; justify-content: center;
-    margin: 0 auto 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(79,70,229,0.3);
+    margin: 0 auto 16px; overflow: visible; box-shadow: none;
 }
-.login-logo img { width: 100%; height: 100%; object-fit: cover; }
-.login-logo i   { color: #fff; font-size: 1.75rem; }
+.login-logo img { width: 100%; height: 100%; object-fit: contain; }
+.login-logo i   { color: var(--primary); font-size: 1.75rem; }
 .login-header h1 { font-size: 1.5rem; font-weight: 800; color: var(--gray-900); margin-bottom: 4px; }
 .login-header p  { color: var(--gray-500); font-size: 0.875rem; }
 .login-form .form-group { margin-bottom: 16px; }
