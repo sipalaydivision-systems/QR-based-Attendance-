@@ -1090,13 +1090,24 @@ a:hover { color: var(--primary-dark); }
     font-size: 0.875rem;
     flex-shrink: 0;
 }
-.div-summary-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
-.div-summary-row-teachers { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.div-summary-grid,
+.div-summary-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 14px;
+}
 .div-sum-card { background: var(--bg-card); border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: 16px 20px; display: flex; align-items: center; gap: 14px; border: 1px solid var(--gray-200); }
 .div-sum-icon { width: 44px; height: 44px; border-radius: var(--radius); display: flex; align-items: center; justify-content: center; font-size: 1.125rem; flex-shrink: 0; }
 .div-sum-val  { font-size: 1.5rem; font-weight: 800; color: var(--gray-900); line-height: 1.2; transition: color 0.18s ease, transform 0.18s ease; }
 .div-sum-lbl  { font-size: 0.6875rem; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.03em; }
-.div-middle-row { display: grid; grid-template-columns: 1.5fr 1fr; gap: 14px; margin-bottom: 20px; }
+.div-middle-row {
+    display: grid;
+    grid-template-columns: minmax(260px, 0.9fr) minmax(520px, 1.7fr) minmax(320px, 1.05fr);
+    gap: 14px;
+    margin-bottom: 20px;
+    align-items: stretch;
+}
 .div-card { background: var(--bg-card); border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: 20px; border: 1px solid var(--gray-200); }
 .div-card h3 { font-size: 0.9375rem; font-weight: 700; color: var(--gray-800); margin: 0 0 14px; }
 .div-chart-card { position: relative; min-height: 280px; }
@@ -1322,8 +1333,8 @@ a:hover { color: var(--primary-dark); }
     .dashboard-toolbar { flex-direction: column; align-items: stretch; }
     .dashboard-filters { grid-template-columns: minmax(0, 1fr) 150px; width: 100%; }
     .div-middle-row { grid-template-columns: 1fr; }
-    .div-summary-row,
-    .div-summary-row-teachers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .div-summary-grid,
+    .div-summary-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .sec-kpi-grid   { grid-template-columns: repeat(3,1fr); }
 }
 @media (max-width: 768px) {
@@ -1343,6 +1354,7 @@ a:hover { color: var(--primary-dark); }
     .page-content                 { padding: 14px; }
     .page-header                  { flex-direction: column; align-items: flex-start; }
     .action-row                   { flex-direction: column; align-items: flex-start; }
+    .div-summary-grid,
     .div-summary-row              { grid-template-columns: repeat(2,1fr); }
     .div-schools-grid             { grid-template-columns: repeat(2,1fr); }
     .status-counts-grid           { grid-template-columns: 1fr 1fr; }
@@ -1360,6 +1372,7 @@ a:hover { color: var(--primary-dark); }
     .school-grid    { grid-template-columns: 1fr; }
     .qr-grid        { grid-template-columns: 1fr; }
     .page-content   { padding: 10px; }
+    .div-summary-grid,
     .div-summary-row  { grid-template-columns: 1fr; }
     .div-schools-grid { grid-template-columns: 1fr; }
     .sec-kpi-grid     { grid-template-columns: 1fr; }

@@ -23,8 +23,8 @@
         <i class="fa-solid fa-triangle-exclamation"></i> <span id="nonSchoolDayText"></span>
     </div>
 
-    <!-- Summary Row 1: Student Stats -->
-    <div class="div-summary-row div-summary-row-students">
+    <!-- Summary Stats -->
+    <div class="div-summary-grid">
         <div class="div-sum-card">
             <div class="div-sum-icon" style="background:#eef2ff;color:#4f46e5;border-radius:10px;"><i class="fa-solid fa-building-columns"></i></div>
             <div class="div-sum-info">
@@ -60,10 +60,6 @@
                 <span class="div-sum-lbl">2-Day Absentees</span>
             </div>
         </div>
-    </div>
-
-    <!-- Summary Row 2: Teacher Stats -->
-    <div class="div-summary-row div-summary-row-teachers">
         <div class="div-sum-card">
             <div class="div-sum-icon" style="background:#f3e8ff;color:#7c3aed;border-radius:10px;"><i class="fa-solid fa-chalkboard-user"></i></div>
             <div class="div-sum-info">
@@ -95,7 +91,7 @@
     </div>
 
     <!-- Middle Row: Pie chart + Calendar + Ranking -->
-    <div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:14px;margin-bottom:20px;align-items:start;" id="divMiddleRow">
+    <div class="div-middle-row" id="divMiddleRow">
 
         <!-- 2-Day Absentees -->
         <div class="div-card" style="display:flex;flex-direction:column;">
@@ -497,7 +493,7 @@
         if (window.innerWidth < 1100) {
             row.style.gridTemplateColumns = '1fr';
         } else {
-            row.style.gridTemplateColumns = '1fr 2fr 1fr';
+            row.style.gridTemplateColumns = 'minmax(260px, 0.9fr) minmax(520px, 1.7fr) minmax(320px, 1.05fr)';
         }
     }
     window.addEventListener('resize', checkLayout);
