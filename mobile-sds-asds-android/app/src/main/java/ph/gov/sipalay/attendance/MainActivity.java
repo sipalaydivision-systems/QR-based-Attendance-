@@ -19,13 +19,14 @@ public class MainActivity extends Activity {
         showSplash();
         applyConfigurationIntent(getIntent());
         new Thread(() -> {
+            ApiClient.refreshBaseUrl(this);
             boolean hasServer = SessionStore.hasConfiguredBaseUrl(this);
             try {
                 Thread.sleep(650);
             } catch (InterruptedException ignored) {}
             runOnUiThread(() -> {
                 if (!SessionStore.hasConfiguredBaseUrl(this)) {
-                    showConnectRequired();
+                    showServerUnavailable();
                     return;
                 }
                 startActivity(new Intent(this, WebAppActivity.class));
@@ -72,7 +73,7 @@ public class MainActivity extends Activity {
         return false;
     }
 
-    private void showConnectRequired() {
+    private void showServerUnavailable() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER);
@@ -92,16 +93,16 @@ public class MainActivity extends Activity {
         logo.setAdjustViewBounds(true);
         card.addView(logo, Ui.lp(96, 96));
 
-        TextView title = Ui.text(this, "Connect Mobile App", 24, Ui.INK, Typeface.BOLD);
+        TextView title = Ui.text(this, "Server Setup Required", 24, Ui.INK, Typeface.BOLD);
         title.setGravity(Gravity.CENTER);
         card.addView(title, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 18, 0, 8));
 
-        TextView message = Ui.text(this, "Open the web system on this phone, go to /mobile-app, then tap Connect App. This links mobile login to the same MySQL database as the website.", 15, Ui.MUTED, Typeface.NORMAL);
+        TextView message = Ui.text(this, "The APK needs the live Railway URL. Please install the latest APK from the live /mobile-app page.", 15, Ui.MUTED, Typeface.NORMAL);
         message.setGravity(Gravity.CENTER);
         card.addView(message, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
         Button retry = new Button(this);
-        retry.setText("I tapped Connect App");
+        retry.setText("Retry");
         retry.setAllCaps(false);
         retry.setTextColor(android.graphics.Color.WHITE);
         retry.setTextSize(16);
@@ -111,6 +112,8 @@ public class MainActivity extends Activity {
             if (SessionStore.hasConfiguredBaseUrl(this)) {
                 startActivity(new Intent(this, WebAppActivity.class));
                 finish();
+            } else {
+                recreate();
             }
         });
         card.addView(retry, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, 112, 0, 24, 0, 0));

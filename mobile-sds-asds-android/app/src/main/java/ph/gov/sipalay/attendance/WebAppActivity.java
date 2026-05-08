@@ -115,16 +115,16 @@ public class WebAppActivity extends Activity {
         logo.setAdjustViewBounds(true);
         card.addView(logo, Ui.lp(92, 92));
 
-        TextView title = Ui.text(this, "Connect Mobile App", 24, Ui.INK, android.graphics.Typeface.BOLD);
+        TextView title = Ui.text(this, "Server Setup Required", 24, Ui.INK, android.graphics.Typeface.BOLD);
         title.setGravity(android.view.Gravity.CENTER);
         card.addView(title, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 18, 0, 8));
 
-        TextView message = Ui.text(this, "Open the live web system on this phone, go to /mobile-app, then tap Connect App.", 15, Ui.MUTED, android.graphics.Typeface.NORMAL);
+        TextView message = Ui.text(this, "The saved server is unavailable. Install the latest APK from the live /mobile-app page so it can load the Railway dashboard automatically.", 15, Ui.MUTED, android.graphics.Typeface.NORMAL);
         message.setGravity(android.view.Gravity.CENTER);
         card.addView(message, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
         Button close = new Button(this);
-        close.setText("Open after connecting");
+        close.setText("Close");
         close.setAllCaps(false);
         close.setTextColor(Color.WHITE);
         close.setTextSize(16);
@@ -137,8 +137,9 @@ public class WebAppActivity extends Activity {
     }
 
     private void loadApp() {
+        ApiClient.refreshBaseUrl(this);
         if (!SessionStore.hasConfiguredBaseUrl(this)) {
-            Toast.makeText(this, "Connect the app from /mobile-app first.", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Live Railway URL is not configured.", Toast.LENGTH_LONG).show();
             finish();
             return;
         }

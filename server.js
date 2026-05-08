@@ -74,6 +74,16 @@ function getDashboardUrl(role) {
     return '/admin/dashboard';
 }
 
+function getPublicAppBaseUrl(req) {
+    const configured = process.env.BASE_URL || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : '');
+    if (configured) return configured.replace(/\/+$/, '');
+    const host = req.get('host') || '';
+    if (host.includes('localhost') || host.startsWith('127.0.0.1')) {
+        return 'https://sdo-sipalay-website-production.up.railway.app';
+    }
+    return `${req.protocol}://${host}`.replace(/\/+$/, '');
+}
+
 // Root redirect
 app.get('/', (req, res) => {
     if (req.session.user) {
@@ -89,7 +99,7 @@ app.get('/dashboard', (req, res) => {
 
 app.get('/mobile-app', (req, res) => {
     const apkPath = path.join(__dirname, 'public', 'downloads', 'school-attendance-division.apk');
-    const appBaseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const appBaseUrl = getPublicAppBaseUrl(req);
     res.render('mobile_app', {
         title: 'Download Mobile App',
         apkAvailable: fs.existsSync(apkPath),
@@ -100,7 +110,7 @@ app.get('/mobile-app', (req, res) => {
 app.get('/download/mobile-app', (req, res) => {
     const apkPath = path.join(__dirname, 'public', 'downloads', 'school-attendance-division.apk');
     if (!fs.existsSync(apkPath)) {
-        const appBaseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+        const appBaseUrl = getPublicAppBaseUrl(req);
         return res.status(404).render('mobile_app', {
             title: 'Download Mobile App',
             apkAvailable: false,

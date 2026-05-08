@@ -29,4 +29,8 @@ The server URL is stored in:
 
 `app/src/main/res/values/strings.xml`
 
-The app is connected from the live `/mobile-app` page instead of using a hardcoded Railway URL.
+The app reads `public/mobile-config.json` from GitHub and opens the configured Railway web system automatically.
+
+Current Railway URL:
+
+`https://sdo-sipalay-website-production.up.railway.app`
