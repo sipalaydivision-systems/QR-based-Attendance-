@@ -34,6 +34,7 @@ async function init() {
             await db.query(statement);
         }
 
+        await ensureColumn('schools', 'school_id_code', 'VARCHAR(50) UNIQUE AFTER name');
         await ensureColumn('users', 'last_login', 'TIMESTAMP NULL AFTER status');
 
         console.log('Running database seed...');

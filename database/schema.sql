@@ -8,6 +8,7 @@
 CREATE TABLE IF NOT EXISTS schools (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
+    school_id_code VARCHAR(50) UNIQUE,
     school_code VARCHAR(20) UNIQUE,
     address VARCHAR(500),
     contact VARCHAR(100),
