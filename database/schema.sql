@@ -1,13 +1,11 @@
 -- QR Attendance System Database Schema
 -- MySQL
-
-CREATE DATABASE IF NOT EXISTS qr_attend CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE qr_attend;
+-- Run this inside the configured application database.
 
 -- -----------------------------------------------------------
 -- Schools
 -- -----------------------------------------------------------
-CREATE TABLE schools (
+CREATE TABLE IF NOT EXISTS schools (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     school_code VARCHAR(20) UNIQUE,
@@ -22,7 +20,7 @@ CREATE TABLE schools (
 -- -----------------------------------------------------------
 -- Grade Levels
 -- -----------------------------------------------------------
-CREATE TABLE grade_levels (
+CREATE TABLE IF NOT EXISTS grade_levels (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     school_id INT,
@@ -33,7 +31,7 @@ CREATE TABLE grade_levels (
 -- -----------------------------------------------------------
 -- Sections
 -- -----------------------------------------------------------
-CREATE TABLE sections (
+CREATE TABLE IF NOT EXISTS sections (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     grade_level_id INT,
@@ -48,7 +46,7 @@ CREATE TABLE sections (
 -- -----------------------------------------------------------
 -- Admin Users
 -- -----------------------------------------------------------
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(100) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
@@ -65,7 +63,7 @@ CREATE TABLE users (
 -- -----------------------------------------------------------
 -- Students
 -- -----------------------------------------------------------
-CREATE TABLE students (
+CREATE TABLE IF NOT EXISTS students (
     id INT AUTO_INCREMENT PRIMARY KEY,
     lrn VARCHAR(50) UNIQUE,
     firstname VARCHAR(255) NOT NULL,
@@ -94,7 +92,7 @@ CREATE TABLE students (
 -- -----------------------------------------------------------
 -- Teachers
 -- -----------------------------------------------------------
-CREATE TABLE teachers (
+CREATE TABLE IF NOT EXISTS teachers (
     id INT AUTO_INCREMENT PRIMARY KEY,
     employee_id VARCHAR(50) UNIQUE,
     firstname VARCHAR(255) NOT NULL,
@@ -115,7 +113,7 @@ CREATE TABLE teachers (
 -- -----------------------------------------------------------
 -- Attendance
 -- -----------------------------------------------------------
-CREATE TABLE attendance (
+CREATE TABLE IF NOT EXISTS attendance (
     id INT AUTO_INCREMENT PRIMARY KEY,
     person_type ENUM('student','teacher') NOT NULL,
     person_id INT NOT NULL,
@@ -135,7 +133,7 @@ CREATE TABLE attendance (
 -- -----------------------------------------------------------
 -- User Activity Logs
 -- -----------------------------------------------------------
-CREATE TABLE user_logs (
+CREATE TABLE IF NOT EXISTS user_logs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT,
     action VARCHAR(255) NOT NULL,
@@ -148,7 +146,7 @@ CREATE TABLE user_logs (
 -- -----------------------------------------------------------
 -- SMS Logs
 -- -----------------------------------------------------------
-CREATE TABLE sms_logs (
+CREATE TABLE IF NOT EXISTS sms_logs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     recipient VARCHAR(100),
     message TEXT,
@@ -159,7 +157,7 @@ CREATE TABLE sms_logs (
 -- -----------------------------------------------------------
 -- Notifications
 -- -----------------------------------------------------------
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
     id INT AUTO_INCREMENT PRIMARY KEY,
     title VARCHAR(255),
     message TEXT,
@@ -172,7 +170,7 @@ CREATE TABLE notifications (
 -- -----------------------------------------------------------
 -- Push Subscriptions
 -- -----------------------------------------------------------
-CREATE TABLE push_subscriptions (
+CREATE TABLE IF NOT EXISTS push_subscriptions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT,
     endpoint TEXT NOT NULL,
@@ -185,7 +183,7 @@ CREATE TABLE push_subscriptions (
 -- -----------------------------------------------------------
 -- Settings
 -- -----------------------------------------------------------
-CREATE TABLE settings (
+CREATE TABLE IF NOT EXISTS settings (
     id INT AUTO_INCREMENT PRIMARY KEY,
     setting_key VARCHAR(100) UNIQUE NOT NULL,
     setting_value TEXT,
