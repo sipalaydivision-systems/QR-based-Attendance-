@@ -93,7 +93,7 @@ public class AbsenceWorker extends Worker {
             return;
         }
 
-        Intent intent = new Intent(context, DashboardActivity.class);
+        Intent intent = new Intent(context, WebAppActivity.class);
         PendingIntent pendingIntent = PendingIntent.getActivity(
                 context,
                 100,

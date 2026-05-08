@@ -4,8 +4,9 @@ Native Android APK project for SDS and ASDS dashboard monitoring.
 
 ## Features
 
-- SDS / ASDS login only.
-- Native dashboard cards backed by the Railway server.
+- Full-screen Android WebView shell for the live web system.
+- Same web login, same sessions, same MySQL database.
+- APK-only mobile styling for a native app feel.
 - 2-day absence alert list.
 - Android phone notifications for 2-day absence alerts.
 - Background polling through WorkManager.

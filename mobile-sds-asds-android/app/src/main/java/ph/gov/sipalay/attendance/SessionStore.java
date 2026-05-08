@@ -54,6 +54,12 @@ final class SessionStore {
                 .apply();
     }
 
+    static void saveCookieOnly(Context context, String cookie) {
+        prefs(context).edit()
+                .putString("cookie", cookie)
+                .apply();
+    }
+
     static String getFullname(Context context) {
         return prefs(context).getString("fullname", "Division User");
     }
@@ -70,6 +76,25 @@ final class SessionStore {
                 .remove("role")
                 .remove("last_absence_notification")
                 .putString("base_url", baseUrl)
+                .apply();
+    }
+
+    static void clearLogin(Context context) {
+        prefs(context).edit()
+                .remove("cookie")
+                .remove("fullname")
+                .remove("role")
+                .remove("last_absence_notification")
+                .apply();
+    }
+
+    static void clearServer(Context context) {
+        prefs(context).edit()
+                .remove("base_url")
+                .remove("cookie")
+                .remove("fullname")
+                .remove("role")
+                .remove("last_absence_notification")
                 .apply();
     }
 }

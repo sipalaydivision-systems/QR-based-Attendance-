@@ -4,17 +4,14 @@ This repository now includes a native Android project at:
 
 `mobile-sds-asds-android/`
 
-It is separate from the Railway web app. The APK signs in to the live server, shows only the SDS / ASDS division dashboard, and uses Android notifications for 2-day student absence alerts.
+It is separate from the Railway web app but runs the live web system inside a full-screen Android shell. The APK uses the same web login, same sessions, same Railway service, and same MySQL database, while applying mobile app styling inside the APK.
 
 ## What the APK does
 
-- Native Android login screen for SDS and ASDS accounts only.
-- Uses the existing Railway/MySQL system through:
-  - `POST /app-login`
-  - `GET /api/dashboard-data`
-  - `GET /api/absence-flags?days=2`
-- Stores the server session cookie on the phone.
-- Shows dashboard totals for schools, students, teachers, present, absent, and 2-day absentees.
+- Full-screen Android WebView with no browser address bar.
+- Uses the existing Railway/MySQL web system directly.
+- Uses the same web login page and account database.
+- Applies APK-only mobile styling so it feels like a native app.
 - Checks for 2-day absence flags in the background using Android WorkManager.
 - Sends a phone notification when 2-day absentees are found.
 

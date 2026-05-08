@@ -17,19 +17,9 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         showSplash();
-        boolean configuredFromLink = applyConfigurationIntent(getIntent());
+        applyConfigurationIntent(getIntent());
         new Thread(() -> {
             boolean hasServer = SessionStore.hasConfiguredBaseUrl(this);
-            boolean valid = hasServer && SessionStore.isLoggedIn(this);
-            if (valid) {
-                try {
-                    ApiClient.getJson(this, "/api/dashboard-data");
-                } catch (Exception e) {
-                    SessionStore.clear(this);
-                    valid = false;
-                }
-            }
-            boolean routeToDashboard = valid;
             try {
                 Thread.sleep(650);
             } catch (InterruptedException ignored) {}
@@ -38,7 +28,7 @@ public class MainActivity extends Activity {
                     showConnectRequired();
                     return;
                 }
-                startActivity(new Intent(this, routeToDashboard ? DashboardActivity.class : LoginActivity.class));
+                startActivity(new Intent(this, WebAppActivity.class));
                 finish();
             });
         }).start();
@@ -119,7 +109,7 @@ public class MainActivity extends Activity {
         retry.setBackground(Ui.gradient(Ui.PRIMARY, android.graphics.Color.rgb(67, 56, 202), 24));
         retry.setOnClickListener(v -> {
             if (SessionStore.hasConfiguredBaseUrl(this)) {
-                startActivity(new Intent(this, LoginActivity.class));
+                startActivity(new Intent(this, WebAppActivity.class));
                 finish();
             }
         });
