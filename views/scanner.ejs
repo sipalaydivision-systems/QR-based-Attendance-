@@ -76,19 +76,26 @@
             gap: 12px;
             padding: 14px 18px;
             border-radius: 14px;
-            border: 1px solid #fde68a;
-            background: #fffbeb;
-            color: #92400e;
+            border: 1px solid #fecaca;
+            background: linear-gradient(90deg, #fee2e2 0%, #fecaca 50%, #fee2e2 100%);
+            background-size: 220% 100%;
+            color: #991b1b;
             font-weight: 800;
-            box-shadow: 0 10px 28px rgba(217,119,6,0.08);
+            box-shadow: 0 10px 28px rgba(220,38,38,0.18);
+            animation: warningShift 2.2s linear infinite;
         }
-        .scanner-day-status i { color: #d97706; flex-shrink: 0; }
+        .scanner-day-status i { color: #dc2626; flex-shrink: 0; }
         .scanner-day-status.class-suspension {
-            border-color: #bfdbfe;
-            background: #eff6ff;
-            color: #1d4ed8;
+            border-color: #fca5a5;
+            background: linear-gradient(90deg, #fecaca 0%, #fca5a5 50%, #fecaca 100%);
+            background-size: 220% 100%;
+            color: #7f1d1d;
         }
-        .scanner-day-status.class-suspension i { color: #2563eb; }
+        .scanner-day-status.class-suspension i { color: #b91c1c; }
+        @keyframes warningShift {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+        }
 
         /* Camera */
         .camera-box {
