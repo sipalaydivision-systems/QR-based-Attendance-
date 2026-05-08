@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS users (
     role ENUM('super_admin','principal','superintendent','asst_superintendent') NOT NULL DEFAULT 'principal',
     school_id INT,
     status ENUM('active','inactive') DEFAULT 'active',
+    last_login TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE SET NULL

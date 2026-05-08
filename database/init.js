@@ -4,6 +4,22 @@ const fs = require('fs');
 const path = require('path');
 const db = require('../config/database');
 
+async function ensureColumn(tableName, columnName, definition) {
+    const [columns] = await db.query(
+        `SELECT COLUMN_NAME
+         FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = ?
+           AND COLUMN_NAME = ?`,
+        [tableName, columnName]
+    );
+
+    if (columns.length === 0) {
+        console.log(`Adding missing column ${tableName}.${columnName}...`);
+        await db.query(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+    }
+}
+
 async function init() {
     try {
         const schemaPath = path.join(__dirname, 'schema.sql');
@@ -17,6 +33,8 @@ async function init() {
         for (const statement of statements) {
             await db.query(statement);
         }
+
+        await ensureColumn('users', 'last_login', 'TIMESTAMP NULL AFTER status');
 
         console.log('Running database seed...');
         require('./seed');
