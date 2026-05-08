@@ -66,11 +66,22 @@ A full-stack QR code attendance monitoring system built with **Node.js**, **Expr
 2. Connect your repo in Railway.
 3. Add a MySQL service in Railway.
 4. Set environment variables:
-   - `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS`, `DB_PORT`
+   - Either Railway's MySQL variables directly: `MYSQLHOST`, `MYSQLDATABASE`, `MYSQLUSER`, `MYSQLPASSWORD`, `MYSQLPORT`
+   - Or map them to app variables: `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS`, `DB_PORT`
    - `SESSION_SECRET` (random string)
    - `BASE_URL` (your Railway URL)
    - `NODE_ENV=production`
 5. Deploy — Railway will auto-detect Node.js and run `node server.js`.
+
+For a Railway web service connected to a Railway MySQL service, these app variables can be set as references:
+
+```env
+DB_HOST=${{MySQL.MYSQLHOST}}
+DB_NAME=${{MySQL.MYSQLDATABASE}}
+DB_USER=${{MySQL.MYSQLUSER}}
+DB_PASS=${{MySQL.MYSQLPASSWORD}}
+DB_PORT=${{MySQL.MYSQLPORT}}
+```
 
 ## Project Structure
 
