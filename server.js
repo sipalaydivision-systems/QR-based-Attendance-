@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
+const fs = require('fs');
 const db = require('./config/database');
 const MySQLSessionStore = require('./config/mysqlSessionStore');
 
@@ -84,6 +85,26 @@ app.get('/', (req, res) => {
 app.get('/dashboard', (req, res) => {
     if (!req.session.user) return res.redirect('/login');
     return res.redirect(getDashboardUrl(req.session.user.role));
+});
+
+app.get('/mobile-app', (req, res) => {
+    const apkPath = path.join(__dirname, 'public', 'downloads', 'school-attendance-division.apk');
+    res.render('mobile_app', {
+        title: 'Download Mobile App',
+        apkAvailable: fs.existsSync(apkPath)
+    });
+});
+
+app.get('/download/mobile-app', (req, res) => {
+    const apkPath = path.join(__dirname, 'public', 'downloads', 'school-attendance-division.apk');
+    if (!fs.existsSync(apkPath)) {
+        return res.status(404).render('mobile_app', {
+            title: 'Download Mobile App',
+            apkAvailable: false,
+            error: 'The APK file has not been uploaded yet.'
+        });
+    }
+    return res.download(apkPath, 'School-Attendance-Division.apk');
 });
 
 // 404

@@ -33,6 +33,22 @@ The debug APK will be created under:
 
 `mobile-sds-asds-android/app/build/outputs/apk/debug/`
 
+## One-click download page
+
+The web app has a public download page:
+
+`/mobile-app`
+
+The button downloads:
+
+`/download/mobile-app`
+
+GitHub Actions builds the Android APK and publishes it to:
+
+`public/downloads/school-attendance-division.apk`
+
+After the GitHub workflow finishes and Railway redeploys, users can open `/mobile-app` and tap `Download APK`.
+
 ## Server URL
 
 The APK currently points to the Railway URL:

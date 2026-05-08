@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title || 'Download Mobile App' %></title>
+    <link rel="icon" type="image/png" href="/uploads/logos/system-logo.png">
+    <style>
+        :root {
+            --ink: #0f172a;
+            --muted: #64748b;
+            --primary: #4f46e5;
+            --primary-dark: #4338ca;
+            --line: #dbe3ef;
+            --surface: #ffffff;
+            --soft: #f8fafc;
+            --success: #16a34a;
+            --danger: #b91c1c;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Arial, Helvetica, sans-serif;
+            color: var(--ink);
+            background: linear-gradient(180deg, #eef4fb 0%, #ffffff 100%);
+            display: grid;
+            place-items: center;
+            padding: 24px;
+        }
+        .page {
+            width: min(960px, 100%);
+            display: grid;
+            grid-template-columns: 1fr 0.78fr;
+            gap: 28px;
+            align-items: center;
+        }
+        .hero, .phone {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            box-shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
+        }
+        .hero { padding: 34px; }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 30px;
+        }
+        .brand img {
+            width: 64px;
+            height: 64px;
+            object-fit: contain;
+        }
+        .brand strong { display: block; font-size: 18px; }
+        .brand span { color: var(--muted); font-size: 13px; }
+        h1 {
+            margin: 0;
+            font-size: clamp(32px, 5vw, 52px);
+            line-height: 1.02;
+            letter-spacing: 0;
+        }
+        .lead {
+            color: var(--muted);
+            font-size: 17px;
+            line-height: 1.6;
+            margin: 18px 0 26px;
+        }
+        .download {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 54px;
+            padding: 0 24px;
+            border-radius: 12px;
+            background: var(--primary);
+            color: #fff;
+            text-decoration: none;
+            font-weight: 700;
+            box-shadow: 0 12px 28px rgba(79, 70, 229, 0.3);
+        }
+        .download:hover { background: var(--primary-dark); }
+        .download.disabled {
+            background: #94a3b8;
+            box-shadow: none;
+            pointer-events: none;
+        }
+        .status {
+            margin-top: 18px;
+            color: <%= apkAvailable ? "var(--success)" : "var(--danger)" %>;
+            font-weight: 700;
+            font-size: 14px;
+        }
+        .features {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 28px;
+        }
+        .feature {
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 14px;
+            color: var(--muted);
+            font-size: 14px;
+            background: var(--soft);
+        }
+        .phone {
+            padding: 24px;
+            min-height: 520px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .phone-top {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .phone-top img { width: 48px; height: 48px; object-fit: contain; }
+        .screen-card {
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 18px;
+            background: var(--soft);
+        }
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--line);
+            padding: 13px 0;
+            font-size: 14px;
+            color: var(--muted);
+        }
+        .metric:last-child { border-bottom: 0; }
+        .metric strong { color: var(--ink); font-size: 22px; }
+        .alert {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+            border-radius: 12px;
+            padding: 14px;
+            font-weight: 700;
+        }
+        @media (max-width: 780px) {
+            .page { grid-template-columns: 1fr; }
+            .hero { padding: 26px; }
+            .features { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <main class="page">
+        <section class="hero">
+            <div class="brand">
+                <img src="/uploads/logos/system-logo.png" alt="System Logo">
+                <div>
+                    <strong>School Attendance QR based Systems</strong>
+                    <span>Schools Division of Sipalay City</span>
+                </div>
+            </div>
+            <h1>SDS / ASDS Mobile Dashboard</h1>
+            <p class="lead">Install the native Android app for division dashboard monitoring and 2-day absence notifications on your phone.</p>
+            <a class="download <%= apkAvailable ? '' : 'disabled' %>" href="/download/mobile-app" download>Download APK</a>
+            <div class="status">
+                <% if (typeof error !== 'undefined' && error) { %>
+                    <%= error %>
+                <% } else if (apkAvailable) { %>
+                    APK is ready for one-click download.
+                <% } else { %>
+                    APK source is ready. Build the APK and place it in public/downloads/school-attendance-division.apk.
+                <% } %>
+            </div>
+            <div class="features">
+                <div class="feature">Native SDS / ASDS sign in</div>
+                <div class="feature">Dashboard totals from MySQL</div>
+                <div class="feature">2-day absence alerts</div>
+                <div class="feature">Android phone notifications</div>
+            </div>
+        </section>
+        <aside class="phone">
+            <div class="phone-top">
+                <img src="/uploads/logos/system-logo.png" alt="">
+                <div>
+                    <strong>Division Dashboard</strong><br>
+                    <span style="color:var(--muted);font-size:13px;">Native Android App</span>
+                </div>
+            </div>
+            <div class="screen-card">
+                <div class="metric"><span>Total Schools</span><strong>48</strong></div>
+                <div class="metric"><span>Present Today</span><strong>0</strong></div>
+                <div class="metric"><span>Absent Today</span><strong>0</strong></div>
+                <div class="metric"><span>Teachers Present</span><strong>0</strong></div>
+            </div>
+            <div class="alert">2-Day Absence Alert will notify your phone.</div>
+        </aside>
+    </main>
+</body>
+</html>

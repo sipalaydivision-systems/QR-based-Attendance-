@@ -1,0 +1,55 @@
+name: Build Mobile APK
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "mobile-sds-asds-android/**"
+      - ".github/workflows/build-mobile-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Build debug APK
+        run: gradle -p mobile-sds-asds-android assembleDebug
+
+      - name: Publish APK into web downloads
+        run: |
+          mkdir -p public/downloads
+          cp mobile-sds-asds-android/app/build/outputs/apk/debug/app-debug.apk public/downloads/school-attendance-division.apk
+
+      - name: Commit APK
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/downloads/school-attendance-division.apk
+          if git diff --cached --quiet; then
+            echo "APK unchanged"
+          else
+            git commit -m "Publish mobile APK"
+            git push
+          fi
