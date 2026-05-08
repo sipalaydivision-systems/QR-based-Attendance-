@@ -329,7 +329,7 @@
     function scannerDayMessage(data) {
         var type = data.type || data.non_school_day_type || 'Non-school Day';
         var reason = data.reason || data.non_school_day_reason;
-        return 'Today is a ' + type + (reason ? ' - ' + reason : '') + '.';
+        return 'No classes due to ' + type.toLowerCase() + (reason ? ' - ' + reason : '') + '.';
     }
 
     async function loadScannerDayStatus() {

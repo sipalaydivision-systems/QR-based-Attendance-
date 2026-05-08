@@ -153,7 +153,7 @@ async function loadData() {
             var type = sdRes.type || 'Non-school Day';
             var reason = sdRes.reason;
             banner.style.display = '';
-            document.getElementById('nonSchoolDayReason').textContent = 'Today is a ' + type + (reason ? ' - ' + reason : '') + '. Attendance data shown is for reference only.';
+            document.getElementById('nonSchoolDayReason').textContent = 'No classes due to ' + String(type).toLowerCase() + (reason ? ' - ' + reason : '') + '. Attendance data shown is for reference only.';
         } else {
             banner.style.display = 'none';
         }

@@ -41,9 +41,9 @@
     }
 
     function nonSchoolDayMessage(data) {
-        const type = data.non_school_day_type || 'Non-school Day';
+        const type = (data.non_school_day_type || 'non-school day').toLowerCase();
         const reason = data.non_school_day_reason;
-        return 'Today is a ' + type + (reason ? ' - ' + reason : '') + '.';
+        return 'No classes due to ' + type + (reason ? ' - ' + reason : '') + '.';
     }
 
     function updateUI(data) {
