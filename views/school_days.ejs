@@ -1,0 +1,105 @@
+<%- include('partials/header') %>
+
+<div class="page-actions">
+    <button class="btn btn-primary" onclick="openSdModal()">+ Add Non-School Day</button>
+    <div class="filter-group">
+        <label for="sdMonth">Month:</label>
+        <input type="month" id="sdMonth" value="<%= new Date().toISOString().slice(0,7) %>" onchange="loadSchoolDays()">
+    </div>
+</div>
+
+<div class="card">
+    <h3>School Days Calendar</h3>
+    <p style="color:#64748b;margin-bottom:16px;">Manage non-school days such as holidays, seminar days, and special events. Weekends (Saturday & Sunday) are automatically marked as non-school days.</p>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Day</th>
+                    <th>School Day?</th>
+                    <th>Reason</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="sdBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add Non-School Day Modal -->
+<div class="modal-overlay" id="sdModal" style="display:none">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Add Non-School Day</h3>
+            <button class="modal-close" onclick="document.getElementById('sdModal').style.display='none'">&times;</button>
+        </div>
+        <form id="sdForm" onsubmit="saveSd(event)">
+            <div class="form-group"><label>Date *</label><input type="date" id="sdDate" required></div>
+            <div class="form-group"><label>Reason</label><input type="text" id="sdReason" placeholder="e.g. Holiday, Seminar, etc."></div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('sdModal').style.display='none'">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+var sdPollTimer = null;
+
+async function loadSchoolDays() {
+    var month = document.getElementById('sdMonth').value;
+    var params = new URLSearchParams();
+    if (month) params.append('month', month);
+    try {
+        var res = await fetch('/api/school-days?' + params);
+        var data = await res.json();
+        var dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+        document.getElementById('sdBody').innerHTML = data.map(function(d) {
+            var dt = new Date(d.date + 'T00:00:00');
+            var dayName = dayNames[dt.getDay()];
+            var isSD = d.is_school_day ? 'Yes' : 'No';
+            var badgeClass = d.is_school_day ? 'active' : 'inactive';
+            return '<tr><td>' + d.date + '</td><td>' + dayName + '</td>' +
+                '<td><span class="badge badge-' + badgeClass + '">' + isSD + '</span></td>' +
+                '<td>' + (d.reason || '-') + '</td>' +
+                '<td><button class="btn btn-sm btn-danger" onclick="deleteSd(' + d.id + ')">Remove</button></td></tr>';
+        }).join('') || '<tr><td colspan="5" class="text-center">No custom school day entries for this month</td></tr>';
+    } catch(e) { console.error(e); }
+}
+
+function openSdModal() {
+    document.getElementById('sdForm').reset();
+    document.getElementById('sdModal').style.display = 'flex';
+}
+
+async function saveSd(e) {
+    e.preventDefault();
+    await fetch('/api/school-days', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            date: document.getElementById('sdDate').value,
+            is_school_day: 0,
+            reason: document.getElementById('sdReason').value || null
+        })
+    });
+    document.getElementById('sdModal').style.display = 'none';
+    loadSchoolDays();
+}
+
+async function deleteSd(id) {
+    if (!confirm('Remove this entry?')) return;
+    await fetch('/api/school-days/' + id, { method: 'DELETE' });
+    loadSchoolDays();
+}
+
+function startSdPoll() {
+    if (sdPollTimer) clearInterval(sdPollTimer);
+    sdPollTimer = setInterval(loadSchoolDays, 5000);
+}
+loadSchoolDays();
+startSdPoll();
+</script>
+<%- include('partials/footer') %>

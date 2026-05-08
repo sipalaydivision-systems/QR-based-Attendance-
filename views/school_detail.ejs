@@ -1,0 +1,108 @@
+<%- include('partials/header') %>
+
+<!-- Breadcrumb -->
+<nav class="breadcrumb-nav">
+    <a href="/admin/schools"><i class="fa fa-school"></i> All Schools</a>
+    <span class="breadcrumb-sep"><i class="fa fa-chevron-right"></i></span>
+    <span class="breadcrumb-active" id="bcName"><i class="fa fa-school"></i> Loading...</span>
+</nav>
+
+<a href="/admin/schools" class="back-btn"><i class="fa fa-arrow-left"></i> Back to Schools</a>
+
+<div class="view-title">
+    <h1><i class="fa fa-layer-group" style="color:var(--primary)"></i> <span id="sdName">Loading...</span></h1>
+    <span class="count-badge" id="gradeCount">-</span>
+</div>
+
+<div class="browser-grid" id="gradeGrid">
+    <div class="text-center text-muted" style="grid-column:1/-1;padding:3rem">Loading grades...</div>
+</div>
+
+<script>
+var schoolId = <%= schoolId %>;
+var schoolData = null;
+var allStudents = [], allSections = [], allGrades = [];
+
+async function loadAll() {
+    try {
+        var [sRes, studRes, secRes, gradeRes] = await Promise.all([
+            fetch('/api/schools').then(function(r){return r.json();}),
+            fetch('/api/students?school_id=' + schoolId).then(function(r){return r.json();}),
+            fetch('/api/sections?school_id=' + schoolId).then(function(r){return r.json();}),
+            fetch('/api/grade-levels').then(function(r){return r.json();})
+        ]);
+
+        schoolData = sRes.find(function(s){return s.id === schoolId;});
+        allStudents = studRes;
+        allSections = secRes;
+        allGrades = gradeRes;
+
+        if (schoolData) {
+            document.getElementById('bcName').innerHTML = '<i class="fa fa-school"></i> ' + schoolData.name;
+            document.getElementById('sdName').textContent = schoolData.name;
+        }
+
+        renderGrades();
+    } catch(e) { console.error(e); }
+}
+
+function renderGrades() {
+    var gradeMap = {};
+    allSections.forEach(function(s) {
+        var gid = s.grade_level_id || 0;
+        if (!gradeMap[gid]) gradeMap[gid] = { grade: null, sections: [] };
+        gradeMap[gid].sections.push(s);
+    });
+    allGrades.forEach(function(g) {
+        if (gradeMap[g.id]) gradeMap[g.id].grade = g;
+    });
+
+    var keys = Object.keys(gradeMap);
+    document.getElementById('gradeCount').textContent = keys.length + ' grade' + (keys.length !== 1 ? 's' : '');
+
+    if (keys.length === 0) {
+        document.getElementById('gradeGrid').innerHTML = '<div class="card" style="grid-column:1/-1"><div class="empty-state"><i class="fa fa-layer-group" style="font-size:3rem;opacity:.3;margin-bottom:16px"></i><h3>No Grades Found</h3><p>This school has no sections or grades configured yet.</p></div></div>';
+        return;
+    }
+
+    keys.sort(function(a,b){
+        var ga = gradeMap[a].grade, gb = gradeMap[b].grade;
+        if (!ga) return 1; if (!gb) return -1;
+        return (ga.name || '').localeCompare(gb.name || '', undefined, {numeric: true});
+    });
+
+    document.getElementById('gradeGrid').innerHTML = keys.map(function(gid, idx) {
+        var item = gradeMap[gid];
+        var g = item.grade;
+        var secs = item.sections;
+        var gradeName = g ? g.name : 'Unassigned';
+        var gradeId = g ? g.id : 0;
+        var studentCount = 0;
+        secs.forEach(function(sec) {
+            studentCount += allStudents.filter(function(st){return st.section_id === sec.id;}).length;
+        });
+
+        return '<a href="/admin/school/'+schoolId+'/grade/'+gradeId+'" class="browser-card grade-card">'+
+            '<div class="card-top-accent"></div>'+
+            '<div class="card-body-inner">'+
+                '<div class="card-icon-wrap">'+
+                    '<i class="fa fa-graduation-cap"></i>'+
+                '</div>'+
+                '<div class="card-details">'+
+                    '<h3>'+gradeName+'</h3>'+
+                    '<p>'+secs.length+' section'+(secs.length!==1?'s':'')+'</p>'+
+                '</div>'+
+            '</div>'+
+            '<div class="card-stats-row">'+
+                '<div class="card-stat-item"><i class="fa fa-user-graduate"></i> <strong>'+studentCount+'</strong> Students</div>'+
+                '<div class="card-stat-item"><i class="fa fa-door-open"></i> <strong>'+secs.length+'</strong> Sections</div>'+
+            '</div>'+
+        '</a>';
+    }).join('');
+}
+
+loadAll();
+</script>
+
+<div class="live-indicator"><div class="live-dot"></div> Live</div>
+<%- include('partials/footer') %>

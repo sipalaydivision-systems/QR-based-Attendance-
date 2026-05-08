@@ -1,0 +1,502 @@
+<%- include('partials/header') %>
+
+<div class="page-header">
+    <div class="page-header-left">
+        <h1><i class="fa-solid fa-gear"></i> Settings</h1>
+    </div>
+</div>
+
+<!-- System Logo -->
+<div class="settings-section">
+    <h3><i class="fa-solid fa-image"></i> System Logo</h3>
+    <p class="section-desc">Upload a logo for the system. This will appear on printed QR codes and reports.</p>
+    <div style="display:flex; align-items:center; gap:1.25rem;">
+        <div class="logo-preview" id="logoPreview">
+            <i class="fa-solid fa-school" style="font-size:2rem;color:var(--gray-300);"></i>
+        </div>
+        <div>
+            <input type="file" id="logoFile" accept="image/*" style="display:none">
+            <button class="btn btn-primary btn-sm" onclick="document.getElementById('logoFile').click()"><i class="fa-solid fa-upload"></i> Upload Logo</button>
+            <button class="btn btn-secondary btn-sm" onclick="removeLogo()">Remove</button>
+            <p style="margin-top:0.5rem;font-size:0.75rem;color:var(--gray-400);">PNG/JPG, max 2MB</p>
+        </div>
+    </div>
+</div>
+
+<!-- Attendance Time Windows -->
+<div class="settings-section">
+    <h3><i class="fa-solid fa-clock"></i> Attendance Time Windows</h3>
+    <p class="section-desc">Configure the time boundaries for morning and afternoon attendance periods.</p>
+    <div class="settings-grid">
+        <div class="form-group">
+            <label>AM Time In End</label>
+            <input type="time" id="am_time_in_end" class="form-control" value="08:00">
+        </div>
+        <div class="form-group">
+            <label>AM Time Out Until</label>
+            <input type="time" id="am_time_out_until" class="form-control" value="12:00">
+        </div>
+        <div class="form-group">
+            <label>PM Time In Start</label>
+            <input type="time" id="pm_time_in_start" class="form-control" value="13:00">
+        </div>
+        <div class="form-group">
+            <label>PM Time Out End</label>
+            <input type="time" id="pm_time_out_end" class="form-control" value="17:00">
+        </div>
+    </div>
+</div>
+
+<!-- System Configuration -->
+<div class="settings-section">
+    <h3><i class="fa-solid fa-sliders"></i> System Configuration</h3>
+    <p class="section-desc">General system settings and defaults.</p>
+    <div class="settings-grid">
+        <div class="form-group">
+            <label>Division Name</label>
+            <input type="text" id="division_name" class="form-control" placeholder="School Division of Sipalay City">
+        </div>
+        <div class="form-group">
+            <label>System Name</label>
+            <input type="text" id="system_name" class="form-control" placeholder="School Attendance System">
+        </div>
+        <div class="form-group">
+            <label>Late Threshold (minutes)</label>
+            <input type="number" id="late_threshold" class="form-control" min="0" value="15">
+        </div>
+        <div class="form-group">
+            <label>Auto Time-Out (minutes)</label>
+            <input type="number" id="auto_timeout" class="form-control" min="0" value="480">
+        </div>
+        <div class="form-group">
+            <label>SMS Notifications</label>
+            <select id="sms_enabled" class="form-control">
+                <option value="1">Enabled</option>
+                <option value="0">Disabled</option>
+            </select>
+        </div>
+    </div>
+    <div style="margin-top:1rem;">
+        <button class="btn btn-primary" onclick="saveSettings()"><i class="fa-solid fa-floppy-disk"></i> Save All Settings</button>
+    </div>
+    <div id="settingsMsg" style="margin-top:0.75rem;"></div>
+</div>
+
+<!-- Enrollment & Activation -->
+<div class="settings-section">
+    <h3><i class="fa-solid fa-users-gear"></i> Enrollment &amp; Activation</h3>
+    <p class="section-desc">Control how newly imported students and teachers are activated.</p>
+    <div class="settings-grid">
+        <div class="form-group">
+            <label>Auto-Activate on First Scan</label>
+            <select id="auto_activate_on_scan" class="form-control">
+                <option value="1">Enabled</option>
+                <option value="0">Disabled</option>
+            </select>
+            <small style="color:var(--gray-400);font-size:0.75rem;">When enabled, imported students/teachers become active on their first QR scan.</small>
+        </div>
+    </div>
+    <div style="margin-top:1rem;">
+        <h4 style="margin-bottom:0.75rem;">Current Status Counts</h4>
+        <div class="status-counts-grid">
+            <div class="status-card">
+                <span class="status-count" id="inactiveStudentCount">0</span>
+                <span class="status-label">Inactive Students</span>
+                <small>Imported, not yet scanned</small>
+            </div>
+            <div class="status-card">
+                <span class="status-count" id="inactiveTeacherCount">0</span>
+                <span class="status-label">Inactive Teachers</span>
+                <small>Imported, not yet scanned</small>
+            </div>
+            <div class="status-card deleted">
+                <span class="status-count" id="deletedStudentCount">0</span>
+                <span class="status-label">Deleted Students</span>
+                <small>Removed from system</small>
+            </div>
+            <div class="status-card deleted">
+                <span class="status-count" id="deletedTeacherCount">0</span>
+                <span class="status-label">Deleted Teachers</span>
+                <small>Removed from system</small>
+            </div>
+        </div>
+    </div>
+    <div style="margin-top:1rem; display:flex; gap:0.75rem; flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" onclick="bulkActivate()"><i class="fa-solid fa-circle-check"></i> Activate All Inactive</button>
+        <button class="btn btn-danger btn-sm" onclick="bulkPurgeDeleted()"><i class="fa-solid fa-trash-can"></i> Permanently Remove Deleted</button>
+    </div>
+    <div id="activationMsg" style="margin-top:0.75rem;"></div>
+</div>
+
+<!-- Holiday Management -->
+<div class="settings-section">
+    <h3><i class="fa-solid fa-calendar-days"></i> Holiday Management</h3>
+    <p class="section-desc">Manage holidays and non-school days. Attendance will not be required on weekends (Sat/Sun) and listed holidays.</p>
+    <div class="holiday-form">
+        <div class="form-group" style="margin-bottom:0;">
+            <label>Date</label>
+            <input type="date" id="holidayDate" class="form-control">
+        </div>
+        <div class="form-group" style="margin-bottom:0;flex:1;">
+            <label>Holiday Name</label>
+            <input type="text" id="holidayName" class="form-control" placeholder="e.g. Rizal Day">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+            <label>Type</label>
+            <select id="holidayType" class="form-control">
+                <option value="1">Regular Holiday</option>
+                <option value="0">Special Non-Working</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+            <label>Scope</label>
+            <select id="holidayScope" class="form-control">
+                <option value="">All Schools (Division)</option>
+            </select>
+        </div>
+        <button class="btn btn-primary" onclick="addHoliday()">+ Add Holiday</button>
+    </div>
+    <div id="holidaysEmpty" style="text-align:center; padding:2rem; color:var(--gray-400);">
+        <i class="fa-solid fa-calendar-check" style="font-size:2rem; margin-bottom:0.5rem; display:block;"></i>
+        No holidays configured yet. Weekends (Saturday &amp; Sunday) are automatically treated as non-school days.
+    </div>
+    <div class="table-responsive" id="holidaysTableWrap" style="display:none;">
+        <table class="data-table">
+            <thead><tr><th>Holiday Name</th><th>Date</th><th>Type</th><th>Scope</th><th>Actions</th></tr></thead>
+            <tbody id="holidaysBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Admin Accounts -->
+<div class="settings-section">
+    <h3><i class="fa-solid fa-user-shield"></i> Admin Accounts</h3>
+    <div style="display:flex; justify-content:flex-end; margin-bottom:1rem;">
+        <button class="btn btn-primary" onclick="openAdminModal()">+ Add Admin</button>
+    </div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead><tr><th>Username</th><th>Full Name</th><th>Role</th><th>School</th><th>Last Login</th><th>Actions</th></tr></thead>
+            <tbody id="adminsBody">
+                <tr><td colspan="6" class="text-center text-muted">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Admin Modal -->
+<div class="modal-overlay" id="adminModal" style="display:none;">
+    <div class="modal-content" style="max-width:500px;">
+        <div class="modal-header">
+            <h3 id="adminModalTitle">Add Admin</h3>
+            <button class="modal-close" onclick="closeAdminModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="adminId">
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="adminUsername" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" id="adminFullname" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="adminEmail" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Password <span id="pwdHint" style="font-weight:normal;color:var(--gray-400);font-size:0.75rem;">(required)</span></label>
+                <input type="password" id="adminPassword" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Role</label>
+                <select id="adminRole" class="form-control">
+                    <option value="super_admin">Super Admin</option>
+                    <option value="superintendent">Superintendent</option>
+                    <option value="asst_superintendent">Asst. Superintendent</option>
+                    <option value="principal">Principal</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Assigned School</label>
+                <select id="adminSchool" class="form-control">
+                    <option value="">All Schools</option>
+                </select>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeAdminModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveAdmin()">Save</button>
+        </div>
+        <div id="adminMsg" style="padding:0 1.5rem 1rem;"></div>
+    </div>
+</div>
+
+<script>
+var settingKeys = ['system_name', 'am_time_in_end', 'am_time_out_until', 'pm_time_in_start', 'pm_time_out_end', 'division_name', 'late_threshold', 'auto_timeout', 'sms_enabled', 'auto_activate_on_scan'];
+
+async function loadSettings() {
+    try {
+        var res = await fetch('/api/settings');
+        var data = await res.json();
+        if (Array.isArray(data)) {
+            data.forEach(function(s) {
+                var el = document.getElementById(s.setting_key);
+                if (el) el.value = s.setting_value;
+            });
+        } else {
+            Object.keys(data).forEach(function(k) {
+                var el = document.getElementById(k);
+                if (el) el.value = data[k];
+            });
+        }
+    } catch(e) { console.error(e); }
+}
+
+async function saveSettings() {
+    var settings = {};
+    settingKeys.forEach(function(k) {
+        var el = document.getElementById(k);
+        if (el) settings[k] = el.value;
+    });
+    var res = await fetch('/api/settings', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(settings) });
+    var result = await res.json();
+    document.getElementById('settingsMsg').innerHTML = result.success
+        ? '<div class="alert alert-success">Settings saved successfully!</div>'
+        : '<div class="alert alert-danger">Failed to save settings.</div>';
+    setTimeout(function(){ document.getElementById('settingsMsg').innerHTML = ''; }, 3000);
+}
+
+async function loadHolidays() {
+    try {
+        var res = await fetch('/api/holidays');
+        var data = await res.json();
+        if (data.length > 0) {
+            document.getElementById('holidaysEmpty').style.display = 'none';
+            document.getElementById('holidaysTableWrap').style.display = '';
+            document.getElementById('holidaysBody').innerHTML = data.map(function(h){
+                var dateStr = h.holiday_date ? h.holiday_date.substring(0,10) : '';
+                var typeBadge = h.is_national ? '<span class="badge badge-active">Regular Holiday</span>' : '<span class="badge" style="background:#fef3c7;color:#92400e;">Special</span>';
+                var scope = h.school_name || 'All Schools (Division)';
+                return '<tr><td>'+h.name+'</td><td>'+dateStr+'</td><td>'+typeBadge+'</td><td>'+scope+'</td>'+
+                    '<td><button class="action-btn delete" onclick="deleteHoliday('+h.id+')" title="Delete"><i class="fa-solid fa-trash-can"></i></button></td></tr>';
+            }).join('');
+        } else {
+            document.getElementById('holidaysEmpty').style.display = '';
+            document.getElementById('holidaysTableWrap').style.display = 'none';
+        }
+    } catch(e) { console.error(e); }
+}
+
+async function addHoliday() {
+    var name = document.getElementById('holidayName').value.trim();
+    var date = document.getElementById('holidayDate').value;
+    var isNational = document.getElementById('holidayType').value;
+    var schoolId = document.getElementById('holidayScope').value;
+    if (!name || !date) { alert('Please enter holiday name and date.'); return; }
+    await fetch('/api/holidays', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ name: name, holiday_date: date, is_national: isNational, school_id: schoolId || null })
+    });
+    document.getElementById('holidayName').value = '';
+    document.getElementById('holidayDate').value = '';
+    loadHolidays();
+}
+
+async function deleteHoliday(id) {
+    if (!confirm('Delete this holiday?')) return;
+    await fetch('/api/holidays/' + id, { method: 'DELETE' });
+    loadHolidays();
+}
+
+function removeLogo() {
+    if (!confirm('Remove the system logo?')) return;
+    fetch('/api/settings/logo', { method: 'DELETE' }).then(function(r){ return r.json(); }).then(function(data){
+        if (data.success) {
+            document.getElementById('logoPreview').innerHTML = '<i class="fa-solid fa-school" style="font-size:2rem;color:var(--gray-300);"></i>';
+        }
+    });
+}
+
+function loadLogo() {
+    fetch('/api/settings').then(function(r){ return r.json(); }).then(function(data){
+        var logo = data.system_logo || (data['system_logo'] ? data['system_logo'] : null);
+        if (logo) {
+            document.getElementById('logoPreview').innerHTML = '<img src="' + logo + '?' + Date.now() + '" alt="System Logo">';
+        }
+    });
+}
+
+document.getElementById('logoFile').addEventListener('change', function() {
+    var file = this.files[0];
+    if (!file) return;
+    var fd = new FormData();
+    fd.append('logo', file);
+    fetch('/api/settings/logo', { method: 'POST', body: fd }).then(function(r){ return r.json(); }).then(function(data){
+        if (data.success) {
+            document.getElementById('logoPreview').innerHTML = '<img src="' + data.logo + '?' + Date.now() + '" alt="System Logo">';
+        } else {
+            alert(data.error || 'Upload failed');
+        }
+    }).catch(function(e){ alert('Upload failed'); });
+    this.value = '';
+});
+
+async function loadStatusCounts() {
+    try {
+        var res = await fetch('/api/status-counts');
+        var data = await res.json();
+        document.getElementById('inactiveStudentCount').textContent = data.inactive_students || 0;
+        document.getElementById('inactiveTeacherCount').textContent = data.inactive_teachers || 0;
+        document.getElementById('deletedStudentCount').textContent = data.deleted_students || 0;
+        document.getElementById('deletedTeacherCount').textContent = data.deleted_teachers || 0;
+    } catch(e) { console.error(e); }
+}
+
+async function bulkActivate() {
+    if (!confirm('Activate ALL inactive students and teachers? They will become active without needing to scan.')) return;
+    try {
+        var res = await fetch('/api/bulk-activate', { method: 'POST' });
+        var data = await res.json();
+        if (data.success) {
+            document.getElementById('activationMsg').innerHTML =
+                '<div class="alert alert-success">Activated ' + data.students + ' students and ' + data.teachers + ' teachers.</div>';
+            loadStatusCounts();
+        }
+    } catch(e) { console.error(e); }
+    setTimeout(function(){ document.getElementById('activationMsg').innerHTML = ''; }, 4000);
+}
+
+async function bulkPurgeDeleted() {
+    if (!confirm('PERMANENTLY delete all removed students and teachers? This cannot be undone.')) return;
+    try {
+        var res = await fetch('/api/bulk-purge-deleted', { method: 'POST' });
+        var data = await res.json();
+        if (data.success) {
+            document.getElementById('activationMsg').innerHTML =
+                '<div class="alert alert-success">Permanently removed ' + data.students + ' students and ' + data.teachers + ' teachers.</div>';
+            loadStatusCounts();
+        }
+    } catch(e) { console.error(e); }
+    setTimeout(function(){ document.getElementById('activationMsg').innerHTML = ''; }, 4000);
+}
+
+var roleBadgeMap = {
+    'super_admin': '<span class="badge" style="background:#dbeafe;color:#1e40af;">Super Admin</span>',
+    'superintendent': '<span class="badge" style="background:#ede9fe;color:#5b21b6;">Superintendent</span>',
+    'asst_superintendent': '<span class="badge" style="background:#fce7f3;color:#9d174d;">Asst Superintendent</span>',
+    'principal': '<span class="badge" style="background:#fee2e2;color:#991b1b;">Principal</span>'
+};
+
+async function loadAdmins() {
+    try {
+        var res = await fetch('/api/users');
+        var data = await res.json();
+        if (data.length === 0) {
+            document.getElementById('adminsBody').innerHTML = '<tr><td colspan="6" class="text-center text-muted">No admin accounts</td></tr>';
+            return;
+        }
+        document.getElementById('adminsBody').innerHTML = data.map(function(u){
+            var roleBadge = roleBadgeMap[u.role] || u.role;
+            var school = u.school_name || 'All Schools';
+            var lastLogin = u.last_login ? new Date(u.last_login).toLocaleString() : '-';
+            var actions = '<button class="action-btn edit" onclick="editAdmin('+u.id+')" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>';
+            if (u.role !== 'super_admin' || data.filter(function(x){return x.role==='super_admin'}).length > 1) {
+                actions += ' <button class="action-btn delete" onclick="deleteAdmin('+u.id+')" title="Delete"><i class="fa-solid fa-trash-can"></i></button>';
+            }
+            return '<tr><td>'+u.username+'</td><td>'+u.fullname+'</td><td>'+roleBadge+'</td><td>'+school+'</td><td>'+lastLogin+'</td><td>'+actions+'</td></tr>';
+        }).join('');
+    } catch(e) { console.error(e); }
+}
+
+function openAdminModal(id) {
+    document.getElementById('adminModal').style.display = 'flex';
+    document.getElementById('adminId').value = '';
+    document.getElementById('adminUsername').value = '';
+    document.getElementById('adminFullname').value = '';
+    document.getElementById('adminEmail').value = '';
+    document.getElementById('adminPassword').value = '';
+    document.getElementById('adminRole').value = 'principal';
+    document.getElementById('adminSchool').value = '';
+    document.getElementById('adminMsg').innerHTML = '';
+    document.getElementById('adminModalTitle').textContent = 'Add Admin';
+    document.getElementById('pwdHint').textContent = '(required)';
+}
+
+function closeAdminModal() {
+    document.getElementById('adminModal').style.display = 'none';
+}
+
+async function editAdmin(id) {
+    var res = await fetch('/api/users');
+    var users = await res.json();
+    var u = users.find(function(x){ return x.id === id; });
+    if (!u) return;
+    openAdminModal();
+    document.getElementById('adminModalTitle').textContent = 'Edit Admin';
+    document.getElementById('pwdHint').textContent = '(leave blank to keep current)';
+    document.getElementById('adminId').value = u.id;
+    document.getElementById('adminUsername').value = u.username;
+    document.getElementById('adminFullname').value = u.fullname;
+    document.getElementById('adminEmail').value = u.email || '';
+    document.getElementById('adminRole').value = u.role;
+    document.getElementById('adminSchool').value = u.school_id || '';
+}
+
+async function saveAdmin() {
+    var id = document.getElementById('adminId').value;
+    var body = {
+        username: document.getElementById('adminUsername').value.trim(),
+        fullname: document.getElementById('adminFullname').value.trim(),
+        email: document.getElementById('adminEmail').value.trim(),
+        password: document.getElementById('adminPassword').value,
+        role: document.getElementById('adminRole').value,
+        school_id: document.getElementById('adminSchool').value || null
+    };
+    if (!body.username || !body.fullname) { alert('Username and full name are required.'); return; }
+    if (!id && !body.password) { alert('Password is required for new admin.'); return; }
+    try {
+        var url = id ? '/api/users/' + id : '/api/users';
+        var method = id ? 'PUT' : 'POST';
+        var res = await fetch(url, { method: method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+        var data = await res.json();
+        if (data.success) {
+            closeAdminModal();
+            loadAdmins();
+        } else {
+            document.getElementById('adminMsg').innerHTML = '<div class="alert alert-danger">'+(data.error || 'Failed to save.')+'</div>';
+        }
+    } catch(e) { console.error(e); }
+}
+
+async function deleteAdmin(id) {
+    if (!confirm('Delete this admin account?')) return;
+    await fetch('/api/users/' + id, { method: 'DELETE' });
+    loadAdmins();
+}
+
+async function loadSchoolDropdowns() {
+    try {
+        var res = await fetch('/api/schools');
+        var schools = await res.json();
+        var active = schools.filter(function(s){ return s.status === 'active'; });
+        var opts = '<option value="">All Schools (Division)</option>' + active.map(function(s){
+            return '<option value="'+s.id+'">'+s.name+'</option>';
+        }).join('');
+        document.getElementById('holidayScope').innerHTML = opts;
+        var adminOpts = '<option value="">All Schools</option>' + active.map(function(s){
+            return '<option value="'+s.id+'">'+s.name+'</option>';
+        }).join('');
+        document.getElementById('adminSchool').innerHTML = adminOpts;
+    } catch(e) {}
+}
+
+loadSettings();
+loadHolidays();
+loadStatusCounts();
+loadLogo();
+loadAdmins();
+loadSchoolDropdowns();
+</script>
+<%- include('partials/footer') %>

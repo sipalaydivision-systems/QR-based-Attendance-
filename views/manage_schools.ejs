@@ -1,0 +1,516 @@
+<%- include('partials/header') %>
+
+<div class="page-header">
+    <div class="page-header-left">
+        <h1><i class="fa-solid fa-school"></i> All Schools <span class="page-count" id="schoolCount">-</span></h1>
+        <p class="page-subtitle">Manage all schools in the division</p>
+    </div>
+    <div class="page-actions">
+        <input type="text" class="search-input" id="searchInput" placeholder="Search by name or code..." oninput="applyFilters()">
+        <select id="statusFilter" class="filter-select" onchange="applyFilters()">
+            <option value="all">All Status</option>
+            <option value="active" selected>Active</option>
+            <option value="inactive">Inactive</option>
+        </select>
+        <button class="btn btn-primary" onclick="openSchoolModal()">+ Add School</button>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="summary-stats" id="statsCards">
+    <div class="summary-stat-card">
+        <div class="stat-icon-box blue"><i class="fa-solid fa-school"></i></div>
+        <div class="stat-content">
+            <div class="stat-value" id="statTotalSchools">-</div>
+            <div class="stat-label">Total Schools</div>
+        </div>
+    </div>
+    <div class="summary-stat-card">
+        <div class="stat-icon-box green"><i class="fa-solid fa-circle-check"></i></div>
+        <div class="stat-content">
+            <div class="stat-value" id="statActiveSchools">-</div>
+            <div class="stat-label">Active Schools</div>
+        </div>
+    </div>
+    <div class="summary-stat-card">
+        <div class="stat-icon-box purple"><i class="fa-solid fa-user-graduate"></i></div>
+        <div class="stat-content">
+            <div class="stat-value" id="statTotalStudents">-</div>
+            <div class="stat-label">Total Students</div>
+        </div>
+    </div>
+    <div class="summary-stat-card">
+        <div class="stat-icon-box orange"><i class="fa-solid fa-chalkboard-user"></i></div>
+        <div class="stat-content">
+            <div class="stat-value" id="statTotalTeachers">-</div>
+            <div class="stat-label">Total Teachers</div>
+        </div>
+    </div>
+    <div class="summary-stat-card">
+        <div class="stat-icon-box red"><i class="fa-solid fa-layer-group"></i></div>
+        <div class="stat-content">
+            <div class="stat-value" id="statTotalSections">-</div>
+            <div class="stat-label">Total Sections</div>
+        </div>
+    </div>
+</div>
+
+<!-- Action Row -->
+<div class="action-row">
+    <div class="action-row-left">
+        <button class="btn btn-secondary" onclick="location.href='/admin/bulk-import'"><i class="fa-solid fa-file-import"></i> Import Students/Teachers</button>
+        <button class="btn btn-secondary" onclick="exportSchools()"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+        <button class="btn btn-secondary btn-icon" onclick="loadData()" title="Refresh"><i class="fa-solid fa-rotate"></i></button>
+    </div>
+    <div class="action-row-right">
+        <div class="view-toggle">
+            <button class="view-btn active" id="viewCards" onclick="setView('cards')" title="Card View"><i class="fa-solid fa-grip"></i></button>
+            <button class="view-btn" id="viewTable" onclick="setView('table')" title="Table View"><i class="fa-solid fa-list"></i></button>
+        </div>
+    </div>
+</div>
+
+<!-- Card View -->
+<div class="school-grid" id="cardView">
+    <div class="text-center text-muted" style="grid-column:1/-1; padding:2rem;">Loading schools...</div>
+</div>
+
+<!-- Table View -->
+<div id="tableView" style="display:none">
+    <div class="card" style="padding:0; overflow:hidden;">
+        <div class="table-responsive">
+            <table class="data-table" id="schoolsTable">
+                <thead>
+                    <tr>
+                        <th class="sortable" onclick="sortBy('name')">School Name <span class="sort-icon"><i class="fa-solid fa-sort"></i></span></th>
+                        <th class="sortable" onclick="sortBy('school_code')">Code <span class="sort-icon"><i class="fa-solid fa-sort"></i></span></th>
+                        <th class="sortable" onclick="sortBy('address')">Location <span class="sort-icon"><i class="fa-solid fa-sort"></i></span></th>
+                        <th class="sortable" onclick="sortBy('student_count')">Students <span class="sort-icon"><i class="fa-solid fa-sort"></i></span></th>
+                        <th class="sortable" onclick="sortBy('teacher_count')">Teachers <span class="sort-icon"><i class="fa-solid fa-sort"></i></span></th>
+                        <th class="sortable" onclick="sortBy('section_count')">Sections <span class="sort-icon"><i class="fa-solid fa-sort"></i></span></th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="schoolsBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Pagination -->
+<div class="pagination-bar" id="paginationBar">
+    <div class="pagination-info" id="pagInfo">Showing 0 of 0</div>
+    <div class="pagination-controls">
+        <select id="pageSize" onchange="changePage(1)">
+            <option value="12">12 per page</option>
+            <option value="24">24 per page</option>
+            <option value="48">48 per page</option>
+            <option value="999">All</option>
+        </select>
+        <div class="pagination-btns" id="pagBtns"></div>
+    </div>
+</div>
+
+<!-- Add/Edit School Modal -->
+<div class="modal-overlay" id="schoolModal" style="display:none">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="schoolModalTitle">Add School</h3>
+            <button class="modal-close" onclick="closeSchoolModal()">&times;</button>
+        </div>
+        <form id="schoolForm" onsubmit="saveSchool(event)">
+            <input type="hidden" id="schoolId">
+            <div class="form-row">
+                <div class="form-group" style="flex:1">
+                    <label>School ID</label>
+                    <input type="text" id="schoolIdDisplay" placeholder="e.g. SCH-001">
+                </div>
+                <div class="form-group" style="flex:2">
+                    <label>School Name *</label>
+                    <input type="text" id="schoolName" required placeholder="e.g. Sipalay National High School">
+                    <small class="field-hint" id="nameHint"></small>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Address</label>
+                <input type="text" id="schoolAddress" placeholder="e.g. Brgy. Centro, Sipalay City">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Contact</label>
+                    <input type="text" id="schoolContact" placeholder="Phone or email">
+                </div>
+                <div class="form-group">
+                    <label>Status</label>
+                    <select id="schoolStatus">
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>School Logo</label>
+                <div id="logoPreviewArea" style="display:none;margin-bottom:8px">
+                    <div style="display:flex;align-items:center;gap:12px">
+                        <img id="logoPreviewImg" src="" alt="" style="width:64px;height:64px;object-fit:contain;border-radius:8px;border:1px solid var(--border)">
+                        <button type="button" class="btn btn-secondary" style="font-size:.8rem;padding:4px 12px" onclick="removeLogo()"><i class="fa fa-trash"></i> Remove</button>
+                    </div>
+                </div>
+                <input type="file" id="schoolLogo" accept="image/*" style="font-size:.85rem">
+                <small class="field-hint" style="color:var(--text-muted)">Max 2MB. JPG, PNG, GIF, or WebP.</small>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeSchoolModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="schoolSaveBtn">Save School</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Delete Confirm Modal -->
+<div class="modal-overlay" id="deleteModal" style="display:none">
+    <div class="modal" style="max-width:440px">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-triangle-exclamation"></i> Delete School</h3>
+            <button class="modal-close" onclick="closeDeleteModal()">&times;</button>
+        </div>
+        <div style="padding:1.25rem 1.5rem">
+            <p style="margin-bottom:1rem;color:var(--gray-600);font-size:0.875rem" id="deleteMsg">Are you sure?</p>
+            <div id="deleteDeps" style="display:none;margin-bottom:1rem">
+                <div class="alert alert-warning" style="margin-bottom:0">
+                    <i class="fa-solid fa-triangle-exclamation"></i> This school has linked records. Remove students and teachers first, or set it to <strong>Inactive</strong> instead.
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+                <button class="btn btn-danger" id="confirmDeleteBtn" onclick="confirmDelete()">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+var allSchools = [];
+var filtered = [];
+var currentPage = 1;
+var currentSort = { field: 'name', dir: 'asc' };
+var currentView = 'cards';
+var deleteId = null;
+
+async function loadData() {
+    try {
+        var res = await fetch('/api/schools');
+        allSchools = await res.json();
+        updateStats();
+        applyFilters();
+    } catch(e) { console.error(e); }
+}
+
+function updateStats() {
+    var active = allSchools.filter(function(s){return s.status === 'active';});
+    var totalStudents = allSchools.reduce(function(sum,s){return sum + (s.student_count||0);}, 0);
+    var totalTeachers = allSchools.reduce(function(sum,s){return sum + (s.teacher_count||0);}, 0);
+    var totalSections = allSchools.reduce(function(sum,s){return sum + (s.section_count||0);}, 0);
+    document.getElementById('statTotalSchools').textContent = allSchools.length;
+    document.getElementById('statActiveSchools').textContent = active.length;
+    document.getElementById('statTotalStudents').textContent = totalStudents.toLocaleString();
+    document.getElementById('statTotalTeachers').textContent = totalTeachers.toLocaleString();
+    document.getElementById('statTotalSections').textContent = totalSections.toLocaleString();
+}
+
+function applyFilters() {
+    var q = document.getElementById('searchInput').value.toLowerCase().trim();
+    var st = document.getElementById('statusFilter').value;
+    filtered = allSchools.filter(function(s) {
+        var matchQ = !q
+            || s.name.toLowerCase().indexOf(q) !== -1
+            || (s.school_code && s.school_code.toLowerCase().indexOf(q) !== -1)
+            || (s.school_id_code && s.school_id_code.toLowerCase().indexOf(q) !== -1);
+        var matchS = st === 'all' || s.status === st;
+        return matchQ && matchS;
+    });
+    sortFiltered();
+    currentPage = 1;
+    render();
+}
+
+function sortBy(field) {
+    if (currentSort.field === field) {
+        currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSort.field = field;
+        currentSort.dir = 'asc';
+    }
+    sortFiltered();
+    render();
+}
+
+function sortFiltered() {
+    var f = currentSort.field, d = currentSort.dir;
+    filtered.sort(function(a,b) {
+        var av = a[f], bv = b[f];
+        if (av == null) av = '';
+        if (bv == null) bv = '';
+        if (typeof av === 'string') { av = av.toLowerCase(); bv = bv.toLowerCase(); }
+        if (av < bv) return d === 'asc' ? -1 : 1;
+        if (av > bv) return d === 'asc' ? 1 : -1;
+        return 0;
+    });
+}
+
+function render() {
+    var ps = parseInt(document.getElementById('pageSize').value);
+    var totalPages = Math.ceil(filtered.length / ps) || 1;
+    if (currentPage > totalPages) currentPage = totalPages;
+    var start = (currentPage - 1) * ps;
+    var page = filtered.slice(start, start + ps);
+
+    document.getElementById('schoolCount').textContent = filtered.length + ' school' + (filtered.length !== 1 ? 's' : '');
+
+    if (currentView === 'cards') renderCards(page);
+    else renderTable(page);
+
+    renderPagination(totalPages, start, page.length);
+}
+
+function renderCards(items) {
+    if (items.length === 0) {
+        document.getElementById('cardView').innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon"><i class="fa-solid fa-school" style="font-size:2.5rem;color:var(--gray-300);"></i></div><h4>No schools found</h4><p>Try changing your filters</p></div>';
+        return;
+    }
+    document.getElementById('cardView').innerHTML = items.map(function(s) {
+        var statusCls = s.status === 'active' ? 'badge-active' : 'badge-inactive';
+        var iconHtml = s.logo
+            ? '<img src="'+s.logo+'" alt="" style="width:48px;height:48px;object-fit:contain;border-radius:8px">'
+            : '<i class="fa-solid fa-school" style="font-size:1.75rem;color:var(--gray-400);"></i>';
+        return '<div class="school-card-v2" onclick="viewSchool('+s.id+')">'+ 
+            '<div class="sc-header">'+
+                '<div class="sc-icon">'+iconHtml+'</div>'+
+                '<span class="badge '+statusCls+'">'+s.status+'</span>'+
+            '</div>'+
+                '<div class="sc-body">'+
+                    '<div class="sc-name">'+s.name+'</div>'+
+                    (s.school_id_code ? '<div class="sc-code">'+s.school_id_code+'</div>' : '')+
+                '</div>'+
+            '<div class="sc-stats">'+
+                '<div class="sc-stat"><span class="sc-stat-val">'+(s.student_count||0)+'</span><span class="sc-stat-lbl">Students</span></div>'+
+                '<div class="sc-stat"><span class="sc-stat-val">'+(s.teacher_count||0)+'</span><span class="sc-stat-lbl">Teachers</span></div>'+
+                '<div class="sc-stat"><span class="sc-stat-val">'+(s.section_count||0)+'</span><span class="sc-stat-lbl">Sections</span></div>'+
+            '</div>'+
+            '<div class="sc-actions" onclick="event.stopPropagation()">'+
+                '<button class="action-btn edit" onclick="editSchoolById('+s.id+')" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>'+
+                '<button class="action-btn delete" onclick="openDeleteModal('+s.id+')" title="Delete"><i class="fa-solid fa-trash-can"></i></button>'+
+            '</div>'+
+        '</div>';
+    }).join('');
+}
+
+function renderTable(items) {
+    if (items.length === 0) {
+        document.getElementById('schoolsBody').innerHTML = '<tr><td colspan="8" class="text-center text-muted" style="padding:2rem">No schools found</td></tr>';
+        return;
+    }
+    document.getElementById('schoolsBody').innerHTML = items.map(function(s) {
+        var statusCls = s.status === 'active' ? 'badge-active' : 'badge-inactive';
+        return '<tr class="clickable-row" onclick="viewSchool('+s.id+')">'+
+            '<td><div class="school-name-cell"><div class="school-mini-icon"><i class="fa-solid fa-school"></i></div><div><strong>'+s.name+'</strong></div></div></td>'+
+            '<td><span class="school-code">'+(s.school_code||'&mdash;')+'</span></td>'+
+            '<td class="text-muted">'+(s.address||'&mdash;')+'</td>'+
+            '<td>'+(s.student_count||0)+'</td>'+
+            '<td>'+(s.teacher_count||0)+'</td>'+
+            '<td>'+(s.section_count||0)+'</td>'+
+            '<td><span class="badge '+statusCls+'">'+s.status+'</span></td>'+
+            '<td onclick="event.stopPropagation()"><div class="action-btns">'+
+                '<button class="action-btn edit" onclick="editSchoolById('+s.id+')" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>'+
+                '<button class="action-btn delete" onclick="openDeleteModal('+s.id+')" title="Delete"><i class="fa-solid fa-trash-can"></i></button>'+
+            '</div></td></tr>';
+    }).join('');
+}
+
+function renderPagination(totalPages, start, count) {
+    document.getElementById('pagInfo').textContent = 'Showing ' + (filtered.length ? start+1 : 0) + '\u2013' + (start+count) + ' of ' + filtered.length;
+    var html = '';
+    if (totalPages > 1) {
+        html += '<button class="pag-btn" onclick="changePage('+(currentPage-1)+')" '+(currentPage<=1?'disabled':'')+'><i class="fa-solid fa-chevron-left"></i></button>';
+        for (var i = 1; i <= totalPages; i++) {
+            if (totalPages > 7 && i > 2 && i < totalPages - 1 && Math.abs(i - currentPage) > 1) {
+                if (i === 3 || i === totalPages - 2) html += '<span class="pag-dots">...</span>';
+                continue;
+            }
+            html += '<button class="pag-btn'+(i===currentPage?' active':'')+'" onclick="changePage('+i+')">'+i+'</button>';
+        }
+        html += '<button class="pag-btn" onclick="changePage('+(currentPage+1)+')" '+(currentPage>=totalPages?'disabled':'')+'><i class="fa-solid fa-chevron-right"></i></button>';
+    }
+    document.getElementById('pagBtns').innerHTML = html;
+}
+
+function changePage(p) {
+    var ps = parseInt(document.getElementById('pageSize').value);
+    var totalPages = Math.ceil(filtered.length / ps) || 1;
+    if (p < 1 || p > totalPages) return;
+    currentPage = p;
+    render();
+}
+
+function setView(v) {
+    currentView = v;
+    document.getElementById('cardView').style.display = v === 'cards' ? '' : 'none';
+    document.getElementById('tableView').style.display = v === 'table' ? '' : 'none';
+    document.getElementById('viewCards').classList.toggle('active', v === 'cards');
+    document.getElementById('viewTable').classList.toggle('active', v === 'table');
+    render();
+}
+
+function viewSchool(id) {
+    location.href = '/admin/school/' + id;
+}
+
+/* ---- Modal CRUD ---- */
+function openSchoolModal() {
+    document.getElementById('schoolModalTitle').textContent = 'Add School';
+    document.getElementById('schoolForm').reset();
+    document.getElementById('schoolId').value = '';
+    document.getElementById('schoolIdDisplay').value = '';
+    document.getElementById('schoolStatus').value = 'active';
+    document.getElementById('nameHint').textContent = '';
+    document.getElementById('schoolLogo').value = '';
+    document.getElementById('logoPreviewArea').style.display = 'none';
+    document.getElementById('schoolModal').style.display = 'flex';
+}
+
+function closeSchoolModal() { document.getElementById('schoolModal').style.display = 'none'; }
+
+function editSchoolById(id) {
+    var s = allSchools.find(function(x){return x.id===id;});
+    if (!s) return;
+    document.getElementById('schoolModalTitle').textContent = 'Edit School';
+    document.getElementById('schoolId').value = s.id;
+    document.getElementById('schoolIdDisplay').value = s.id;
+    document.getElementById('schoolName').value = s.name;
+    document.getElementById('schoolIdDisplay').value = s.school_id_code || '';
+    document.getElementById('schoolAddress').value = s.address || '';
+    document.getElementById('schoolContact').value = s.contact || '';
+    document.getElementById('schoolStatus').value = s.status || 'active';
+    document.getElementById('nameHint').textContent = '';
+    document.getElementById('schoolLogo').value = '';
+    if (s.logo) {
+        document.getElementById('logoPreviewImg').src = s.logo;
+        document.getElementById('logoPreviewArea').style.display = '';
+    } else {
+        document.getElementById('logoPreviewArea').style.display = 'none';
+    }
+    document.getElementById('schoolModal').style.display = 'flex';
+}
+
+async function saveSchool(e) {
+    e.preventDefault();
+    var id = document.getElementById('schoolId').value;
+    var body = {
+        name: document.getElementById('schoolName').value.trim(),
+        school_id_code: document.getElementById('schoolIdDisplay').value.trim(),
+        address: document.getElementById('schoolAddress').value.trim(),
+        contact: document.getElementById('schoolContact').value.trim(),
+        status: document.getElementById('schoolStatus').value
+    };
+    if (!body.name) { showToast('School name is required', 'error'); return; }
+
+    // Duplicate check
+    var dup = allSchools.find(function(s){ return s.name.toLowerCase() === body.name.toLowerCase() && String(s.id) !== String(id); });
+    if (dup) { document.getElementById('nameHint').textContent = 'A school with this name already exists'; document.getElementById('nameHint').style.color = 'var(--danger)'; return; }
+
+    var url = id ? '/api/schools/' + id : '/api/schools';
+    var method = id ? 'PUT' : 'POST';
+    try {
+        var res = await fetch(url, { method: method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+        var data = await res.json();
+        if (data.success || data.id) {
+            var schoolId = id || data.id;
+            // Upload logo if file selected
+            var logoFile = document.getElementById('schoolLogo').files[0];
+            if (logoFile) {
+                var fd = new FormData();
+                fd.append('logo', logoFile);
+                var logoRes = await fetch('/api/schools/' + schoolId + '/logo', { method: 'POST', body: fd });
+                var logoData = await logoRes.json();
+                if (!logoData.success) showToast('School saved but logo upload failed: ' + (logoData.error || ''), 'error');
+            }
+            closeSchoolModal();
+            showToast(id ? 'School updated successfully' : 'School added successfully', 'success');
+            loadData();
+        } else {
+            showToast(data.error || 'Failed to save school', 'error');
+        }
+    } catch(err) { showToast('Network error', 'error'); }
+}
+
+async function removeLogo() {
+    var id = document.getElementById('schoolId').value;
+    if (!id) return;
+    try {
+        var res = await fetch('/api/schools/' + id + '/logo', { method: 'DELETE' });
+        var data = await res.json();
+        if (data.success) {
+            document.getElementById('logoPreviewArea').style.display = 'none';
+            document.getElementById('logoPreviewImg').src = '';
+            showToast('Logo removed', 'success');
+        }
+    } catch(e) { showToast('Failed to remove logo', 'error'); }
+}
+
+/* ---- Delete ---- */
+function openDeleteModal(id) {
+    deleteId = id;
+    var s = allSchools.find(function(x){return x.id===id;});
+    var hasDeps = s && ((s.student_count||0) > 0 || (s.teacher_count||0) > 0);
+    document.getElementById('deleteMsg').textContent = 'Are you sure you want to delete "' + (s ? s.name : '') + '"? This action cannot be undone.';
+    document.getElementById('deleteDeps').style.display = hasDeps ? '' : 'none';
+    document.getElementById('confirmDeleteBtn').disabled = hasDeps;
+    document.getElementById('confirmDeleteBtn').style.opacity = hasDeps ? '0.5' : '1';
+    document.getElementById('deleteModal').style.display = 'flex';
+}
+function closeDeleteModal() { document.getElementById('deleteModal').style.display = 'none'; deleteId = null; }
+
+async function confirmDelete() {
+    if (!deleteId) return;
+    try {
+        var res = await fetch('/api/schools/' + deleteId, { method: 'DELETE' });
+        var data = await res.json();
+        if (data.success) { closeDeleteModal(); showToast('School deleted', 'success'); loadData(); }
+        else showToast(data.error || 'Delete failed', 'error');
+    } catch(err) { showToast('Network error', 'error'); }
+}
+
+/* ---- Export ---- */
+function exportSchools() {
+    var csv = 'Name,Code,Address,Contact,Status,Students,Teachers,Sections\n';
+    filtered.forEach(function(s) {
+        csv += '"'+(s.name||'')+'",'+(s.school_code||'')+','+
+               '"'+(s.address||'')+'","'+(s.contact||'')+'",'+
+               s.status+','+(s.student_count||0)+','+(s.teacher_count||0)+','+(s.section_count||0)+'\n';
+    });
+    var blob = new Blob([csv], {type:'text/csv'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'schools_export.csv';
+    a.click();
+}
+
+/* ---- Toast ---- */
+function showToast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'toast toast-' + type;
+    el.innerHTML = (type==='success'?'<i class="fa-solid fa-circle-check"></i>':'<i class="fa-solid fa-triangle-exclamation"></i>') + ' ' + msg;
+    document.getElementById('toastContainer').appendChild(el);
+    setTimeout(function(){ el.classList.add('toast-hide'); setTimeout(function(){ el.remove(); },300); }, 3000);
+}
+
+loadData();
+setInterval(function() { if (document.getElementById('schoolModal').style.display !== 'flex' && document.getElementById('deleteModal').style.display !== 'flex') loadData(); }, 5000);
+</script>
+
+<div class="live-indicator"><div class="live-dot"></div> Live</div>
+<%- include('partials/footer') %>

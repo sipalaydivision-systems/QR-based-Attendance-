@@ -1,0 +1,60 @@
+<%- include('partials/header') %>
+
+<!-- Breadcrumb -->
+<nav class="breadcrumb-nav">
+    <span class="breadcrumb-active"><i class="fa-solid fa-school"></i> All Schools</span>
+</nav>
+
+<div class="view-title">
+    <h1><i class="fa-solid fa-school" style="color:var(--primary)"></i> Schools</h1>
+    <span class="count-badge" id="schoolCount">-</span>
+</div>
+
+<div class="school-grid" id="schoolGrid">
+    <div class="text-center text-muted" style="grid-column:1/-1;padding:3rem">Loading schools...</div>
+</div>
+
+<script>
+async function loadSchools() {
+    try {
+        var res = await fetch('/api/schools');
+        var schools = await res.json();
+
+        var active = schools.filter(function(s){ return s.status === 'active'; });
+        active.sort(function(a,b){ return a.name.localeCompare(b.name); });
+
+        document.getElementById('schoolCount').textContent = active.length + ' school' + (active.length !== 1 ? 's' : '');
+
+        if (active.length === 0) {
+            document.getElementById('schoolGrid').innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon"><i class="fa-solid fa-school"></i></div><h4>No Schools Found</h4><p>No active schools are available.</p></div>';
+            return;
+        }
+
+        document.getElementById('schoolGrid').innerHTML = active.map(function(s) {
+            var iconHtml = s.logo
+                ? '<img src="'+s.logo+'" alt="" style="width:48px;height:48px;object-fit:contain;border-radius:8px">'
+                : '<i class="fa-solid fa-school"></i>';
+            return '<a href="/admin/school/'+s.id+'" class="school-card-v2" style="text-decoration:none;color:inherit;display:block">'+
+                '<div class="sc-header">'+
+                    '<div class="sc-icon">'+iconHtml+'</div>'+
+                    '<span class="badge badge-active">active</span>'+
+                '</div>'+
+                '<div class="sc-body">'+
+                    '<div class="sc-name">'+s.name+'</div>'+
+                    (s.school_id_code ? '<div class="sc-code">'+s.school_id_code+'</div>' : '')+
+                '</div>'+
+                '<div class="sc-stats">'+
+                    '<div class="sc-stat"><span class="sc-stat-val">'+(s.student_count||0)+'</span><span class="sc-stat-lbl">Students</span></div>'+
+                    '<div class="sc-stat"><span class="sc-stat-val">'+(s.teacher_count||0)+'</span><span class="sc-stat-lbl">Teachers</span></div>'+
+                    '<div class="sc-stat"><span class="sc-stat-val">'+(s.section_count||0)+'</span><span class="sc-stat-lbl">Sections</span></div>'+
+                '</div>'+
+            '</a>';
+        }).join('');
+    } catch(e) { console.error(e); }
+}
+
+loadSchools();
+</script>
+
+<div class="live-indicator"><div class="live-dot"></div> Live</div>
+<%- include('partials/footer') %>

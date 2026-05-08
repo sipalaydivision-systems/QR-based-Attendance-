@@ -1,0 +1,18 @@
+        </div>
+    </main>
+    <div class="offline-overlay" id="offlineOverlay" style="display:none;">
+        <div class="offline-content">
+            <h2>You are offline</h2>
+            <p>Please check your internet connection.</p>
+            <button onclick="location.reload()">Retry</button>
+        </div>
+    </div>
+    <script>
+        window.addEventListener('offline', () => document.getElementById('offlineOverlay').style.display = 'flex');
+        window.addEventListener('online', () => document.getElementById('offlineOverlay').style.display = 'none');
+    </script>
+    <% if (typeof user !== 'undefined' && user) { %>
+    <script src="/js/mobile-app.js"></script>
+    <% } %>
+</body>
+</html>

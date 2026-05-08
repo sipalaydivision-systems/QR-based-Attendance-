@@ -1,0 +1,35 @@
+<%- include('partials/header') %>
+
+<div class="card">
+    <h3>User Activity Logs</h3>
+    <div class="filter-row">
+        <input type="date" id="logDate" class="form-control" style="max-width:200px">
+        <button class="btn btn-primary" onclick="loadLogs()">Filter</button>
+    </div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead><tr><th>Date/Time</th><th>User</th><th>Action</th><th>Details</th><th>IP Address</th></tr></thead>
+            <tbody id="logsBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+async function loadLogs() {
+    var date = document.getElementById('logDate').value;
+    var url = '/api/user-logs' + (date ? '?date=' + date : '');
+    var res = await fetch(url);
+    var data = await res.json();
+    document.getElementById('logsBody').innerHTML = data.map(function(l) {
+        return '<tr><td>' + new Date(l.created_at).toLocaleString() + '</td><td>' +
+            (l.username || 'System') + '</td><td>' + l.action + '</td><td>' +
+            (l.details || '-') + '</td><td>' + (l.ip_address || '-') + '</td></tr>';
+    }).join('') || '<tr><td colspan="5" class="text-center">No logs found</td></tr>';
+}
+document.getElementById('logDate').valueAsDate = new Date();
+loadLogs();
+
+// Real-time auto-refresh every 5 seconds
+var logPollTimer = setInterval(loadLogs, 5000);
+</script>
+<%- include('partials/footer') %>

@@ -1,0 +1,66 @@
+<%- include('partials/header') %>
+
+<div class="page-actions">
+    <div class="filter-group">
+        <label for="smsDate">Date:</label>
+        <input type="date" id="smsDate" value="<%= new Date().toISOString().slice(0,10) %>">
+    </div>
+    <div class="filter-group">
+        <label for="smsStatus">Status:</label>
+        <select id="smsStatus">
+            <option value="">All</option>
+            <option value="sent">Sent</option>
+            <option value="failed">Failed</option>
+            <option value="pending">Pending</option>
+        </select>
+    </div>
+    <button class="btn btn-primary" onclick="loadSmsLogs()">Filter</button>
+</div>
+
+<div class="card">
+    <h3>SMS Delivery Logs</h3>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Date/Time</th>
+                    <th>Recipient</th>
+                    <th>Message</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="smsBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+var smsPollTimer = null;
+
+async function loadSmsLogs() {
+    var date = document.getElementById('smsDate').value;
+    var status = document.getElementById('smsStatus').value;
+    var params = new URLSearchParams();
+    if (date) params.append('date', date);
+    if (status) params.append('status', status);
+    try {
+        var res = await fetch('/api/sms-logs?' + params);
+        var data = await res.json();
+        document.getElementById('smsBody').innerHTML = data.map(function(l) {
+            var statusClass = l.status === 'sent' ? 'active' : l.status === 'failed' ? 'inactive' : 'present';
+            return '<tr><td>' + new Date(l.created_at).toLocaleString() + '</td>' +
+                '<td>' + (l.recipient || '-') + '</td>' +
+                '<td>' + (l.message || '-') + '</td>' +
+                '<td><span class="badge badge-' + statusClass + '">' + l.status + '</span></td></tr>';
+        }).join('') || '<tr><td colspan="4" class="text-center">No SMS logs found</td></tr>';
+    } catch(e) { console.error(e); }
+}
+
+function startSmsPoll() {
+    if (smsPollTimer) clearInterval(smsPollTimer);
+    smsPollTimer = setInterval(loadSmsLogs, 5000);
+}
+loadSmsLogs();
+startSmsPoll();
+</script>
+<%- include('partials/footer') %>

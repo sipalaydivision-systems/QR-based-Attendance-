@@ -1,0 +1,120 @@
+<%- include('partials/header') %>
+
+<div class="page-header">
+    <div class="page-header-left">
+        <h1><i class="fa-solid fa-bell"></i> Notifications</h1>
+    </div>
+</div>
+
+<!-- 2-Day Consecutive Absence Alerts -->
+<div class="alert-card">
+    <div class="alert-card-header">
+        <i class="fa-solid fa-triangle-exclamation"></i> 2-Day Consecutive Absence Alerts <span class="alert-count" id="absenceCount">0</span>
+    </div>
+
+    <div class="sub-title"><i class="fa-solid fa-user-graduate"></i> Students</div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>School</th>
+                    <th>Grade &amp; Section</th>
+                    <th>Adviser</th>
+                </tr>
+            </thead>
+            <tbody id="absStudents">
+                <tr><td colspan="4" class="text-center text-muted">No consecutive absences detected</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="sub-title" style="margin-top:1.25rem;"><i class="fa-solid fa-chalkboard-user"></i> Teachers</div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Employee ID</th>
+                    <th>School</th>
+                </tr>
+            </thead>
+            <tbody id="absTeachers">
+                <tr><td colspan="3" class="text-center text-muted">No consecutive absences detected</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<% if (user && user.role === 'super_admin') { %>
+<!-- User Activity -->
+<div class="activity-card">
+    <h3><i class="fa-solid fa-user-clock"></i> User Activity</h3>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Role</th>
+                    <th>School</th>
+                    <th>Last Login</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="userActivity">
+                <tr><td colspan="5" class="text-center text-muted">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<% } %>
+
+<script>
+async function loadNotifications() {
+    try {
+        // Load absence flags
+        var flagRes = await fetch('/api/absence-flags');
+        var flags = await flagRes.json();
+        var studentFlags = flags.filter(function(f){return f.person_type==='student';});
+        var teacherFlags = flags.filter(function(f){return f.person_type==='teacher';});
+        document.getElementById('absenceCount').textContent = flags.length;
+
+        if (studentFlags.length > 0) {
+            document.getElementById('absStudents').innerHTML = studentFlags.map(function(f){
+                return '<tr><td><strong>'+f.person_name+'</strong></td><td><span class="school-code">'+(f.school_name||'-')+'</span></td><td>'+(f.grade_name||'-')+' / '+(f.section_name||'-')+'</td><td>'+(f.adviser||'-')+'</td></tr>';
+            }).join('');
+        }
+        if (teacherFlags.length > 0) {
+            document.getElementById('absTeachers').innerHTML = teacherFlags.map(function(f){
+                return '<tr><td><strong>'+f.person_name+'</strong></td><td>'+(f.employee_id||'-')+'</td><td><span class="school-code">'+(f.school_name||'-')+'</span></td></tr>';
+            }).join('');
+        }
+    } catch(e) { console.error('Absence flags:', e); }
+
+    var userActivityEl = document.getElementById('userActivity');
+    if (userActivityEl) {
+        try {
+            // Load user activity
+            var userRes = await fetch('/api/users');
+            var users = await userRes.json();
+            if (users.length > 0) {
+                userActivityEl.innerHTML = users.map(function(u){
+                    var roleClass = u.role === 'super_admin' ? 'super-admin' : u.role === 'principal' ? 'principal' : u.role === 'superintendent' ? 'superintendent' : 'asst-superintendent';
+                    var roleName = u.role.replace(/_/g, ' ');
+                    var isOnline = u.last_login && (Date.now() - new Date(u.last_login).getTime() < 300000);
+                    return '<tr><td><strong>'+u.fullname+'</strong></td>'+
+                        '<td><span class="role-badge '+roleClass+'">'+ roleName +'</span></td>'+
+                        '<td>'+(u.school_name||'Division Office')+'</td>'+
+                        '<td>'+(u.last_login ? new Date(u.last_login).toLocaleString() : 'Never')+'</td>'+
+                        '<td><span class="status-dot '+(isOnline?'online':'offline')+'"></span>'+(isOnline?'Active':'Offline')+'</td></tr>';
+                }).join('');
+            }
+        } catch(e) { console.error('User activity:', e); }
+    }
+}
+loadNotifications();
+setInterval(loadNotifications, 5000);
+</script>
+
+<div class="live-indicator"><div class="live-dot"></div> Live</div>
+<%- include('partials/footer') %>

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#4f46e5">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <title><%= title %> — <%= (settings && settings.system_name) || 'QR Attendance' %></title>
+    <link rel="icon" type="image/png" href="/uploads/logos/system-logo.png" id="favicon">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/uploads/logos/system-logo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <% if (typeof user !== 'undefined' && user) { %>
+    <nav class="sidebar" id="sidebar">
+        <!-- Brand -->
+        <div class="sidebar-brand">
+            <div class="brand-icon" id="sidebarLogo">
+                <% if (settings && settings.system_logo) { %>
+                <img src="<%= settings.system_logo %>" alt="Logo" onerror="this.parentElement.innerHTML='<i class=\'fa-solid fa-school\'></i>'">
+                <% } else { %>
+                <i class="fa-solid fa-qrcode"></i>
+                <% } %>
+            </div>
+            <div class="brand-text">
+                <span class="brand-title"><%= (settings && settings.system_name) || 'QR Attendance' %></span>
+                <span class="brand-subtitle"><%= (settings && settings.division_name) || 'School Division' %></span>
+            </div>
+            <button class="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">
+                <i class="fa-solid fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Nav Links -->
+        <ul class="nav-links">
+            <li class="nav-section"><span class="nav-section-label">Overview</span></li>
+            <li>
+                <a href="<%= user.role === 'principal' ? '/admin/principal-dashboard' : user.role === 'superintendent' ? '/admin/sds-dashboard' : user.role === 'asst_superintendent' ? '/admin/asds-dashboard' : '/admin/dashboard' %>"
+                   class="<%= ['dashboard','principal_dashboard','sds_dashboard','asds_dashboard'].includes(page) ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-chart-pie"></i> Dashboard
+                </a>
+            </li>
+            <% if (user.role === 'super_admin') { %>
+            <li>
+                <a href="/admin/schools" class="<%= page === 'schools' ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-building-columns"></i> Schools
+                </a>
+            </li>
+            <% } %>
+
+            <% if (user.role !== 'superintendent' && user.role !== 'asst_superintendent') { %>
+            <li class="nav-section"><span class="nav-section-label">Management</span></li>
+            <% if (user.role === 'super_admin') { %>
+            <li>
+                <a href="/admin/manage-schools" class="<%= page === 'manage_schools' ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-school-circle-check"></i> Manage Schools
+                </a>
+            </li>
+            <% } %>
+            <li>
+                <a href="/admin/students" class="<%= page === 'students' ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-graduation-cap"></i> Students
+                </a>
+            </li>
+            <li>
+                <a href="/admin/shs-students" class="<%= page === 'shs_students' ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-user-graduate"></i> SHS Students
+                </a>
+            </li>
+            <li>
+                <a href="/admin/teachers" class="<%= page === 'teachers' ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-chalkboard-user"></i> Teachers
+                </a>
+            </li>
+            <li>
+                <a href="/admin/sections" class="<%= page === 'sections' ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-layer-group"></i> Sections
+                </a>
+            </li>
+            <% if (user.role === 'super_admin') { %>
+            <li>
+                <a href="/admin/bulk-import" class="<%= page === 'bulk_import' ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-file-arrow-up"></i> Bulk Import
+                </a>
+            </li>
+            <% } %>
+            <li>
+                <a href="/admin/print-qr" class="<%= page === 'print_qr' ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-qrcode"></i> Print QR Codes
+                </a>
+            </li>
+            <% } %>
+
+            <li class="nav-section"><span class="nav-section-label">Attendance</span></li>
+            <li>
+                <a href="/admin/attendance" class="<%= page === 'attendance' ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-clipboard-list"></i> Attendance
+                </a>
+            </li>
+            <li>
+                <a href="/admin/reports" class="<%= page === 'reports' ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-chart-bar"></i> Reports
+                </a>
+            </li>
+
+            <li class="nav-section"><span class="nav-section-label">Communication</span></li>
+            <li>
+                <a href="/admin/notifications" class="<%= page === 'notifications' ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-bell"></i> Notifications
+                </a>
+            </li>
+            <% if (user.role === 'super_admin') { %>
+            <li>
+                <a href="/admin/events" class="<%= page === 'events' ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-calendar-days"></i> Events
+                </a>
+            </li>
+            <% } %>
+
+            <li class="nav-section"><span class="nav-section-label">System</span></li>
+            <% if (user.role === 'super_admin') { %>
+            <li>
+                <a href="/admin/settings" class="<%= page === 'settings' ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-gear"></i> Settings
+                </a>
+            </li>
+            <li>
+                <a href="/admin/backups" class="<%= page === 'backups' ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-database"></i> Backups
+                </a>
+            </li>
+            <% } %>
+            <% if (user.role !== 'superintendent' && user.role !== 'asst_superintendent') { %>
+            <li>
+                <a href="/admin/scanner" class="<%= page === 'scanner' ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-camera"></i> QR Scanner
+                </a>
+            </li>
+            <% } %>
+        </ul>
+
+        <!-- Sidebar Footer -->
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <div class="user-avatar"><%= user.fullname ? user.fullname.charAt(0).toUpperCase() : 'U' %></div>
+                <div class="user-details">
+                    <strong><%= user.fullname %></strong>
+                    <small><%= user.role.replace(/_/g, ' ') %></small>
+                </div>
+            </div>
+            <div class="sidebar-footer-links">
+                <a href="/change-password"><i class="fa-solid fa-key"></i> Password</a>
+                <a href="/logout" class="logout-btn"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+            </div>
+        </div>
+    </nav>
+    <% } %>
+
+    <main class="content<%= (typeof user === 'undefined' || !user) ? ' full-width' : '' %>">
+        <% if (typeof user !== 'undefined' && user) { %>
+        <header class="topbar">
+            <button class="menu-btn" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            <h1><%= title %></h1>
+        </header>
+        <% } %>
+        <div class="page-content">
+

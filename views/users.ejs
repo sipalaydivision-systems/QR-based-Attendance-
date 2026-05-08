@@ -1,0 +1,30 @@
+<%- include('partials/header') %>
+
+<div class="page-actions">
+    <a href="/admin/register-user" class="btn btn-primary">+ Register User</a>
+</div>
+<div class="card">
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead><tr><th>Username</th><th>Full Name</th><th>Email</th><th>Role</th><th>School</th><th>Status</th></tr></thead>
+            <tbody id="usersBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+async function loadUsers() {
+    var res = await fetch('/api/users');
+    var data = await res.json();
+    document.getElementById('usersBody').innerHTML = data.map(function(u) {
+        return '<tr><td>'+u.username+'</td><td>'+u.fullname+'</td><td>'+(u.email||'-')+'</td>' +
+            '<td>'+u.role.replace(/_/g,' ')+'</td><td>'+(u.school_name||'All')+'</td>' +
+            '<td><span class="badge badge-'+u.status+'">'+u.status+'</span></td></tr>';
+    }).join('') || '<tr><td colspan="6" class="text-center">No users found</td></tr>';
+}
+loadUsers();
+
+// Real-time auto-refresh every 5 seconds
+var userPollTimer = setInterval(loadUsers, 5000);
+</script>
+<%- include('partials/footer') %>

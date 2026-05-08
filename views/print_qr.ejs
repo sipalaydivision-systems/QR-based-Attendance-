@@ -1,0 +1,119 @@
+<%- include('partials/header') %>
+
+<div class="page-header">
+    <div class="page-header-left">
+        <h1><i class="fa-solid fa-qrcode"></i> Print QR Codes</h1>
+    </div>
+    <div class="page-actions no-print">
+        <button class="btn btn-primary" onclick="window.print()"><i class="fa-solid fa-print"></i> Print All</button>
+    </div>
+</div>
+
+<div class="filter-bar no-print">
+    <div class="filter-item">
+        <label>Type</label>
+        <select id="qrType">
+            <option value="student">Students</option>
+            <option value="teacher">Teachers</option>
+        </select>
+    </div>
+    <div class="filter-item">
+        <label>School</label>
+        <select id="qrSchool">
+            <option value="">All Schools</option>
+        </select>
+    </div>
+    <div class="filter-item">
+        <label>Grade Level</label>
+        <select id="qrGrade">
+            <option value="">All Grades</option>
+        </select>
+    </div>
+    <div class="filter-item">
+        <label>Section</label>
+        <select id="qrSection">
+            <option value="">All Sections</option>
+        </select>
+    </div>
+    <div class="filter-item">
+        <label>Layout</label>
+        <select id="qrLayout">
+            <option value="3">3 per row</option>
+            <option value="4" selected>4 per row</option>
+            <option value="5">5 per row</option>
+        </select>
+    </div>
+    <button class="btn-filter" onclick="reloadQR()"><i class="fa-solid fa-magnifying-glass"></i> Generate</button>
+</div>
+
+<div class="qr-grid" id="qrGrid">
+    <% if (typeof people !== 'undefined' && people.length) { %>
+        <% people.forEach(function(p) { %>
+            <div class="qr-card">
+                <div class="qr-card-header"><%= p.school_name || 'School Attendance System' %></div>
+                <div class="qr-card-body">
+                    <img src="<%= p.qrDataUrl %>" alt="QR" class="qr-image">
+                    <div class="qr-name"><%= p.lastname %>, <%= p.firstname %></div>
+                    <% if (p.lrn) { %><div class="qr-detail">LRN: <%= p.lrn %></div><% } %>
+                    <% if (p.employee_id) { %><div class="qr-detail">ID: <%= p.employee_id %></div><% } %>
+                    <% if (p.grade_name) { %><div class="qr-detail"><%= p.grade_name %><% if (p.section_name) { %> - <%= p.section_name %><% } %></div><% } %>
+                </div>
+                <div class="qr-code-text"><%= p.qr_code %></div>
+            </div>
+        <% }); %>
+    <% } else { %>
+        <div class="empty-state" style="grid-column:1/-1;">
+            <div class="empty-icon"><i class="fa-solid fa-qrcode" style="font-size:2.5rem;color:var(--gray-300);"></i></div>
+            <h4>No QR codes to display</h4>
+            <p>Select filters above and click Generate.</p>
+        </div>
+    <% } %>
+</div>
+
+<style>
+@media print {
+    .no-print, .sidebar, .topbar, .menu-btn, .live-indicator { display: none !important; }
+    .content { margin-left: 0 !important; }
+    .page-content { padding: 0 !important; }
+    .qr-grid { display: grid; grid-template-columns: repeat(4, 1fr) !important; gap: 8px !important; }
+    .qr-card { break-inside: avoid; box-shadow: none; border: 1px solid #ddd; }
+    .qr-card .qr-card-header { background: #333 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .qr-image { width: 100px !important; height: 100px !important; }
+}
+</style>
+
+<script>
+async function loadDropdowns() {
+    var [schools, sections] = await Promise.all([
+        fetch('/api/schools').then(function(r){return r.json();}),
+        fetch('/api/sections').then(function(r){return r.json();})
+    ]);
+    var sSel = document.getElementById('qrSchool');
+    schools.forEach(function(s) {
+        var opt = document.createElement('option');
+        opt.value = s.id; opt.textContent = s.name;
+        sSel.appendChild(opt);
+    });
+    var secSel = document.getElementById('qrSection');
+    sections.forEach(function(s) {
+        var opt = document.createElement('option');
+        opt.value = s.id; opt.textContent = s.name;
+        secSel.appendChild(opt);
+    });
+}
+loadDropdowns();
+
+function reloadQR() {
+    var type = document.getElementById('qrType').value;
+    var school = document.getElementById('qrSchool').value;
+    var params = ['type=' + type];
+    if (school) params.push('school_id=' + school);
+    window.location.href = '/admin/print-qr?' + params.join('&');
+}
+
+document.getElementById('qrLayout').addEventListener('change', function() {
+    var cols = this.value;
+    document.getElementById('qrGrid').style.gridTemplateColumns = 'repeat(' + cols + ', 1fr)';
+});
+</script>
+<%- include('partials/footer') %>

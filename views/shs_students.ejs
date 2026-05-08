@@ -1,0 +1,263 @@
+<%- include('partials/header') %>
+
+<div class="page-header">
+    <div class="page-header-left">
+        <h1><i class="fa-solid fa-graduation-cap"></i> SHS Students (Grade 11 &mdash; 12)</h1>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-primary" onclick="openStudentModal()">+ Add SHS Student</button>
+    </div>
+</div>
+
+<div class="filter-bar">
+    <div class="filter-item">
+        <label>School</label>
+        <select id="filterSchool">
+            <option value="">All Schools</option>
+            <% schools.forEach(s => { %>
+            <option value="<%= s.id %>"><%= s.name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="filter-item">
+        <label>Grade Level</label>
+        <select id="filterGrade">
+            <option value="">All Grades</option>
+            <% gradeLevels.forEach(g => { %>
+            <option value="<%= g.id %>"><%= g.name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="filter-item">
+        <label>Track/Strand</label>
+        <select id="filterTrack">
+            <option value="">All Tracks</option>
+            <option value="ABM">ABM</option>
+            <option value="STEM">STEM</option>
+            <option value="HUMSS">HUMSS</option>
+            <option value="GAS">GAS</option>
+            <option value="TVL">TVL</option>
+            <option value="Sports">Sports</option>
+            <option value="Arts and Design">Arts and Design</option>
+        </select>
+    </div>
+    <div class="filter-item">
+        <label>Search</label>
+        <input type="text" id="studentSearch" placeholder="Search by name or LRN...">
+    </div>
+    <button class="btn-filter" onclick="loadStudents()"><i class="fa-solid fa-magnifying-glass"></i> Filter</button>
+</div>
+
+<div class="results-header">
+    <span class="record-count" id="studentCount">0 student(s) found</span>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>LRN</th>
+                    <th>Student Name</th>
+                    <th>School</th>
+                    <th>Grade</th>
+                    <th>Track/Strand</th>
+                    <th>Section</th>
+                    <th>Guardian Contact</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="studentsBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- SHS Student Modal -->
+<div class="modal-overlay" id="studentModal" style="display:none">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="studentModalTitle">Add SHS Student</h3>
+            <button class="modal-close" onclick="closeStudentModal()">&times;</button>
+        </div>
+        <form id="studentForm" onsubmit="saveStudent(event)">
+            <input type="hidden" id="studentId">
+            <div class="form-row">
+                <div class="form-group"><label>LRN</label><input type="text" id="studentLrn"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>First Name *</label><input type="text" id="studentFirstname" required></div>
+                <div class="form-group"><label>Last Name *</label><input type="text" id="studentLastname" required></div>
+                <div class="form-group"><label>Middle Name</label><input type="text" id="studentMiddlename"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>Gender</label>
+                    <select id="studentGender"><option value="">-</option><option>Male</option><option>Female</option><option>Other</option></select>
+                </div>
+                <div class="form-group"><label>Birthdate</label><input type="date" id="studentBirthdate"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>School *</label>
+                    <select id="studentSchool" required>
+                        <option value="">Select School</option>
+                        <% schools.forEach(s => { %>
+                        <option value="<%= s.id %>"><%= s.name %></option>
+                        <% }) %>
+                    </select>
+                </div>
+                <div class="form-group"><label>Grade Level</label>
+                    <select id="studentGrade">
+                        <option value="">-</option>
+                        <% gradeLevels.forEach(g => { %>
+                        <option value="<%= g.id %>"><%= g.name %></option>
+                        <% }) %>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>Track/Strand</label>
+                    <select id="studentTrack">
+                        <option value="">-</option>
+                        <option value="ABM">ABM</option>
+                        <option value="STEM">STEM</option>
+                        <option value="HUMSS">HUMSS</option>
+                        <option value="GAS">GAS</option>
+                        <option value="TVL">TVL</option>
+                        <option value="Sports">Sports</option>
+                        <option value="Arts and Design">Arts and Design</option>
+                    </select>
+                </div>
+                <div class="form-group"><label>Section</label>
+                    <select id="studentSection">
+                        <option value="">-</option>
+                        <% sections.forEach(s => { %>
+                        <option value="<%= s.id %>"><%= s.name %></option>
+                        <% }) %>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>Guardian Name</label><input type="text" id="studentGuardian"></div>
+                <div class="form-group"><label>Guardian Contact</label><input type="text" id="studentGuardianContact"></div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeStudentModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+var allStudents = [];
+
+async function loadStudents() {
+    var search = document.getElementById('studentSearch').value;
+    var school = document.getElementById('filterSchool').value;
+    var grade = document.getElementById('filterGrade').value;
+    var params = new URLSearchParams();
+    if (search) params.append('search', search);
+    if (school) params.append('school', school);
+    if (grade) params.append('grade', grade);
+    params.append('category', 'shs_student');
+
+    var res = await fetch('/api/students?' + params);
+    allStudents = await res.json();
+    document.getElementById('studentCount').textContent = allStudents.length + ' student(s) found';
+    renderStudents();
+}
+
+function renderStudents() {
+    var trackFilter = document.getElementById('filterTrack').value;
+    var visible = allStudents.filter(function(s){ return s.status !== 'deleted'; });
+    var filtered = trackFilter ? visible.filter(function(s){ return s.track === trackFilter; }) : visible;
+    document.getElementById('studentsBody').innerHTML = filtered.map(function(s) {
+        var isInactive = s.status === 'inactive';
+        var rowClass = isInactive ? ' class="row-inactive"' : '';
+        var statusBadge = isInactive ? '<span class="badge badge-inactive">Inactive</span>' : '<span class="badge badge-active">Active</span>';
+        return '<tr'+rowClass+'>' +
+            '<td><a href="#" style="color:var(--primary);font-weight:600;">' + (s.lrn || '-') + '</a></td>' +
+            '<td>' + s.lastname + ', ' + s.firstname + (s.middlename ? ' ' + s.middlename.charAt(0) + '.' : '') + '</td>' +
+            '<td><span class="school-code">' + (s.school_name || '-') + '</span></td>' +
+            '<td>' + (s.grade_name || '-') + '</td>' +
+            '<td>' + (s.track || '-') + '</td>' +
+            '<td>' + (s.section_name || '-') + '</td>' +
+            '<td>' + (s.guardian_contact || '-') + '</td>' +
+            '<td>' + statusBadge + '</td>' +
+            '<td><div class="action-btns">' +
+                '<button class="action-btn qr" onclick="viewQR('+s.id+')" title="View QR"><i class="fa-solid fa-qrcode"></i></button>' +
+                '<button class="action-btn edit" onclick="editStudentById('+s.id+')" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>' +
+                '<button class="action-btn delete" onclick="deleteStudent('+s.id+')" title="Delete"><i class="fa-solid fa-trash-can"></i></button>' +
+            '</div></td></tr>';
+    }).join('') || '<tr><td colspan="9"><div class="empty-state"><div class="empty-icon"><i class="fa-solid fa-graduation-cap" style="font-size:2.5rem;color:var(--gray-300);"></i></div><h4>No SHS students found</h4><p>Try adjusting your filters or add a new SHS student.</p></div></td></tr>';
+}
+
+function openStudentModal() {
+    document.getElementById('studentModalTitle').textContent = 'Add SHS Student';
+    document.getElementById('studentForm').reset();
+    document.getElementById('studentId').value = '';
+    document.getElementById('studentModal').style.display = 'flex';
+}
+function closeStudentModal() { document.getElementById('studentModal').style.display = 'none'; }
+
+function editStudentById(id) {
+    var s = allStudents.find(function(x) { return x.id === id; });
+    if (!s) return;
+    document.getElementById('studentModalTitle').textContent = 'Edit SHS Student';
+    document.getElementById('studentId').value = s.id;
+    document.getElementById('studentLrn').value = s.lrn || '';
+    document.getElementById('studentFirstname').value = s.firstname;
+    document.getElementById('studentLastname').value = s.lastname;
+    document.getElementById('studentMiddlename').value = s.middlename || '';
+    document.getElementById('studentGender').value = s.gender || '';
+    document.getElementById('studentBirthdate').value = s.birthdate ? s.birthdate.slice(0, 10) : '';
+    document.getElementById('studentSchool').value = s.school_id || '';
+    document.getElementById('studentGrade').value = s.grade_level_id || '';
+    document.getElementById('studentSection').value = s.section_id || '';
+    document.getElementById('studentTrack').value = s.track || '';
+    document.getElementById('studentGuardian').value = s.guardian_name || '';
+    document.getElementById('studentGuardianContact').value = s.guardian_contact || '';
+    document.getElementById('studentModal').style.display = 'flex';
+}
+
+function viewQR(id) { window.open('/admin/print-qr?type=student&student_id=' + id, '_blank'); }
+
+async function saveStudent(e) {
+    e.preventDefault();
+    var id = document.getElementById('studentId').value;
+    var body = {
+        lrn: document.getElementById('studentLrn').value,
+        firstname: document.getElementById('studentFirstname').value,
+        lastname: document.getElementById('studentLastname').value,
+        middlename: document.getElementById('studentMiddlename').value,
+        gender: document.getElementById('studentGender').value,
+        birthdate: document.getElementById('studentBirthdate').value,
+        school_id: document.getElementById('studentSchool').value,
+        grade_level_id: document.getElementById('studentGrade').value,
+        section_id: document.getElementById('studentSection').value,
+        track: document.getElementById('studentTrack').value,
+        guardian_name: document.getElementById('studentGuardian').value,
+        guardian_contact: document.getElementById('studentGuardianContact').value,
+        category: 'shs_student',
+        status: 'active'
+    };
+    var url = id ? '/api/students/' + id : '/api/students';
+    var method = id ? 'PUT' : 'POST';
+    var res = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    var data = await res.json();
+    if (data.success || data.id) { closeStudentModal(); loadStudents(); }
+    else alert(data.error || 'Failed to save student');
+}
+
+async function deleteStudent(id) {
+    if (!confirm('Are you sure you want to deactivate this student?')) return;
+    await fetch('/api/students/' + id, { method: 'DELETE' });
+    loadStudents();
+}
+
+loadStudents();
+setInterval(function() { if (document.getElementById('studentModal').style.display !== 'flex') loadStudents(); }, 5000);
+</script>
+
+<div class="live-indicator"><div class="live-dot"></div> Live</div>
+<%- include('partials/footer') %>

@@ -1,0 +1,532 @@
+<%- include('partials/header') %>
+
+<style>
+.pd-wrap { max-width: 1400px; }
+
+/* Welcome bar */
+.pd-welcome {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+}
+.pd-welcome-left h1 {
+    font-size: 1.375rem; font-weight: 800; color: var(--gray-900); margin: 0;
+    display: flex; align-items: center; gap: 10px;
+}
+.pd-welcome-left h1 i { color: var(--primary); }
+.pd-welcome-left p { font-size: 0.8125rem; color: var(--gray-500); margin: 3px 0 0; }
+.pd-welcome-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pd-date-label { font-size: 0.8125rem; color: var(--gray-500); font-style: italic; }
+.pd-date-input {
+    padding: 8px 12px; border: 1px solid var(--gray-300);
+    border-radius: var(--radius); font-size: 0.8125rem;
+    color: var(--gray-700); background: #fff; cursor: pointer;
+}
+
+/* KPI row */
+.pd-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px; margin-bottom: 20px;
+}
+.pd-kpi-card {
+    background: #fff; border-radius: var(--radius-lg);
+    padding: 18px 20px; border: 1px solid var(--gray-200);
+    box-shadow: var(--shadow); display: flex; align-items: center; gap: 14px;
+    transition: box-shadow 0.2s, transform 0.2s;
+}
+.pd-kpi-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.pd-kpi-icon {
+    width: 46px; height: 46px; border-radius: var(--radius-lg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.125rem; flex-shrink: 0;
+}
+.pd-kpi-info { display: flex; flex-direction: column; }
+.pd-kpi-val {
+    font-size: 1.75rem; font-weight: 800;
+    color: var(--gray-900); line-height: 1.1;
+}
+.pd-kpi-lbl {
+    font-size: 0.6875rem; font-weight: 600;
+    color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.04em;
+    margin-top: 2px;
+}
+
+/* Charts row */
+.pd-charts-row {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 16px; margin-bottom: 20px;
+}
+.pd-chart-card {
+    background: #fff; border-radius: var(--radius-lg);
+    border: 1px solid var(--gray-200); box-shadow: var(--shadow); padding: 20px;
+}
+.pd-chart-card h3 {
+    font-size: 0.9375rem; font-weight: 700; color: var(--gray-800);
+    margin: 0 0 16px; display: flex; align-items: center; gap: 8px;
+}
+.pd-chart-card h3 i { color: var(--primary); }
+.pd-chart-wrap { position: relative; height: 220px; }
+
+/* Donut center label */
+.donut-center {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    text-align: center; pointer-events: none;
+}
+.donut-center .dc-val { font-size: 1.75rem; font-weight: 800; color: var(--gray-900); line-height: 1; }
+.donut-center .dc-lbl { font-size: 0.6875rem; font-weight: 600; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+/* Legend */
+.chart-legend {
+    display: flex; justify-content: center; gap: 20px; margin-top: 12px;
+    flex-wrap: wrap;
+}
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--gray-600); font-weight: 500; }
+.legend-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
+
+/* Bottom row */
+.pd-bottom-row {
+    display: grid; grid-template-columns: 1.5fr 1fr;
+    gap: 16px;
+}
+.pd-table-card {
+    background: #fff; border-radius: var(--radius-lg);
+    border: 1px solid var(--gray-200); box-shadow: var(--shadow); overflow: hidden;
+}
+.pd-table-card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--gray-100);
+}
+.pd-table-card-header h3 {
+    font-size: 0.9375rem; font-weight: 700; color: var(--gray-800);
+    margin: 0; display: flex; align-items: center; gap: 8px;
+}
+.pd-table-card-header h3 i { color: var(--primary); }
+
+/* Absent list */
+.absent-list { max-height: 280px; overflow-y: auto; }
+.absent-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 20px; border-bottom: 1px solid var(--gray-50);
+    transition: background 0.15s;
+}
+.absent-item:hover { background: var(--gray-50); }
+.absent-item:last-child { border-bottom: none; }
+.absent-avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: #fee2e2; color: #dc2626;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem; font-weight: 700; flex-shrink: 0;
+}
+.absent-name { font-weight: 600; font-size: 0.8125rem; color: var(--gray-800); }
+.absent-sub  { font-size: 0.75rem; color: var(--gray-500); margin-top: 1px; }
+
+/* Non-school banner */
+.pd-banner-warn {
+    display: flex; align-items: center; gap: 10px;
+    background: #fffbeb; border: 1px solid #fde68a;
+    border-radius: var(--radius-lg); padding: 12px 16px;
+    margin-bottom: 16px; color: #92400e; font-weight: 600; font-size: 0.8125rem;
+}
+.pd-banner-warn i { color: #d97706; }
+
+@media (max-width: 1024px) {
+    .pd-charts-row, .pd-bottom-row { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+    .pd-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+
+<div class="pd-wrap">
+    <!-- Welcome Banner -->
+    <div class="welcome-banner">
+        <div class="wb-left">
+            <h2 id="pdGreeting">Good morning, <%= user.fullname %></h2>
+            <p><i class="fa-solid fa-school"></i> <span id="pdSchoolName">Loading...</span> &nbsp;&middot;&nbsp; <span id="pdDateLabel"></span></p>
+        </div>
+        <div class="wb-right">
+            <div class="wb-stat">
+                <span class="wb-stat-val" id="pdWbRate">0%</span>
+                <span class="wb-stat-lbl">Today's Rate</span>
+            </div>
+            <input type="date" id="pdDate" value="<%= new Date().toISOString().slice(0,10) %>"
+                   style="padding:8px 12px;border:1.5px solid rgba(255,255,255,0.45);border-radius:9px;font-size:0.8125rem;background:rgba(255,255,255,0.18);color:#fff;cursor:pointer;">
+            <a href="/admin/attendance" class="wb-btn"><i class="fa-solid fa-clipboard-list"></i> View Attendance</a>
+        </div>
+    </div>
+
+    <!-- Non-school day banner -->
+    <div id="pdBannerWarn" class="pd-banner-warn" style="display:none;">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span id="pdBannerText"></span>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="pd-kpi-grid">
+        <div class="pd-kpi-card">
+            <div class="pd-kpi-icon" style="background:#eef2ff;color:#4f46e5;"><i class="fa-solid fa-users"></i></div>
+            <div class="pd-kpi-info">
+                <span class="pd-kpi-val" id="pdEnrolled">—</span>
+                <span class="pd-kpi-lbl">Total Enrolled</span>
+            </div>
+        </div>
+        <div class="pd-kpi-card">
+            <div class="pd-kpi-icon" style="background:#dcfce7;color:#16a34a;"><i class="fa-solid fa-circle-check"></i></div>
+            <div class="pd-kpi-info">
+                <span class="pd-kpi-val" id="pdPresent">—</span>
+                <span class="pd-kpi-lbl">Present Today</span>
+            </div>
+        </div>
+        <div class="pd-kpi-card">
+            <div class="pd-kpi-icon" style="background:#fee2e2;color:#dc2626;"><i class="fa-solid fa-circle-xmark"></i></div>
+            <div class="pd-kpi-info">
+                <span class="pd-kpi-val" id="pdAbsent">—</span>
+                <span class="pd-kpi-lbl">Absent Today</span>
+            </div>
+        </div>
+        <div class="pd-kpi-card">
+            <div class="pd-kpi-icon" style="background:#fef3c7;color:#d97706;"><i class="fa-solid fa-clock"></i></div>
+            <div class="pd-kpi-info">
+                <span class="pd-kpi-val" id="pdLate">—</span>
+                <span class="pd-kpi-lbl">Late Today</span>
+            </div>
+        </div>
+        <div class="pd-kpi-card">
+            <div class="pd-kpi-icon" style="background:#dbeafe;color:#2563eb;"><i class="fa-solid fa-chalkboard-user"></i></div>
+            <div class="pd-kpi-info">
+                <span class="pd-kpi-val" id="pdTeachersPresent">—</span>
+                <span class="pd-kpi-lbl">Teachers Present</span>
+            </div>
+        </div>
+        <div class="pd-kpi-card" style="border-left: 3px solid var(--primary);">
+            <div class="pd-kpi-icon" style="background:#ede9fe;color:#7c3aed;"><i class="fa-solid fa-chart-pie"></i></div>
+            <div class="pd-kpi-info">
+                <span class="pd-kpi-val" id="pdRate">—</span>
+                <span class="pd-kpi-lbl">Attendance Rate</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="pd-charts-row">
+        <!-- Donut: Today's attendance breakdown -->
+        <div class="pd-chart-card">
+            <h3><i class="fa-solid fa-chart-pie"></i> Today's Attendance Breakdown</h3>
+            <div class="pd-chart-wrap">
+                <canvas id="donutChart"></canvas>
+                <div class="donut-center">
+                    <div class="dc-val" id="donutRate">0%</div>
+                    <div class="dc-lbl">Rate</div>
+                </div>
+            </div>
+            <div class="chart-legend">
+                <span class="legend-item"><span class="legend-dot" style="background:#16a34a;"></span> Present</span>
+                <span class="legend-item"><span class="legend-dot" style="background:#f59e0b;"></span> Late</span>
+                <span class="legend-item"><span class="legend-dot" style="background:#dc2626;"></span> Absent</span>
+            </div>
+        </div>
+
+        <!-- Bar: 7-day attendance trend -->
+        <div class="pd-chart-card">
+            <h3><i class="fa-solid fa-chart-column"></i> 7-Day Attendance Trend</h3>
+            <div class="pd-chart-wrap">
+                <canvas id="trendChart"></canvas>
+            </div>
+            <div class="chart-legend">
+                <span class="legend-item"><span class="legend-dot" style="background:#4f46e5;"></span> Present</span>
+                <span class="legend-item"><span class="legend-dot" style="background:#dc2626;"></span> Absent</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Row -->
+    <div class="pd-bottom-row">
+        <!-- Absent students list -->
+        <div class="pd-table-card">
+            <div class="pd-table-card-header">
+                <h3><i class="fa-solid fa-user-xmark"></i> Absent Students Today</h3>
+                <span class="badge badge-absent" id="pdAbsentCount">0</span>
+            </div>
+            <div class="absent-list" id="pdAbsentList">
+                <div style="padding:32px;text-align:center;color:var(--gray-400);">
+                    <i class="fa-solid fa-spinner fa-spin"></i> Loading...
+                </div>
+            </div>
+        </div>
+
+        <!-- 2-day flagged -->
+        <div class="pd-table-card">
+            <div class="pd-table-card-header">
+                <h3><i class="fa-solid fa-triangle-exclamation" style="color:#dc2626;"></i> 2-Day Absentees</h3>
+                <span class="badge badge-absent" id="pdFlaggedCount">0</span>
+            </div>
+            <div class="absent-list" id="pdFlaggedList">
+                <div style="padding:32px;text-align:center;color:var(--gray-400);">
+                    <i class="fa-solid fa-spinner fa-spin"></i> Loading...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="live-indicator"><div class="live-dot"></div> Live</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    var schoolId = '<%= schools && schools.length === 1 ? schools[0].id : "" %>';
+    var donutChart = null;
+    var trendChart = null;
+    var pollTimer = null;
+
+    function formatDate(str) {
+        var d = new Date(str + 'T00:00:00');
+        return d.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+    }
+
+    function rateColor(r) {
+        return r >= 80 ? '#16a34a' : r >= 50 ? '#d97706' : '#dc2626';
+    }
+
+    // Banner greeting
+    (function() {
+        var h = new Date().getHours();
+        var g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+        document.getElementById('pdGreeting').textContent = g + ', <%= user.fullname %>';
+        document.getElementById('pdDateLabel').textContent = formatDate('<%= new Date().toISOString().slice(0,10) %>');
+    })();
+
+    // ---- Load KPI + donut ----
+    async function loadDashboard() {
+        var date = document.getElementById('pdDate').value;
+        document.getElementById('pdDateLabel').textContent = formatDate(date);
+        var params = new URLSearchParams({ date: date });
+        if (schoolId) params.append('school_id', schoolId);
+        try {
+            var res  = await fetch('/api/dashboard-data?' + params);
+            var data = await res.json();
+            if (data.error) return;
+
+            // School name
+            if (data.schools && data.schools.length === 1) {
+                document.getElementById('pdSchoolName').textContent = data.schools[0].name;
+            }
+
+            // Non-school banner
+            var banner = document.getElementById('pdBannerWarn');
+            if (!data.is_school_day) {
+                document.getElementById('pdBannerText').textContent =
+                    'Non-school day' + (data.non_school_day_reason ? ' — ' + data.non_school_day_reason : '') + '.';
+                banner.style.display = 'flex';
+            } else { banner.style.display = 'none'; }
+
+            var enrolled = data.active_students;
+            var present  = data.students_present;
+            var absent   = data.students_absent;
+            var rate     = data.attendance_rate;
+
+            document.getElementById('pdEnrolled').textContent = enrolled;
+            document.getElementById('pdPresent').textContent  = present;
+            document.getElementById('pdAbsent').textContent   = absent;
+            document.getElementById('pdRate').textContent     = rate + '%';
+            document.getElementById('pdRate').style.color     = rateColor(rate);
+            document.getElementById('pdWbRate').textContent   = rate + '%';
+            document.getElementById('pdTeachersPresent').textContent = data.teachers_present;
+            document.getElementById('pdFlaggedCount').textContent    = data.flagged_absent_2day;
+
+            // Late count — fetch from reports API
+            loadLate(date);
+
+            // Donut
+            document.getElementById('donutRate').textContent = rate + '%';
+            document.getElementById('donutRate').style.color = rateColor(rate);
+            renderDonut(present, 0, absent); // late updated separately
+
+            // Absent list
+            loadAbsentList(date);
+            loadFlaggedList(date);
+
+        } catch(e) { console.error('Principal dashboard error:', e); }
+    }
+
+    async function loadLate(date) {
+        var params = new URLSearchParams({ date: date, type: 'student' });
+        if (schoolId) params.append('school', schoolId);
+        try {
+            var res  = await fetch('/api/reports?' + params);
+            var data = await res.json();
+            var late = (data.records || []).filter(function(r) { return r.status === 'late'; }).length;
+            document.getElementById('pdLate').textContent = late;
+            // Update donut with actual late count
+            var present = parseInt(document.getElementById('pdPresent').textContent) || 0;
+            var absent  = parseInt(document.getElementById('pdAbsent').textContent)  || 0;
+            renderDonut(present - late, late, absent);
+        } catch(e) { /* silently skip */ }
+    }
+
+    function renderDonut(present, late, absent) {
+        var ctx = document.getElementById('donutChart').getContext('2d');
+        if (donutChart) donutChart.destroy();
+        var total = present + late + absent;
+        donutChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Present', 'Late', 'Absent'],
+                datasets: [{
+                    data: [present, late, absent],
+                    backgroundColor: ['#16a34a', '#f59e0b', '#dc2626'],
+                    borderWidth: 0,
+                    hoverOffset: 6
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, cutout: '68%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                var pct = total > 0 ? Math.round((ctx.parsed / total) * 100) : 0;
+                                return ' ' + ctx.label + ': ' + ctx.parsed + ' (' + pct + '%)';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // ---- 7-day trend ----
+    async function loadTrend() {
+        var date = document.getElementById('pdDate').value;
+        var end  = new Date(date + 'T00:00:00');
+        var start = new Date(end); start.setDate(start.getDate() - 6);
+        var startStr = start.toISOString().slice(0, 10);
+        var params = new URLSearchParams({ start_date: startStr, end_date: date, type: 'student' });
+        if (schoolId) params.append('school', schoolId);
+        try {
+            var res  = await fetch('/api/reports?' + params);
+            var data = await res.json();
+            buildTrend(data.records || [], startStr, date);
+        } catch(e) { console.error('Trend error:', e); }
+    }
+
+    function buildTrend(records, start, end) {
+        var days = {};
+        var d = new Date(start + 'T00:00:00'), endD = new Date(end + 'T00:00:00');
+        while (d <= endD) {
+            days[d.toISOString().slice(0,10)] = { p: 0, a: 0 };
+            d.setDate(d.getDate() + 1);
+        }
+        // Count present per day
+        var presPerDay = {};
+        records.forEach(function(r) {
+            if (!presPerDay[r.date]) presPerDay[r.date] = 0;
+            if (r.time_in) presPerDay[r.date]++;
+        });
+        Object.keys(days).forEach(function(dt) {
+            days[dt].p = presPerDay[dt] || 0;
+        });
+
+        var labels = Object.keys(days).map(function(dt) {
+            var dd = new Date(dt + 'T00:00:00');
+            return dd.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+        });
+        var pData = Object.keys(days).map(function(dt) { return days[dt].p; });
+
+        var ctx = document.getElementById('trendChart').getContext('2d');
+        if (trendChart) trendChart.destroy();
+        trendChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    { label: 'Present', data: pData, backgroundColor: '#4f46e5', borderRadius: 5, barPercentage: 0.6 }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+                    y: { beginAtZero: true, ticks: { precision: 0, font: { size: 11 } }, grid: { color: '#f1f5f9' } }
+                }
+            }
+        });
+    }
+
+    // ---- Absent list ----
+    async function loadAbsentList(date) {
+        var params = new URLSearchParams({ date: date });
+        if (schoolId) params.append('school_id', schoolId);
+        try {
+            var res  = await fetch('/api/reports/absentees?' + params);
+            var data = await res.json();
+            var el = document.getElementById('pdAbsentList');
+            document.getElementById('pdAbsentCount').textContent = data.length;
+            if (!data.length) {
+                el.innerHTML = '<div style="padding:32px;text-align:center;color:var(--gray-400);font-size:0.8125rem;"><i class="fa-solid fa-circle-check" style="color:#16a34a;font-size:1.5rem;display:block;margin-bottom:8px;"></i>No absences recorded today!</div>';
+                return;
+            }
+            el.innerHTML = data.map(function(s) {
+                return '<div class="absent-item">' +
+                    '<div class="absent-avatar">' + s.firstname.charAt(0).toUpperCase() + '</div>' +
+                    '<div>' +
+                        '<div class="absent-name">' + s.lastname + ', ' + s.firstname + '</div>' +
+                        '<div class="absent-sub">' +
+                            (s.grade_name || '—') + ' &bull; ' + (s.section_name || '—') +
+                            (s.lrn ? ' &bull; <span style="font-family:monospace;color:var(--gray-500);">' + s.lrn + '</span>' : '') +
+                        '</div>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+        } catch(e) { console.error('Absent list error:', e); }
+    }
+
+    // ---- Flagged (2-day) list ----
+    async function loadFlaggedList(date) {
+        var params = new URLSearchParams({ days: 2 });
+        if (date) params.append('date', date);
+        if (schoolId) params.append('school_id', schoolId);
+        try {
+            var res  = await fetch('/api/absence-flags?' + params);
+            var data = await res.json();
+            var el = document.getElementById('pdFlaggedList');
+            document.getElementById('pdFlaggedCount').textContent = data.length;
+            if (!data.length) {
+                el.innerHTML = '<div style="padding:32px;text-align:center;color:var(--gray-400);font-size:0.8125rem;"><i class="fa-solid fa-circle-check" style="color:#16a34a;font-size:1.5rem;display:block;margin-bottom:8px;"></i>No multi-day absences!</div>';
+                return;
+            }
+            el.innerHTML = data.map(function(s) {
+                return '<div class="absent-item">' +
+                    '<div class="absent-avatar" style="background:#fef3c7;color:#d97706;">' + s.firstname.charAt(0).toUpperCase() + '</div>' +
+                    '<div>' +
+                        '<div class="absent-name">' + s.lastname + ', ' + s.firstname + '</div>' +
+                        '<div class="absent-sub">' + (s.grade_name || '—') + ' &bull; ' + (s.section_name || '—') + '</div>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+        } catch(e) { console.error('Flagged error:', e); }
+    }
+
+    // ---- Date change ----
+    document.getElementById('pdDate').addEventListener('change', function() {
+        clearTimeout(pollTimer);
+        loadDashboard();
+        loadTrend();
+        pollTimer = setTimeout(autoPoll, 5000);
+    });
+
+    function autoPoll() {
+        loadDashboard();
+        pollTimer = setTimeout(autoPoll, 5000);
+    }
+
+    // Init
+    loadDashboard();
+    loadTrend();
+    pollTimer = setTimeout(autoPoll, 5000);
+})();
+</script>
+
+<%- include('partials/footer') %>

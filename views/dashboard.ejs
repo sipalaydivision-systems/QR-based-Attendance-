@@ -1,0 +1,338 @@
+<%- include('partials/header') %>
+
+<!-- Welcome Banner -->
+<div class="welcome-banner">
+    <div class="wb-left">
+        <h2 id="saGreeting">Good morning, <%= user.fullname %></h2>
+        <p><i class="fa-solid fa-gauge-high"></i> Division Overview &nbsp;&middot;&nbsp; <span id="saDateLabel"></span></p>
+    </div>
+    <div class="wb-right">
+        <div class="wb-stat">
+            <span class="wb-stat-val" id="saWbRate">—</span>
+            <span class="wb-stat-lbl">Today's Rate</span>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+    <div>
+        <h2 style="font-size:1.375rem;font-weight:800;color:var(--gray-900);margin:0;">Attendance Overview</h2>
+        <p style="font-size:0.8125rem;color:var(--gray-500);margin:2px 0 0;">Real-time attendance monitoring dashboard</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <% if (schools && schools.length > 0) { %>
+        <div style="display:flex;align-items:center;gap:6px;">
+            <i class="fa-solid fa-building-columns" style="color:var(--gray-400);font-size:0.875rem;"></i>
+            <select id="dashSchool" style="padding:8px 12px;border:1px solid var(--gray-300);border-radius:8px;font-size:0.8125rem;background:#fff;color:var(--gray-700);">
+                <option value="">All Schools</option>
+                <% schools.forEach(s => { %>
+                <option value="<%= s.id %>"><%= s.name %></option>
+                <% }) %>
+            </select>
+        </div>
+        <% } %>
+        <div style="display:flex;align-items:center;gap:6px;">
+            <i class="fa-solid fa-calendar" style="color:var(--gray-400);font-size:0.875rem;"></i>
+            <input type="date" id="dashDate" value="<%= new Date().toISOString().slice(0,10) %>"
+                   style="padding:8px 12px;border:1px solid var(--gray-300);border-radius:8px;font-size:0.8125rem;background:#fff;color:var(--gray-700);">
+        </div>
+    </div>
+</div>
+
+<!-- Non-school day banner -->
+<div id="nonSchoolDayBanner" class="non-school-banner" style="display:none;">
+    <i class="fa-solid fa-triangle-exclamation"></i>
+    <span id="nonSchoolDayText"></span>
+</div>
+
+<!-- KPI Stats -->
+<div class="stats-grid" id="statsGrid">
+    <div class="stat-card stat-schools">
+        <div class="stat-icon-wrap indigo"><i class="fa-solid fa-building-columns"></i></div>
+        <div class="stat-info">
+            <span class="stat-number" id="statSchools">—</span>
+            <span class="stat-label">Schools</span>
+        </div>
+    </div>
+    <div class="stat-card stat-students">
+        <div class="stat-icon-wrap blue"><i class="fa-solid fa-users"></i></div>
+        <div class="stat-info">
+            <span class="stat-number" id="statStudents">—</span>
+            <span class="stat-label">Active Students</span>
+        </div>
+    </div>
+    <div class="stat-card stat-present">
+        <div class="stat-icon-wrap green"><i class="fa-solid fa-circle-check"></i></div>
+        <div class="stat-info">
+            <span class="stat-number" id="statPresent">—</span>
+            <span class="stat-label">Timed In Today</span>
+        </div>
+    </div>
+    <div class="stat-card stat-absent">
+        <div class="stat-icon-wrap red"><i class="fa-solid fa-circle-xmark"></i></div>
+        <div class="stat-info">
+            <span class="stat-number" id="statAbsent">—</span>
+            <span class="stat-label">Absent Today</span>
+        </div>
+    </div>
+    <div class="stat-card stat-rate">
+        <div class="stat-icon-wrap amber"><i class="fa-solid fa-chart-line"></i></div>
+        <div class="stat-info">
+            <span class="stat-number" id="statRate">—</span>
+            <span class="stat-label">Attendance Rate</span>
+        </div>
+    </div>
+    <div class="stat-card stat-teachers">
+        <div class="stat-icon-wrap blue"><i class="fa-solid fa-chalkboard-user"></i></div>
+        <div class="stat-info">
+            <span class="stat-number" id="statTeachers">—</span>
+            <span class="stat-label">Teachers Present</span>
+        </div>
+    </div>
+    <div class="stat-card" style="border-left:3px solid #ea580c;">
+        <div class="stat-icon-wrap orange"><i class="fa-solid fa-right-from-bracket"></i></div>
+        <div class="stat-info">
+            <span class="stat-number" id="statTimedOut">—</span>
+            <span class="stat-label">Timed Out</span>
+        </div>
+    </div>
+    <div class="stat-card" style="border-left:3px solid #dc2626;">
+        <div class="stat-icon-wrap rose"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <div class="stat-info">
+            <span class="stat-number" id="statFlagged">—</span>
+            <span class="stat-label">2-Day Absent</span>
+        </div>
+    </div>
+    <% if (typeof user !== 'undefined' && user && user.role === 'super_admin') { %>
+    <div class="stat-card" style="border-left:3px solid var(--gray-400);">
+        <div class="stat-icon-wrap slate"><i class="fa-solid fa-user-slash"></i></div>
+        <div class="stat-info">
+            <span class="stat-number" id="statInactive">—</span>
+            <span class="stat-label">Inactive Students</span>
+        </div>
+    </div>
+    <% } %>
+</div>
+
+<!-- School Breakdown Table -->
+<div class="card">
+    <div class="card-header">
+        <h3 style="margin:0;"><i class="fa-solid fa-table-list"></i> School Breakdown</h3>
+        <span style="font-size:0.75rem;color:var(--gray-400);" id="breakdownDate"></span>
+    </div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>School</th>
+                    <th>Enrollment</th>
+                    <th>Present</th>
+                    <th>Absent</th>
+                    <th>Student Rate</th>
+                    <th>Teachers</th>
+                    <th>Teacher Rate</th>
+                </tr>
+            </thead>
+            <tbody id="schoolBreakdownBody">
+                <tr><td colspan="7" class="text-center text-muted" style="padding:32px;">
+                    <i class="fa-solid fa-spinner fa-spin" style="margin-right:6px;"></i> Loading...
+                </td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 2-Day Absence Flagged Students -->
+<div class="card" id="flaggedCard" style="display:none;">
+    <div class="card-header">
+        <h3 style="margin:0;color:var(--danger);">
+            <i class="fa-solid fa-triangle-exclamation"></i> Students Absent 2+ Consecutive Days
+        </h3>
+        <span class="badge badge-inactive" id="flaggedCount"></span>
+    </div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Student Name</th>
+                    <th>LRN</th>
+                    <th>School</th>
+                    <th>Grade</th>
+                    <th>Section</th>
+                </tr>
+            </thead>
+            <tbody id="flaggedBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<div class="live-indicator"><div class="live-dot"></div> Live</div>
+
+<script>
+(function() {
+    var refreshTimer = null;
+
+    function pad(n) { return String(n).padStart(2, '0'); }
+
+    function rateColor(r) {
+        return r >= 80 ? 'var(--success)' : r >= 50 ? 'var(--warning)' : 'var(--danger)';
+    }
+
+    // Banner greeting
+    (function() {
+        var h = new Date().getHours();
+        var g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+        document.getElementById('saGreeting').textContent = g + ', <%= user.fullname %>';
+        var d = new Date();
+        document.getElementById('saDateLabel').textContent = d.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+    })();
+
+    function progressBar(pct) {
+        var color = pct >= 80 ? 'green' : pct >= 50 ? 'amber' : 'red';
+        return '<div class="progress-bar-wrap" style="min-width:80px;">' +
+               '<div class="progress-bar-fill ' + color + '" style="width:' + Math.min(100, pct) + '%"></div></div>';
+    }
+
+    async function load() {
+        var date   = document.getElementById('dashDate').value;
+        var school = document.getElementById('dashSchool') ? document.getElementById('dashSchool').value : '';
+        var params = new URLSearchParams({ date: date });
+        if (school) params.append('school_id', school);
+
+        try {
+            var res  = await fetch('/api/dashboard-data?' + params);
+            var data = await res.json();
+            if (data.error) return;
+
+            // Non-school day banner
+            var banner = document.getElementById('nonSchoolDayBanner');
+            if (!data.is_school_day) {
+                document.getElementById('nonSchoolDayText').textContent =
+                    'Today is a non-school day' + (data.non_school_day_reason ? ' — ' + data.non_school_day_reason : '') + '.';
+                banner.style.display = 'flex';
+            } else {
+                banner.style.display = 'none';
+            }
+
+            // KPI cards
+            document.getElementById('statSchools').textContent  = data.total_schools;
+            document.getElementById('statStudents').textContent = data.active_students;
+            document.getElementById('statPresent').textContent  = data.students_present;
+            document.getElementById('statAbsent').textContent   = data.students_absent;
+            document.getElementById('statRate').textContent     = data.attendance_rate + '%';
+            document.getElementById('saWbRate').textContent     = data.attendance_rate + '%';
+            document.getElementById('statTeachers').textContent = data.teachers_present;
+            document.getElementById('statTimedOut').textContent = data.students_timed_out;
+            document.getElementById('statFlagged').textContent  = data.flagged_absent_2day;
+            var inactiveEl = document.getElementById('statInactive');
+            if (inactiveEl) inactiveEl.textContent = data.inactive_students;
+
+            // Date label
+            var dl = document.getElementById('breakdownDate');
+            if (dl) {
+                var d = new Date(date + 'T00:00:00');
+                dl.textContent = d.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+            }
+
+            // School breakdown table
+            var tbody = document.getElementById('schoolBreakdownBody');
+            if (!data.schools || !data.schools.length) {
+                tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><i class="fa-solid fa-building-columns"></i><h4>No schools found</h4><p>No attendance data available.</p></div></td></tr>';
+            } else {
+                tbody.innerHTML = data.schools.map(function(s) {
+                    var sRate = s.rate;
+                    var tRate = s.teacher_rate;
+                    return '<tr>' +
+                        '<td style="font-weight:600;color:var(--gray-800);">' +
+                            '<div style="display:flex;align-items:center;gap:8px;">' +
+                            '<div style="width:32px;height:32px;border-radius:8px;background:var(--primary-bg);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;flex-shrink:0;">' +
+                            s.name.charAt(0).toUpperCase() + '</div>' +
+                            '<span>' + s.name + '</span></div></td>' +
+                        '<td>' + s.enrollment + '</td>' +
+                        '<td style="color:var(--success);font-weight:600;">' + s.present + '</td>' +
+                        '<td style="color:var(--danger);font-weight:600;">' + s.absent + '</td>' +
+                        '<td>' +
+                            '<div style="display:flex;align-items:center;gap:8px;">' +
+                            progressBar(sRate) +
+                            '<span style="font-weight:700;font-size:0.8125rem;color:' + rateColor(sRate) + ';min-width:38px;">' + sRate + '%</span>' +
+                            '</div>' +
+                        '</td>' +
+                        '<td>' + s.teachers_present + '<span style="color:var(--gray-400);font-size:0.75rem;"> / ' + s.teachers_total + '</span></td>' +
+                        '<td>' +
+                            '<div style="display:flex;align-items:center;gap:8px;">' +
+                            progressBar(tRate) +
+                            '<span style="font-weight:700;font-size:0.8125rem;color:' + rateColor(tRate) + ';min-width:38px;">' + tRate + '%</span>' +
+                            '</div>' +
+                        '</td>' +
+                    '</tr>';
+                }).join('');
+            }
+
+            // Flagged students
+            var flaggedCard = document.getElementById('flaggedCard');
+            if (data.flagged_absent_2day > 0) {
+                var fc = document.getElementById('flaggedCount');
+                if (fc) fc.textContent = data.flagged_absent_2day + ' student(s)';
+                flaggedCard.style.display = 'block';
+                loadFlagged(date, school);
+            } else {
+                flaggedCard.style.display = 'none';
+            }
+
+        } catch (e) {
+            console.error('Dashboard error:', e);
+        }
+    }
+
+    async function loadFlagged(date, school) {
+        var params = new URLSearchParams({ days: 2 });
+        if (date) params.append('date', date);
+        if (school) params.append('school_id', school);
+        try {
+            var res  = await fetch('/api/absence-flags?' + params);
+            var data = await res.json();
+            var tbody = document.getElementById('flaggedBody');
+            if (!data.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No flagged students.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.map(function(s, i) {
+                return '<tr>' +
+                    '<td style="color:var(--gray-400);font-size:0.8125rem;">' + (i+1) + '</td>' +
+                    '<td>' +
+                        '<div class="student-name-cell">' +
+                        '<div class="student-avatar" style="background:#fee2e2;color:#dc2626;">' + s.firstname.charAt(0).toUpperCase() + '</div>' +
+                        '<span style="font-weight:600;">' + s.lastname + ', ' + s.firstname + '</span>' +
+                        '</div>' +
+                    '</td>' +
+                    '<td><span class="lrn-badge">' + (s.lrn || '—') + '</span></td>' +
+                    '<td>' + (s.school_name || '—') + '</td>' +
+                    '<td>' + (s.grade_name  || '—') + '</td>' +
+                    '<td>' + (s.section_name || '—') + '</td>' +
+                '</tr>';
+            }).join('');
+        } catch (e) { console.error('Flagged error:', e); }
+    }
+
+    // Watch changes
+    document.getElementById('dashDate').addEventListener('change', function() {
+        clearInterval(refreshTimer);
+        load();
+        refreshTimer = setInterval(load, 5000);
+    });
+    var schoolEl = document.getElementById('dashSchool');
+    if (schoolEl) schoolEl.addEventListener('change', function() {
+        clearInterval(refreshTimer);
+        load();
+        refreshTimer = setInterval(load, 5000);
+    });
+
+    // Initial load + polling
+    load();
+    refreshTimer = setInterval(load, 5000);
+})();
+</script>
+
+<%- include('partials/footer') %>

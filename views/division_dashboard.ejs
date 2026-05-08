@@ -1,0 +1,501 @@
+<%- include('partials/header') %>
+
+<div class="div-dash">
+    <!-- Welcome Banner -->
+    <div class="welcome-banner">
+        <div class="wb-left">
+            <h2 id="wbGreeting">Good morning, <%= user.fullname %></h2>
+            <p><i class="fa-solid fa-calendar-days"></i> <span id="wbDateLabel"></span></p>
+        </div>
+        <div class="wb-right">
+            <div class="wb-stat">
+                <span class="wb-stat-val" id="wbRate">0%</span>
+                <span class="wb-stat-lbl">Today's Rate</span>
+            </div>
+            <input type="date" id="divDate" value="<%= new Date().toISOString().slice(0,10) %>"
+                   style="padding:8px 12px;border:1.5px solid rgba(255,255,255,0.45);border-radius:9px;font-size:0.8125rem;background:rgba(255,255,255,0.18);color:#fff;cursor:pointer;">
+            <a href="/admin/reports" class="wb-btn"><i class="fa-solid fa-chart-bar"></i> View Reports</a>
+        </div>
+    </div>
+
+    <!-- Non-school day banner -->
+    <div id="nonSchoolDayBanner" style="display:none;" class="div-banner-warn">
+        <i class="fa-solid fa-triangle-exclamation"></i> <span id="nonSchoolDayText"></span>
+    </div>
+
+    <!-- Summary Row 1: Student Stats -->
+    <div class="div-summary-row">
+        <div class="div-sum-card">
+            <div class="div-sum-icon" style="background:#eef2ff;color:#4f46e5;border-radius:10px;"><i class="fa-solid fa-building-columns"></i></div>
+            <div class="div-sum-info">
+                <span class="div-sum-val" id="dsTotalSchools">0</span>
+                <span class="div-sum-lbl">Total Schools</span>
+            </div>
+        </div>
+        <div class="div-sum-card">
+            <div class="div-sum-icon" style="background:#ede9fe;color:#7c3aed;border-radius:10px;"><i class="fa-solid fa-users"></i></div>
+            <div class="div-sum-info">
+                <span class="div-sum-val" id="dsTotalStudents">0</span>
+                <span class="div-sum-lbl">Total Students</span>
+            </div>
+        </div>
+        <div class="div-sum-card">
+            <div class="div-sum-icon" style="background:#dcfce7;color:#16a34a;border-radius:10px;"><i class="fa-solid fa-circle-check"></i></div>
+            <div class="div-sum-info">
+                <span class="div-sum-val" id="dsStudentsPresent">0</span>
+                <span class="div-sum-lbl">Present Today</span>
+            </div>
+        </div>
+        <div class="div-sum-card">
+            <div class="div-sum-icon" style="background:#fee2e2;color:#dc2626;border-radius:10px;"><i class="fa-solid fa-circle-xmark"></i></div>
+            <div class="div-sum-info">
+                <span class="div-sum-val" id="dsStudentsAbsent">0</span>
+                <span class="div-sum-lbl">Absent Today</span>
+            </div>
+        </div>
+        <div class="div-sum-card">
+            <div class="div-sum-icon" style="background:#fef3c7;color:#d97706;border-radius:10px;"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <div class="div-sum-info">
+                <span class="div-sum-val" id="ds2DayAbsent">0</span>
+                <span class="div-sum-lbl">2-Day Absentees</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Row 2: Teacher Stats -->
+    <div class="div-summary-row">
+        <div class="div-sum-card">
+            <div class="div-sum-icon" style="background:#f3e8ff;color:#7c3aed;border-radius:10px;"><i class="fa-solid fa-chalkboard-user"></i></div>
+            <div class="div-sum-info">
+                <span class="div-sum-val" id="dsTotalTeachers">0</span>
+                <span class="div-sum-lbl">Total Teachers</span>
+            </div>
+        </div>
+        <div class="div-sum-card">
+            <div class="div-sum-icon" style="background:#dcfce7;color:#16a34a;border-radius:10px;"><i class="fa-solid fa-user-check"></i></div>
+            <div class="div-sum-info">
+                <span class="div-sum-val" id="dsTeachersPresent">0</span>
+                <span class="div-sum-lbl">Teachers Present</span>
+            </div>
+        </div>
+        <div class="div-sum-card">
+            <div class="div-sum-icon" style="background:#fee2e2;color:#dc2626;border-radius:10px;"><i class="fa-solid fa-user-xmark"></i></div>
+            <div class="div-sum-info">
+                <span class="div-sum-val" id="dsTeachersAbsent">0</span>
+                <span class="div-sum-lbl">Teachers Absent</span>
+            </div>
+        </div>
+        <div class="div-sum-card">
+            <div class="div-sum-icon" style="background:#fef3c7;color:#d97706;border-radius:10px;"><i class="fa-solid fa-chart-line"></i></div>
+            <div class="div-sum-info">
+                <span class="div-sum-val" id="dsTeacherRate">0%</span>
+                <span class="div-sum-lbl">Teacher Attendance</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Middle Row: Pie chart + Calendar + Ranking -->
+    <div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:14px;margin-bottom:20px;align-items:start;" id="divMiddleRow">
+
+        <!-- 2-Day Absentees -->
+        <div class="div-card" style="display:flex;flex-direction:column;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                <h3 style="margin:0;"><i class="fa-solid fa-triangle-exclamation" style="color:#d97706;"></i> 2-Day Absentees</h3>
+                <span id="absentFlagCount" style="background:#fef3c7;color:#92400e;font-size:0.6875rem;font-weight:700;padding:2px 8px;border-radius:20px;">0</span>
+            </div>
+            <div id="absentFlagList" style="overflow-y:auto;max-height:380px;display:flex;flex-direction:column;gap:7px;">
+                <div style="text-align:center;color:var(--gray-400);padding:2rem;font-size:0.8125rem;">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Absence Calendar -->
+        <div class="div-card" style="min-width:0;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                <h3 style="margin:0;"><i class="fa-solid fa-calendar-days" style="color:var(--primary);"></i> Monthly Absences</h3>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <button onclick="calPrev()" style="background:var(--gray-100);border:1px solid var(--gray-200);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.75rem;"><i class="fa-solid fa-chevron-left"></i></button>
+                    <span id="calMonthLabel" style="font-size:0.8125rem;font-weight:700;color:var(--gray-700);white-space:nowrap;min-width:100px;text-align:center;"></span>
+                    <button onclick="calNext()" style="background:var(--gray-100);border:1px solid var(--gray-200);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.75rem;"><i class="fa-solid fa-chevron-right"></i></button>
+                </div>
+            </div>
+            <!-- Calendar legend -->
+            <div style="display:flex;gap:12px;margin-bottom:10px;flex-wrap:wrap;">
+                <span style="display:flex;align-items:center;gap:5px;font-size:0.6875rem;color:var(--gray-500);">
+                    <span style="width:12px;height:12px;border-radius:3px;background:#dcfce7;display:inline-block;border:1px solid #bbf7d0;"></span> Low absence
+                </span>
+                <span style="display:flex;align-items:center;gap:5px;font-size:0.6875rem;color:var(--gray-500);">
+                    <span style="width:12px;height:12px;border-radius:3px;background:#fef3c7;display:inline-block;border:1px solid #fde68a;"></span> Medium
+                </span>
+                <span style="display:flex;align-items:center;gap:5px;font-size:0.6875rem;color:var(--gray-500);">
+                    <span style="width:12px;height:12px;border-radius:3px;background:#fee2e2;display:inline-block;border:1px solid #fecaca;"></span> High absence
+                </span>
+            </div>
+            <div id="calGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;">
+                <div style="padding:4px 2px;text-align:center;font-size:0.625rem;font-weight:700;color:var(--gray-400);text-transform:uppercase;">Sun</div>
+                <div style="padding:4px 2px;text-align:center;font-size:0.625rem;font-weight:700;color:var(--gray-400);text-transform:uppercase;">Mon</div>
+                <div style="padding:4px 2px;text-align:center;font-size:0.625rem;font-weight:700;color:var(--gray-400);text-transform:uppercase;">Tue</div>
+                <div style="padding:4px 2px;text-align:center;font-size:0.625rem;font-weight:700;color:var(--gray-400);text-transform:uppercase;">Wed</div>
+                <div style="padding:4px 2px;text-align:center;font-size:0.625rem;font-weight:700;color:var(--gray-400);text-transform:uppercase;">Thu</div>
+                <div style="padding:4px 2px;text-align:center;font-size:0.625rem;font-weight:700;color:var(--gray-400);text-transform:uppercase;">Fri</div>
+                <div style="padding:4px 2px;text-align:center;font-size:0.625rem;font-weight:700;color:var(--gray-400);text-transform:uppercase;">Sat</div>
+            </div>
+        </div>
+
+        <!-- Schools by Attendance Rate -->
+        <div class="div-card div-rank-card" style="display:flex;flex-direction:column;">
+            <h3 style="margin:0 0 12px;"><i class="fa-solid fa-ranking-star" style="color:var(--primary);"></i> Schools by Rate</h3>
+            <div class="div-rank-list" id="dsRankList" style="overflow-y:auto;max-height:360px;">
+                <div class="text-center text-muted" style="padding:2rem">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- All Schools Grid -->
+    <div class="div-schools-header">
+        <h3><i class="fa-solid fa-building-columns" style="color:var(--primary);"></i> All Schools</h3>
+        <span class="text-muted" style="font-size:0.82rem">Click a school card for detailed view</span>
+    </div>
+    <div class="school-grid" id="dsSchoolsGrid">
+        <div class="text-center text-muted" style="grid-column:1/-1;padding:2rem">Loading...</div>
+    </div>
+</div>
+
+<!-- Day Detail Modal -->
+<div id="calDayModal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.45);z-index:1000;align-items:center;justify-content:center;padding:16px;">
+    <div style="background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.18);width:100%;max-width:520px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;">
+        <!-- Modal header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--gray-100);">
+            <div>
+                <h3 style="margin:0;font-size:1rem;font-weight:800;color:var(--gray-900);" id="calModalTitle">Day Details</h3>
+                <p style="margin:3px 0 0;font-size:0.75rem;color:var(--gray-500);" id="calModalSub"></p>
+            </div>
+            <button onclick="closeCalModal()" style="background:var(--gray-100);border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:1.125rem;color:var(--gray-600);display:flex;align-items:center;justify-content:center;">&times;</button>
+        </div>
+        <!-- Summary pills -->
+        <div style="display:flex;gap:10px;padding:14px 22px;border-bottom:1px solid var(--gray-100);flex-wrap:wrap;" id="calModalPills"></div>
+        <!-- List -->
+        <div style="flex:1;overflow-y:auto;padding:14px 22px;" id="calModalBody">
+            <div style="text-align:center;color:var(--gray-400);padding:2rem;">Loading...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var pollTimer  = null;
+    var calYear    = new Date().getFullYear();
+    var calMonth   = new Date().getMonth() + 1; // 1-based
+
+    var MONTHS = ['January','February','March','April','May','June',
+                  'July','August','September','October','November','December'];
+
+    // ── Helpers ──────────────────────────────────────────────
+    function formatDateLabel(str) {
+        var d = new Date(str + 'T00:00:00');
+        return d.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+    }
+    function rateColor(r) { return r >= 80 ? '#16a34a' : r >= 50 ? '#d97706' : '#dc2626'; }
+
+    // ── Banner greeting ──────────────────────────────────────
+    (function initBanner() {
+        var h = new Date().getHours();
+        var greet = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+        document.getElementById('wbGreeting').textContent = greet + ', <%= user.fullname %>';
+        document.getElementById('wbDateLabel').textContent = formatDateLabel('<%= new Date().toISOString().slice(0,10) %>');
+    })();
+
+    // ── Dashboard KPIs ───────────────────────────────────────
+    async function fetchData() {
+        var date = document.getElementById('divDate').value;
+        document.getElementById('wbDateLabel').textContent = formatDateLabel(date);
+        try {
+            var res  = await fetch('/api/dashboard-data?date=' + date);
+            if (!res.ok) return;
+            var data = await res.json();
+            updateSummary(data);
+            updateSchoolCards(data.schools || []);
+            updateRanking(data.schools || []);
+            loadAbsentFlags();
+            document.getElementById('wbRate').textContent = (data.attendance_rate || 0) + '%';
+
+            var banner = document.getElementById('nonSchoolDayBanner');
+            if (!data.is_school_day) {
+                banner.style.display = 'flex';
+                document.getElementById('nonSchoolDayText').textContent =
+                    'Today is not a school day: ' + (data.non_school_day_reason || 'N/A');
+            } else { banner.style.display = 'none'; }
+        } catch(e) { console.error('Division dashboard error:', e); }
+    }
+
+    function updateSummary(d) {
+        document.getElementById('dsTotalSchools').textContent    = d.total_schools    || 0;
+        document.getElementById('dsTotalStudents').textContent   = d.active_students  || 0;
+        document.getElementById('dsStudentsPresent').textContent = d.students_present || 0;
+        document.getElementById('dsStudentsAbsent').textContent  = d.students_absent  || 0;
+        document.getElementById('ds2DayAbsent').textContent      = d.flagged_absent_2day || 0;
+        document.getElementById('dsTotalTeachers').textContent   = d.total_teachers   || 0;
+        document.getElementById('dsTeachersPresent').textContent = d.teachers_present || 0;
+        document.getElementById('dsTeachersAbsent').textContent  = d.teachers_absent  || 0;
+        var tRate = d.total_teachers > 0 ? Math.round((d.teachers_present / d.total_teachers) * 100) : 0;
+        document.getElementById('dsTeacherRate').textContent = tRate + '%';
+    }
+
+    // ── 2-Day Absentees ──────────────────────────────────────
+    async function loadAbsentFlags() {
+        var el = document.getElementById('absentFlagList');
+        try {
+            var res  = await fetch('/api/absence-flags?days=2');
+            var data = await res.json();
+            document.getElementById('absentFlagCount').textContent = data.length;
+            if (!data.length) {
+                el.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:2rem 1rem;font-size:0.8125rem;">' +
+                    '<i class="fa-solid fa-circle-check" style="font-size:1.75rem;display:block;margin-bottom:8px;color:#16a34a;"></i>' +
+                    'No 2-day absentees detected</div>';
+                return;
+            }
+            el.innerHTML = data.map(function(s) {
+                var initials = (s.name || 'U').split(' ').map(function(w){ return w[0]; }).slice(0,2).join('').toUpperCase();
+                return '<div style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;background:#fffbeb;border:1px solid #fde68a;">' +
+                    '<div style="width:34px;height:34px;border-radius:50%;background:#fee2e2;display:flex;align-items:center;justify-content:center;font-size:0.6875rem;font-weight:800;color:#dc2626;flex-shrink:0;">' + initials + '</div>' +
+                    '<div style="flex:1;min-width:0;">' +
+                        '<div style="font-size:0.8125rem;font-weight:700;color:var(--gray-800);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (s.name || 'Unknown') + '</div>' +
+                        '<div style="font-size:0.6875rem;color:var(--gray-500);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (s.school_name || '') + '</div>' +
+                    '</div>' +
+                    '<div style="flex-shrink:0;text-align:right;">' +
+                        '<div style="font-size:0.6875rem;color:var(--gray-500);">' + (s.grade_name || '') + '</div>' +
+                        '<div style="font-size:0.6875rem;font-weight:700;color:#dc2626;"><i class="fa-solid fa-circle-xmark"></i> ' + s.absent_days + ' days</div>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+        } catch(e) { console.error('Absent flags error:', e); }
+    }
+
+    // ── School Cards ─────────────────────────────────────────
+    function updateSchoolCards(schools) {
+        var grid = document.getElementById('dsSchoolsGrid');
+        if (!schools.length) {
+            grid.innerHTML = '<div class="text-center text-muted" style="grid-column:1/-1;padding:2rem">No schools found</div>';
+            return;
+        }
+        grid.innerHTML = schools.map(function(s) {
+            var rate = s.enrollment > 0 ? Math.round((s.present / s.enrollment) * 100) : 0;
+            var rc = rateColor(rate);
+            return '<a href="/admin/school/' + s.id + '" class="school-card-v2" style="text-decoration:none;display:block">' +
+                '<div class="sc-header"><span class="sc-icon"><i class="fa-solid fa-building-columns" style="color:var(--primary);font-size:1rem;"></i></span></div>' +
+                '<div class="sc-body"><div class="sc-name">' + s.name + '</div></div>' +
+                '<div class="sc-stats">' +
+                    '<div class="sc-stat"><span class="sc-stat-val">' + (s.enrollment||0) + '</span><span class="sc-stat-lbl">Students</span></div>' +
+                    '<div class="sc-stat"><span class="sc-stat-val" style="color:#16a34a">' + (s.present||0) + '</span><span class="sc-stat-lbl">Present</span></div>' +
+                    '<div class="sc-stat"><span class="sc-stat-val" style="color:#dc2626">' + (s.absent||0) + '</span><span class="sc-stat-lbl">Absent</span></div>' +
+                    '<div class="sc-stat"><span class="sc-stat-val">' + s.teachers_present + '/' + s.teachers_total + '</span><span class="sc-stat-lbl">Teachers</span></div>' +
+                '</div>' +
+                '<div class="div-sc-footer">' +
+                    '<div class="div-sc-rate-bar"><div class="div-sc-rate-fill" style="width:' + rate + '%;background:' + rc + '"></div></div>' +
+                    '<span class="div-sc-rate-text" style="color:' + rc + '">' + rate + '%</span>' +
+                '</div>' +
+            '</a>';
+        }).join('');
+    }
+
+    function updateRanking(schools) {
+        var el = document.getElementById('dsRankList');
+        if (!schools.length) { el.innerHTML = '<div class="text-center text-muted" style="padding:2rem">No data</div>'; return; }
+        var sorted = schools.slice().sort(function(a,b){ return b.rate - a.rate; });
+        el.innerHTML = sorted.map(function(s, i) {
+            var rc = rateColor(s.rate);
+            var medal = i === 0 ? 'style="background:#fef3c7;color:#d97706;"' :
+                        i === 1 ? 'style="background:#f1f5f9;color:#64748b;"' :
+                        i === 2 ? 'style="background:#fff7ed;color:#c2410c;"' : '';
+            return '<div class="div-rank-item">' +
+                '<span class="div-rank-num" ' + medal + '>' + (i+1) + '</span>' +
+                '<div class="div-rank-info">' +
+                    '<span class="div-rank-name">' + s.name + '</span>' +
+                    '<span class="div-rank-sub">' + s.present + ' present of ' + s.enrollment + '</span>' +
+                '</div>' +
+                '<span class="div-rank-rate" style="color:' + rc + '">' + s.rate + '%</span>' +
+            '</div>';
+        }).join('');
+    }
+
+    // ── Absence Calendar ─────────────────────────────────────
+    async function loadCalendar() {
+        document.getElementById('calMonthLabel').textContent = MONTHS[calMonth - 1] + ' ' + calYear;
+        try {
+            var res  = await fetch('/api/monthly-attendance?year=' + calYear + '&month=' + calMonth);
+            var data = await res.json();
+            renderCalendar(data);
+        } catch(e) { console.error('Calendar error:', e); }
+    }
+
+    function renderCalendar(data) {
+        var grid = document.getElementById('calGrid');
+        // Header row (kept in HTML), rebuild day cells only
+        // Remove all day cells (not the 7 header cells)
+        var cells = grid.querySelectorAll('.cal-cell');
+        cells.forEach(function(c){ c.remove(); });
+
+        var today = new Date().toISOString().slice(0,10);
+        var firstDay = new Date(calYear, calMonth - 1, 1).getDay(); // 0=Sun
+
+        // Empty leading cells
+        for (var i = 0; i < firstDay; i++) {
+            var empty = document.createElement('div');
+            empty.className = 'cal-cell';
+            empty.style.cssText = 'aspect-ratio:1;border-radius:6px;';
+            grid.appendChild(empty);
+        }
+
+        var maxAbsent = Math.max.apply(null, data.days.map(function(d){ return d.absent; })) || 1;
+
+        data.days.forEach(function(day) {
+            var cell = document.createElement('div');
+            cell.className = 'cal-cell';
+            var isToday = day.date === today;
+            var dayNum  = parseInt(day.date.slice(8));
+
+            var bg = '#f8fafc'; var color = '#94a3b8'; var border = '1px solid #f1f5f9';
+            if (day.isWeekend) {
+                bg = '#f1f5f9'; color = '#cbd5e1'; border = '1px solid #e2e8f0';
+            } else if (day.absent > 0) {
+                var intensity = day.absent / maxAbsent;
+                if (intensity >= 0.66)      { bg = '#fee2e2'; color = '#dc2626'; border = '1px solid #fecaca'; }
+                else if (intensity >= 0.33) { bg = '#fef3c7'; color = '#d97706'; border = '1px solid #fde68a'; }
+                else                        { bg = '#dcfce7'; color = '#16a34a'; border = '1px solid #bbf7d0'; }
+            }
+
+            var clickable = !day.isWeekend;
+            cell.style.cssText = 'aspect-ratio:1;border-radius:6px;background:' + bg + ';border:' + border + ';' +
+                'display:flex;flex-direction:column;align-items:center;justify-content:center;' +
+                'cursor:' + (clickable ? 'pointer' : 'default') + ';' +
+                'transition:transform 0.1s,box-shadow 0.15s;position:relative;' +
+                (isToday ? 'box-shadow:0 0 0 2px var(--primary);' : '');
+
+            if (clickable) {
+                cell.onmouseenter = function(){ this.style.transform = 'scale(1.04)'; this.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)' + (isToday ? ',0 0 0 2px var(--primary)' : ''); };
+                cell.onmouseleave = function(){ this.style.transform = ''; this.style.boxShadow = isToday ? '0 0 0 2px var(--primary)' : ''; };
+                cell.onclick = (function(d){ return function(){ openCalModal(d); }; })(day);
+            }
+
+            var absentLabel = (!day.isWeekend && day.absent > 0) ? '<div style="font-size:0.5rem;font-weight:700;color:' + color + ';line-height:1;">' + day.absent + ' abs</div>' : '';
+            cell.innerHTML = '<div style="font-size:0.7rem;font-weight:' + (isToday ? '800' : '600') + ';color:' + (isToday ? 'var(--primary)' : color) + ';line-height:1;">' + dayNum + '</div>' + absentLabel;
+
+            cell.title = day.isWeekend ? 'Weekend' : 'Click to view details — ' + day.absent + ' absent / ' + day.present + ' present';
+            grid.appendChild(cell);
+        });
+    }
+
+    // ── Day Detail Modal ─────────────────────────────────────
+    async function openCalModal(day) {
+        var modal = document.getElementById('calDayModal');
+        modal.style.display = 'flex';
+        var d = new Date(day.date + 'T00:00:00');
+        var label = d.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+        document.getElementById('calModalTitle').textContent = label;
+        document.getElementById('calModalSub').textContent = 'Attendance details for this day';
+        document.getElementById('calModalPills').innerHTML = '<div style="font-size:0.8125rem;color:var(--gray-400);">Loading...</div>';
+        document.getElementById('calModalBody').innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:2rem;">Loading...</div>';
+
+        try {
+            var res  = await fetch('/api/attendance?date=' + day.date + '&type=student');
+            var records = await res.json();
+
+            var present = records.filter(function(r){ return r.status === 'present'; });
+            var late    = records.filter(function(r){ return r.status === 'late'; });
+            var total   = day.total || (day.present + day.absent);
+            var rate    = total > 0 ? Math.round(((present.length + late.length) / total) * 100) : 0;
+
+            document.getElementById('calModalSub').textContent = label;
+            document.getElementById('calModalTitle').textContent = 'Attendance Details';
+
+            document.getElementById('calModalPills').innerHTML =
+                '<span style="display:inline-flex;align-items:center;gap:5px;background:#dcfce7;color:#15803d;border-radius:20px;padding:4px 12px;font-size:0.75rem;font-weight:700;">' +
+                    '<i class="fa-solid fa-circle-check"></i> ' + present.length + ' Present</span>' +
+                '<span style="display:inline-flex;align-items:center;gap:5px;background:#fef3c7;color:#b45309;border-radius:20px;padding:4px 12px;font-size:0.75rem;font-weight:700;">' +
+                    '<i class="fa-solid fa-clock"></i> ' + late.length + ' Late</span>' +
+                '<span style="display:inline-flex;align-items:center;gap:5px;background:#fee2e2;color:#dc2626;border-radius:20px;padding:4px 12px;font-size:0.75rem;font-weight:700;">' +
+                    '<i class="fa-solid fa-circle-xmark"></i> ' + day.absent + ' Absent</span>' +
+                '<span style="display:inline-flex;align-items:center;gap:5px;background:#eef2ff;color:#4338ca;border-radius:20px;padding:4px 12px;font-size:0.75rem;font-weight:700;">' +
+                    '<i class="fa-solid fa-percent"></i> ' + rate + '% Rate</span>';
+
+            if (!records.length) {
+                document.getElementById('calModalBody').innerHTML =
+                    '<div style="text-align:center;color:var(--gray-400);padding:2rem;font-size:0.8125rem;">' +
+                    '<i class="fa-solid fa-calendar-xmark" style="font-size:1.75rem;display:block;margin-bottom:8px;"></i>No attendance records for this day</div>';
+                return;
+            }
+
+            var allRows = records.slice().sort(function(a, b) {
+                var order = { present: 0, late: 1, absent: 2 };
+                return (order[a.status] || 0) - (order[b.status] || 0);
+            });
+
+            document.getElementById('calModalBody').innerHTML =
+                '<div style="display:flex;flex-direction:column;gap:7px;">' +
+                allRows.map(function(r) {
+                    var sc = r.status === 'present' ? '#16a34a' : r.status === 'late' ? '#d97706' : '#dc2626';
+                    var sb = r.status === 'present' ? '#dcfce7' : r.status === 'late' ? '#fef3c7' : '#fee2e2';
+                    var si = r.status === 'present' ? 'fa-circle-check' : r.status === 'late' ? 'fa-clock' : 'fa-circle-xmark';
+                    var initials = (r.person_name || 'U').split(' ').map(function(w){ return w[0]; }).slice(0,2).join('').toUpperCase();
+                    var timeStr = r.time_in ? new Date(r.time_in).toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' }) : '—';
+                    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:var(--gray-50);border:1px solid var(--gray-100);">' +
+                        '<div style="width:32px;height:32px;border-radius:50%;background:' + sb + ';display:flex;align-items:center;justify-content:center;font-size:0.625rem;font-weight:800;color:' + sc + ';flex-shrink:0;">' + initials + '</div>' +
+                        '<div style="flex:1;min-width:0;">' +
+                            '<div style="font-size:0.8125rem;font-weight:700;color:var(--gray-800);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (r.person_name || 'Unknown') + '</div>' +
+                            '<div style="font-size:0.6875rem;color:var(--gray-500);">' + (r.grade_name || '') + (r.section_name ? ' · ' + r.section_name : '') + '</div>' +
+                        '</div>' +
+                        '<div style="text-align:right;flex-shrink:0;">' +
+                            '<div style="font-size:0.6875rem;font-weight:700;color:' + sc + ';"><i class="fa-solid ' + si + '"></i> ' + r.status + '</div>' +
+                            '<div style="font-size:0.6875rem;color:var(--gray-400);">' + timeStr + '</div>' +
+                        '</div>' +
+                    '</div>';
+                }).join('') + '</div>';
+        } catch(e) {
+            document.getElementById('calModalBody').innerHTML = '<div style="text-align:center;color:#dc2626;padding:2rem;">Failed to load details.</div>';
+        }
+    }
+
+    window.closeCalModal = function() {
+        document.getElementById('calDayModal').style.display = 'none';
+    };
+    document.getElementById('calDayModal').addEventListener('click', function(e) {
+        if (e.target === this) closeCalModal();
+    });
+
+    window.calPrev = function() { calMonth--; if (calMonth < 1) { calMonth = 12; calYear--; } loadCalendar(); };
+    window.calNext = function() { calMonth++; if (calMonth > 12) { calMonth = 1; calYear++; } loadCalendar(); };
+
+    // ── Polling ──────────────────────────────────────────────
+    document.getElementById('divDate').addEventListener('change', function() {
+        clearTimeout(pollTimer);
+        fetchData();
+        pollTimer = setTimeout(autoPoll, 5000);
+    });
+
+    function autoPoll() { fetchData(); pollTimer = setTimeout(autoPoll, 5000); }
+    document.addEventListener('visibilitychange', function() {
+        if (!document.hidden) fetchData();
+    });
+    window.addEventListener('focus', fetchData);
+
+    // ── Responsive: collapse 3-col to 1-col on small screens
+    function checkLayout() {
+        var row = document.getElementById('divMiddleRow');
+        if (!row) return;
+        if (window.innerWidth < 1100) {
+            row.style.gridTemplateColumns = '1fr';
+        } else {
+            row.style.gridTemplateColumns = '1fr 2fr 1fr';
+        }
+    }
+    window.addEventListener('resize', checkLayout);
+    checkLayout();
+
+    // Init
+    fetchData();
+    loadCalendar();
+    loadAbsentFlags();
+    pollTimer = setTimeout(autoPoll, 5000);
+})();
+</script>
+
+<%- include('partials/footer') %>

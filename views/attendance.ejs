@@ -1,0 +1,114 @@
+<%- include('partials/header') %>
+
+<div class="page-header">
+    <div class="page-header-left">
+        <h1><i class="fa-solid fa-clipboard-list"></i> Attendance Records</h1>
+    </div>
+    <div class="page-actions">
+        <a href="#" class="btn btn-success" id="exportAttBtn"><i class="fa-solid fa-file-csv"></i> Export CSV</a>
+    </div>
+</div>
+
+<div class="filter-bar">
+    <div class="filter-item">
+        <label>Type</label>
+        <select id="attType">
+            <option value="student">Students</option>
+            <option value="teacher">Teachers</option>
+        </select>
+    </div>
+    <div class="filter-item">
+        <label>Date</label>
+        <input type="date" id="attDate" value="<%= new Date().toISOString().slice(0,10) %>">
+    </div>
+    <div class="filter-item">
+        <label>School</label>
+        <select id="attSchool">
+            <option value="">All Schools</option>
+            <% schools.forEach(s => { %>
+            <option value="<%= s.id %>"><%= s.name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="filter-item">
+        <label>Grade</label>
+        <select id="attGrade">
+            <option value="">All Grades</option>
+        </select>
+    </div>
+    <div class="filter-item">
+        <label>Search</label>
+        <input type="text" id="attSearch" placeholder="Search by name...">
+    </div>
+    <button class="btn-filter" onclick="loadAttendance()"><i class="fa-solid fa-magnifying-glass"></i> Filter</button>
+</div>
+
+<div class="results-header">
+    <span class="record-count" id="attCount">0 record(s)</span>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>LRN / ID</th>
+                    <th>School</th>
+                    <th>Grade / Section</th>
+                    <th>Time In</th>
+                    <th>Time Out</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="attendanceBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+async function loadAttendance() {
+    var date = document.getElementById('attDate').value;
+    var type = document.getElementById('attType').value;
+    var school = document.getElementById('attSchool').value;
+    var search = document.getElementById('attSearch').value;
+    var params = new URLSearchParams({ date: date, type: type });
+    if (school) params.append('school', school);
+
+    var res = await fetch('/api/attendance?' + params);
+    var data = await res.json();
+
+    if (search) {
+        var q = search.toLowerCase();
+        data = data.filter(function(r){ return (r.person_name||'').toLowerCase().indexOf(q) >= 0; });
+    }
+    document.getElementById('attCount').textContent = data.length + ' record(s)';
+
+    document.getElementById('attendanceBody').innerHTML = data.map(function(r) {
+        var statusClass = r.status === 'present' ? 'badge-active' : r.status === 'late' ? 'badge-late' : 'badge-inactive';
+        return '<tr>' +
+            '<td><strong>' + (r.person_name || 'N/A') + '</strong></td>' +
+            '<td>' + (r.lrn || r.employee_id || '-') + '</td>' +
+            '<td><span class="school-code">' + (r.school_name || '-') + '</span></td>' +
+            '<td>' + (r.grade_name || '-') + (r.section_name ? ' / ' + r.section_name : '') + '</td>' +
+            '<td>' + (r.time_in ? new Date(r.time_in).toLocaleTimeString() : '-') + '</td>' +
+            '<td>' + (r.time_out ? new Date(r.time_out).toLocaleTimeString() : '-') + '</td>' +
+            '<td><span class="badge ' + statusClass + '">' + r.status + '</span></td>' +
+            '</tr>';
+    }).join('') || '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon"><i class="fa-solid fa-clipboard-list" style="font-size:2.5rem;color:var(--gray-300);"></i></div><h4>No attendance records found</h4><p>No records for the selected date and filters.</p></div></td></tr>';
+
+    var exportParams = new URLSearchParams({ date: date, end_date: date, type: type });
+    if (school) exportParams.append('school', school);
+    document.getElementById('exportAttBtn').href = '/export/report?' + exportParams;
+}
+
+loadAttendance();
+setInterval(loadAttendance, 3000);
+
+document.getElementById('attDate').addEventListener('change', loadAttendance);
+document.getElementById('attType').addEventListener('change', loadAttendance);
+document.getElementById('attSchool').addEventListener('change', loadAttendance);
+</script>
+
+<div class="live-indicator"><div class="live-dot"></div> Live</div>
+<%- include('partials/footer') %>

@@ -1,0 +1,277 @@
+<%- include('partials/header') %>
+
+<!-- Breadcrumb -->
+<nav class="breadcrumb-nav">
+    <a href="/admin/schools"><i class="fa fa-school"></i> All Schools</a>
+    <span class="breadcrumb-sep"><i class="fa fa-chevron-right"></i></span>
+    <a href="/admin/school/<%= schoolId %>" id="bcSchool"><i class="fa fa-school"></i> School</a>
+    <span class="breadcrumb-sep"><i class="fa fa-chevron-right"></i></span>
+    <a href="#" id="bcGrade"><i class="fa fa-layer-group"></i> Grade</a>
+    <span class="breadcrumb-sep"><i class="fa fa-chevron-right"></i></span>
+    <span class="breadcrumb-active" id="bcSection"><i class="fa fa-door-open"></i> Section</span>
+</nav>
+
+<a href="#" class="back-btn" id="backBtn"><i class="fa fa-arrow-left"></i> Back to Grade</a>
+
+<!-- Section Detail Header -->
+<div class="section-detail-header">
+    <div class="section-icon"><i class="fa fa-users" style="font-size:28px;color:#fff"></i></div>
+    <div class="section-meta">
+        <h2 id="secName">Loading...</h2>
+        <p id="secMeta">Loading...</p>
+    </div>
+</div>
+
+<!-- Teacher Card -->
+<div class="teacher-card" id="teacherCard" style="display:none">
+    <div class="teacher-avatar" id="tcAvatar">?</div>
+    <div class="teacher-info">
+        <div class="teacher-name"><i class="fa fa-star" style="color:#fbbf24;margin-right:6px"></i><span id="tcName">-</span></div>
+        <div class="teacher-detail" id="tcDetail">Class Adviser</div>
+    </div>
+    <span class="teacher-badge"><i class="fa fa-certificate"></i> Class Adviser</span>
+</div>
+
+<!-- No Adviser Warning -->
+<div class="teacher-card" id="noAdviserCard" style="display:none;background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%)">
+    <div class="teacher-avatar" style="background:#f59e0b;color:#fff"><i class="fa fa-exclamation-triangle"></i></div>
+    <div class="teacher-info">
+        <div class="teacher-name" style="color:#92400e"><i class="fa fa-exclamation-circle" style="color:#f59e0b;margin-right:6px"></i>No Adviser Assigned</div>
+        <div class="teacher-detail" style="color:#a16207">This section does not have an adviser assigned yet.</div>
+    </div>
+</div>
+
+<!-- Non-School-Day Banner -->
+<div id="nonSchoolDayBanner" style="display:none;background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%);border:1px solid #f59e0b;border-radius:var(--radius);padding:16px 20px;margin-bottom:16px;display:none">
+    <div style="display:flex;align-items:center;gap:12px">
+        <i class="fa fa-calendar-times" style="font-size:1.5rem;color:#d97706"></i>
+        <div>
+            <div style="font-weight:600;color:#92400e">No Classes Today</div>
+            <div style="color:#a16207;font-size:.9rem" id="nonSchoolDayReason">Attendance data shown is for reference only.</div>
+        </div>
+    </div>
+</div>
+
+<!-- Stat Cards -->
+<div class="stats-grid">
+    <div class="stat-card" style="border-left:4px solid var(--primary)">
+        <div class="stat-icon" style="background:var(--primary-bg);color:var(--primary)"><i class="fa fa-users"></i></div>
+        <div class="stat-info">
+            <div class="stat-value" id="kTotal">-</div>
+            <div class="stat-label">Total Students</div>
+        </div>
+    </div>
+    <div class="stat-card" style="border-left:4px solid #f97316">
+        <div class="stat-icon" style="background:#fff7ed;color:#f97316"><i class="fa fa-user-slash"></i></div>
+        <div class="stat-info">
+            <div class="stat-value" id="kInactive">-</div>
+            <div class="stat-label">Inactive</div>
+        </div>
+    </div>
+    <div class="stat-card" style="border-left:4px solid var(--success)">
+        <div class="stat-icon" style="background:var(--success-bg);color:var(--success)"><i class="fa fa-check-circle"></i></div>
+        <div class="stat-info">
+            <div class="stat-value" id="kPresent">-</div>
+            <div class="stat-label">Present</div>
+        </div>
+    </div>
+    <div class="stat-card" style="border-left:4px solid var(--warning)">
+        <div class="stat-icon" style="background:var(--warning-bg);color:var(--warning)"><i class="fa fa-clock"></i></div>
+        <div class="stat-info">
+            <div class="stat-value" id="kLate">-</div>
+            <div class="stat-label">Late</div>
+        </div>
+    </div>
+    <div class="stat-card" style="border-left:4px solid var(--error)">
+        <div class="stat-icon" style="background:var(--error-bg);color:var(--error)"><i class="fa fa-times-circle"></i></div>
+        <div class="stat-info">
+            <div class="stat-value" id="kAbsent">-</div>
+            <div class="stat-label">Absent</div>
+        </div>
+    </div>
+</div>
+
+<!-- Student Attendance Table -->
+<div class="card" style="padding:0;overflow:hidden;border-radius:var(--radius)">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border);background:var(--card-bg)">
+        <div style="font-weight:600;font-size:1rem;color:var(--text)"><i class="fa fa-user-graduate" style="color:var(--primary);margin-right:8px"></i>Students <span class="count-badge" id="studentCountBadge">-</span></div>
+        <div style="color:var(--text-muted);font-size:.85rem"><i class="fa fa-calendar-day"></i> Today: <span id="todayDate">-</span></div>
+    </div>
+    <div class="table-responsive">
+        <table class="student-table">
+            <thead>
+                <tr>
+                    <th style="width:50px">#</th>
+                    <th>Student Name</th>
+                    <th>LRN</th>
+                    <th>Time In</th>
+                    <th>Time Out</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="studentBody"><tr><td colspan="6" class="text-center text-muted" style="padding:40px">Loading...</td></tr></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+var schoolId = <%= schoolId %>;
+var sectionId = <%= sectionId %>;
+var gradeId = <%= typeof gradeId !== 'undefined' ? gradeId : 0 %>;
+var allStudents = [];
+var attendanceMap = {};
+
+// Set today's date
+var now = new Date();
+var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+document.getElementById('todayDate').textContent = months[now.getMonth()] + ' ' + now.getDate() + ', ' + now.getFullYear();
+var todayStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+
+function formatTime12(timeStr) {
+    if (!timeStr) return '';
+    var parts = timeStr.split(':');
+    var h = parseInt(parts[0], 10);
+    var m = parts[1];
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return h + ':' + m + ' ' + ampm;
+}
+
+async function loadData() {
+    try {
+        var [stuRes, secRes, schoolRes, attRes, sdRes] = await Promise.all([
+            fetch('/api/students?school_id=' + schoolId + '&section_id=' + sectionId).then(function(r){return r.json();}),
+            fetch('/api/sections?school_id=' + schoolId).then(function(r){return r.json();}),
+            fetch('/api/schools').then(function(r){return r.json();}),
+            fetch('/api/attendance?date=' + todayStr + '&type=student').then(function(r){return r.json();}).catch(function(){return [];}),
+            fetch('/api/is-school-day?date=' + todayStr + '&school_id=' + schoolId).then(function(r){return r.json();}).catch(function(){return {isSchoolDay:true};})
+        ]);
+
+        // Show non-school-day banner
+        var banner = document.getElementById('nonSchoolDayBanner');
+        if (sdRes && !sdRes.isSchoolDay) {
+            banner.style.display = '';
+            document.getElementById('nonSchoolDayReason').textContent = (sdRes.reason || 'Non-school day') + ' \u2014 attendance data shown is for reference only.';
+        } else {
+            banner.style.display = 'none';
+        }
+
+        allStudents = stuRes;
+        var sec = secRes.find(function(s){return s.id === sectionId;});
+        var school = schoolRes.find(function(s){return s.id === schoolId;});
+        var gradeName = sec ? (sec.grade_name || '') : '';
+
+        // Build attendance lookup
+        attendanceMap = {};
+        (Array.isArray(attRes) ? attRes : []).forEach(function(a) {
+            if (a.person_type === 'student') attendanceMap[a.person_id] = a;
+        });
+
+        // Update breadcrumb
+        document.getElementById('bcSchool').innerHTML = '<i class="fa fa-school"></i> ' + (school ? school.name : 'School');
+        if (sec && sec.grade_level_id) {
+            gradeId = sec.grade_level_id;
+            document.getElementById('bcGrade').innerHTML = '<i class="fa fa-layer-group"></i> ' + gradeName;
+            document.getElementById('bcGrade').href = '/admin/school/' + schoolId + '/grade/' + gradeId;
+            document.getElementById('backBtn').innerHTML = '<i class="fa fa-arrow-left"></i> Back to ' + gradeName;
+            document.getElementById('backBtn').href = '/admin/school/' + schoolId + '/grade/' + gradeId;
+        }
+        document.getElementById('bcSection').innerHTML = '<i class="fa fa-door-open"></i> ' + (sec ? sec.name : 'Section');
+        document.getElementById('secName').textContent = sec ? sec.name : 'Section';
+
+        var activeCount = allStudents.filter(function(s){return s.status==='active';}).length;
+        document.getElementById('secMeta').innerHTML = '<i class="fa fa-layer-group"></i> ' + gradeName + ' &middot; <i class="fa fa-school"></i> ' + (school ? school.name : '') + ' &middot; <i class="fa fa-users"></i> ' + activeCount + ' student' + (activeCount !== 1 ? 's' : '');
+
+        // Teacher card or no-adviser warning
+        if (sec && sec.adviser) {
+            document.getElementById('teacherCard').style.display = '';
+            document.getElementById('noAdviserCard').style.display = 'none';
+            var parts = sec.adviser.trim().split(/\s+/);
+            document.getElementById('tcAvatar').textContent = parts[0] ? parts[0][0].toUpperCase() : '?';
+            document.getElementById('tcName').textContent = sec.adviser;
+        } else {
+            document.getElementById('teacherCard').style.display = 'none';
+            document.getElementById('noAdviserCard').style.display = '';
+        }
+
+        // KPI
+        var totalActive = allStudents.filter(function(s){return s.status==='active';}).length;
+        var inactive = allStudents.filter(function(s){return s.status!=='active';}).length;
+        var present = 0, late = 0, absent = 0;
+        allStudents.forEach(function(s) {
+            if (s.status !== 'active') return;
+            var att = attendanceMap[s.id];
+            if (att) {
+                if (att.status === 'present') present++;
+                else if (att.status === 'late') late++;
+                else if (att.status === 'absent') absent++;
+                else present++;
+            } else {
+                absent++;
+            }
+        });
+        document.getElementById('kTotal').textContent = totalActive;
+        document.getElementById('kInactive').textContent = inactive;
+        document.getElementById('kPresent').textContent = present;
+        document.getElementById('kLate').textContent = late;
+        document.getElementById('kAbsent').textContent = Math.max(0, absent);
+
+        renderStudents();
+    } catch(e) { console.error(e); }
+}
+
+function renderStudents() {
+    var visible = allStudents.filter(function(s){return s.status === 'active' || s.status === 'inactive';});
+    var activeCount = allStudents.filter(function(s){return s.status === 'active';}).length;
+    document.getElementById('studentCountBadge').textContent = visible.length;
+
+    if (visible.length === 0) {
+        document.getElementById('studentBody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:60px 20px;color:var(--text-muted)"><div class="empty-state"><i class="fa fa-user-graduate" style="font-size:3rem;opacity:.3;margin-bottom:16px"></i><h3>No Students Found</h3><p>No students are enrolled in this section.</p></div></td></tr>';
+        return;
+    }
+
+    visible.sort(function(a,b){
+        if (a.status === 'active' && b.status !== 'active') return -1;
+        if (a.status !== 'active' && b.status === 'active') return 1;
+        return (a.lastname+a.firstname).localeCompare(b.lastname+b.firstname);
+    });
+
+    document.getElementById('studentBody').innerHTML = visible.map(function(s, idx) {
+        var isStudentInactive = s.status === 'inactive';
+        var att = attendanceMap[s.id];
+        var status = isStudentInactive ? 'inactive' : (att ? att.status : 'absent');
+        var isAbsent = (status === 'absent');
+        var rowClass = isStudentInactive ? ' class="row-inactive"' : (isAbsent ? ' class="row-absent"' : '');
+        var initial = s.firstname ? s.firstname[0].toUpperCase() : '?';
+        var fullName = s.lastname + ', ' + s.firstname + (s.middlename ? ' ' + s.middlename : '');
+        var avatarClass = isAbsent ? 'student-avatar absent' : 'student-avatar';
+
+        var timeInHtml = '---';
+        var timeOutHtml = '---';
+        if (att && att.time_in) {
+            timeInHtml = '<span style="color:var(--success);font-weight:500"><i class="fa fa-sign-in-alt" style="margin-right:4px"></i>' + formatTime12(att.time_in) + '</span>';
+        }
+        if (att && att.time_out) {
+            timeOutHtml = '<span style="color:var(--primary);font-weight:500"><i class="fa fa-sign-out-alt" style="margin-right:4px"></i>' + formatTime12(att.time_out) + '</span>';
+        }
+
+        var statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+        var badgeClass = isStudentInactive ? 'badge badge-inactive' : 'status-badge status-' + status;
+
+        return '<tr'+rowClass+'>'+
+            '<td class="student-num">'+(idx+1)+'</td>'+
+            '<td><div class="student-name-cell"><div class="'+avatarClass+'">'+initial+'</div><span class="student-name-text">'+fullName+'</span></div></td>'+
+            '<td><span class="lrn-badge">'+(s.lrn||'\u2014')+'</span></td>'+
+            '<td>'+(isStudentInactive ? '<span style="color:var(--gray-400)">---</span>' : timeInHtml)+'</td>'+
+            '<td>'+(isStudentInactive ? '<span style="color:var(--gray-400)">---</span>' : timeOutHtml)+'</td>'+
+            '<td><span class="'+badgeClass+'">'+statusLabel+'</span></td>'+
+        '</tr>';
+    }).join('');
+}
+
+loadData();
+setInterval(loadData, 15000);
+</script>
+
+<div class="live-indicator"><div class="live-dot"></div> Live</div>
+<%- include('partials/footer') %>

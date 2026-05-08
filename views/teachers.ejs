@@ -1,0 +1,186 @@
+<%- include('partials/header') %>
+
+<div class="page-header">
+    <div class="page-header-left">
+        <h1><i class="fa-solid fa-chalkboard-user"></i> Teachers</h1>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-primary" onclick="openTeacherModal()">+ Add Teacher</button>
+    </div>
+</div>
+
+<div class="filter-bar">
+    <div class="filter-item">
+        <label>School</label>
+        <select id="filterSchool">
+            <option value="">All Schools</option>
+            <% schools.forEach(s => { %>
+            <option value="<%= s.id %>"><%= s.name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="filter-item">
+        <label>Search</label>
+        <input type="text" id="teacherSearch" placeholder="Search by name or ID...">
+    </div>
+    <button class="btn-filter" onclick="loadTeachers()"><i class="fa-solid fa-magnifying-glass"></i> Filter</button>
+</div>
+
+<div class="results-header">
+    <span class="record-count" id="teacherCount">0 teacher(s) found</span>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Employee ID</th>
+                    <th>Name</th>
+                    <th>School</th>
+                    <th>Contact</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="teachersBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Teacher Modal -->
+<div class="modal-overlay" id="teacherModal" style="display:none">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="teacherModalTitle">Add Teacher</h3>
+            <button class="modal-close" onclick="closeTeacherModal()">&times;</button>
+        </div>
+        <form id="teacherForm" onsubmit="saveTeacher(event)">
+            <input type="hidden" id="teacherId">
+            <div class="form-row">
+                <div class="form-group"><label>Employee ID</label><input type="text" id="teacherEmpId"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>First Name *</label><input type="text" id="teacherFirstname" required></div>
+                <div class="form-group"><label>Last Name *</label><input type="text" id="teacherLastname" required></div>
+                <div class="form-group"><label>Middle Name</label><input type="text" id="teacherMiddlename"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>Department</label><input type="text" id="teacherDepartment"></div>
+                <div class="form-group"><label>Subject</label><input type="text" id="teacherSubject"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>School *</label>
+                    <select id="teacherSchool" required>
+                        <option value="">Select School</option>
+                        <% schools.forEach(s => { %>
+                        <option value="<%= s.id %>"><%= s.name %></option>
+                        <% }) %>
+                    </select>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeTeacherModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+var allTeachers = [];
+
+async function loadTeachers() {
+    var school = document.getElementById('filterSchool').value;
+    var search = document.getElementById('teacherSearch').value;
+    var params = new URLSearchParams();
+    if (school) params.append('school', school);
+    if (search) params.append('search', search);
+    var res = await fetch('/api/teachers?' + params);
+    allTeachers = await res.json();
+    document.getElementById('teacherCount').textContent = allTeachers.length + ' teacher(s) found';
+    renderTeachers();
+}
+
+function renderTeachers() {
+    var visible = allTeachers.filter(function(t){ return t.status !== 'deleted'; });
+    document.getElementById('teachersBody').innerHTML = visible.map(function(t) {
+        var isInactive = t.status === 'inactive';
+        var rowClass = isInactive ? ' class="row-inactive"' : '';
+        var statusBadge = isInactive ? '<span class="badge badge-inactive">Inactive</span>' : '<span class="badge badge-active">Active</span>';
+        return '<tr'+rowClass+'>' +
+            '<td>' + (t.employee_id || '-') + '</td>' +
+            '<td>' + t.lastname + ', ' + t.firstname + (t.middlename ? ' ' + t.middlename.charAt(0) + '.' : '') + '</td>' +
+            '<td><span class="school-code">' + (t.school_name || '-') + '</span></td>' +
+            '<td>' + (t.department || '-') + '</td>' +
+            '<td>' + statusBadge + '</td>' +
+            '<td><div class="action-btns">' +
+                '<button class="action-btn edit" onclick="editTeacherById('+t.id+')" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>' +
+                '<button class="action-btn delete" onclick="deleteTeacher('+t.id+')" title="Delete"><i class="fa-solid fa-trash-can"></i></button>' +
+            '</div></td></tr>';
+    }).join('') || '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon"><i class="fa-solid fa-chalkboard-user" style="font-size:2.5rem;color:var(--gray-300);"></i></div><h4>No teachers found</h4></div></td></tr>';
+}
+
+function openTeacherModal() {
+    document.getElementById('teacherModalTitle').textContent = 'Add Teacher';
+    document.getElementById('teacherForm').reset();
+    document.getElementById('teacherId').value = '';
+    document.getElementById('teacherModal').style.display = 'flex';
+}
+function closeTeacherModal() { document.getElementById('teacherModal').style.display = 'none'; }
+
+function editTeacherById(id) {
+    var t = allTeachers.find(function(x) { return x.id === id; });
+    if (!t) return;
+    document.getElementById('teacherModalTitle').textContent = 'Edit Teacher';
+    document.getElementById('teacherId').value = t.id;
+    document.getElementById('teacherEmpId').value = t.employee_id || '';
+    document.getElementById('teacherFirstname').value = t.firstname;
+    document.getElementById('teacherLastname').value = t.lastname;
+    document.getElementById('teacherMiddlename').value = t.middlename || '';
+    document.getElementById('teacherDepartment').value = t.department || '';
+    document.getElementById('teacherSubject').value = t.subject || '';
+    document.getElementById('teacherSchool').value = t.school_id || '';
+    document.getElementById('teacherModal').style.display = 'flex';
+}
+
+async function saveTeacher(e) {
+    e.preventDefault();
+    var id = document.getElementById('teacherId').value;
+    var body = {
+        employee_id: document.getElementById('teacherEmpId').value,
+        firstname: document.getElementById('teacherFirstname').value,
+        lastname: document.getElementById('teacherLastname').value,
+        middlename: document.getElementById('teacherMiddlename').value,
+        department: document.getElementById('teacherDepartment').value,
+        subject: document.getElementById('teacherSubject').value,
+        school_id: document.getElementById('teacherSchool').value,
+        status: 'active'
+    };
+    var url = id ? '/api/teachers/' + id : '/api/teachers';
+    var method = id ? 'PUT' : 'POST';
+    var res = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    var data = await res.json();
+    if (data.success || data.id) { closeTeacherModal(); loadTeachers(); }
+    else alert(data.error || 'Failed to save teacher');
+}
+
+async function deleteTeacher(id) {
+    if (!confirm('Are you sure you want to deactivate this teacher?')) return;
+    await fetch('/api/teachers/' + id, { method: 'DELETE' });
+    loadTeachers();
+}
+
+loadTeachers();
+setInterval(function() { if (document.getElementById('teacherModal').style.display !== 'flex') loadTeachers(); }, 5000);
+</script>
+
+<div class="live-indicator"><div class="live-dot"></div> Live</div>
+<%- include('partials/footer') %>
+
+// Real-time auto-refresh every 5 seconds
+var teacherPollTimer = setInterval(function() {
+    if (document.getElementById('teacherModal').style.display !== 'flex') loadTeachers();
+}, 5000);
+</script>
+<%- include('partials/footer') %>

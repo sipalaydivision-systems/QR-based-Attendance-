@@ -1,0 +1,85 @@
+<%- include('partials/header') %>
+
+<div class="card">
+    <h3>Database Backups</h3>
+    <p>Create and manage database backups for the attendance system.</p>
+    <div class="page-actions">
+        <button class="btn btn-primary" id="btnCreateBackup" onclick="createBackup()">Create Backup Now</button>
+    </div>
+    <div id="backupMsg" style="margin:10px 0;"></div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead><tr><th>Filename</th><th>Date Created</th><th>Size</th><th>Actions</th></tr></thead>
+            <tbody id="backupsBody"><tr><td colspan="4" class="text-center">Loading...</td></tr></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+var backupPollTimer = null;
+
+async function loadBackups() {
+    try {
+        var res = await fetch('/api/backups');
+        var data = await res.json();
+        var tbody = document.getElementById('backupsBody');
+        if (data.length > 0) {
+            tbody.innerHTML = data.map(function(b) {
+                return '<tr>' +
+                    '<td>' + b.filename + '</td>' +
+                    '<td>' + new Date(b.created_at).toLocaleString() + '</td>' +
+                    '<td>' + b.size_display + '</td>' +
+                    '<td>' +
+                        '<a href="/api/backups/' + encodeURIComponent(b.filename) + '" class="btn btn-small btn-primary" download>Download</a> ' +
+                        '<button class="btn btn-small btn-danger" onclick="deleteBackup(\'' + b.filename.replace(/'/g, "\\'") + '\')">Delete</button>' +
+                    '</td></tr>';
+            }).join('');
+        } else {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center">No backups yet. Click "Create Backup Now" to create one.</td></tr>';
+        }
+    } catch(e) {
+        console.error('Load backups error:', e);
+    }
+}
+
+async function createBackup() {
+    var btn = document.getElementById('btnCreateBackup');
+    var msg = document.getElementById('backupMsg');
+    btn.disabled = true;
+    btn.textContent = 'Creating...';
+    msg.innerHTML = '<div class="alert alert-info">Creating backup, please wait...</div>';
+    try {
+        var res = await fetch('/api/backups', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        var data = await res.json();
+        if (data.success) {
+            msg.innerHTML = '<div class="alert alert-success">Backup created: ' + data.filename + ' (' + data.size_display + ')</div>';
+            loadBackups();
+        } else {
+            msg.innerHTML = '<div class="alert alert-danger">' + (data.error || 'Failed to create backup.') + '</div>';
+        }
+    } catch (e) {
+        msg.innerHTML = '<div class="alert alert-danger">Error creating backup.</div>';
+    }
+    btn.disabled = false;
+    btn.textContent = 'Create Backup Now';
+}
+
+async function deleteBackup(filename) {
+    if (!confirm('Delete backup "' + filename + '"? This cannot be undone.')) return;
+    try {
+        var res = await fetch('/api/backups/' + encodeURIComponent(filename), { method: 'DELETE' });
+        var data = await res.json();
+        if (data.success) {
+            loadBackups();
+        } else {
+            alert(data.error || 'Failed to delete backup.');
+        }
+    } catch(e) {
+        alert('Error deleting backup.');
+    }
+}
+
+loadBackups();
+backupPollTimer = setInterval(loadBackups, 10000);
+</script>
+<%- include('partials/footer') %>

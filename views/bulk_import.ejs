@@ -1,0 +1,325 @@
+<%- include('partials/header') %>
+
+<div class="page-header">
+    <div class="page-header-left">
+        <h1><i class="fa-solid fa-file-import"></i> Bulk Import</h1>
+        <p style="color:var(--gray-500);margin:0;">Import students or teachers from Excel (.xlsx) or CSV file</p>
+    </div>
+</div>
+
+<!-- STEP 1: Upload Form -->
+<div id="uploadStep">
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('students')"><i class="fa-solid fa-user-graduate"></i> Students</button>
+        <button class="tab-btn" onclick="switchTab('shs_students')"><i class="fa-solid fa-graduation-cap"></i> SHS Students</button>
+        <button class="tab-btn" onclick="switchTab('teachers')"><i class="fa-solid fa-chalkboard-user"></i> Teachers</button>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 350px; gap:1.5rem;">
+        <div class="card">
+            <h3 id="importTitle"><i class="fa-solid fa-file-import"></i> Import Students</h3>
+            <form id="importForm" onsubmit="doPreview(event)">
+                <div class="form-group">
+                    <label>Default School</label>
+                    <select id="importSchool" class="form-control">
+                        <option value="">Select School (use file data)</option>
+                        <% schools.forEach(s => { %>
+                        <option value="<%= s.id %>"><%= s.name %></option>
+                        <% }) %>
+                    </select>
+                </div>
+                <div id="gradeField" class="form-group">
+                    <label>Default Grade Level</label>
+                    <select id="importGrade" class="form-control">
+                        <option value="">Select Grade Level</option>
+                    </select>
+                </div>
+                <div id="sectionField" class="form-group">
+                    <label>Default Section</label>
+                    <select id="importSection" class="form-control">
+                        <option value="">Select Section</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>File</label>
+                    <div class="upload-area" id="uploadArea" onclick="document.getElementById('csvFile').click()">
+                        <div class="upload-icon"><i class="fa-solid fa-file-arrow-up" style="font-size:2rem;color:var(--gray-400);"></i></div>
+                        <p><strong>Click to upload</strong> or drag and drop</p>
+                        <small>CSV or XLSX file (max 10MB)</small>
+                    </div>
+                    <input type="file" id="csvFile" accept=".csv,.xlsx,.xls" style="display:none" onchange="fileSelected(this)">
+                    <div id="fileName" style="margin-top:0.5rem;font-size:0.8125rem;color:var(--gray-600);"></div>
+                </div>
+                <div class="form-group">
+                    <label>Active From</label>
+                    <input type="date" id="importDate" class="form-control">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block" id="previewBtn"><i class="fa-solid fa-magnifying-glass"></i> Preview Data</button>
+            </form>
+        </div>
+
+        <div>
+            <div class="info-card" id="infoStudents">
+                <h4><i class="fa-solid fa-file-lines"></i> Student File Format</h4>
+                <div class="code-preview">LRN, Student Name, School, Grade, Section, Guardian Contact</div>
+                <ul class="info-list">
+                    <li><span class="dot" style="background:var(--success);"></span> First row is treated as header (skipped)</li>
+                    <li><span class="dot" style="background:var(--primary);"></span> Duplicate LRNs update existing records</li>
+                    <li><span class="dot" style="background:var(--primary);"></span> QR codes auto-generated as STU-{LRN}</li>
+                    <li><span class="dot" style="background:var(--primary);"></span> School & Grade from file or dropdown default</li>
+                    <li><span class="dot" style="background:var(--primary);"></span> Section is auto-created if not found</li>
+                    <li><span class="dot" style="background:var(--gray-400);"></span> Guardian Contact is optional</li>
+                </ul>
+                <a href="/export/template/student" class="btn btn-outline btn-block" style="margin-top:0.75rem;">&#x2B07; Download Student Template (.xlsx)</a>
+            </div>
+            <div class="info-card" id="infoShs" style="display:none;">
+                <h4><i class="fa-solid fa-file-lines"></i> SHS Student File Format</h4>
+                <div class="code-preview">LRN, Student Name, School, Grade, Track/Strand, Section, Guardian Contact</div>
+                <ul class="info-list">
+                    <li><span class="dot" style="background:var(--success);"></span> First row is treated as header (skipped)</li>
+                    <li><span class="dot" style="background:var(--primary);"></span> Track/Strand is required for SHS</li>
+                    <li><span class="dot" style="background:var(--primary);"></span> Duplicate LRNs update existing records</li>
+                    <li><span class="dot" style="background:var(--primary);"></span> Section is auto-created with track if not found</li>
+                    <li><span class="dot" style="background:var(--primary);"></span> QR codes auto-generated as STU-{LRN}</li>
+                </ul>
+                <a href="/export/template/shs_student" class="btn btn-outline btn-block" style="margin-top:0.75rem;">&#x2B07; Download SHS Template (.xlsx)</a>
+            </div>
+            <div class="info-card" id="infoTeachers" style="display:none;">
+                <h4><i class="fa-solid fa-file-lines"></i> Teacher File Format</h4>
+                <div class="code-preview">Employee ID, Name, School, Grade, Section, Contact Number</div>
+                <ul class="info-list">
+                    <li><span class="dot" style="background:var(--success);"></span> First row is treated as header (skipped)</li>
+                    <li><span class="dot" style="background:var(--primary);"></span> Duplicate Employee IDs update existing records</li>
+                    <li><span class="dot" style="background:var(--primary);"></span> QR codes auto-generated as TCH-{Employee ID}</li>
+                    <li><span class="dot" style="background:var(--primary);"></span> Section is auto-created if not found</li>
+                    <li><span class="dot" style="background:var(--gray-400);"></span> Contact Number is optional</li>
+                </ul>
+                <a href="/export/template/teacher" class="btn btn-outline btn-block" style="margin-top:0.75rem;">&#x2B07; Download Teacher Template (.xlsx)</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- STEP 2: Preview Table -->
+<div id="previewStep" style="display:none;">
+    <div class="card">
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;">
+            <i class="fa-solid fa-circle-check" style="font-size:1.25rem;color:var(--primary);"></i>
+            <h3 style="margin:0;" id="previewTitle">Preview Import Data &mdash; Students</h3>
+        </div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;" id="previewTags"></div>
+        <div class="table-wrapper">
+            <table class="data-table" id="previewTable">
+                <thead id="previewHead"></thead>
+                <tbody id="previewBody"></tbody>
+            </table>
+        </div>
+        <div style="display:flex;gap:0.75rem;margin-top:1.25rem;">
+            <button class="btn btn-primary" id="confirmBtn" onclick="doConfirmImport()" style="flex:1;"><i class="fa-solid fa-check"></i> Confirm &amp; Import <span id="validCount">0</span> Record(s)</button>
+            <button class="btn btn-outline" onclick="cancelPreview()"><i class="fa-solid fa-xmark"></i> Cancel</button>
+        </div>
+        <div id="importResult" style="margin-top:1rem;"></div>
+    </div>
+</div>
+
+<style>
+.preview-tag {
+    display:inline-flex; align-items:center; gap:0.375rem;
+    padding:0.375rem 0.75rem; border-radius:20px;
+    background:var(--gray-100); font-size:0.8125rem; color:var(--gray-700);
+    border:1px solid var(--gray-200);
+}
+.preview-tag strong { color:var(--primary); }
+.status-badge-ready { background:#e8f5e9; color:#2e7d32; padding:0.125rem 0.5rem; border-radius:10px; font-size:0.75rem; }
+.status-badge-update { background:#fff3e0; color:#e65100; padding:0.125rem 0.5rem; border-radius:10px; font-size:0.75rem; }
+.status-badge-restore { background:#e3f2fd; color:#1565c0; padding:0.125rem 0.5rem; border-radius:10px; font-size:0.75rem; }
+.status-badge-error { background:#fce4ec; color:#c62828; padding:0.125rem 0.5rem; border-radius:10px; font-size:0.75rem; }
+</style>
+
+<script>
+var currentCategory = 'students';
+var previewData = null;
+var savedFormData = null;
+
+function switchTab(cat) {
+    currentCategory = cat;
+    document.querySelectorAll('.tab-btn').forEach(function(b, i) {
+        b.classList.toggle('active', (i===0 && cat==='students') || (i===1 && cat==='shs_students') || (i===2 && cat==='teachers'));
+    });
+    document.getElementById('infoStudents').style.display = cat==='students' ? 'block' : 'none';
+    document.getElementById('infoShs').style.display = cat==='shs_students' ? 'block' : 'none';
+    document.getElementById('infoTeachers').style.display = cat==='teachers' ? 'block' : 'none';
+    var showGrade = cat !== 'teachers';
+    document.getElementById('gradeField').style.display = showGrade ? 'block' : 'none';
+    document.getElementById('sectionField').style.display = showGrade ? 'block' : 'none';
+    var icon = '<i class="fa-solid fa-file-import"></i> ';
+    var titles = { students: icon + 'Import Students', shs_students: icon + 'Import SHS Students', teachers: icon + 'Import Teachers' };
+    document.getElementById('importTitle').innerHTML = titles[cat];
+}
+
+function fileSelected(input) {
+    if (input.files[0]) {
+        document.getElementById('fileName').innerHTML = '<i class="fa-solid fa-file"></i> ' + input.files[0].name;
+    }
+}
+
+async function doPreview(e) {
+    e.preventDefault();
+    var file = document.getElementById('csvFile').files[0];
+    if (!file) { alert('Please select a file.'); return; }
+    var btn = document.getElementById('previewBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Analyzing...';
+
+    var formData = new FormData();
+    formData.append('file', file);
+    var cat = currentCategory === 'students' ? 'student' : currentCategory === 'shs_students' ? 'shs_student' : 'teacher';
+    formData.append('category', cat);
+    formData.append('school_id', document.getElementById('importSchool').value);
+
+    // Save for confirm step
+    savedFormData = new FormData();
+    savedFormData.append('file', file);
+    savedFormData.append('category', cat);
+    savedFormData.append('school_id', document.getElementById('importSchool').value);
+
+    try {
+        var res = await fetch('/admin/bulk-import-preview', { method: 'POST', body: formData });
+        var data = await res.json();
+        if (!data.success) {
+            alert(data.error || 'Failed to preview.');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Preview Data';
+            return;
+        }
+        previewData = data;
+        showPreview(data);
+    } catch(err) {
+        alert('Error: ' + err.message);
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> Preview Data';
+}
+
+function showPreview(data) {
+    document.getElementById('uploadStep').style.display = 'none';
+    document.getElementById('previewStep').style.display = 'block';
+
+    var isTeacher = data.category === 'teacher';
+    var catLabel = data.category === 'teacher' ? 'Teachers' : data.category === 'shs_student' ? 'SHS Students' : 'Students';
+    document.getElementById('previewTitle').innerHTML = 'Preview Import Data &mdash; ' + catLabel;
+
+    // Tags
+    var schoolSel = document.getElementById('importSchool');
+    var schoolText = schoolSel.value ? schoolSel.options[schoolSel.selectedIndex].text : 'From file';
+    var dateVal = document.getElementById('importDate').value || new Date().toISOString().slice(0,10);
+    var tags = '';
+    tags += '<span class="preview-tag">School: <strong>' + schoolText + '</strong></span>';
+    if (!isTeacher) {
+        tags += '<span class="preview-tag">Grade: <strong>From file</strong></span>';
+        tags += '<span class="preview-tag">Section: <strong>From file</strong></span>';
+    }
+    tags += '<span class="preview-tag">Total Rows: <strong>' + data.total + '</strong></span>';
+    tags += '<span class="preview-tag">Active From: <strong>' + dateVal + '</strong></span>';
+    document.getElementById('previewTags').innerHTML = tags;
+
+    // Table header
+    var headHtml = '<tr>';
+    headHtml += '<th>ROW</th>';
+    if (isTeacher) {
+        headHtml += '<th>EMP ID</th><th>NAME</th><th>SCHOOL</th><th>GRADE</th><th>SECTION</th><th>CONTACT</th><th>QR CODE</th><th>STATUS</th>';
+    } else {
+        headHtml += '<th>LRN</th><th>NAME</th><th>SCHOOL</th><th>GRADE</th><th>SECTION</th><th>GUARDIAN</th><th>QR CODE</th><th>STATUS</th>';
+    }
+    headHtml += '</tr>';
+    document.getElementById('previewHead').innerHTML = headHtml;
+
+    // Table body
+    var bodyHtml = '';
+    data.preview.forEach(function(p) {
+        var statusHtml = '';
+        if (p.status === 'ready') statusHtml = '<span class="status-badge-ready"><i class="fa-solid fa-check"></i> New</span>';
+        else if (p.status === 'update') statusHtml = '<span class="status-badge-update"><i class="fa-solid fa-pen-to-square"></i> Update</span>';
+        else if (p.status === 'restore') statusHtml = '<span class="status-badge-restore"><i class="fa-solid fa-rotate"></i> Restore</span>';
+        else if (p.status === 'error') statusHtml = '<span class="status-badge-error"><i class="fa-solid fa-circle-xmark"></i> ' + (p.error || 'Error') + '</span>';
+
+        bodyHtml += '<tr' + (p.status === 'error' ? ' style="background:#fff5f5;"' : '') + '>';
+        bodyHtml += '<td>' + p.row + '</td>';
+        if (isTeacher) {
+            bodyHtml += '<td>' + (p.empId || '') + '</td>';
+            bodyHtml += '<td>' + (p.name || '') + '</td>';
+            bodyHtml += '<td>' + (p.school || '') + '</td>';
+            bodyHtml += '<td>' + (p.grade || '') + '</td>';
+            bodyHtml += '<td>' + (p.section || '') + '</td>';
+            bodyHtml += '<td>' + (p.contact || '') + '</td>';
+            bodyHtml += '<td style="color:var(--primary);font-size:0.8125rem;">' + (p.qr_code || '') + '</td>';
+        } else {
+            bodyHtml += '<td>' + (p.lrn || '') + '</td>';
+            bodyHtml += '<td>' + (p.name || '') + '</td>';
+            bodyHtml += '<td>' + (p.school || '') + '</td>';
+            bodyHtml += '<td>' + (p.grade || '') + '</td>';
+            bodyHtml += '<td>' + (p.section || '') + '</td>';
+            bodyHtml += '<td>' + (p.guardian || '') + '</td>';
+            bodyHtml += '<td style="color:var(--primary);font-size:0.8125rem;">' + (p.qr_code || '') + '</td>';
+        }
+        bodyHtml += '<td>' + statusHtml + '</td>';
+        bodyHtml += '</tr>';
+    });
+    document.getElementById('previewBody').innerHTML = bodyHtml;
+
+    // Valid count
+    document.getElementById('validCount').textContent = data.validCount;
+    document.getElementById('confirmBtn').disabled = data.validCount === 0;
+}
+
+function cancelPreview() {
+    document.getElementById('previewStep').style.display = 'none';
+    document.getElementById('uploadStep').style.display = 'block';
+    document.getElementById('importResult').innerHTML = '';
+    previewData = null;
+    savedFormData = null;
+}
+
+async function doConfirmImport() {
+    if (!savedFormData) { alert('No data to import. Please try again.'); return; }
+    var btn = document.getElementById('confirmBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Importing...';
+
+    try {
+        var res = await fetch('/admin/bulk-import', { method: 'POST', body: savedFormData });
+        var data = await res.json();
+        var msg = '';
+        if (data.success) {
+            msg = '<div class="alert alert-success"><i class="fa-solid fa-circle-check"></i> Import complete! Imported: <strong>' + data.imported + '</strong>, Updated: <strong>' + data.updated + '</strong> of ' + data.total + ' rows.</div>';
+            if (data.errors && data.errors.length) {
+                msg += '<div class="alert alert-warning">' + data.errors.length + ' error(s):<br>' + data.errors.map(function(e){return 'Row '+e.row+': '+e.message;}).join('<br>') + '</div>';
+            }
+        } else {
+            msg = '<div class="alert alert-danger">' + (data.error || 'Import failed.') + '</div>';
+        }
+        document.getElementById('importResult').innerHTML = msg;
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> Import Complete';
+    } catch(err) {
+        document.getElementById('importResult').innerHTML = '<div class="alert alert-danger">Error: ' + err.message + '</div>';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> Confirm &amp; Import ' + (previewData ? previewData.validCount : 0) + ' Record(s)';
+    }
+}
+
+async function loadGrades() {
+    var res = await fetch('/api/sections');
+    var sections = await res.json();
+    var sel = document.getElementById('importSection');
+    sections.forEach(function(s) {
+        var opt = document.createElement('option');
+        opt.value = s.id; opt.textContent = s.name + ' (' + (s.grade_name||'') + ')';
+        sel.appendChild(opt);
+    });
+}
+loadGrades();
+
+// Set default date to today
+document.getElementById('importDate').value = new Date().toISOString().slice(0,10);
+</script>
+<%- include('partials/footer') %>

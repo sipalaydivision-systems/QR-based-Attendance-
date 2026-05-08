@@ -1,0 +1,53 @@
+<%- include('partials/header') %>
+
+<div class="card">
+    <h3>Register New User</h3>
+    <% if (typeof error !== 'undefined' && error) { %>
+        <div class="alert alert-danger"><%= error %></div>
+    <% } %>
+    <% if (typeof success !== 'undefined' && success) { %>
+        <div class="alert alert-success"><%= success %></div>
+    <% } %>
+    <form method="POST" action="/admin/register-user">
+        <div class="form-group">
+            <label>Username *</label>
+            <input type="text" name="username" required class="form-control">
+        </div>
+        <div class="form-group">
+            <label>Password *</label>
+            <input type="password" name="password" required class="form-control" minlength="6">
+        </div>
+        <div class="form-group">
+            <label>Full Name *</label>
+            <input type="text" name="fullname" required class="form-control">
+        </div>
+        <div class="form-group">
+            <label>Email</label>
+            <input type="email" name="email" class="form-control">
+        </div>
+        <div class="form-group">
+            <label>Role *</label>
+            <select name="role" required class="form-control">
+                <option value="">Select Role</option>
+                <option value="super_admin">Super Admin</option>
+                <option value="admin">Admin</option>
+                <option value="principal">Principal</option>
+                <option value="registrar">Registrar</option>
+                <option value="superintendent">Superintendent</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>School</label>
+            <select name="school_id" class="form-control">
+                <option value="">All Schools</option>
+                <% schools.forEach(function(s) { %>
+                    <option value="<%= s.id %>"><%= s.name %></option>
+                <% }); %>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Register User</button>
+        <a href="/admin/users" class="btn btn-secondary">Cancel</a>
+    </form>
+</div>
+
+<%- include('partials/footer') %>

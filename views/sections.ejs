@@ -1,0 +1,189 @@
+<%- include('partials/header') %>
+
+<div class="page-header">
+    <div class="page-header-left">
+        <h1><i class="fa-solid fa-layer-group"></i> Sections</h1>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-primary" onclick="openSectionModal()">+ Add Section</button>
+    </div>
+</div>
+
+<div class="filter-bar">
+    <div class="filter-item">
+        <label>School</label>
+        <select id="filterSchool">
+            <option value="">All Schools</option>
+            <% schools.forEach(s => { %>
+            <option value="<%= s.id %>"><%= s.name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="filter-item">
+        <label>Grade Level</label>
+        <select id="filterGrade">
+            <option value="">All Grades</option>
+            <% gradeLevels.forEach(g => { %>
+            <option value="<%= g.id %>"><%= g.name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <button class="btn-filter" onclick="loadSections()"><i class="fa-solid fa-magnifying-glass"></i> Filter</button>
+</div>
+
+<div class="results-header">
+    <span class="record-count" id="sectionCount">0 section(s) found</span>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th style="width:30px;"><input type="checkbox" id="selectAll" onclick="toggleAll(this)"></th>
+                    <th>School</th>
+                    <th>Grade Level</th>
+                    <th>Track/Strand</th>
+                    <th>Section</th>
+                    <th>Adviser</th>
+                    <th>Students</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="sectionsBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Section Modal -->
+<div class="modal-overlay" id="sectionModal" style="display:none">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="sectionModalTitle">Add Section</h3>
+            <button class="modal-close" onclick="closeSectionModal()">&times;</button>
+        </div>
+        <form id="sectionForm" onsubmit="saveSection(event)">
+            <input type="hidden" id="sectionId">
+            <div class="form-group"><label>Name *</label><input type="text" id="sectionName" required></div>
+            <div class="form-row">
+                <div class="form-group"><label>Grade Level</label>
+                    <select id="sectionGrade"><option value="">-</option>
+                    <% gradeLevels.forEach(g => { %>
+                    <option value="<%= g.id %>"><%= g.name %></option>
+                    <% }) %>
+                    </select>
+                </div>
+                <div class="form-group"><label>School</label>
+                    <select id="sectionSchool"><option value="">-</option>
+                    <% schools.forEach(s => { %>
+                    <option value="<%= s.id %>"><%= s.name %></option>
+                    <% }) %>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group"><label>Adviser</label><input type="text" id="sectionAdviser"></div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeSectionModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+var allSections = [], allStudents = [];
+
+async function loadSections() {
+    var school = document.getElementById('filterSchool').value;
+    var grade = document.getElementById('filterGrade').value;
+    try {
+        var [secRes, stuRes] = await Promise.all([
+            fetch('/api/sections').then(function(r){return r.json();}),
+            fetch('/api/students').then(function(r){return r.json();})
+        ]);
+        allSections = secRes; allStudents = stuRes;
+        var filtered = allSections;
+        if (school) filtered = filtered.filter(function(s){return String(s.school_id)===school;});
+        if (grade) filtered = filtered.filter(function(s){return String(s.grade_level_id)===grade;});
+        document.getElementById('sectionCount').textContent = filtered.length + ' section(s) found';
+        document.getElementById('sectionsBody').innerHTML = filtered.map(function(s) {
+            var activeCount = allStudents.filter(function(st){return st.section_id===s.id && st.status==='active';}).length;
+            var inactiveCount = allStudents.filter(function(st){return st.section_id===s.id && st.status==='inactive';}).length;
+            var stuLabel = activeCount + (inactiveCount > 0 ? ' <span style="color:var(--gray-400);font-size:0.75rem;">(' + inactiveCount + ' inactive)</span>' : '');
+            var isInactive = s.status === 'inactive';
+            var rowClass = isInactive ? ' class="row-inactive"' : '';
+            var statusBadge = isInactive
+                ? '<span class="badge badge-inactive" style="cursor:pointer;" onclick="toggleStatus('+s.id+',\'active\')" title="Click to activate">Inactive</span>'
+                : '<span class="badge badge-active" style="cursor:pointer;" onclick="toggleStatus('+s.id+',\'inactive\')" title="Click to deactivate">Active</span>';
+            return '<tr'+rowClass+'>'+
+                '<td><input type="checkbox" class="row-check" value="'+s.id+'"></td>'+
+                '<td><span class="school-code">'+(s.school_name||'-')+'</span></td>'+
+                '<td>'+(s.grade_name||'-')+'</td>'+
+                '<td>-</td>'+
+                '<td><strong>'+s.name+'</strong></td>'+
+                '<td>'+(s.adviser||'<span style="color:var(--warning);"><i class="fa-solid fa-triangle-exclamation"></i> No Adviser</span>')+'</td>'+
+                '<td>'+stuLabel+'</td>'+
+                '<td>'+statusBadge+'</td>'+
+                '<td><div class="action-btns">'+
+                    '<button class="action-btn edit" onclick="editSectionById('+s.id+')" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>'+
+                    '<button class="action-btn delete" onclick="deleteSection('+s.id+')" title="Delete"><i class="fa-solid fa-trash-can"></i></button>'+
+                '</div></td></tr>';
+        }).join('') || '<tr><td colspan="9"><div class="empty-state"><div class="empty-icon"><i class="fa-solid fa-layer-group" style="font-size:2.5rem;color:var(--gray-300);"></i></div><h4>No sections found</h4></div></td></tr>';
+    } catch(e) { console.error(e); }
+}
+
+function toggleAll(el) {
+    document.querySelectorAll('.row-check').forEach(function(cb){ cb.checked = el.checked; });
+}
+
+function openSectionModal() {
+    document.getElementById('sectionModalTitle').textContent = 'Add Section';
+    document.getElementById('sectionForm').reset();
+    document.getElementById('sectionId').value = '';
+    document.getElementById('sectionModal').style.display = 'flex';
+}
+function closeSectionModal() { document.getElementById('sectionModal').style.display = 'none'; }
+
+function editSectionById(id) {
+    var s = allSections.find(function(x){return x.id===id;});
+    if (!s) return;
+    document.getElementById('sectionModalTitle').textContent = 'Edit Section';
+    document.getElementById('sectionId').value = s.id;
+    document.getElementById('sectionName').value = s.name;
+    document.getElementById('sectionGrade').value = s.grade_level_id || '';
+    document.getElementById('sectionSchool').value = s.school_id || '';
+    document.getElementById('sectionAdviser').value = s.adviser || '';
+    document.getElementById('sectionModal').style.display = 'flex';
+}
+
+async function saveSection(e) {
+    e.preventDefault();
+    var id = document.getElementById('sectionId').value;
+    var body = { name: document.getElementById('sectionName').value, grade_level_id: document.getElementById('sectionGrade').value, school_id: document.getElementById('sectionSchool').value, adviser: document.getElementById('sectionAdviser').value };
+    var url = id ? '/api/sections/' + id : '/api/sections';
+    var method = id ? 'PUT' : 'POST';
+    var res = await fetch(url, { method: method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    var data = await res.json();
+    if (data.success) { closeSectionModal(); loadSections(); } else alert(data.error || 'Failed to save');
+}
+
+async function toggleStatus(id, newStatus) {
+    var res = await fetch('/api/sections/' + id + '/status', { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ status: newStatus }) });
+    var data = await res.json();
+    if (data.success) loadSections(); else alert(data.error || 'Failed to update status');
+}
+
+async function deleteSection(id) {
+    if (!confirm('Delete this section? This cannot be undone.')) return;
+    var res = await fetch('/api/sections/' + id, { method: 'DELETE' });
+    var data = await res.json();
+    if (data.success) { loadSections(); } else { alert(data.error || 'Failed to delete section.'); }
+}
+
+loadSections();
+setInterval(function() { if (document.getElementById('sectionModal').style.display !== 'flex') loadSections(); }, 5000);
+</script>
+
+<div class="live-indicator"><div class="live-dot"></div> Live</div>
+<%- include('partials/footer') %>

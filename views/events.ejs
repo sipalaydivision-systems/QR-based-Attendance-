@@ -1,0 +1,177 @@
+<%- include('partials/header') %>
+
+<div class="page-actions">
+    <button class="btn btn-primary" onclick="openEventModal()">+ Create Event</button>
+    <% if (schools && schools.length > 0) { %>
+    <div class="filter-group">
+        <select id="eventSchool" onchange="loadEvents()">
+            <option value="">All Schools</option>
+            <% schools.forEach(s => { %>
+            <option value="<%= s.id %>"><%= s.name %></option>
+            <% }) %>
+        </select>
+    </div>
+    <% } %>
+</div>
+
+<div class="card">
+    <h3>Events</h3>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Event Name</th>
+                    <th>Date</th>
+                    <th>School</th>
+                    <th>Description</th>
+                    <th>Status</th>
+                    <th>Attendees</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="eventsBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Event Attendance Modal -->
+<div class="modal-overlay" id="eventAttModal" style="display:none">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="eventAttTitle">Event Attendance</h3>
+            <button class="modal-close" onclick="document.getElementById('eventAttModal').style.display='none'">&times;</button>
+        </div>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead><tr><th>Name</th><th>Type</th><th>School</th><th>Time In</th><th>Time Out</th></tr></thead>
+                <tbody id="eventAttBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Create/Edit Event Modal -->
+<div class="modal-overlay" id="eventModal" style="display:none">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="eventModalTitle">Create Event</h3>
+            <button class="modal-close" onclick="closeEventModal()">&times;</button>
+        </div>
+        <form id="eventForm" onsubmit="saveEvent(event)">
+            <input type="hidden" id="eventId">
+            <div class="form-group"><label>Event Name *</label><input type="text" id="eventName" required></div>
+            <div class="form-group"><label>Date *</label><input type="date" id="eventDate" required></div>
+            <div class="form-group"><label>School</label>
+                <select id="eventSchoolId">
+                    <option value="">All Schools</option>
+                    <% schools.forEach(s => { %>
+                    <option value="<%= s.id %>"><%= s.name %></option>
+                    <% }) %>
+                </select>
+            </div>
+            <div class="form-group"><label>Description</label><textarea id="eventDesc" rows="3" class="form-control"></textarea></div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeEventModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+var allEvents = [];
+var eventPollTimer = null;
+
+async function loadEvents() {
+    var schoolEl = document.getElementById('eventSchool');
+    var school = schoolEl ? schoolEl.value : '';
+    var params = new URLSearchParams();
+    if (school) params.append('school', school);
+    try {
+        var res = await fetch('/api/events?' + params);
+        allEvents = await res.json();
+        renderEvents();
+    } catch(e) { console.error(e); }
+}
+
+function renderEvents() {
+    document.getElementById('eventsBody').innerHTML = allEvents.map(function(ev) {
+        return '<tr>' +
+            '<td>' + ev.name + '</td>' +
+            '<td>' + ev.event_date + '</td>' +
+            '<td>' + (ev.school_name || 'All') + '</td>' +
+            '<td>' + (ev.description || '-') + '</td>' +
+            '<td><span class="badge badge-' + ev.status + '">' + ev.status + '</span></td>' +
+            '<td><button class="btn btn-sm btn-secondary" onclick="viewEventAtt(' + ev.id + ',\'' + ev.name.replace(/'/g, "\\'") + '\')">View</button></td>' +
+            '<td>' +
+            '<button class="btn btn-sm btn-secondary" onclick="editEvent(' + ev.id + ')">Edit</button> ' +
+            '<button class="btn btn-sm btn-danger" onclick="deleteEvent(' + ev.id + ')">Cancel</button>' +
+            '</td></tr>';
+    }).join('') || '<tr><td colspan="7" class="text-center">No events found</td></tr>';
+}
+
+async function viewEventAtt(eventId, name) {
+    document.getElementById('eventAttTitle').textContent = 'Attendance: ' + name;
+    try {
+        var res = await fetch('/api/event-attendance?event_id=' + eventId);
+        var data = await res.json();
+        document.getElementById('eventAttBody').innerHTML = data.map(function(a) {
+            return '<tr><td>' + (a.person_name || 'N/A') + '</td><td>' + a.person_type + '</td><td>' + (a.school_name || '-') + '</td>' +
+                '<td>' + (a.time_in ? new Date(a.time_in).toLocaleTimeString() : '-') + '</td>' +
+                '<td>' + (a.time_out ? new Date(a.time_out).toLocaleTimeString() : '-') + '</td></tr>';
+        }).join('') || '<tr><td colspan="5" class="text-center">No attendees</td></tr>';
+    } catch(e) { console.error(e); }
+    document.getElementById('eventAttModal').style.display = 'flex';
+}
+
+function openEventModal() {
+    document.getElementById('eventModalTitle').textContent = 'Create Event';
+    document.getElementById('eventForm').reset();
+    document.getElementById('eventId').value = '';
+    document.getElementById('eventModal').style.display = 'flex';
+}
+
+function closeEventModal() { document.getElementById('eventModal').style.display = 'none'; }
+
+function editEvent(id) {
+    var ev = allEvents.find(function(e) { return e.id === id; });
+    if (!ev) return;
+    document.getElementById('eventModalTitle').textContent = 'Edit Event';
+    document.getElementById('eventId').value = ev.id;
+    document.getElementById('eventName').value = ev.name;
+    document.getElementById('eventDate').value = ev.event_date;
+    document.getElementById('eventSchoolId').value = ev.school_id || '';
+    document.getElementById('eventDesc').value = ev.description || '';
+    document.getElementById('eventModal').style.display = 'flex';
+}
+
+async function saveEvent(e) {
+    e.preventDefault();
+    var id = document.getElementById('eventId').value;
+    var body = {
+        name: document.getElementById('eventName').value,
+        event_date: document.getElementById('eventDate').value,
+        school_id: document.getElementById('eventSchoolId').value || null,
+        description: document.getElementById('eventDesc').value
+    };
+    var url = id ? '/api/events/' + id : '/api/events';
+    var method = id ? 'PUT' : 'POST';
+    await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    closeEventModal();
+    loadEvents();
+}
+
+async function deleteEvent(id) {
+    if (!confirm('Cancel this event?')) return;
+    await fetch('/api/events/' + id, { method: 'DELETE' });
+    loadEvents();
+}
+
+function startEventPoll() {
+    if (eventPollTimer) clearInterval(eventPollTimer);
+    eventPollTimer = setInterval(loadEvents, 5000);
+}
+loadEvents();
+startEventPoll();
+</script>
+<%- include('partials/footer') %>

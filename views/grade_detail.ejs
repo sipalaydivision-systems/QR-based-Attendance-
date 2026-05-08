@@ -1,0 +1,97 @@
+<%- include('partials/header') %>
+
+<!-- Breadcrumb -->
+<nav class="breadcrumb-nav">
+    <a href="/admin/schools"><i class="fa fa-school"></i> All Schools</a>
+    <span class="breadcrumb-sep"><i class="fa fa-chevron-right"></i></span>
+    <a href="/admin/school/<%= schoolId %>" id="bcSchool"><i class="fa fa-school"></i> Loading...</a>
+    <span class="breadcrumb-sep"><i class="fa fa-chevron-right"></i></span>
+    <span class="breadcrumb-active" id="bcGrade"><i class="fa fa-layer-group"></i> Loading...</span>
+</nav>
+
+<a href="/admin/school/<%= schoolId %>" class="back-btn" id="backBtn"><i class="fa fa-arrow-left"></i> Back to School</a>
+
+<div class="view-title">
+    <h1><i class="fa fa-door-open" style="color:var(--primary)"></i> <span id="gdName">Loading...</span></h1>
+    <span class="count-badge" id="sectionCount">-</span>
+</div>
+<p style="color:var(--text-muted);font-size:.85rem;margin-bottom:24px"><i class="fa fa-school"></i> <span id="gdSchoolName">-</span></p>
+
+<div class="browser-grid" id="sectionGrid">
+    <div class="text-center text-muted" style="grid-column:1/-1;padding:3rem">Loading sections...</div>
+</div>
+
+<script>
+var schoolId = <%= schoolId %>;
+var gradeId = <%= gradeId %>;
+var schoolData = null, gradeData = null;
+var allStudents = [], allSections = [];
+
+async function loadAll() {
+    try {
+        var [sRes, studRes, secRes, gradeRes] = await Promise.all([
+            fetch('/api/schools').then(function(r){return r.json();}),
+            fetch('/api/students?school_id=' + schoolId).then(function(r){return r.json();}),
+            fetch('/api/sections?school_id=' + schoolId + '&grade_level_id=' + gradeId).then(function(r){return r.json();}),
+            fetch('/api/grade-levels').then(function(r){return r.json();})
+        ]);
+
+        schoolData = sRes.find(function(s){return s.id === schoolId;});
+        gradeData = gradeRes.find(function(g){return g.id === gradeId;});
+        allStudents = studRes;
+        allSections = secRes;
+
+        if (schoolData) {
+            document.getElementById('bcSchool').innerHTML = '<i class="fa fa-school"></i> ' + schoolData.name;
+            document.getElementById('gdSchoolName').textContent = schoolData.name;
+            document.getElementById('backBtn').innerHTML = '<i class="fa fa-arrow-left"></i> Back to ' + schoolData.name;
+        }
+        if (gradeData) {
+            document.getElementById('bcGrade').innerHTML = '<i class="fa fa-layer-group"></i> ' + gradeData.name;
+            document.getElementById('gdName').textContent = gradeData.name;
+        }
+
+        renderSections();
+    } catch(e) { console.error(e); }
+}
+
+function renderSections() {
+    document.getElementById('sectionCount').textContent = allSections.length + ' section' + (allSections.length !== 1 ? 's' : '');
+
+    if (allSections.length === 0) {
+        document.getElementById('sectionGrid').innerHTML = '<div class="card" style="grid-column:1/-1"><div class="empty-state"><i class="fa fa-door-open" style="font-size:3rem;opacity:.3;margin-bottom:16px"></i><h3>No Sections Found</h3><p>This grade level has no sections configured yet.</p></div></div>';
+        return;
+    }
+
+    document.getElementById('sectionGrid').innerHTML = allSections.map(function(sec) {
+        var studentCount = allStudents.filter(function(st){return st.section_id === sec.id;}).length;
+        var adviser = sec.adviser || '';
+        var hasAdviser = !!adviser;
+        var iconClass = hasAdviser ? 'card-icon-wrap success' : 'card-icon-wrap';
+        var adviserHtml = hasAdviser
+            ? '<p><i class="fa fa-chalkboard-teacher"></i> ' + adviser + '</p>'
+            : '<p style="color:var(--warning)"><i class="fa fa-exclamation-triangle"></i> No adviser assigned</p>';
+
+        return '<a href="/admin/school/'+schoolId+'/grade/'+gradeId+'/section/'+sec.id+'" class="browser-card" style="aspect-ratio:auto">'+
+            '<div class="card-top-accent"></div>'+
+            '<div class="card-body-inner">'+
+                '<div class="'+iconClass+'">'+
+                    '<i class="fa fa-users"></i>'+
+                '</div>'+
+                '<div class="card-details">'+
+                    '<h3>'+sec.name+'</h3>'+
+                    adviserHtml+
+                '</div>'+
+            '</div>'+
+            '<div class="card-stats-row">'+
+                '<div class="card-stat-item"><i class="fa fa-user-graduate"></i> <strong>'+studentCount+'</strong> Students</div>'+
+            '</div>'+
+        '</a>';
+    }).join('');
+}
+
+loadAll();
+</script>
+
+<div class="live-indicator"><div class="live-dot"></div> Live</div>
+<%- include('partials/footer') %>

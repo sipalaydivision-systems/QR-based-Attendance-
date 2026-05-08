@@ -1,0 +1,355 @@
+<%- include('partials/header') %>
+
+<div class="rpt-page">
+    <!-- Header -->
+    <div class="rpt-header">
+        <h1><i class="fa-solid fa-chart-bar"></i> Reports</h1>
+        <p class="rpt-subtitle">Generate and export attendance reports</p>
+    </div>
+
+    <!-- Tabs -->
+    <div class="rpt-tabs">
+        <button class="rpt-tab active" data-tab="daily" onclick="switchTab('daily', this)">Daily Summary</button>
+        <button class="rpt-tab" data-tab="trend" onclick="switchTab('trend', this)">Trend</button>
+        <button class="rpt-tab" data-tab="absentees" onclick="switchTab('absentees', this)">Absentee List</button>
+        <button class="rpt-tab" data-tab="comparison" onclick="switchTab('comparison', this)">School Comparison</button>
+    </div>
+
+    <!-- ===== DAILY SUMMARY TAB ===== -->
+    <div class="rpt-panel" id="panel-daily">
+        <!-- Filters -->
+        <div class="rpt-filters">
+            <div class="rpt-filter-group">
+                <label>School</label>
+                <select id="dsSchool">
+                    <option value="">All Schools</option>
+                    <% schools.forEach(s => { %>
+                    <option value="<%= s.id %>"><%= s.name %></option>
+                    <% }) %>
+                </select>
+            </div>
+            <div class="rpt-filter-group">
+                <label>Date</label>
+                <input type="date" id="dsDate" value="<%= new Date().toISOString().slice(0,10) %>">
+            </div>
+            <button class="btn btn-outline" onclick="exportDailySummaryCSV()"><i class="fa-solid fa-download"></i> CSV</button>
+        </div>
+        <!-- Table -->
+        <div class="rpt-card">
+            <div class="table-responsive">
+                <table class="rpt-table" id="dsSummaryTable">
+                    <thead>
+                        <tr>
+                            <th>School</th>
+                            <th>Enrolled</th>
+                            <th>Present</th>
+                            <th>Late</th>
+                            <th>Absent</th>
+                            <th>Rate</th>
+                            <th>Teachers</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dsBody">
+                        <tr><td colspan="7" class="text-center">Loading...</td></tr>
+                    </tbody>
+                    <tfoot id="dsFoot"></tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== TREND TAB ===== -->
+    <div class="rpt-panel" id="panel-trend" style="display:none">
+        <div class="rpt-filters">
+            <div class="rpt-filter-group">
+                <label>School</label>
+                <select id="trendSchool">
+                    <option value="">All Schools</option>
+                    <% schools.forEach(s => { %>
+                    <option value="<%= s.id %>"><%= s.name %></option>
+                    <% }) %>
+                </select>
+            </div>
+            <div class="rpt-filter-group">
+                <label>From</label>
+                <input type="date" id="trendStart">
+            </div>
+            <div class="rpt-filter-group">
+                <label>To</label>
+                <input type="date" id="trendEnd">
+            </div>
+            <button class="btn btn-primary" onclick="loadTrend()">Generate</button>
+        </div>
+        <div class="rpt-card" style="padding:1.5rem">
+            <canvas id="trendChart" height="300"></canvas>
+        </div>
+    </div>
+
+    <!-- ===== ABSENTEE LIST TAB ===== -->
+    <div class="rpt-panel" id="panel-absentees" style="display:none">
+        <div class="rpt-filters">
+            <div class="rpt-filter-group">
+                <label>School</label>
+                <select id="absSchool">
+                    <option value="">All Schools</option>
+                    <% schools.forEach(s => { %>
+                    <option value="<%= s.id %>"><%= s.name %></option>
+                    <% }) %>
+                </select>
+            </div>
+            <div class="rpt-filter-group">
+                <label>Date</label>
+                <input type="date" id="absDate" value="<%= new Date().toISOString().slice(0,10) %>">
+            </div>
+            <button class="btn btn-primary" onclick="loadAbsentees()">Generate</button>
+        </div>
+        <div class="rpt-card">
+            <div class="table-responsive">
+                <table class="rpt-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Name</th>
+                            <th>LRN</th>
+                            <th>School</th>
+                            <th>Grade</th>
+                            <th>Section</th>
+                        </tr>
+                    </thead>
+                    <tbody id="absBody">
+                        <tr><td colspan="6" class="text-center text-muted">Click Generate to load absentees</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== SCHOOL COMPARISON TAB ===== -->
+    <div class="rpt-panel" id="panel-comparison" style="display:none">
+        <div class="rpt-filters">
+            <div class="rpt-filter-group">
+                <label>Date</label>
+                <input type="date" id="compDate" value="<%= new Date().toISOString().slice(0,10) %>">
+            </div>
+            <button class="btn btn-primary" onclick="loadComparison()">Generate</button>
+        </div>
+        <div class="rpt-card" style="padding:1.5rem">
+            <canvas id="compChart" height="400"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Live indicator -->
+<div class="rpt-live-badge" id="rptLive"><i class="fa-solid fa-circle"></i> Live</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    var pollTimer = null;
+    var trendChart = null;
+    var compChart = null;
+    var currentTab = 'daily';
+
+    // Set trend date defaults (last 7 days)
+    var today = new Date().toISOString().slice(0, 10);
+    var weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    document.getElementById('trendStart').value = weekAgo;
+    document.getElementById('trendEnd').value = today;
+
+    // ---- Tab switching ----
+    window.switchTab = function(tab, btn) {
+        currentTab = tab;
+        document.querySelectorAll('.rpt-tab').forEach(function(t) { t.classList.remove('active'); });
+        btn.classList.add('active');
+        document.querySelectorAll('.rpt-panel').forEach(function(p) { p.style.display = 'none'; });
+        document.getElementById('panel-' + tab).style.display = '';
+
+        // Start/stop polling
+        if (pollTimer) clearInterval(pollTimer);
+        if (tab === 'daily') {
+            loadDailySummary();
+            pollTimer = setInterval(loadDailySummary, 5000);
+            document.getElementById('rptLive').style.display = '';
+        } else {
+            document.getElementById('rptLive').style.display = 'none';
+        }
+    };
+
+    // ===== DAILY SUMMARY =====
+    async function loadDailySummary() {
+        var date = document.getElementById('dsDate').value;
+        var school = document.getElementById('dsSchool').value;
+        var params = new URLSearchParams({ date: date });
+        if (school) params.append('school_id', school);
+        try {
+            var res = await fetch('/api/reports/daily-summary?' + params);
+            var data = await res.json();
+            renderDailySummary(data);
+        } catch(e) { console.error('Daily summary error:', e); }
+    }
+
+    function renderDailySummary(data) {
+        var tbody = document.getElementById('dsBody');
+        var tfoot = document.getElementById('dsFoot');
+        if (!data.schools || !data.schools.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No data found</td></tr>';
+            tfoot.innerHTML = '';
+            return;
+        }
+        tbody.innerHTML = data.schools.map(function(s) {
+            var rateColor = s.rate >= 80 ? '#22c55e' : s.rate >= 50 ? '#f59e0b' : '#ef4444';
+            return '<tr>' +
+                '<td class="rpt-school-name">' + s.name + '</td>' +
+                '<td>' + s.enrolled + '</td>' +
+                '<td style="color:#22c55e;font-weight:600">' + s.present + '</td>' +
+                '<td style="color:#f59e0b;font-weight:600">' + s.late + '</td>' +
+                '<td style="color:#ef4444;font-weight:600">' + s.absent + '</td>' +
+                '<td style="color:' + rateColor + ';font-weight:700">' + s.rate + '%</td>' +
+                '<td>' + s.teachers_present + '/' + s.teachers_total + '</td>' +
+            '</tr>';
+        }).join('');
+        var t = data.totals;
+        var tRateColor = t.rate >= 80 ? '#22c55e' : t.rate >= 50 ? '#f59e0b' : '#ef4444';
+        tfoot.innerHTML = '<tr style="font-weight:700;background:var(--gray-50)">' +
+            '<td>TOTAL</td>' +
+            '<td>' + t.enrolled + '</td>' +
+            '<td style="color:#22c55e">' + t.present + '</td>' +
+            '<td style="color:#f59e0b">' + t.late + '</td>' +
+            '<td style="color:#ef4444">' + t.absent + '</td>' +
+            '<td style="color:' + tRateColor + '">' + t.rate + '%</td>' +
+            '<td>' + t.teachers_present + '/' + t.teachers_total + '</td>' +
+        '</tr>';
+    }
+
+    window.exportDailySummaryCSV = function() {
+        var table = document.getElementById('dsSummaryTable');
+        var rows = [];
+        table.querySelectorAll('thead tr, tbody tr, tfoot tr').forEach(function(tr) {
+            var cols = [];
+            tr.querySelectorAll('th, td').forEach(function(td) { cols.push('"' + td.textContent.replace(/"/g, '""') + '"'); });
+            if (cols.length > 0) rows.push(cols.join(','));
+        });
+        var blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'daily_summary_' + document.getElementById('dsDate').value + '.csv';
+        a.click();
+    };
+
+    // Watch date/school changes for daily summary
+    document.getElementById('dsDate').addEventListener('change', loadDailySummary);
+    document.getElementById('dsSchool').addEventListener('change', loadDailySummary);
+
+    // ===== TREND =====
+    window.loadTrend = async function() {
+        var start = document.getElementById('trendStart').value;
+        var end = document.getElementById('trendEnd').value;
+        var school = document.getElementById('trendSchool').value;
+        var params = new URLSearchParams({ start_date: start, end_date: end, type: 'student' });
+        if (school) params.append('school', school);
+        try {
+            var res = await fetch('/api/reports?' + params);
+            var data = await res.json();
+            renderTrendChart(data.records, start, end);
+        } catch(e) { console.error('Trend error:', e); }
+    };
+
+    function renderTrendChart(records, start, end) {
+        var dateMap = {};
+        var d = new Date(start + 'T00:00:00');
+        var endD = new Date(end + 'T00:00:00');
+        while (d <= endD) {
+            var key = d.toISOString().slice(0, 10);
+            dateMap[key] = { present: 0, late: 0, absent: 0 };
+            d.setDate(d.getDate() + 1);
+        }
+        records.forEach(function(r) {
+            if (dateMap[r.date]) {
+                if (r.time_in) dateMap[r.date].present++;
+                if (r.status === 'late') dateMap[r.date].late++;
+            }
+        });
+        var labels = Object.keys(dateMap);
+        var ctx = document.getElementById('trendChart').getContext('2d');
+        if (trendChart) trendChart.destroy();
+        trendChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    { label: 'Present', data: labels.map(function(l) { return dateMap[l].present; }), borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.1)', fill: true, tension: 0.3 },
+                    { label: 'Late', data: labels.map(function(l) { return dateMap[l].late; }), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.3 }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+        });
+    }
+
+    // ===== ABSENTEE LIST =====
+    window.loadAbsentees = async function() {
+        var date = document.getElementById('absDate').value;
+        var school = document.getElementById('absSchool').value;
+        var params = new URLSearchParams({ date: date });
+        if (school) params.append('school_id', school);
+        try {
+            var res = await fetch('/api/reports/absentees?' + params);
+            var data = await res.json();
+            var tbody = document.getElementById('absBody');
+            if (!data.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No absentees found</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.map(function(s, i) {
+                return '<tr>' +
+                    '<td>' + (i + 1) + '</td>' +
+                    '<td>' + s.firstname + ' ' + s.lastname + '</td>' +
+                    '<td>' + (s.lrn || '-') + '</td>' +
+                    '<td>' + (s.school_name || '-') + '</td>' +
+                    '<td>' + (s.grade_name || '-') + '</td>' +
+                    '<td>' + (s.section_name || '-') + '</td>' +
+                '</tr>';
+            }).join('');
+        } catch(e) { console.error('Absentees error:', e); }
+    };
+
+    // ===== SCHOOL COMPARISON =====
+    window.loadComparison = async function() {
+        var date = document.getElementById('compDate').value;
+        try {
+            var res = await fetch('/api/reports/daily-summary?date=' + date);
+            var data = await res.json();
+            renderCompChart(data.schools || []);
+        } catch(e) { console.error('Comparison error:', e); }
+    };
+
+    function renderCompChart(schools) {
+        var ctx = document.getElementById('compChart').getContext('2d');
+        if (compChart) compChart.destroy();
+        var sorted = schools.slice().sort(function(a, b) { return b.rate - a.rate; });
+        compChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: sorted.map(function(s) { return s.name.length > 25 ? s.name.slice(0, 25) + '...' : s.name; }),
+                datasets: [{
+                    label: 'Attendance Rate %',
+                    data: sorted.map(function(s) { return s.rate; }),
+                    backgroundColor: sorted.map(function(s) { return s.rate >= 80 ? '#22c55e' : s.rate >= 50 ? '#f59e0b' : '#ef4444'; }),
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { x: { beginAtZero: true, max: 100 } }
+            }
+        });
+    }
+
+    // Initial load
+    loadDailySummary();
+    pollTimer = setInterval(loadDailySummary, 5000);
+})();
+</script>
+<%- include('partials/footer') %>
