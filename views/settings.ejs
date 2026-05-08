@@ -146,6 +146,7 @@
             <select id="holidayType" class="form-control">
                 <option value="1">Regular Holiday</option>
                 <option value="0">Special Non-Working</option>
+                <option value="2">Class Suspension</option>
             </select>
         </div>
         <div class="form-group" style="margin-bottom:0;">
@@ -277,7 +278,7 @@ async function loadHolidays() {
             document.getElementById('holidaysTableWrap').style.display = '';
             document.getElementById('holidaysBody').innerHTML = data.map(function(h){
                 var dateStr = h.holiday_date ? h.holiday_date.substring(0,10) : '';
-                var typeBadge = h.is_national ? '<span class="badge badge-active">Regular Holiday</span>' : '<span class="badge" style="background:#fef3c7;color:#92400e;">Special</span>';
+                var typeBadge = holidayTypeBadge(h.is_national);
                 var scope = h.school_name || 'All Schools (Division)';
                 return '<tr><td>'+h.name+'</td><td>'+dateStr+'</td><td>'+typeBadge+'</td><td>'+scope+'</td>'+
                     '<td><button class="action-btn delete" onclick="deleteHoliday('+h.id+')" title="Delete"><i class="fa-solid fa-trash-can"></i></button></td></tr>';
@@ -287,6 +288,17 @@ async function loadHolidays() {
             document.getElementById('holidaysTableWrap').style.display = 'none';
         }
     } catch(e) { console.error(e); }
+}
+
+function holidayTypeBadge(type) {
+    var value = String(type);
+    if (value === '2') {
+        return '<span class="badge" style="background:#dbeafe;color:#1d4ed8;">Class Suspension</span>';
+    }
+    if (value === '1') {
+        return '<span class="badge badge-active">Regular Holiday</span>';
+    }
+    return '<span class="badge" style="background:#fef3c7;color:#92400e;">Special Non-Working</span>';
 }
 
 async function addHoliday() {

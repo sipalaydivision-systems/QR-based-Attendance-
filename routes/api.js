@@ -989,10 +989,11 @@ router.get('/holidays', requireAuth, async (req, res) => {
 router.post('/holidays', requireAuth, async (req, res) => {
     const { name, holiday_date, is_national, school_id } = req.body;
     if (!name || !holiday_date) return res.status(400).json({ error: 'Name and date are required.' });
+    const holidayType = ['0', '1', '2'].includes(String(is_national)) ? Number(is_national) : 1;
     try {
         await db.query(
             'INSERT INTO holidays (holiday_date, name, school_id, is_national) VALUES (?, ?, ?, ?)',
-            [holiday_date, name, school_id || null, is_national !== undefined ? is_national : 1]
+            [holiday_date, name, school_id || null, holidayType]
         );
         return res.json({ success: true });
     } catch (err) {
