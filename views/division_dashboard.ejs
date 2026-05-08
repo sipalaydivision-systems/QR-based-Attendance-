@@ -195,6 +195,15 @@
         return d.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
     }
     function rateColor(r) { return r >= 80 ? '#16a34a' : r >= 50 ? '#d97706' : '#dc2626'; }
+    function setText(id, value) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        var next = String(value);
+        if (el.textContent === next) return;
+        el.textContent = next;
+        el.classList.add('updating');
+        setTimeout(function(){ el.classList.remove('updating'); }, 220);
+    }
 
     // ── Banner greeting ──────────────────────────────────────
     (function initBanner() {
@@ -216,7 +225,7 @@
             updateSchoolCards(data.schools || []);
             updateRanking(data.schools || []);
             loadAbsentFlags();
-            document.getElementById('wbRate').textContent = (data.attendance_rate || 0) + '%';
+            setText('wbRate', (data.attendance_rate || 0) + '%');
 
             var banner = document.getElementById('nonSchoolDayBanner');
             if (!data.is_school_day) {
@@ -228,16 +237,16 @@
     }
 
     function updateSummary(d) {
-        document.getElementById('dsTotalSchools').textContent    = d.total_schools    || 0;
-        document.getElementById('dsTotalStudents').textContent   = d.active_students  || 0;
-        document.getElementById('dsStudentsPresent').textContent = d.students_present || 0;
-        document.getElementById('dsStudentsAbsent').textContent  = d.students_absent  || 0;
-        document.getElementById('ds2DayAbsent').textContent      = d.flagged_absent_2day || 0;
-        document.getElementById('dsTotalTeachers').textContent   = d.total_teachers   || 0;
-        document.getElementById('dsTeachersPresent').textContent = d.teachers_present || 0;
-        document.getElementById('dsTeachersAbsent').textContent  = d.teachers_absent  || 0;
+        setText('dsTotalSchools', d.total_schools || 0);
+        setText('dsTotalStudents', d.active_students || 0);
+        setText('dsStudentsPresent', d.students_present || 0);
+        setText('dsStudentsAbsent', d.students_absent || 0);
+        setText('ds2DayAbsent', d.flagged_absent_2day || 0);
+        setText('dsTotalTeachers', d.total_teachers || 0);
+        setText('dsTeachersPresent', d.teachers_present || 0);
+        setText('dsTeachersAbsent', d.teachers_absent || 0);
         var tRate = d.total_teachers > 0 ? Math.round((d.teachers_present / d.total_teachers) * 100) : 0;
-        document.getElementById('dsTeacherRate').textContent = tRate + '%';
+        setText('dsTeacherRate', tRate + '%');
     }
 
     // ── 2-Day Absentees ──────────────────────────────────────

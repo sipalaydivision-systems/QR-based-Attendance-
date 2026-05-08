@@ -96,5 +96,5 @@ app.use((err, req, res, _next) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`QR Attendance System running on port ${PORT}`);
+    console.log(`School Attendance QR based Systems running on port ${PORT}`);
 });

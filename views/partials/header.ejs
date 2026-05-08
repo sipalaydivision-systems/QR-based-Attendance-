@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <title><%= title %> — <%= (settings && settings.system_name) || 'QR Attendance' %></title>
+    <title><%= title %> — <%= (settings && settings.system_name) || 'School Attendance QR based Systems' %></title>
     <link rel="icon" type="image/png" href="/uploads/logos/system-logo.png" id="favicon">
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="apple-touch-icon" href="/uploads/logos/system-logo.png">
@@ -29,7 +29,7 @@
                 <% } %>
             </div>
             <div class="brand-text">
-                <span class="brand-title"><%= (settings && settings.system_name) || 'QR Attendance' %></span>
+                <span class="brand-title"><%= (settings && settings.system_name) || 'School Attendance QR based Systems' %></span>
                 <span class="brand-subtitle"><%= (settings && settings.division_name) || 'School Division' %></span>
             </div>
             <button class="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">
@@ -169,6 +169,13 @@
                 <i class="fa-solid fa-bars"></i>
             </button>
             <h1><%= title %></h1>
+            <div class="topbar-user">
+                <div class="topbar-user-avatar"><%= user.fullname ? user.fullname.charAt(0).toUpperCase() : 'U' %></div>
+                <div class="topbar-user-details">
+                    <strong><%= user.fullname %></strong>
+                    <span><%= user.role.replace(/_/g, ' ') %></span>
+                </div>
+            </div>
         </header>
         <% } %>
         <div class="page-content">

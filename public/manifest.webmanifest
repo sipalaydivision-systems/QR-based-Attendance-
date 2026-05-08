@@ -1,6 +1,6 @@
 {
-  "name": "QR Attendance System",
-  "short_name": "QR Attendance",
+  "name": "School Attendance QR based Systems",
+  "short_name": "School QR Attendance",
   "start_url": "/login",
   "scope": "/",
   "display": "standalone",

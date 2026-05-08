@@ -83,6 +83,13 @@ async function seed() {
         );
         console.log('Default admin created: username=admin, password=admin123');
 
+        await db.query(
+            `INSERT INTO settings (setting_key, setting_value)
+             VALUES ('system_name', ?)
+             ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)`,
+            ['School Attendance QR based Systems']
+        );
+
         const [[sampleDeps]] = await db.query(
             `SELECT
                 (SELECT COUNT(*) FROM students st JOIN schools sc ON st.school_id = sc.id WHERE sc.name = ?) +

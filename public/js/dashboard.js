@@ -27,23 +27,31 @@
         }
     }
 
+    function setText(id, value) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const next = String(value);
+        if (el.textContent === next) return;
+
+        el.textContent = next;
+        el.classList.add('updating');
+        setTimeout(function() {
+            el.classList.remove('updating');
+        }, 220);
+    }
+
     function updateUI(data) {
-        document.getElementById('statSchools').textContent = data.total_schools;
-        document.getElementById('statStudents').textContent = data.active_students;
-        document.getElementById('statPresent').textContent = data.students_present;
-        document.getElementById('statAbsent').textContent = data.students_absent;
-        document.getElementById('statTeachers').textContent = data.teachers_present + '/' + data.total_teachers;
-        document.getElementById('statRate').textContent = data.attendance_rate + '%';
+        setText('statSchools', data.total_schools);
+        setText('statStudents', data.active_students);
+        setText('statPresent', data.students_present);
+        setText('statAbsent', data.students_absent);
+        setText('statTeachers', data.teachers_present + '/' + data.total_teachers);
+        setText('statRate', data.attendance_rate + '%');
 
         // New stats
-        var timedOutEl = document.getElementById('statTimedOut');
-        if (timedOutEl) timedOutEl.textContent = data.students_timed_out || 0;
-
-        var flaggedEl = document.getElementById('statFlagged');
-        if (flaggedEl) flaggedEl.textContent = data.flagged_absent_2day || 0;
-
-        var inactiveEl = document.getElementById('statInactive');
-        if (inactiveEl) inactiveEl.textContent = data.inactive_students || 0;
+        setText('statTimedOut', data.students_timed_out || 0);
+        setText('statFlagged', data.flagged_absent_2day || 0);
+        setText('statInactive', data.inactive_students || 0);
 
         // Non-school day banner
         var banner = document.getElementById('nonSchoolDayBanner');
