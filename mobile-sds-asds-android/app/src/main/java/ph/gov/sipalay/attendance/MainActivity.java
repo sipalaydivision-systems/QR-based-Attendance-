@@ -5,31 +5,47 @@ import android.content.Intent;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.Gravity;
-import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
 public class MainActivity extends Activity {
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private boolean serverUnavailableShown = false;
+    private boolean openingDashboard = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         showSplash();
         applyConfigurationIntent(getIntent());
+        handler.postDelayed(this::checkServerAndOpen, 650);
+    }
+
+    @Override
+    protected void onDestroy() {
+        handler.removeCallbacksAndMessages(null);
+        super.onDestroy();
+    }
+
+    private void checkServerAndOpen() {
+        if (openingDashboard || isFinishing()) return;
         new Thread(() -> {
             ApiClient.refreshBaseUrl(this);
-            try {
-                Thread.sleep(650);
-            } catch (InterruptedException ignored) {}
             runOnUiThread(() -> {
-                if (!SessionStore.hasConfiguredBaseUrl(this)) {
-                    showServerUnavailable();
+                if (isFinishing()) return;
+                if (SessionStore.hasConfiguredBaseUrl(this)) {
+                    openingDashboard = true;
+                    startActivity(new Intent(this, WebAppActivity.class));
+                    finish();
                     return;
                 }
-                startActivity(new Intent(this, WebAppActivity.class));
-                finish();
+                if (!serverUnavailableShown) showServerUnavailable();
+                handler.postDelayed(this::checkServerAndOpen, 5000);
             });
         }).start();
     }
@@ -98,42 +114,16 @@ public class MainActivity extends Activity {
         title.setGravity(Gravity.CENTER);
         card.addView(title, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 18, 0, 8));
 
-        TextView message = Ui.text(this, "The app could not reach the live QR attendance server yet. Tap retry after installing the latest APK from the attendance system download page.", 15, Ui.MUTED, Typeface.NORMAL);
+        TextView message = Ui.text(this, "The app is waiting for the live QR attendance server configuration. It will open the dashboard automatically when the server is available.", 15, Ui.MUTED, Typeface.NORMAL);
         message.setGravity(Gravity.CENTER);
         card.addView(message, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
-        TextView error = Ui.text(this, "", 13, Ui.RED, Typeface.BOLD);
-        error.setGravity(Gravity.CENTER);
-        error.setVisibility(TextView.GONE);
-        card.addView(error, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 20, 0, 12));
+        ProgressBar bar = new ProgressBar(this);
+        card.addView(bar, Ui.marginLp(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 24, 0, 10));
 
-        Button retry = new Button(this);
-        retry.setText("Retry");
-        retry.setAllCaps(false);
-        retry.setTextColor(android.graphics.Color.WHITE);
-        retry.setTextSize(16);
-        retry.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        retry.setBackground(Ui.gradient(Ui.PRIMARY, android.graphics.Color.rgb(67, 56, 202), 24));
-        retry.setOnClickListener(v -> {
-            retry.setEnabled(false);
-            retry.setText("Checking...");
-            error.setVisibility(TextView.GONE);
-            new Thread(() -> {
-                ApiClient.refreshBaseUrl(this);
-                runOnUiThread(() -> {
-                    retry.setEnabled(true);
-                    retry.setText("Retry");
-                    if (!SessionStore.hasConfiguredBaseUrl(this)) {
-                        error.setText("Server config is still not available. Download the newest APK from the attendance system web page.");
-                        error.setVisibility(TextView.VISIBLE);
-                        return;
-                    }
-                    startActivity(new Intent(this, WebAppActivity.class));
-                    finish();
-                });
-            }).start();
-        });
-        card.addView(retry, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, 112, 0, 8, 0, 0));
+        TextView status = Ui.text(this, "Checking automatically...", 13, Ui.PRIMARY, Typeface.BOLD);
+        status.setGravity(Gravity.CENTER);
+        card.addView(status, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
         setContentView(root);
     }
