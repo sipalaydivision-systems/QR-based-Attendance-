@@ -79,10 +79,26 @@ final class ApiClient {
             if (conn.getResponseCode() >= 400) return;
             JSONObject config = new JSONObject(response);
             String baseUrl = config.optString("base_url", "");
-            if (baseUrl.startsWith("https://") || baseUrl.startsWith("http://")) {
+            if ((baseUrl.startsWith("https://") || baseUrl.startsWith("http://")) && isAttendanceSystem(baseUrl)) {
                 SessionStore.saveBaseUrl(context, baseUrl);
             }
         } catch (Exception ignored) {}
+    }
+
+    static boolean isAttendanceSystem(String baseUrl) {
+        try {
+            HttpURLConnection conn = (HttpURLConnection) new URL(baseUrl.replaceAll("/+$", "") + "/api/app-info").openConnection();
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+            conn.setRequestProperty("Accept", "application/json");
+            String response = read(conn);
+            if (conn.getResponseCode() >= 400) return false;
+            JSONObject info = new JSONObject(response);
+            return "school-attendance-qr-based-systems".equals(info.optString("app"));
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private static HttpURLConnection open(Context context, String path, String method) throws Exception {

@@ -79,7 +79,7 @@ function getPublicAppBaseUrl(req) {
     if (configured) return configured.replace(/\/+$/, '');
     const host = req.get('host') || '';
     if (host.includes('localhost') || host.startsWith('127.0.0.1')) {
-        return 'https://sdo-sipalay-website-production.up.railway.app';
+        return '';
     }
     return `${req.protocol}://${host}`.replace(/\/+$/, '');
 }
@@ -95,6 +95,14 @@ app.get('/', (req, res) => {
 app.get('/dashboard', (req, res) => {
     if (!req.session.user) return res.redirect('/login');
     return res.redirect(getDashboardUrl(req.session.user.role));
+});
+
+app.get('/api/app-info', (req, res) => {
+    return res.json({
+        app: 'school-attendance-qr-based-systems',
+        name: 'School Attendance QR based Systems',
+        baseUrl: getPublicAppBaseUrl(req)
+    });
 });
 
 app.get('/mobile-app', (req, res) => {

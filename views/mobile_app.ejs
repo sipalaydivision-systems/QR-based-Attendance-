@@ -168,26 +168,26 @@
                 </div>
             </div>
             <h1>SDS / ASDS Mobile Dashboard</h1>
-            <p class="lead">Install the Android APK for mobile dashboard monitoring and 2-day absence notifications on your phone.</p>
+            <p class="lead">Install the Android APK for this QR attendance system. It uses this same web dashboard, login, and MySQL database.</p>
             <a class="download <%= apkAvailable ? '' : 'disabled' %>" href="/download/mobile-app" download>Download APK</a>
             <div class="status">
                 <% if (typeof error !== 'undefined' && error) { %>
                     <%= error %>
                 <% } else if (apkAvailable) { %>
-                APK is ready. It connects automatically to the configured Railway web system.
+                APK is ready for this attendance system.
                 <% } else { %>
                     APK source is ready. Build the APK and place it in public/downloads/school-attendance-division.apk.
                 <% } %>
             </div>
             <p class="lead" style="font-size:14px;margin-top:14px;margin-bottom:0;">
-                Install the APK, open it, and sign in with the same web account. The app loads the same web dashboard and MySQL database.
+                Install the APK from this page, open it, and sign in with the same web account.
             </p>
             <div class="features">
                 <div class="feature">Same web account login</div>
                 <div class="feature">Dashboard totals from MySQL</div>
                 <div class="feature">2-day absence alerts</div>
                 <div class="feature">Android phone notifications</div>
-                <div class="feature">Railway web system</div>
+                <div class="feature">This QR attendance system</div>
                 <div class="feature">Use the same web accounts</div>
             </div>
         </section>

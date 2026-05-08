@@ -66,9 +66,11 @@ public class MainActivity extends Activity {
         Uri uri = intent.getData();
         String baseUrl = uri.getQueryParameter("base_url");
         if (baseUrl != null && (baseUrl.startsWith("https://") || baseUrl.startsWith("http://"))) {
-            SessionStore.clear(this);
-            SessionStore.saveBaseUrl(this, baseUrl);
-            return true;
+            if (ApiClient.isAttendanceSystem(baseUrl)) {
+                SessionStore.clear(this);
+                SessionStore.saveBaseUrl(this, baseUrl);
+                return true;
+            }
         }
         return false;
     }
@@ -93,11 +95,11 @@ public class MainActivity extends Activity {
         logo.setAdjustViewBounds(true);
         card.addView(logo, Ui.lp(96, 96));
 
-        TextView title = Ui.text(this, "Server Setup Required", 24, Ui.INK, Typeface.BOLD);
+        TextView title = Ui.text(this, "Attendance System URL Needed", 24, Ui.INK, Typeface.BOLD);
         title.setGravity(Gravity.CENTER);
         card.addView(title, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 18, 0, 8));
 
-        TextView message = Ui.text(this, "The APK needs the live Railway URL. Please install the latest APK from the live /mobile-app page.", 15, Ui.MUTED, Typeface.NORMAL);
+        TextView message = Ui.text(this, "The app is not connected to the QR attendance Railway service yet. Open the attendance web system, go to /mobile-app, then download the APK from there.", 15, Ui.MUTED, Typeface.NORMAL);
         message.setGravity(Gravity.CENTER);
         card.addView(message, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 

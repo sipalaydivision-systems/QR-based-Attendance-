@@ -52,9 +52,7 @@ After installing the APK, open it and sign in with the same web account. The app
 
 The APK reads the live server from `public/mobile-config.json`, then opens that Railway web system in a full-screen Android shell.
 
-Current Railway URL:
-
-`https://sdo-sipalay-website-production.up.railway.app`
+The APK validates `/api/app-info` so it will not open another Railway website by mistake.
 
 ## Notification Notes
 

@@ -31,6 +31,4 @@ The server URL is stored in:
 
 The app reads `public/mobile-config.json` from GitHub and opens the configured Railway web system automatically.
 
-Current Railway URL:
-
-`https://sdo-sipalay-website-production.up.railway.app`
+The APK validates `/api/app-info` so it will not open another Railway website by mistake.
