@@ -15,16 +15,16 @@
 </div>
 
 <!-- Filters -->
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+<div class="dashboard-toolbar">
     <div>
-        <h2 style="font-size:1.375rem;font-weight:800;color:var(--gray-900);margin:0;">Attendance Overview</h2>
-        <p style="font-size:0.8125rem;color:var(--gray-500);margin:2px 0 0;">Real-time attendance monitoring dashboard</p>
+        <h2>Attendance Overview</h2>
+        <p>Real-time attendance monitoring dashboard</p>
     </div>
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <div class="dashboard-filters">
         <% if (schools && schools.length > 0) { %>
-        <div style="display:flex;align-items:center;gap:6px;">
-            <i class="fa-solid fa-building-columns" style="color:var(--gray-400);font-size:0.875rem;"></i>
-            <select id="dashSchool" style="padding:8px 12px;border:1px solid var(--gray-300);border-radius:8px;font-size:0.8125rem;background:#fff;color:var(--gray-700);">
+        <div class="dashboard-filter">
+            <i class="fa-solid fa-building-columns"></i>
+            <select id="dashSchool">
                 <option value="">All Schools</option>
                 <% schools.forEach(s => { %>
                 <option value="<%= s.id %>"><%= s.name %></option>
@@ -32,10 +32,9 @@
             </select>
         </div>
         <% } %>
-        <div style="display:flex;align-items:center;gap:6px;">
-            <i class="fa-solid fa-calendar" style="color:var(--gray-400);font-size:0.875rem;"></i>
-            <input type="date" id="dashDate" value="<%= new Date().toISOString().slice(0,10) %>"
-                   style="padding:8px 12px;border:1px solid var(--gray-300);border-radius:8px;font-size:0.8125rem;background:#fff;color:var(--gray-700);">
+        <div class="dashboard-filter dashboard-filter-date">
+            <i class="fa-solid fa-calendar"></i>
+            <input type="date" id="dashDate" value="<%= new Date().toISOString().slice(0,10) %>">
         </div>
     </div>
 </div>

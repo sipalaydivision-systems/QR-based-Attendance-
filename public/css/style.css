@@ -292,16 +292,66 @@ a:hover { color: var(--primary-dark); }
 /* ============================================================
    STAT CARDS (Dashboard)
    ============================================================ */
+.dashboard-toolbar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 18px;
+    gap: 16px;
+}
+.dashboard-toolbar h2 {
+    font-size: 1.375rem;
+    font-weight: 800;
+    color: var(--gray-900);
+    margin: 0;
+}
+.dashboard-toolbar p {
+    font-size: 0.8125rem;
+    color: var(--gray-500);
+    margin: 3px 0 0;
+}
+.dashboard-filters {
+    display: grid;
+    grid-template-columns: minmax(220px, 320px) 150px;
+    gap: 10px;
+    align-items: center;
+    flex-shrink: 0;
+}
+.dashboard-filter {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+}
+.dashboard-filter i {
+    color: var(--gray-400);
+    font-size: 0.875rem;
+    text-align: center;
+}
+.dashboard-filter select,
+.dashboard-filter input {
+    width: 100%;
+    height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--gray-300);
+    border-radius: 8px;
+    font-size: 0.8125rem;
+    background: #fff;
+    color: var(--gray-700);
+    min-width: 0;
+}
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 16px; margin-bottom: 20px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
 }
 .stat-card {
     background: var(--bg-card);
     border-radius: var(--radius-lg);
     padding: 20px;
     display: flex; align-items: center; gap: 16px;
+    min-height: 110px;
     box-shadow: var(--shadow);
     border: 1px solid var(--gray-200);
     transition: box-shadow 0.2s, transform 0.2s;
@@ -1233,6 +1283,8 @@ a:hover { color: var(--primary-dark); }
    RESPONSIVE
    ============================================================ */
 @media (max-width: 1024px) {
+    .dashboard-toolbar { flex-direction: column; align-items: stretch; }
+    .dashboard-filters { grid-template-columns: minmax(0, 1fr) 150px; width: 100%; }
     .div-middle-row { grid-template-columns: 1fr; }
     .sec-kpi-grid   { grid-template-columns: repeat(3,1fr); }
 }
@@ -1243,7 +1295,7 @@ a:hover { color: var(--primary-dark); }
     .topbar { display: flex !important; }
     .menu-btn, .sidebar-toggle { display: block; }
 
-    .stats-grid, .summary-stats   { grid-template-columns: repeat(2,1fr); }
+    .stats-grid, .summary-stats   { grid-template-columns: repeat(2,minmax(0,1fr)); }
     .school-grid                  { grid-template-columns: repeat(2,1fr); }
     .scanner-container            { grid-template-columns: 1fr; }
     .form-row                     { flex-direction: column; }
@@ -1318,6 +1370,17 @@ a:hover { color: var(--primary-dark); }
         border-radius: 14px;
         padding: 14px;
     }
+    .dashboard-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .dashboard-filters {
+        grid-template-columns: 1fr;
+        width: 100%;
+    }
+    .stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
     .modal {
         width: calc(100vw - 16px);
         max-width: none;
@@ -1329,6 +1392,9 @@ a:hover { color: var(--primary-dark); }
 @media (max-width: 480px) {
     .page-content {
         padding: 10px 10px calc(20px + env(safe-area-inset-bottom));
+    }
+    .stats-grid {
+        grid-template-columns: 1fr;
     }
     .modal-overlay {
         padding: 8px;
