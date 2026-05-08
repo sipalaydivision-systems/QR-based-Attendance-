@@ -104,6 +104,13 @@ app.get('/dashboard', (req, res) => {
     return res.redirect(getDashboardUrl(req.session.user.role));
 });
 
+app.get('/app', (req, res) => {
+    if (req.session.user) {
+        return res.redirect(getDashboardUrl(req.session.user.role));
+    }
+    return res.redirect('/login');
+});
+
 app.get('/api/app-info', (req, res) => {
     return res.json({
         app: 'school-attendance-qr-based-systems',

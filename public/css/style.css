@@ -900,6 +900,71 @@ a:hover { color: var(--primary-dark); }
     box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
 }
 
+/* Mobile web app login shell (Railway URL in mobile browser) */
+body.login-page.mobile-web-app {
+    background:
+        radial-gradient(circle at 0% 0%, rgba(56, 189, 248, 0.28), transparent 38%),
+        radial-gradient(circle at 100% 100%, rgba(79, 70, 229, 0.22), transparent 40%),
+        linear-gradient(180deg, #eaf3ff 0%, #f7fbff 100%);
+    padding: max(14px, env(safe-area-inset-top)) 14px max(14px, env(safe-area-inset-bottom));
+}
+
+body.login-page.mobile-web-app .login-container {
+    max-width: 460px;
+    padding: 0;
+}
+
+body.login-page.mobile-web-app .login-card {
+    border-radius: 24px;
+    padding: 30px 22px 24px;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+    backdrop-filter: blur(10px);
+}
+
+body.login-page.mobile-web-app .login-logo {
+    width: 86px;
+    height: 86px;
+    margin-bottom: 12px;
+}
+
+body.login-page.mobile-web-app .login-header h1 {
+    font-size: 1.65rem;
+    line-height: 1.2;
+}
+
+body.login-page.mobile-web-app .login-header p {
+    font-size: 0.92rem;
+}
+
+body.login-page.mobile-web-app .login-form label {
+    font-size: 0.78rem;
+}
+
+body.login-page.mobile-web-app .login-form input {
+    min-height: 50px;
+    border-radius: 12px;
+    font-size: 1rem;
+}
+
+body.login-page.mobile-web-app .btn.btn-primary {
+    min-height: 52px;
+    border-radius: 14px;
+    font-size: 1.02rem;
+    box-shadow: 0 12px 24px rgba(79, 70, 229, 0.24);
+}
+
+body.login-page.mobile-web-app #installWebAppBtn {
+    min-height: 46px;
+    border-radius: 12px;
+    font-weight: 700;
+    justify-content: center;
+}
+
+body.login-page.mobile-web-app .mobile-app-download-link {
+    margin-top: 10px !important;
+}
+
 /* ============================================================
    SCHOOL CARDS
    ============================================================ */
