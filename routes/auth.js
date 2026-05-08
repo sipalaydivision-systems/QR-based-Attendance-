@@ -138,7 +138,13 @@ router.post('/app-login', async (req, res) => {
             'INSERT INTO user_logs (user_id, action, ip_address) VALUES (?, ?, ?)',
             [user.id, 'mobile_app_login', req.ip]
         );
-        return res.json({ success: true, user: req.session.user });
+        req.session.save((saveErr) => {
+            if (saveErr) {
+                console.error('App session save error:', saveErr);
+                return res.status(500).json({ success: false, message: 'Unable to start mobile session.' });
+            }
+            return res.json({ success: true, user: req.session.user });
+        });
     } catch (err) {
         console.error('App login error:', err);
         return res.status(500).json({ success: false, message: 'Server error.' });

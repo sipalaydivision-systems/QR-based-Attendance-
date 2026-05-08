@@ -26,7 +26,7 @@ final class ApiClient {
             os.write(body.getBytes("UTF-8"));
         }
         String response = read(conn);
-        JSONObject json = new JSONObject(response);
+        JSONObject json = parseJson(response, "Login failed. Please check the server connection.");
         if (conn.getResponseCode() >= 400 || !json.optBoolean("success")) {
             throw new IllegalArgumentException(json.optString("message", "Login failed."));
         }
@@ -43,7 +43,7 @@ final class ApiClient {
         String response = read(conn);
         if (conn.getResponseCode() == 401) throw new SecurityException("Session expired. Please sign in again.");
         if (conn.getResponseCode() >= 400) throw new IllegalStateException(response);
-        return new JSONObject(response);
+        return parseJson(response, "Server returned an invalid dashboard response.");
     }
 
     static String getRaw(Context context, String path) throws Exception {
@@ -63,6 +63,8 @@ final class ApiClient {
         conn.setConnectTimeout(15000);
         conn.setReadTimeout(15000);
         conn.setRequestProperty("Accept", "application/json");
+        conn.setRequestProperty("X-Requested-With", "SchoolAttendanceAndroid");
+        conn.setRequestProperty("User-Agent", "SchoolAttendanceDivisionAndroid/1.0");
         return conn;
     }
 
@@ -78,7 +80,13 @@ final class ApiClient {
     }
 
     private static String extractCookie(Map<String, List<String>> headers) {
-        List<String> cookies = headers.get("Set-Cookie");
+        List<String> cookies = null;
+        for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
+            if (entry.getKey() != null && "set-cookie".equalsIgnoreCase(entry.getKey())) {
+                cookies = entry.getValue();
+                break;
+            }
+        }
         if (cookies == null || cookies.isEmpty()) return "";
         StringBuilder out = new StringBuilder();
         for (String c : cookies) {
@@ -90,5 +98,13 @@ final class ApiClient {
 
     private static String enc(String value) throws Exception {
         return URLEncoder.encode(value, "UTF-8");
+    }
+
+    private static JSONObject parseJson(String response, String fallback) throws Exception {
+        try {
+            return new JSONObject(response);
+        } catch (Exception e) {
+            throw new IllegalStateException(fallback);
+        }
     }
 }
