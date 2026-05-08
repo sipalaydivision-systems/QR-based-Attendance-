@@ -13,13 +13,19 @@ final class SessionStore {
     }
 
     static String getBaseUrl(Context context) {
-        String configured = context.getString(context.getResources().getIdentifier("base_url", "string", context.getPackageName()));
+        String configured = getBundledBaseUrl(context);
         return prefs(context).getString("base_url", configured).replaceAll("/+$", "");
     }
 
+    static String getBundledBaseUrl(Context context) {
+        return context.getString(context.getResources().getIdentifier("base_url", "string", context.getPackageName())).replaceAll("/+$", "");
+    }
+
     static void saveBaseUrl(Context context, String baseUrl) {
+        String normalized = normalizeBaseUrl(baseUrl);
+        if (!normalized.startsWith("https://") && !normalized.startsWith("http://")) return;
         prefs(context).edit()
-                .putString("base_url", normalizeBaseUrl(baseUrl))
+                .putString("base_url", normalized)
                 .apply();
     }
 

@@ -24,10 +24,9 @@ import org.json.JSONObject;
 public class LoginActivity extends Activity {
     private EditText username;
     private EditText password;
-    private EditText serverUrl;
     private Button signIn;
     private ProgressBar progress;
-    private TextView helper;
+    private TextView errorBox;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -43,41 +42,44 @@ public class LoginActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER);
-        root.setPadding(30, 36, 30, 36);
-        root.setBackground(Ui.gradient(android.graphics.Color.rgb(226, 232, 240), android.graphics.Color.rgb(248, 250, 252), 0));
+        root.setPadding(28, 34, 28, 34);
+        root.setBackground(Ui.gradient(android.graphics.Color.rgb(230, 244, 255), android.graphics.Color.rgb(248, 250, 252), 0));
         scroll.addView(root, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT));
 
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setGravity(Gravity.CENTER_HORIZONTAL);
-        card.setPadding(34, 34, 34, 34);
-        card.setBackground(Ui.strokeBg(Ui.CARD, android.graphics.Color.rgb(219, 227, 239), 34));
-        Ui.elevate(card, 8);
+        card.setPadding(34, 34, 34, 30);
+        card.setBackground(Ui.strokeBg(Ui.CARD, android.graphics.Color.rgb(226, 232, 240), 34));
+        Ui.elevate(card, 10);
         root.addView(card, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
         ImageView logo = new ImageView(this);
         logo.setImageResource(getResources().getIdentifier("system_logo", "drawable", getPackageName()));
         logo.setAdjustViewBounds(true);
-        card.addView(logo, Ui.lp(96, 96));
+        card.addView(logo, Ui.lp(92, 92));
 
-        TextView title = Ui.text(this, "School Attendance QR based Systems", 24, Ui.INK, Typeface.BOLD);
+        TextView title = Ui.text(this, "School Attendance QR based Systems", 25, Ui.INK, Typeface.BOLD);
         title.setGravity(Gravity.CENTER);
-        card.addView(title, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 18, 0, 0));
+        card.addView(title, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 16, 0, 0));
 
-        TextView subtitle = Ui.text(this, "SDS / ASDS Native Dashboard", 15, Ui.MUTED, Typeface.NORMAL);
+        TextView subtitle = Ui.text(this, "Division Mobile Dashboard", 15, Ui.MUTED, Typeface.NORMAL);
         subtitle.setGravity(Gravity.CENTER);
-        card.addView(subtitle, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 8, 0, 18));
+        card.addView(subtitle, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 6, 0, 22));
+
+        errorBox = Ui.text(this, "", 14, Ui.RED, Typeface.BOLD);
+        errorBox.setGravity(Gravity.CENTER);
+        errorBox.setPadding(18, 14, 18, 14);
+        errorBox.setBackground(Ui.strokeBg(android.graphics.Color.rgb(254, 242, 242), android.graphics.Color.rgb(252, 165, 165), 18));
+        errorBox.setVisibility(View.GONE);
+        card.addView(errorBox, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, 18));
 
         username = field("Username", false);
         password = field("Password", true);
-        serverUrl = field("Server URL", false);
-        serverUrl.setText(SessionStore.getBaseUrl(this));
         card.addView(label("Username"));
         card.addView(username, fieldParams());
         card.addView(label("Password"));
         card.addView(password, fieldParams());
-        card.addView(label("Server"));
-        card.addView(serverUrl, fieldParams());
 
         signIn = new Button(this);
         signIn.setText("Sign In");
@@ -85,16 +87,12 @@ public class LoginActivity extends Activity {
         signIn.setTextSize(16);
         signIn.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         signIn.setAllCaps(false);
-        signIn.setBackground(Ui.bg(Ui.PRIMARY, 24));
-        card.addView(signIn, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, 112, 0, 22, 0, 0));
+        signIn.setBackground(Ui.gradient(Ui.PRIMARY, android.graphics.Color.rgb(67, 56, 202), 24));
+        card.addView(signIn, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, 112, 0, 12, 0, 0));
 
         progress = new ProgressBar(this);
         progress.setVisibility(View.GONE);
         card.addView(progress, Ui.marginLp(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 18, 0, 0));
-
-        helper = Ui.text(this, "Use your SDS, ASDS, or admin account.", 13, Ui.MUTED, Typeface.NORMAL);
-        helper.setGravity(Gravity.CENTER);
-        card.addView(helper, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 18, 0, 0));
 
         signIn.setOnClickListener(v -> login());
         setContentView(scroll);
@@ -120,18 +118,10 @@ public class LoginActivity extends Activity {
     private void login() {
         final String u = username.getText().toString().trim();
         final String p = password.getText().toString();
-        final String server = SessionStore.normalizeBaseUrl(serverUrl.getText().toString());
         if (u.isEmpty() || p.isEmpty()) {
-            Toast.makeText(this, "Enter username and password.", Toast.LENGTH_SHORT).show();
+            showError("Enter username and password.");
             return;
         }
-        if (!server.startsWith("https://") && !server.startsWith("http://")) {
-            Toast.makeText(this, "Enter the web system URL.", Toast.LENGTH_SHORT).show();
-            helper.setText("Server URL must start with https://");
-            helper.setTextColor(Ui.RED);
-            return;
-        }
-        SessionStore.saveBaseUrl(this, server);
         setLoading(true);
         new Thread(() -> {
             try {
@@ -139,7 +129,7 @@ public class LoginActivity extends Activity {
                 JSONObject user = result.getJSONObject("user");
                 String role = user.optString("role");
                 if (!"super_admin".equals(role) && !"superintendent".equals(role) && !"asst_superintendent".equals(role)) {
-                    throw new IllegalArgumentException("This app is only for division SDS and ASDS dashboard accounts.");
+                    throw new IllegalArgumentException("This app is only for SDS and ASDS dashboard accounts.");
                 }
                 SessionStore.saveLogin(this, result.getString("_cookie"), user.optString("fullname", u), role);
                 AbsenceWorker.schedule(this);
@@ -150,20 +140,23 @@ public class LoginActivity extends Activity {
             } catch (Exception e) {
                 runOnUiThread(() -> {
                     setLoading(false);
-                    helper.setText(e.getMessage());
-                    helper.setTextColor(Ui.RED);
+                    showError(e.getMessage());
                     Toast.makeText(this, e.getMessage(), Toast.LENGTH_LONG).show();
                 });
             }
         }).start();
     }
 
+    private void showError(String message) {
+        errorBox.setText(message == null || message.trim().isEmpty() ? "Login failed." : message);
+        errorBox.setVisibility(View.VISIBLE);
+    }
+
     private void setLoading(boolean loading) {
         progress.setVisibility(loading ? View.VISIBLE : View.GONE);
         signIn.setEnabled(!loading);
         signIn.setText(loading ? "Signing in..." : "Sign In");
-        helper.setText(loading ? "Connecting to " + SessionStore.getBaseUrl(this) : "Use the same account and database as the web system.");
-        helper.setTextColor(Ui.MUTED);
+        if (loading) errorBox.setVisibility(View.GONE);
     }
 
     private void requestNotificationPermission() {
