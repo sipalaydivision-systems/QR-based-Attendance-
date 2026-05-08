@@ -64,16 +64,24 @@ app.use('/api', apiRoutes);
 app.use('/admin', adminRoutes);
 app.use('/export', exportRoutes);
 
+function getDashboardUrl(role) {
+    if (role === 'principal') return '/admin/principal-dashboard';
+    if (role === 'superintendent') return '/admin/sds-dashboard';
+    if (role === 'asst_superintendent') return '/admin/asds-dashboard';
+    return '/admin/dashboard';
+}
+
 // Root redirect
 app.get('/', (req, res) => {
     if (req.session.user) {
-        const role = req.session.user.role;
-        if (role === 'principal') return res.redirect('/admin/principal-dashboard');
-        if (role === 'superintendent') return res.redirect('/admin/sds-dashboard');
-        if (role === 'asst_superintendent') return res.redirect('/admin/asds-dashboard');
-        return res.redirect('/admin/dashboard');
+        return res.redirect(getDashboardUrl(req.session.user.role));
     }
     res.redirect('/login');
+});
+
+app.get('/dashboard', (req, res) => {
+    if (!req.session.user) return res.redirect('/login');
+    return res.redirect(getDashboardUrl(req.session.user.role));
 });
 
 // 404

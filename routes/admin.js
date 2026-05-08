@@ -53,7 +53,7 @@ router.get('/sds-dashboard', async (req, res) => {
     if (role !== 'superintendent') {
         return res.redirect(getDashboardUrl(role));
     }
-    res.render('division_dashboard', { title: 'Professional Dashboard', page: 'sds_dashboard' });
+    res.render('division_dashboard', { title: 'Dashboard', page: 'sds_dashboard' });
 });
 
 router.get('/asds-dashboard', async (req, res) => {
@@ -61,7 +61,7 @@ router.get('/asds-dashboard', async (req, res) => {
     if (role !== 'asst_superintendent') {
         return res.redirect(getDashboardUrl(role));
     }
-    res.render('division_dashboard', { title: 'Professional Dashboard', page: 'asds_dashboard' });
+    res.render('division_dashboard', { title: 'Dashboard', page: 'asds_dashboard' });
 });
 
 // ---- Attendance ----
