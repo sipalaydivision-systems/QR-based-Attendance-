@@ -133,6 +133,11 @@ router.post('/app-login', async (req, res) => {
             role: user.role,
             school_id: user.school_id
         };
+        await db.query('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]);
+        await db.query(
+            'INSERT INTO user_logs (user_id, action, ip_address) VALUES (?, ?, ?)',
+            [user.id, 'mobile_app_login', req.ip]
+        );
         return res.json({ success: true, user: req.session.user });
     } catch (err) {
         console.error('App login error:', err);

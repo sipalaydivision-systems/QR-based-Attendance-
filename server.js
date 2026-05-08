@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
+const db = require('./config/database');
+const MySQLSessionStore = require('./config/mysqlSessionStore');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -24,6 +26,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Session
 app.use(session({
+    store: new MySQLSessionStore(),
     secret: process.env.SESSION_SECRET || 'qr-attendance-secret-key',
     resave: false,
     saveUninitialized: false,
@@ -36,7 +39,6 @@ app.use(session({
 }));
 
 // Make user and key settings available to all views
-const db = require('./config/database');
 app.use(async (req, res, next) => {
     res.locals.user = req.session.user || null;
     res.locals.baseUrl = process.env.BASE_URL || `http://localhost:${PORT}`;

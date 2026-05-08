@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">School Attendance Division</string>
+    <string name="base_url">https://web-production-5f74a.up.railway.app</string>
+</resources>

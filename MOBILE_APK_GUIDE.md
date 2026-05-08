@@ -1,40 +1,50 @@
-# QR Attendance Mobile App (APK) Guide
+# Native SDS / ASDS Android APK
 
-This project is now prepared as an installable mobile web app (PWA) with:
-- Realtime dashboard polling
-- Phone notifications for new 2-day absence flags
-- Mobile-first UI improvements
+This repository now includes a native Android project at:
 
-## 1) Run in production-style mode
+`mobile-sds-asds-android/`
 
-1. Host this app on HTTPS (required for full PWA + notifications on phones).
-2. Open it on Android Chrome.
-3. Login as `super_admin`, `superintendent`, or `asst_superintendent`.
+It is separate from the Railway web app. The APK signs in to the live server, shows only the SDS / ASDS division dashboard, and uses Android notifications for 2-day student absence alerts.
 
-## 2) Install on phone (PWA)
+## What the APK does
 
-1. In Chrome Android: open menu.
-2. Tap `Install app` / `Add to Home screen`.
-3. Open from app icon for full-screen app behavior.
+- Native Android login screen for SDS and ASDS accounts only.
+- Uses the existing Railway/MySQL system through:
+  - `POST /app-login`
+  - `GET /api/dashboard-data`
+  - `GET /api/absence-flags?days=2`
+- Stores the server session cookie on the phone.
+- Shows dashboard totals for schools, students, teachers, present, absent, and 2-day absentees.
+- Checks for 2-day absence flags in the background using Android WorkManager.
+- Sends a phone notification when 2-day absentees are found.
 
-## 3) Build Android APK (Trusted Web Activity)
+## Build the APK
 
-Use Bubblewrap (official TWA tooling):
+This machine needs Android Studio or a JDK + Android SDK to compile the APK.
 
-```bash
-npm i -g @bubblewrap/cli
-bubblewrap init --manifest https://YOUR_DOMAIN/manifest.webmanifest
-bubblewrap build
-```
+1. Install Android Studio.
+2. Open the folder `mobile-sds-asds-android`.
+3. Wait for Gradle sync to finish.
+4. Build APK:
+   - Android Studio: `Build > Build Bundle(s) / APK(s) > Build APK(s)`
+   - Terminal with Android tooling installed: `gradle assembleDebug`
 
-The generated Android project can then be opened in Android Studio and built as APK:
+The debug APK will be created under:
 
-1. Open generated project in Android Studio.
-2. Build > Build Bundle(s) / APK(s) > Build APK(s).
+`mobile-sds-asds-android/app/build/outputs/apk/debug/`
 
-## 4) Notes for alerts
+## Server URL
 
-- Alerts are triggered when app detects newly flagged 2-day absences.
-- User must allow notifications.
-- Best reliability requires HTTPS and opening app from installed icon.
+The APK currently points to the Railway URL:
 
+`https://web-production-5f74a.up.railway.app`
+
+To change it, edit:
+
+`mobile-sds-asds-android/app/src/main/res/values/strings.xml`
+
+## Notification Notes
+
+Android requires notification permission on newer phones. The app asks for it during login.
+
+Background checks run about every 15 minutes because Android controls background battery usage. Opening the app also refreshes the dashboard immediately.
