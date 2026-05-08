@@ -194,6 +194,12 @@
                '<div class="progress-bar-fill ' + color + '" style="width:' + Math.min(100, pct) + '%"></div></div>';
     }
 
+    function nonSchoolDayMessage(data) {
+        var type = data.non_school_day_type || 'Non-school Day';
+        var reason = data.non_school_day_reason;
+        return 'Today is a ' + type + (reason ? ' - ' + reason : '') + '.';
+    }
+
     async function load() {
         var date   = document.getElementById('dashDate').value;
         var school = document.getElementById('dashSchool') ? document.getElementById('dashSchool').value : '';
@@ -208,8 +214,7 @@
             // Non-school day banner
             var banner = document.getElementById('nonSchoolDayBanner');
             if (!data.is_school_day) {
-                document.getElementById('nonSchoolDayText').textContent =
-                    'Today is a non-school day' + (data.non_school_day_reason ? ' — ' + data.non_school_day_reason : '') + '.';
+                document.getElementById('nonSchoolDayText').textContent = nonSchoolDayMessage(data);
                 banner.style.display = 'flex';
             } else {
                 banner.style.display = 'none';

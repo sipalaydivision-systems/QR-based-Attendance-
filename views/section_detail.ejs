@@ -150,8 +150,10 @@ async function loadData() {
         // Show non-school-day banner
         var banner = document.getElementById('nonSchoolDayBanner');
         if (sdRes && !sdRes.isSchoolDay) {
+            var type = sdRes.type || 'Non-school Day';
+            var reason = sdRes.reason;
             banner.style.display = '';
-            document.getElementById('nonSchoolDayReason').textContent = (sdRes.reason || 'Non-school day') + ' \u2014 attendance data shown is for reference only.';
+            document.getElementById('nonSchoolDayReason').textContent = 'Today is a ' + type + (reason ? ' - ' + reason : '') + '. Attendance data shown is for reference only.';
         } else {
             banner.style.display = 'none';
         }

@@ -28,16 +28,27 @@ const logoUpload = multer({
 // =============================================
 // School-day helpers
 // =============================================
+function holidayTypeLabel(type) {
+    const value = Number(type);
+    if (value === 2) return 'Class Suspension';
+    if (value === 0) return 'Special Non-Working Day';
+    return 'Regular Holiday';
+}
+
 async function checkSchoolDay(dateStr, schoolId) {
     // 1. Manual override in school_days table (highest priority)
     const [sdRows] = await db.query('SELECT * FROM school_days WHERE date = ?', [dateStr]);
     if (sdRows.length > 0) {
-        return { isSchoolDay: !!sdRows[0].is_school_day, reason: sdRows[0].reason || (sdRows[0].is_school_day ? null : 'Non-school day') };
+        return {
+            isSchoolDay: !!sdRows[0].is_school_day,
+            reason: sdRows[0].reason || (sdRows[0].is_school_day ? null : 'Non-school day'),
+            type: sdRows[0].is_school_day ? null : 'Non-school Day'
+        };
     }
     // 2. Weekend check
     const dayOfWeek = new Date(dateStr + 'T00:00:00').getDay();
     if (dayOfWeek === 0 || dayOfWeek === 6) {
-        return { isSchoolDay: false, reason: dayOfWeek === 0 ? 'Sunday' : 'Saturday' };
+        return { isSchoolDay: false, reason: dayOfWeek === 0 ? 'Sunday' : 'Saturday', type: 'Weekend' };
     }
     // 3. Holidays table (national + school-specific)
     let hQuery = 'SELECT * FROM holidays WHERE holiday_date = ? AND (school_id IS NULL';
@@ -46,9 +57,13 @@ async function checkSchoolDay(dateStr, schoolId) {
     hQuery += ') LIMIT 1';
     const [holidays] = await db.query(hQuery, hParams);
     if (holidays.length > 0) {
-        return { isSchoolDay: false, reason: holidays[0].name || 'Holiday' };
+        return {
+            isSchoolDay: false,
+            reason: holidays[0].name || holidayTypeLabel(holidays[0].is_national),
+            type: holidayTypeLabel(holidays[0].is_national)
+        };
     }
-    return { isSchoolDay: true, reason: null };
+    return { isSchoolDay: true, reason: null, type: null };
 }
 
 async function getPreviousSchoolDay(dateStr, schoolId) {
@@ -342,6 +357,7 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
         const schoolDayResult = await checkSchoolDay(date, schoolId);
         const isSchoolDay = schoolDayResult.isSchoolDay;
         const nonSchoolDayReason = schoolDayResult.reason;
+        const nonSchoolDayType = schoolDayResult.type;
 
         const data = {
             date,
@@ -359,6 +375,7 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
             flagged_absent_2day: flaggedAbsent[0].count,
             is_school_day: isSchoolDay,
             non_school_day_reason: nonSchoolDayReason,
+            non_school_day_type: nonSchoolDayType,
             schools: breakdown
         };
 

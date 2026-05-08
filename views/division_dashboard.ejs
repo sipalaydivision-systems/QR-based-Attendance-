@@ -204,6 +204,11 @@
         el.classList.add('updating');
         setTimeout(function(){ el.classList.remove('updating'); }, 220);
     }
+    function nonSchoolDayMessage(data) {
+        var type = data.non_school_day_type || 'Non-school Day';
+        var reason = data.non_school_day_reason;
+        return 'Today is a ' + type + (reason ? ' - ' + reason : '') + '.';
+    }
 
     // ── Banner greeting ──────────────────────────────────────
     (function initBanner() {
@@ -230,8 +235,7 @@
             var banner = document.getElementById('nonSchoolDayBanner');
             if (!data.is_school_day) {
                 banner.style.display = 'flex';
-                document.getElementById('nonSchoolDayText').textContent =
-                    'Today is not a school day: ' + (data.non_school_day_reason || 'N/A');
+                document.getElementById('nonSchoolDayText').textContent = nonSchoolDayMessage(data);
             } else { banner.style.display = 'none'; }
         } catch(e) { console.error('Division dashboard error:', e); }
     }

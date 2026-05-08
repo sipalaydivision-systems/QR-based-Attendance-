@@ -40,6 +40,12 @@
         }, 220);
     }
 
+    function nonSchoolDayMessage(data) {
+        const type = data.non_school_day_type || 'Non-school Day';
+        const reason = data.non_school_day_reason;
+        return 'Today is a ' + type + (reason ? ' - ' + reason : '') + '.';
+    }
+
     function updateUI(data) {
         setText('statSchools', data.total_schools);
         setText('statStudents', data.active_students);
@@ -59,7 +65,7 @@
         if (banner && bannerText) {
             if (!data.is_school_day) {
                 banner.style.display = 'block';
-                bannerText.textContent = 'Today is not a school day: ' + (data.non_school_day_reason || 'N/A');
+                bannerText.textContent = nonSchoolDayMessage(data);
             } else {
                 banner.style.display = 'none';
             }

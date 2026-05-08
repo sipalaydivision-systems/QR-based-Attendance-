@@ -68,6 +68,27 @@
             background: transparent; padding: 0 48px 24px;
         }
         .scanner-container { display: flex; flex-direction: column; align-items: center; gap: 28px; width: 100%; max-width: 720px; }
+        .scanner-day-status {
+            width: min(100%, 960px);
+            margin: 0 auto -4px;
+            display: none;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 18px;
+            border-radius: 14px;
+            border: 1px solid #fde68a;
+            background: #fffbeb;
+            color: #92400e;
+            font-weight: 800;
+            box-shadow: 0 10px 28px rgba(217,119,6,0.08);
+        }
+        .scanner-day-status i { color: #d97706; flex-shrink: 0; }
+        .scanner-day-status.class-suspension {
+            border-color: #bfdbfe;
+            background: #eff6ff;
+            color: #1d4ed8;
+        }
+        .scanner-day-status.class-suspension i { color: #2563eb; }
 
         /* Camera */
         .camera-box {
@@ -246,6 +267,10 @@
         <!-- SCANNER -->
         <div class="main">
             <div class="scanner-container">
+                <div class="scanner-day-status" id="scannerDayStatus">
+                    <i class="fas fa-triangle-exclamation"></i>
+                    <span id="scannerDayStatusText"></span>
+                </div>
                 <div class="camera-box">
                     <div id="reader"></div>
                     <div class="scan-frame">
@@ -300,6 +325,38 @@
     }
     updateClock();
     setInterval(updateClock, 1000);
+
+    function scannerDayMessage(data) {
+        var type = data.type || data.non_school_day_type || 'Non-school Day';
+        var reason = data.reason || data.non_school_day_reason;
+        return 'Today is a ' + type + (reason ? ' - ' + reason : '') + '.';
+    }
+
+    async function loadScannerDayStatus() {
+        var box = document.getElementById('scannerDayStatus');
+        var text = document.getElementById('scannerDayStatusText');
+        if (!box || !text) return;
+
+        try {
+            var today = new Date().toISOString().slice(0, 10);
+            var res = await fetch('/api/is-school-day?date=' + today);
+            if (!res.ok) return;
+            var data = await res.json();
+            var isSchoolDay = data.isSchoolDay !== undefined ? data.isSchoolDay : data.is_school_day;
+
+            if (!isSchoolDay) {
+                text.textContent = scannerDayMessage(data);
+                box.classList.toggle('class-suspension', String(data.type).toLowerCase() === 'class suspension');
+                box.style.display = 'flex';
+            } else {
+                box.style.display = 'none';
+            }
+        } catch (e) {
+            console.error('School day status error:', e);
+        }
+    }
+    loadScannerDayStatus();
+    setInterval(loadScannerDayStatus, 60000);
 
     /* ── High-throughput Scanner ── */
     var cooldown = false;

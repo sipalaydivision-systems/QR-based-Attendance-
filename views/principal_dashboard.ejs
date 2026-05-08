@@ -283,6 +283,11 @@
         var d = new Date(str + 'T00:00:00');
         return d.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
     }
+    function nonSchoolDayMessage(data) {
+        var type = data.non_school_day_type || 'Non-school Day';
+        var reason = data.non_school_day_reason;
+        return 'Today is a ' + type + (reason ? ' - ' + reason : '') + '.';
+    }
 
     function rateColor(r) {
         return r >= 80 ? '#16a34a' : r >= 50 ? '#d97706' : '#dc2626';
@@ -315,8 +320,7 @@
             // Non-school banner
             var banner = document.getElementById('pdBannerWarn');
             if (!data.is_school_day) {
-                document.getElementById('pdBannerText').textContent =
-                    'Non-school day' + (data.non_school_day_reason ? ' — ' + data.non_school_day_reason : '') + '.';
+                document.getElementById('pdBannerText').textContent = nonSchoolDayMessage(data);
                 banner.style.display = 'flex';
             } else { banner.style.display = 'none'; }
 
