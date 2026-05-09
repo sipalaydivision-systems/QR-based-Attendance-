@@ -45,7 +45,7 @@ public class MainActivity extends Activity {
                 if (isFinishing()) return;
                 if (SessionStore.hasConfiguredBaseUrl(this)) {
                     openingDashboard = true;
-                    startActivity(new Intent(this, SessionStore.isLoggedIn(this) ? DashboardActivity.class : LoginActivity.class));
+                    startActivity(new Intent(this, WebAppActivity.class));
                     overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
                     finish();
                     return;

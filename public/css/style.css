@@ -900,6 +900,385 @@ a:hover { color: var(--primary-dark); }
     box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
 }
 
+/* ============================================================
+   EDUTRACK APK REDESIGN - FULL WEB FEATURE MOBILE SHELL
+   ============================================================ */
+body.edutrack-mobile-app {
+    --primary: #0aa670;
+    --primary-dark: #00885b;
+    --primary-bg: rgba(10,166,112,0.10);
+    --success: #0aa670;
+    --warning: #e88700;
+    --danger: #dc2626;
+    --bg-page: #f6f8f7;
+    background: #f6f8f7 !important;
+    padding-bottom: 72px;
+}
+
+body.edutrack-mobile-app .content {
+    margin-left: 0 !important;
+}
+
+body.edutrack-mobile-app .sidebar {
+    display: none !important;
+}
+
+body.edutrack-mobile-app .topbar {
+    display: none !important;
+}
+
+body.edutrack-mobile-app .page-content {
+    padding: 0 14px 86px !important;
+    max-width: none;
+}
+
+body.edutrack-mobile-app.mobile-dashboard-mode .page-content {
+    padding-top: 0 !important;
+}
+
+body.edutrack-mobile-app.mobile-dashboard-mode::before {
+    content: "";
+    display: block;
+    height: 116px;
+    background: linear-gradient(135deg, #0aa670, #00885b);
+    box-shadow: 0 8px 24px rgba(0, 136, 91, 0.22);
+}
+
+body.edutrack-mobile-app.mobile-dashboard-mode .welcome-banner,
+body.edutrack-mobile-app.mobile-dashboard-mode .dashboard-toolbar {
+    display: none !important;
+}
+
+.mobile-dashboard-shell {
+    margin-top: -104px;
+    color: #17201d;
+}
+
+.mobile-dash-profile {
+    display: grid;
+    grid-template-columns: 1fr 42px;
+    align-items: center;
+    gap: 10px;
+    min-height: 58px;
+    color: #fff;
+}
+
+.mobile-dash-profile span,
+.mobile-dash-profile small {
+    display: block;
+    font-size: 0.75rem;
+    opacity: 0.88;
+}
+
+.mobile-dash-profile strong {
+    display: block;
+    font-size: 1.15rem;
+    line-height: 1.1;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mobile-dash-profile button,
+.mobile-live-row button {
+    border: 0;
+    background: rgba(255,255,255,0.18);
+    color: #fff;
+    border-radius: 14px;
+    min-height: 40px;
+    font-weight: 800;
+}
+
+.mobile-live-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 8px;
+    align-items: center;
+    color: #fff;
+    margin: 4px 0 12px;
+}
+
+.mobile-live-row span,
+.mobile-live-row button {
+    height: 32px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.16);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 0.76rem;
+    font-weight: 800;
+}
+
+.mobile-attendance-card {
+    background: #fff;
+    border-radius: 14px;
+    padding: 18px 16px 16px;
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.10);
+    border-top: 4px solid #0aa670;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.mobile-ring {
+    --p: 0;
+    width: 142px;
+    height: 142px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    margin: 0 auto 10px;
+    background:
+        radial-gradient(circle closest-side, #fff 68%, transparent 70%),
+        conic-gradient(#e88700 calc(var(--p) * 1%), #c9f5e1 0);
+    transition: background 0.35s ease;
+}
+
+.mobile-ring strong {
+    display: block;
+    font-size: 2.05rem;
+    line-height: 1;
+    font-weight: 900;
+    color: #111827;
+}
+
+.mobile-ring span {
+    display: block;
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    font-weight: 900;
+    color: #4b5563;
+}
+
+#mobilePresentSummary {
+    font-weight: 800;
+    color: #3f4d49;
+    margin: 0;
+}
+
+body.edutrack-mobile-app.mobile-dashboard-mode .non-school-banner {
+    margin: 8px 0;
+    border-radius: 12px;
+    padding: 10px 12px;
+    font-size: 0.78rem;
+}
+
+body.edutrack-mobile-app.mobile-dashboard-mode .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px;
+    margin: 10px 0;
+}
+
+body.edutrack-mobile-app.mobile-dashboard-mode .stat-card {
+    min-height: 82px;
+    padding: 12px;
+    border-radius: 12px;
+    gap: 10px;
+    border-left: 0 !important;
+    box-shadow: 0 6px 16px rgba(15,23,42,0.08);
+}
+
+body.edutrack-mobile-app.mobile-dashboard-mode .stat-icon-wrap {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    font-size: 0.95rem;
+}
+
+body.edutrack-mobile-app.mobile-dashboard-mode .stat-number {
+    font-size: 1.38rem;
+}
+
+body.edutrack-mobile-app.mobile-dashboard-mode .stat-label {
+    font-size: 0.62rem;
+    line-height: 1.15;
+}
+
+body.edutrack-mobile-app.mobile-dashboard-mode .card {
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 10px;
+    box-shadow: 0 6px 16px rgba(15,23,42,0.08);
+}
+
+body.edutrack-mobile-app.mobile-dashboard-mode .card-header {
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+}
+
+body.edutrack-mobile-app.mobile-dashboard-mode .card h3 {
+    font-size: 0.95rem;
+}
+
+body.edutrack-mobile-app.mobile-dashboard-mode .table-responsive {
+    max-height: 260px;
+    overflow: auto;
+}
+
+body.edutrack-mobile-app.mobile-dashboard-mode .data-table th,
+body.edutrack-mobile-app.mobile-dashboard-mode .data-table td {
+    padding: 8px 7px;
+    font-size: 0.72rem;
+}
+
+.mobile-bottom-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 500;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0;
+    height: calc(64px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+    background: rgba(255,255,255,0.96);
+    border-top: 1px solid rgba(15,23,42,0.08);
+    box-shadow: 0 -8px 24px rgba(15,23,42,0.10);
+    backdrop-filter: blur(14px);
+}
+
+.mobile-bottom-nav a,
+.mobile-bottom-nav button {
+    border: 0;
+    background: transparent;
+    color: #52605d;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    font-size: 0.62rem;
+    font-weight: 800;
+}
+
+.mobile-bottom-nav i {
+    font-size: 1rem;
+}
+
+.mobile-bottom-nav .active {
+    color: #00885b;
+}
+
+.mobile-menu-panel {
+    position: fixed;
+    inset: 0;
+    z-index: 700;
+    background: #f6f8f7;
+    transform: translateY(100%);
+    transition: transform 0.22s ease;
+    padding: max(20px, env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+    overflow: auto;
+}
+
+.mobile-menu-panel.open {
+    transform: translateY(0);
+}
+
+.mobile-menu-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.mobile-menu-head strong {
+    font-size: 1.15rem;
+}
+
+.mobile-menu-head button {
+    width: 40px;
+    height: 40px;
+    border: 0;
+    border-radius: 12px;
+    background: #e7f7f0;
+    color: #00885b;
+}
+
+.mobile-menu-links {
+    display: grid;
+    gap: 8px;
+}
+
+.mobile-menu-links a {
+    min-height: 46px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px;
+    border-radius: 12px;
+    color: #17201d;
+    background: #fff;
+    box-shadow: 0 4px 12px rgba(15,23,42,0.06);
+    font-weight: 700;
+}
+
+body.android-app-webview.login-page,
+body.edutrack-mobile-app.login-page {
+    min-height: 100vh;
+    overflow-y: auto;
+    background: linear-gradient(180deg, #e9f1ee 0%, #fbfbfa 100%) !important;
+    padding: 0 18px 30px;
+}
+
+body.android-app-webview.login-page::before,
+body.edutrack-mobile-app.login-page::before {
+    content: "EduTrack";
+    display: grid;
+    place-items: end center;
+    height: 250px;
+    margin: 0 -18px -58px;
+    padding-bottom: 86px;
+    color: #fff;
+    font-size: 2.3rem;
+    font-weight: 900;
+    background: linear-gradient(135deg, #0aa670, #00885b);
+}
+
+body.android-app-webview .login-container,
+body.edutrack-mobile-app .login-container {
+    min-height: auto;
+    max-width: 430px;
+    margin: 0 auto;
+    padding: 0 0 22px;
+}
+
+body.android-app-webview .login-card,
+body.edutrack-mobile-app .login-card {
+    border-radius: 24px;
+    padding: 28px 24px 24px;
+    box-shadow: 0 18px 44px rgba(15,23,42,0.16);
+}
+
+body.android-app-webview .login-logo,
+body.edutrack-mobile-app .login-logo {
+    width: 72px;
+    height: 72px;
+}
+
+body.android-app-webview .login-header h1,
+body.edutrack-mobile-app .login-header h1 {
+    font-size: 1.55rem;
+}
+
+body.android-app-webview .login-form input,
+body.edutrack-mobile-app .login-form input {
+    min-height: 52px;
+    border-radius: 14px;
+    background: #f7f8f7;
+}
+
+body.android-app-webview .login-form .btn,
+body.edutrack-mobile-app .login-form .btn {
+    min-height: 54px;
+    border-radius: 16px;
+    background: #00885b;
+    box-shadow: 0 12px 24px rgba(0,136,91,0.25);
+}
+
 /* Mobile web app login shell (Railway URL in mobile browser) */
 body.login-page.mobile-web-app {
     background:
@@ -1765,4 +2144,44 @@ body.android-app-webview select {
         padding-top: 10px;
         margin-top: 10px;
     }
+}
+
+/* Final APK mobile overrides: keep after legacy Android shell styles. */
+body.edutrack-mobile-app.mobile-dashboard-mode::before {
+    background: linear-gradient(135deg, #0aa670, #00885b) !important;
+}
+body.edutrack-mobile-app.mobile-dashboard-mode .welcome-banner,
+body.edutrack-mobile-app.mobile-dashboard-mode .dashboard-toolbar,
+body.edutrack-mobile-app .topbar,
+body.edutrack-mobile-app .sidebar {
+    display: none !important;
+}
+body.edutrack-mobile-app .page-content {
+    padding: 0 14px 86px !important;
+}
+body.edutrack-mobile-app.mobile-dashboard-mode .stats-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+}
+body.edutrack-mobile-app.mobile-dashboard-mode .stat-card {
+    min-height: 82px !important;
+    padding: 12px !important;
+    border-radius: 12px !important;
+    border-left: 0 !important;
+    box-shadow: 0 6px 16px rgba(15,23,42,0.08) !important;
+}
+body.edutrack-mobile-app.mobile-dashboard-mode .stat-number {
+    font-size: 1.38rem !important;
+}
+body.edutrack-mobile-app.mobile-dashboard-mode .stat-icon-wrap {
+    width: 36px !important;
+    height: 36px !important;
+}
+body.edutrack-mobile-app.login-page::before {
+    background: linear-gradient(135deg, #0aa670, #00885b) !important;
+}
+body.edutrack-mobile-app .login-form .btn {
+    background: #00885b !important;
+    border-color: #00885b !important;
 }

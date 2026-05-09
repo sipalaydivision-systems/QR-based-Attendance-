@@ -2,10 +2,19 @@ package ph.gov.sipalay.attendance;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.Manifest;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.webkit.JavascriptInterface;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -20,15 +29,25 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.core.app.NotificationCompat;
+
 public class WebAppActivity extends Activity {
+    private static final String CHANNEL_ID = "edutrack_mobile_alerts";
     private WebView webView;
     private ProgressBar progress;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        requestNotificationPermission();
         buildWebShell();
         loadApp();
+    }
+
+    private void requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 21);
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -52,6 +71,7 @@ public class WebAppActivity extends Activity {
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
         settings.setUserAgentString(settings.getUserAgentString() + " SchoolAttendanceAndroidWebView");
+        webView.addJavascriptInterface(new NativeBridge(), "EduTrackNative");
 
         CookieManager.getInstance().setAcceptCookie(true);
         if (android.os.Build.VERSION.SDK_INT >= 21) {
@@ -153,10 +173,45 @@ public class WebAppActivity extends Activity {
         String script = "(function(){"
                 + "document.documentElement.classList.add('android-app-webview');"
                 + "document.body.classList.add('android-app-webview');"
+                + "document.body.classList.add('edutrack-mobile-app');"
                 + "var m=document.querySelector('meta[name=viewport]');"
                 + "if(m){m.setAttribute('content','width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover');}"
+                + "window.dispatchEvent(new Event('edutrack-mobile-ready'));"
                 + "})();";
         webView.evaluateJavascript(script, null);
+    }
+
+    private void sendNativeNotification(String title, String body) {
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager == null) return;
+        if (Build.VERSION.SDK_INT >= 26) {
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "EduTrack Mobile Alerts", NotificationManager.IMPORTANCE_HIGH);
+            channel.setDescription("Mobile attendance alerts and notification tests.");
+            manager.createNotificationChannel(channel);
+        }
+        Intent intent = new Intent(this, WebAppActivity.class);
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, 4100, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle(title == null || title.trim().isEmpty() ? "EduTrack Alert" : title)
+                .setContentText(body == null || body.trim().isEmpty() ? "Attendance mobile notification." : body)
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(body == null ? "" : body))
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_HIGH);
+        manager.notify((int) (System.currentTimeMillis() % Integer.MAX_VALUE), builder.build());
+    }
+
+    private final class NativeBridge {
+        @JavascriptInterface
+        public void notify(String title, String body) {
+            runOnUiThread(() -> sendNativeNotification(title, body));
+        }
+
+        @JavascriptInterface
+        public void toast(String message) {
+            runOnUiThread(() -> Toast.makeText(WebAppActivity.this, message, Toast.LENGTH_SHORT).show());
+        }
     }
 
     private void syncCookies(String url) {
