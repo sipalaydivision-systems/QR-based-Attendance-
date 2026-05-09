@@ -119,6 +119,14 @@ app.get('/api/app-info', (req, res) => {
     });
 });
 
+app.get('/api/mobile-health', (req, res) => {
+    return res.json({
+        ok: true,
+        authenticated: !!(req.session && req.session.user),
+        serverTime: new Date().toISOString()
+    });
+});
+
 app.get('/mobile-app', (req, res) => {
     const apkPath = path.join(__dirname, 'public', 'downloads', 'school-attendance-division.apk');
     const appBaseUrl = getPublicAppBaseUrl(req);

@@ -83,6 +83,24 @@ DB_PASS=${{MySQL.MYSQLPASSWORD}}
 DB_PORT=${{MySQL.MYSQLPORT}}
 ```
 
+## React Native Mobile App
+
+A new React Native mobile app (Expo-based) is included at:
+
+`mobile-react-native/`
+
+It connects directly to the same Railway backend APIs and supports:
+- session login/logout
+- dashboard data
+- QR scan attendance
+- 2-day absence alert polling notifications
+- Android APK build via EAS
+- web publishing via Expo web export
+
+See:
+
+`mobile-react-native/README.md`
+
 ## Project Structure
 
 ```

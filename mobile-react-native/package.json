@@ -1,0 +1,25 @@
+{
+  "name": "qr-attendance-mobile-react-native",
+  "version": "1.0.0",
+  "private": true,
+  "main": "node_modules/expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "web": "expo start --web",
+    "web:build": "expo export --platform web",
+    "apk:build": "eas build -p android --profile preview"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "1.23.1",
+    "expo": "~53.0.11",
+    "expo-barcode-scanner": "~13.0.1",
+    "expo-notifications": "~0.31.4",
+    "expo-status-bar": "~2.2.3",
+    "react": "19.0.0",
+    "react-native": "0.79.4"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.24.0"
+  }
+}

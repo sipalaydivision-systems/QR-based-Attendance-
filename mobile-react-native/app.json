@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "School Attendance QR",
+    "slug": "school-attendance-qr",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#f4f8ff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "ph.gov.sipalay.attendance.reactnative",
+      "adaptiveIcon": {
+        "backgroundColor": "#f4f8ff"
+      },
+      "permissions": [
+        "CAMERA",
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "extra": {
+      "apiBaseUrl": "https://sdo-sipalay-website-production.up.railway.app"
+    }
+  }
+}

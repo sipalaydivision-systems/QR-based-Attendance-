@@ -151,4 +151,11 @@ router.post('/app-login', async (req, res) => {
     }
 });
 
+// Mobile app logout (JSON)
+router.post('/app-logout', (req, res) => {
+    req.session.destroy(() => {
+        res.json({ success: true });
+    });
+});
+
 module.exports = router;
