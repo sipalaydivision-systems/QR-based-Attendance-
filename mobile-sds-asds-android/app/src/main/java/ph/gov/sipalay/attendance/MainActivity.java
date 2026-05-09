@@ -45,7 +45,8 @@ public class MainActivity extends Activity {
                 if (isFinishing()) return;
                 if (SessionStore.hasConfiguredBaseUrl(this)) {
                     openingDashboard = true;
-                    startActivity(new Intent(this, WebAppActivity.class));
+                    startActivity(new Intent(this, SessionStore.isLoggedIn(this) ? DashboardActivity.class : LoginActivity.class));
+                    overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
                     finish();
                     return;
                 }
@@ -60,25 +61,34 @@ public class MainActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER);
         root.setPadding(48, 48, 48, 48);
-        root.setBackground(Ui.gradient(android.graphics.Color.rgb(239, 246, 255), android.graphics.Color.rgb(248, 250, 252), 0));
+        root.setBackground(Ui.verticalGradient(android.graphics.Color.rgb(214, 219, 238), android.graphics.Color.rgb(246, 247, 252), 0));
+
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setGravity(Gravity.CENTER);
+        card.setPadding(34, 40, 34, 40);
+        card.setBackground(Ui.verticalGradient(Ui.PRIMARY, android.graphics.Color.rgb(255, 132, 36), 36));
+        Ui.elevate(card, 14);
+        root.addView(card, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
         ImageView logo = new ImageView(this);
         logo.setImageResource(getResources().getIdentifier("system_logo", "drawable", getPackageName()));
         logo.setAdjustViewBounds(true);
-        root.addView(logo, new LinearLayout.LayoutParams(132, 132));
+        card.addView(logo, new LinearLayout.LayoutParams(132, 132));
 
-        TextView title = Ui.text(this, "School Attendance QR based Systems", 22, Ui.INK, Typeface.BOLD);
+        TextView title = Ui.text(this, "School Attendance", 24, android.graphics.Color.WHITE, Typeface.BOLD);
         title.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams titleLp = Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 18, 0, 8);
-        root.addView(title, titleLp);
+        card.addView(title, titleLp);
 
-        TextView subtitle = Ui.text(this, "Loading division dashboard", 14, Ui.MUTED, Typeface.NORMAL);
+        TextView subtitle = Ui.text(this, "Loading mobile dashboard", 14, android.graphics.Color.rgb(255, 237, 222), Typeface.NORMAL);
         subtitle.setGravity(Gravity.CENTER);
-        root.addView(subtitle, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        card.addView(subtitle, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
         ProgressBar bar = new ProgressBar(this);
-        root.addView(bar, Ui.marginLp(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 26, 0, 0));
+        card.addView(bar, Ui.marginLp(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 26, 0, 0));
         setContentView(root);
+        Ui.reveal(card, 50);
     }
 
     private boolean applyConfigurationIntent(Intent intent) {
