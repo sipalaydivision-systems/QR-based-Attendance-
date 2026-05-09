@@ -30,7 +30,7 @@
       "output": "static"
     },
     "extra": {
-      "apiBaseUrl": "https://sdo-sipalay-website-production.up.railway.app"
+      "apiBaseUrl": "https://school-attendance-qrbased.up.railway.app"
     }
   }
 }

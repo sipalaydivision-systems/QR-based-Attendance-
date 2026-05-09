@@ -83,7 +83,10 @@ function getDashboardUrl(role) {
 
 function getPublicAppBaseUrl(req) {
     const configured = process.env.BASE_URL || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : '');
-    if (configured) return configured.replace(/\/+$/, '');
+    const normalizedConfigured = configured.replace(/\/+$/, '');
+    if (normalizedConfigured && !/localhost|127\.0\.0\.1/i.test(normalizedConfigured)) {
+        return normalizedConfigured;
+    }
     const host = req.get('host') || '';
     if (host.includes('localhost') || host.startsWith('127.0.0.1')) {
         return '';
