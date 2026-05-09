@@ -1,5 +1,8 @@
 node_modules/
 .env
+.gradle/
+mobile-sds-asds-android/.gradle/
+mobile-sds-asds-android/app/build/
 *.log
 logs/
 backups/

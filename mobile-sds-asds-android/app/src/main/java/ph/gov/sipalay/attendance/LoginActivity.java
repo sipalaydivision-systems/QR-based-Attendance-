@@ -10,6 +10,7 @@ import android.os.Bundle;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -31,53 +32,57 @@ public class LoginActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         requestNotificationPermission();
         buildUi();
     }
 
     private void buildUi() {
-        Ui.setBars(getWindow(), android.graphics.Color.WHITE, true, android.graphics.Color.WHITE);
+        Ui.setBars(getWindow(), Ui.GREEN_DARK, false, android.graphics.Color.WHITE);
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
+        scroll.setClipToPadding(false);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER_HORIZONTAL);
-        root.setBackgroundColor(android.graphics.Color.rgb(250, 250, 248));
+        root.setBackgroundColor(android.graphics.Color.rgb(245, 248, 246));
         scroll.addView(root, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT));
 
         LinearLayout hero = new LinearLayout(this);
         hero.setOrientation(LinearLayout.VERTICAL);
         hero.setGravity(Gravity.CENTER);
-        hero.setPadding(Ui.dp(this, 24), Ui.dp(this, 36), Ui.dp(this, 24), Ui.dp(this, 72));
-        hero.setBackground(Ui.verticalGradient(Ui.PRIMARY, Ui.PRIMARY_DARK, 0));
-        root.addView(hero, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 340)));
+        hero.setPadding(Ui.dp(this, 24), Ui.dp(this, 28), Ui.dp(this, 24), Ui.dp(this, 62));
+        hero.setBackground(Ui.verticalGradient(Ui.GREEN, Ui.GREEN_DARK, 0));
+        root.addView(hero, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 292)));
 
         ImageView logo = new ImageView(this);
         logo.setImageResource(getResources().getIdentifier("system_logo", "drawable", getPackageName()));
         logo.setAdjustViewBounds(true);
-        hero.addView(logo, Ui.lp(Ui.dp(this, 88), Ui.dp(this, 88)));
+        logo.setBackground(Ui.strokeBg(android.graphics.Color.argb(40, 255, 255, 255), android.graphics.Color.argb(70, 255, 255, 255), Ui.dp(this, 22)));
+        logo.setPadding(Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10));
+        hero.addView(logo, Ui.lp(Ui.dp(this, 84), Ui.dp(this, 84)));
 
-        TextView title = Ui.text(this, "EduTrack", 37, android.graphics.Color.WHITE, Typeface.BOLD);
+        TextView title = Ui.text(this, "EduTrack", 34, android.graphics.Color.WHITE, Typeface.BOLD);
         title.setGravity(Gravity.CENTER);
-        hero.addView(title, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 24), 0, 0));
+        hero.addView(title, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 20), 0, 0));
 
-        TextView subtitle = Ui.text(this, "Attendance Monitoring System", 17, android.graphics.Color.rgb(255, 239, 227), Typeface.NORMAL);
+        TextView subtitle = Ui.text(this, "Attendance Monitoring System", 16, android.graphics.Color.rgb(221, 255, 242), Typeface.NORMAL);
         subtitle.setGravity(Gravity.CENTER);
         hero.addView(subtitle, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 8), 0, 0));
 
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(Ui.dp(this, 34), Ui.dp(this, 34), Ui.dp(this, 34), Ui.dp(this, 34));
-        card.setBackground(Ui.bg(android.graphics.Color.WHITE, Ui.dp(this, 30)));
+        card.setPadding(Ui.dp(this, 26), Ui.dp(this, 28), Ui.dp(this, 26), Ui.dp(this, 26));
+        card.setBackground(Ui.bg(android.graphics.Color.WHITE, Ui.dp(this, 28)));
         Ui.elevate(card, 16);
-        LinearLayout.LayoutParams cardLp = Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, Ui.dp(this, 24), -Ui.dp(this, 70), Ui.dp(this, 24), 0);
+        LinearLayout.LayoutParams cardLp = Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, Ui.dp(this, 20), -Ui.dp(this, 54), Ui.dp(this, 20), 0);
         root.addView(card, cardLp);
 
-        TextView welcome = Ui.text(this, "Welcome Back", 29, android.graphics.Color.rgb(24, 24, 24), Typeface.BOLD);
+        TextView welcome = Ui.text(this, "Welcome Back", 28, Ui.INK, Typeface.BOLD);
         card.addView(welcome);
 
-        TextView continueText = Ui.text(this, "Sign in to continue", 18, android.graphics.Color.rgb(125, 125, 125), Typeface.NORMAL);
+        TextView continueText = Ui.text(this, "Sign in to your attendance dashboard", 15, android.graphics.Color.rgb(102, 116, 112), Typeface.NORMAL);
         card.addView(continueText, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 4), 0, Ui.dp(this, 26)));
 
         errorBox = Ui.text(this, "", 14, Ui.RED, Typeface.BOLD);
@@ -99,7 +104,7 @@ public class LoginActivity extends Activity {
         signIn.setTextSize(18);
         signIn.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         signIn.setAllCaps(false);
-        signIn.setBackground(Ui.gradient(Ui.PRIMARY, Ui.PRIMARY_DARK, Ui.dp(this, 18)));
+        signIn.setBackground(Ui.gradient(Ui.GREEN, Ui.GREEN_DARK, Ui.dp(this, 18)));
         card.addView(signIn, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 58), 0, Ui.dp(this, 14), 0, 0));
 
         progress = new ProgressBar(this);
@@ -109,9 +114,9 @@ public class LoginActivity extends Activity {
         progressWrap.addView(progress, Ui.lp(Ui.dp(this, 38), Ui.dp(this, 38)));
         card.addView(progressWrap, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 8), 0, 0));
 
-        TextView footer = Ui.text(this, "Schools Division Office - Sipalay City\nv1.0.3", 14, android.graphics.Color.rgb(178, 178, 178), Typeface.NORMAL);
+        TextView footer = Ui.text(this, "Schools Division Office - Sipalay City\nv1.0.5", 13, android.graphics.Color.rgb(148, 163, 158), Typeface.NORMAL);
         footer.setGravity(Gravity.CENTER);
-        root.addView(footer, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 54), 0, Ui.dp(this, 28)));
+        root.addView(footer, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 34), 0, Ui.dp(this, 96)));
 
         signIn.setOnClickListener(v -> login());
         setContentView(scroll);
@@ -150,9 +155,6 @@ public class LoginActivity extends Activity {
                 JSONObject result = ApiClient.login(this, u, p);
                 JSONObject user = result.getJSONObject("user");
                 String role = user.optString("role");
-                if (!"super_admin".equals(role) && !"superintendent".equals(role) && !"asst_superintendent".equals(role)) {
-                    throw new IllegalArgumentException("This app is only for SDS and ASDS dashboard accounts.");
-                }
                 SessionStore.saveLogin(this, result.getString("_cookie"), user.optString("fullname", u), role);
                 AbsenceWorker.schedule(this);
                 runOnUiThread(() -> {

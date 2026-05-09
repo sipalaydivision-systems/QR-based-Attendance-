@@ -45,7 +45,8 @@ public class MainActivity extends Activity {
                 if (isFinishing()) return;
                 if (SessionStore.hasConfiguredBaseUrl(this)) {
                     openingDashboard = true;
-                    startActivity(new Intent(this, WebAppActivity.class));
+                    Class<?> next = SessionStore.isLoggedIn(this) ? DashboardActivity.class : LoginActivity.class;
+                    startActivity(new Intent(this, next));
                     overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
                     finish();
                     return;
@@ -57,12 +58,12 @@ public class MainActivity extends Activity {
     }
 
     private void showSplash() {
-        Ui.setBars(getWindow(), Ui.PRIMARY_DARK, false, Ui.PRIMARY_DARK);
+        Ui.setBars(getWindow(), Ui.GREEN_DARK, false, Ui.GREEN_DARK);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER);
         root.setPadding(Ui.dp(this, 34), Ui.dp(this, 42), Ui.dp(this, 34), Ui.dp(this, 42));
-        root.setBackground(Ui.verticalGradient(Ui.PRIMARY, Ui.PRIMARY_DARK, 0));
+        root.setBackground(Ui.verticalGradient(Ui.GREEN, Ui.GREEN_DARK, 0));
 
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
@@ -82,11 +83,11 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams titleLp = Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 34), 0, Ui.dp(this, 8));
         card.addView(title, titleLp);
 
-        TextView subtitle = Ui.text(this, "Attendance Monitoring System", 18, android.graphics.Color.rgb(255, 238, 226), Typeface.NORMAL);
+        TextView subtitle = Ui.text(this, "Attendance Monitoring System", 18, android.graphics.Color.rgb(222, 255, 242), Typeface.NORMAL);
         subtitle.setGravity(Gravity.CENTER);
         card.addView(subtitle, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
-        TextView division = Ui.text(this, "SDO - Sipalay City", 14, android.graphics.Color.argb(190, 255, 255, 255), Typeface.NORMAL);
+        TextView division = Ui.text(this, "Schools Division Office - Sipalay City", 14, android.graphics.Color.argb(190, 255, 255, 255), Typeface.NORMAL);
         division.setGravity(Gravity.CENTER);
         card.addView(division, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 50), 0, 0));
 
