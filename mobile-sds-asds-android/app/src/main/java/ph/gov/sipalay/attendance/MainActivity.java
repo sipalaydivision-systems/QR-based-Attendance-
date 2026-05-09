@@ -28,7 +28,7 @@ public class MainActivity extends Activity {
                 showServerUnavailable();
             }
         }, 1200);
-        handler.postDelayed(this::checkServerAndOpen, 250);
+        handler.postDelayed(this::checkServerAndOpen, 80);
     }
 
     @Override
@@ -75,19 +75,19 @@ public class MainActivity extends Activity {
         logo.setImageResource(getResources().getIdentifier("system_logo", "drawable", getPackageName()));
         logo.setAdjustViewBounds(true);
         logo.setBackground(Ui.strokeBg(android.graphics.Color.argb(42, 255, 255, 255), android.graphics.Color.argb(60, 255, 255, 255), Ui.dp(this, 26)));
-        logo.setPadding(Ui.dp(this, 12), Ui.dp(this, 12), Ui.dp(this, 12), Ui.dp(this, 12));
-        card.addView(logo, new LinearLayout.LayoutParams(Ui.dp(this, 106), Ui.dp(this, 106)));
+        logo.setPadding(Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10));
+        card.addView(logo, new LinearLayout.LayoutParams(Ui.dp(this, 92), Ui.dp(this, 92)));
 
-        TextView title = Ui.text(this, "EduTrack", 38, android.graphics.Color.WHITE, Typeface.BOLD);
+        TextView title = Ui.text(this, "Edutrack", 36, android.graphics.Color.WHITE, Typeface.BOLD);
         title.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams titleLp = Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 34), 0, Ui.dp(this, 8));
         card.addView(title, titleLp);
 
-        TextView subtitle = Ui.text(this, "Attendance Monitoring System", 18, android.graphics.Color.rgb(222, 255, 242), Typeface.NORMAL);
+        TextView subtitle = Ui.text(this, "Schools Division of Sipalay City", 17, android.graphics.Color.rgb(222, 255, 242), Typeface.NORMAL);
         subtitle.setGravity(Gravity.CENTER);
         card.addView(subtitle, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
-        TextView division = Ui.text(this, "Schools Division Office - Sipalay City", 14, android.graphics.Color.argb(190, 255, 255, 255), Typeface.NORMAL);
+        TextView division = Ui.text(this, "Attendance Monitoring System", 13, android.graphics.Color.argb(190, 255, 255, 255), Typeface.NORMAL);
         division.setGravity(Gravity.CENTER);
         card.addView(division, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 50), 0, 0));
 
@@ -96,13 +96,12 @@ public class MainActivity extends Activity {
         loadingRow.setOrientation(LinearLayout.HORIZONTAL);
 
         ProgressBar bar = new ProgressBar(this);
-        loadingRow.addView(bar, new LinearLayout.LayoutParams(Ui.dp(this, 34), Ui.dp(this, 34)));
-        TextView loading = Ui.text(this, "Loading", 16, android.graphics.Color.argb(210, 255, 255, 255), Typeface.NORMAL);
+        loadingRow.addView(bar, new LinearLayout.LayoutParams(Ui.dp(this, 26), Ui.dp(this, 26)));
+        TextView loading = Ui.text(this, "Opening", 14, android.graphics.Color.argb(210, 255, 255, 255), Typeface.NORMAL);
         loadingRow.addView(loading, Ui.marginLp(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, Ui.dp(this, 12), 0, 0, 0));
         root.addView(loadingRow, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 70)));
         setContentView(root);
-        Ui.reveal(card, 50);
-        Ui.pulse(logo);
+        Ui.reveal(card, 10);
     }
 
     private boolean applyConfigurationIntent(Intent intent) {

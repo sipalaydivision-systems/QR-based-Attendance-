@@ -64,11 +64,11 @@ public class LoginActivity extends Activity {
         logo.setPadding(Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10));
         hero.addView(logo, Ui.lp(Ui.dp(this, 72), Ui.dp(this, 72)));
 
-        TextView title = Ui.text(this, "EduTrack", 30, android.graphics.Color.WHITE, Typeface.BOLD);
+        TextView title = Ui.text(this, "Edutrack", 30, android.graphics.Color.WHITE, Typeface.BOLD);
         title.setGravity(Gravity.CENTER);
         hero.addView(title, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 14), 0, 0));
 
-        TextView subtitle = Ui.text(this, "Attendance Monitoring System", 14, android.graphics.Color.rgb(221, 255, 242), Typeface.NORMAL);
+        TextView subtitle = Ui.text(this, "Schools Division of Sipalay City", 14, android.graphics.Color.rgb(221, 255, 242), Typeface.NORMAL);
         subtitle.setGravity(Gravity.CENTER);
         hero.addView(subtitle, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 8), 0, 0));
 
@@ -115,7 +115,7 @@ public class LoginActivity extends Activity {
         progressWrap.addView(progress, Ui.lp(Ui.dp(this, 38), Ui.dp(this, 38)));
         card.addView(progressWrap, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 8), 0, 0));
 
-        TextView footer = Ui.text(this, "Schools Division Office - Sipalay City\nv1.0.6", 13, android.graphics.Color.rgb(148, 163, 158), Typeface.NORMAL);
+        TextView footer = Ui.text(this, "Attendance Monitoring System\nv1.0.7", 13, android.graphics.Color.rgb(148, 163, 158), Typeface.NORMAL);
         footer.setGravity(Gravity.CENTER);
         root.addView(footer, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 24), 0, Ui.dp(this, 110)));
 

@@ -185,7 +185,7 @@ public class WebAppActivity extends Activity {
         NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager == null) return;
         if (Build.VERSION.SDK_INT >= 26) {
-            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "EduTrack Mobile Alerts", NotificationManager.IMPORTANCE_HIGH);
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Edutrack Mobile Alerts", NotificationManager.IMPORTANCE_HIGH);
             channel.setDescription("Mobile attendance alerts and notification tests.");
             manager.createNotificationChannel(channel);
         }
@@ -193,7 +193,7 @@ public class WebAppActivity extends Activity {
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 4100, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle(title == null || title.trim().isEmpty() ? "EduTrack Alert" : title)
+                .setContentTitle(title == null || title.trim().isEmpty() ? "Edutrack Alert" : title)
                 .setContentText(body == null || body.trim().isEmpty() ? "Attendance mobile notification." : body)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(body == null ? "" : body))
                 .setContentIntent(pendingIntent)

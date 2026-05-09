@@ -485,11 +485,15 @@ router.get('/realtime-poll', requireAuth, async (req, res) => {
         );
         // Track ALL non-deleted students (not just active) so imports trigger refresh
         const [studentRows] = await db.query(
-            `SELECT COUNT(*) as cnt, SUM(status='active') as active, SUM(status='inactive') as inactive FROM students WHERE status != 'deleted'` + schoolWhere,
+            `SELECT COUNT(*) as cnt, SUM(status='active') as active, SUM(status='inactive') as inactive,
+                    COALESCE(SUM(CRC32(CONCAT_WS('|', id, firstname, lastname, COALESCE(lrn, ''), COALESCE(status, ''), COALESCE(grade_level_id, ''), COALESCE(section_id, ''), COALESCE(school_id, '')))), 0) as checksum
+             FROM students WHERE status != 'deleted'` + schoolWhere,
             schoolParams
         );
         const [teacherRows] = await db.query(
-            `SELECT COUNT(*) as cnt FROM teachers WHERE status != 'deleted'` + schoolWhere,
+            `SELECT COUNT(*) as cnt,
+                    COALESCE(SUM(CRC32(CONCAT_WS('|', id, firstname, lastname, COALESCE(employee_id, ''), COALESCE(status, ''), COALESCE(school_id, '')))), 0) as checksum
+             FROM teachers WHERE status != 'deleted'` + schoolWhere,
             schoolParams
         );
         const [schoolRows] = await db.query(
@@ -509,7 +513,7 @@ router.get('/realtime-poll', requireAuth, async (req, res) => {
             schoolParams
         );
 
-        const raw = `${countRows[0].cnt}-${latestRows[0].latest || ''}-${studentRows[0].cnt}-${studentRows[0].active}-${studentRows[0].inactive}-${teacherRows[0].cnt}-${schoolRows[0].cnt}-${schoolRows[0].checksum}-${gradeRows[0].cnt}-${gradeRows[0].checksum}-${sectionRows[0].cnt}-${sectionRows[0].checksum}-${notificationRows[0].cnt}-${notificationRows[0].latest || ''}`;
+        const raw = `${countRows[0].cnt}-${latestRows[0].latest || ''}-${studentRows[0].cnt}-${studentRows[0].active}-${studentRows[0].inactive}-${studentRows[0].checksum}-${teacherRows[0].cnt}-${teacherRows[0].checksum}-${schoolRows[0].cnt}-${schoolRows[0].checksum}-${gradeRows[0].cnt}-${gradeRows[0].checksum}-${sectionRows[0].cnt}-${sectionRows[0].checksum}-${notificationRows[0].cnt}-${notificationRows[0].latest || ''}`;
         const hash = crypto.createHash('md5').update(raw).digest('hex').substring(0, 12);
         const changed = hash !== clientHash;
 
