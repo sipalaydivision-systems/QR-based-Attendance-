@@ -143,7 +143,10 @@ public class WebAppActivity extends Activity {
             finish();
             return;
         }
-        webView.loadUrl(SessionStore.getBaseUrl(this) + "/app?app=1");
+        String path = getIntent().getStringExtra("path");
+        if (path == null || path.trim().isEmpty()) path = "/app?app=1";
+        if (!path.startsWith("/")) path = "/" + path;
+        webView.loadUrl(SessionStore.getBaseUrl(this) + path);
     }
 
     private void injectAppMode() {

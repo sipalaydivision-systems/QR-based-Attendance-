@@ -16,11 +16,13 @@ final class Ui {
     static final int MUTED = Color.rgb(133, 111, 137);
     static final int PRIMARY = Color.rgb(255, 116, 24);
     static final int PRIMARY_DARK = Color.rgb(231, 87, 12);
+    static final int GREEN_DARK = Color.rgb(0, 136, 91);
+    static final int GREEN = Color.rgb(10, 166, 112);
+    static final int GREEN_SOFT = Color.rgb(232, 250, 243);
     static final int PLUM = Color.rgb(91, 42, 91);
     static final int PLUM_SOFT = Color.rgb(246, 238, 248);
     static final int BG = Color.rgb(237, 240, 250);
     static final int CARD = Color.WHITE;
-    static final int GREEN = Color.rgb(22, 163, 74);
     static final int RED = Color.rgb(220, 38, 38);
     static final int AMBER = Color.rgb(255, 116, 24);
     static final int LINE = Color.rgb(230, 220, 232);
