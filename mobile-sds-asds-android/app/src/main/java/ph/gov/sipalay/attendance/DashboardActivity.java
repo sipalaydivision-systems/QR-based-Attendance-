@@ -2,6 +2,7 @@ package ph.gov.sipalay.attendance;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -10,6 +11,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -38,7 +40,7 @@ import java.util.Map;
 
 public class DashboardActivity extends Activity {
     private static final String CHANNEL_ID = "mobile_app_alerts";
-    private static final long POLL_MS = 3000L;
+    private static final long POLL_MS = 5000L;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Map<String, TextView> navItems = new LinkedHashMap<>();
@@ -90,7 +92,7 @@ public class DashboardActivity extends Activity {
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
-        header.setPadding(Ui.dp(this, 16), Ui.dp(this, 12), Ui.dp(this, 16), Ui.dp(this, 12));
+        header.setPadding(Ui.dp(this, 16), Ui.statusBarHeight(this) + Ui.dp(this, 8), Ui.dp(this, 16), Ui.dp(this, 10));
         header.setBackground(Ui.verticalGradient(Ui.GREEN, Ui.GREEN_DARK, 0));
         Ui.elevate(header, 8);
 
@@ -100,12 +102,12 @@ public class DashboardActivity extends Activity {
         logo.setImageResource(getResources().getIdentifier("system_logo", "drawable", getPackageName()));
         logo.setBackground(Ui.strokeBg(Color.argb(38, 255, 255, 255), Color.argb(72, 255, 255, 255), Ui.dp(this, 16)));
         logo.setPadding(Ui.dp(this, 5), Ui.dp(this, 5), Ui.dp(this, 5), Ui.dp(this, 5));
-        top.addView(logo, Ui.lp(Ui.dp(this, 44), Ui.dp(this, 44)));
+        top.addView(logo, Ui.lp(Ui.dp(this, 38), Ui.dp(this, 38)));
 
         LinearLayout titleBox = new LinearLayout(this);
         titleBox.setOrientation(LinearLayout.VERTICAL);
-        TextView app = Ui.text(this, "EduTrack", 18, Color.WHITE, Typeface.BOLD);
-        TextView user = Ui.text(this, compactName(SessionStore.getFullname(this)), 12, Color.rgb(222, 255, 242), Typeface.NORMAL);
+        TextView app = Ui.text(this, "EduTrack", 17, Color.WHITE, Typeface.BOLD);
+        TextView user = Ui.text(this, compactName(SessionStore.getFullname(this)), 11, Color.rgb(222, 255, 242), Typeface.NORMAL);
         titleBox.addView(app);
         titleBox.addView(user);
         LinearLayout.LayoutParams titleLp = Ui.marginLp(0, LinearLayout.LayoutParams.WRAP_CONTENT, Ui.dp(this, 10), 0, Ui.dp(this, 8), 0);
@@ -114,20 +116,20 @@ public class DashboardActivity extends Activity {
 
         refreshButton = headerButton("Sync");
         refreshButton.setOnClickListener(v -> loadDashboard(true));
-        top.addView(refreshButton, Ui.marginLp(Ui.dp(this, 68), Ui.dp(this, 42), 0, 0, Ui.dp(this, 8), 0));
+        top.addView(refreshButton, Ui.marginLp(Ui.dp(this, 60), Ui.dp(this, 36), 0, 0, Ui.dp(this, 8), 0));
 
         Button logout = headerButton("Out");
         logout.setOnClickListener(v -> logout());
-        top.addView(logout, Ui.lp(Ui.dp(this, 58), Ui.dp(this, 42)));
+        top.addView(logout, Ui.lp(Ui.dp(this, 52), Ui.dp(this, 36)));
         header.addView(top);
 
         LinearLayout chips = new LinearLayout(this);
         chips.setGravity(Gravity.CENTER_VERTICAL);
-        chips.addView(chip("Live data"));
-        chips.addView(chip(readableDate()), Ui.marginLp(LinearLayout.LayoutParams.WRAP_CONTENT, Ui.dp(this, 30), Ui.dp(this, 8), 0, 0, 0));
+        chips.addView(chip("LIVE"));
+        chips.addView(chip(readableDate()), Ui.marginLp(LinearLayout.LayoutParams.WRAP_CONTENT, Ui.dp(this, 28), Ui.dp(this, 8), 0, 0, 0));
         dateChip = chip(selectedDate);
-        chips.addView(dateChip, Ui.marginLp(LinearLayout.LayoutParams.WRAP_CONTENT, Ui.dp(this, 30), Ui.dp(this, 8), 0, 0, 0));
-        header.addView(chips, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 34), 0, Ui.dp(this, 10), 0, 0));
+        chips.addView(dateChip, Ui.marginLp(LinearLayout.LayoutParams.WRAP_CONTENT, Ui.dp(this, 28), Ui.dp(this, 8), 0, 0, 0));
+        header.addView(chips, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 32), 0, Ui.dp(this, 8), 0, 0));
         root.addView(header);
 
         progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
@@ -140,7 +142,7 @@ public class DashboardActivity extends Activity {
         scroll.setClipToPadding(false);
         content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(Ui.dp(this, 14), Ui.dp(this, 12), Ui.dp(this, 14), Ui.dp(this, 18));
+        content.setPadding(Ui.dp(this, 14), Ui.dp(this, 10), Ui.dp(this, 14), Ui.dp(this, 20));
         scroll.addView(content);
         root.addView(scroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
 
@@ -151,25 +153,27 @@ public class DashboardActivity extends Activity {
     private LinearLayout bottomNav() {
         LinearLayout nav = new LinearLayout(this);
         nav.setGravity(Gravity.CENTER);
-        nav.setPadding(Ui.dp(this, 6), Ui.dp(this, 6), Ui.dp(this, 6), Ui.dp(this, 6));
+        nav.setPadding(Ui.dp(this, 6), Ui.dp(this, 5), Ui.dp(this, 6), Ui.dp(this, 6) + Math.min(Ui.navigationBarHeight(this), Ui.dp(this, 22)));
         nav.setBackgroundColor(Color.WHITE);
         Ui.elevate(nav, 12);
-        addNav(nav, "dashboard", "Home");
-        addNav(nav, "attendance", "Attendance");
-        addNav(nav, "schools", "Schools");
-        addNav(nav, "reports", "Reports");
-        addNav(nav, "alerts", "Alerts");
+        addNav(nav, "dashboard", "Home", android.R.drawable.ic_menu_view);
+        addNav(nav, "attendance", "Attendance", android.R.drawable.ic_menu_today);
+        addNav(nav, "schools", "Schools", android.R.drawable.ic_menu_myplaces);
+        addNav(nav, "reports", "Report", android.R.drawable.ic_menu_agenda);
+        addNav(nav, "alerts", "Alerts", android.R.drawable.ic_dialog_alert);
         updateNav();
         return nav;
     }
 
-    private void addNav(LinearLayout nav, String tab, String label) {
+    private void addNav(LinearLayout nav, String tab, String label, int icon) {
         TextView item = Ui.text(this, label, 10, Color.rgb(70, 86, 82), Typeface.BOLD);
         item.setGravity(Gravity.CENTER);
-        item.setPadding(Ui.dp(this, 2), 0, Ui.dp(this, 2), 0);
+        item.setPadding(Ui.dp(this, 2), Ui.dp(this, 3), Ui.dp(this, 2), Ui.dp(this, 3));
+        item.setCompoundDrawablesWithIntrinsicBounds(0, icon, 0, 0);
+        item.setCompoundDrawablePadding(Ui.dp(this, 2));
         item.setOnClickListener(v -> switchTab(tab));
         navItems.put(tab, item);
-        nav.addView(item, new LinearLayout.LayoutParams(0, Ui.dp(this, 56), 1));
+        nav.addView(item, new LinearLayout.LayoutParams(0, Ui.dp(this, 58), 1));
     }
 
     private void switchTab(String tab) {
@@ -188,6 +192,9 @@ public class DashboardActivity extends Activity {
             boolean active = entry.getKey().equals(currentTab);
             TextView item = entry.getValue();
             item.setTextColor(active ? Ui.GREEN_DARK : Color.rgb(82, 96, 92));
+            if (item.getCompoundDrawables()[1] != null) {
+                item.getCompoundDrawables()[1].setTint(active ? Ui.GREEN_DARK : Color.rgb(82, 96, 92));
+            }
             item.setBackground(active ? Ui.bg(Ui.GREEN_SOFT, Ui.dp(this, 14)) : Ui.bg(Color.TRANSPARENT, Ui.dp(this, 14)));
         }
     }
@@ -238,14 +245,17 @@ public class DashboardActivity extends Activity {
                     if (changed) {
                         lastHash = hash;
                         loadDashboard(false);
+                    } else if (!"dashboard".equals(currentTab)) {
+                        renderCurrentTab(false);
+                        updateLiveText("LIVE");
                     } else {
-                        updateLiveText("Live. Checked " + timeNow());
+                        updateLiveText("LIVE");
                     }
                 });
             } catch (SecurityException e) {
                 runOnUiThread(this::goToLogin);
             } catch (Exception ignored) {
-                runOnUiThread(() -> updateLiveText("Live check failed. Retrying..."));
+                runOnUiThread(() -> updateLiveText("LIVE"));
             }
         }).start();
     }
@@ -300,8 +310,6 @@ public class DashboardActivity extends Activity {
         content.addView(grid);
         if (animate) Ui.reveal(grid, 90);
 
-        addCompactActions(animate);
-        addSchoolPreview(animate);
         addLiveFooter();
     }
 
@@ -370,24 +378,84 @@ public class DashboardActivity extends Activity {
     }
 
     private void renderSchools(boolean animate) {
-        content.addView(sectionHeader("Schools", "Native list synced from the web-based system."));
-        renderRemoteArray("/api/schools", rows -> {
-            LinearLayout card = sectionCard("School Directory", rows.length() + " school(s)");
-            if (rows.length() == 0) {
-                card.addView(emptyText("No schools available."));
+        content.addView(sectionHeader("Schools", "Grade levels, sections, students, and advisers."));
+        renderRemoteObject("/api/mobile-school-structure", data -> {
+            JSONArray schools = data.optJSONArray("schools");
+            int schoolCount = schools == null ? 0 : schools.length();
+            LinearLayout card = sectionCard("School Structure", schoolCount + " school(s)");
+            if (schools == null || schools.length() == 0) {
+                card.addView(emptyText("No school structure available."));
             } else {
-                for (int i = 0; i < rows.length(); i++) {
-                    JSONObject school = rows.optJSONObject(i);
+                for (int i = 0; i < schools.length(); i++) {
+                    JSONObject school = schools.optJSONObject(i);
                     if (school == null) continue;
-                    String detail = school.optInt("student_count") + " students - " + school.optInt("teacher_count") + " teachers";
-                    String sub = school.optString("address", "No address saved");
-                    card.addView(recordRow(school.optString("name", "School"), sub, detail, Ui.GREEN_DARK));
+                    LinearLayout schoolBlock = nestedBlock(Color.rgb(241, 253, 247));
+                    schoolBlock.addView(Ui.text(this, school.optString("name", "School"), 15, Ui.INK, Typeface.BOLD));
+                    schoolBlock.addView(Ui.text(this, school.optInt("student_count") + " students - " + school.optInt("teacher_count") + " teachers", 11, Color.rgb(84, 98, 94), Typeface.BOLD));
+
+                    JSONArray grades = school.optJSONArray("grade_levels");
+                    if (grades == null || grades.length() == 0) {
+                        schoolBlock.addView(emptyText("No grade levels assigned."));
+                    } else {
+                        for (int g = 0; g < grades.length(); g++) {
+                            JSONObject grade = grades.optJSONObject(g);
+                            if (grade != null) schoolBlock.addView(gradeBlock(grade));
+                        }
+                    }
+                    card.addView(schoolBlock, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 10)));
                 }
             }
             content.addView(card);
             addLiveFooter();
             if (animate) Ui.reveal(card, 80);
         });
+    }
+
+    private LinearLayout gradeBlock(JSONObject grade) {
+        LinearLayout block = nestedBlock(Color.WHITE);
+        block.addView(Ui.text(this, grade.optString("name", "Grade Level"), 13, Ui.GREEN_DARK, Typeface.BOLD));
+        JSONArray sections = grade.optJSONArray("sections");
+        if (sections == null || sections.length() == 0) {
+            block.addView(Ui.text(this, "No sections yet.", 11, Color.rgb(102, 116, 112), Typeface.NORMAL));
+            return block;
+        }
+        for (int i = 0; i < sections.length(); i++) {
+            JSONObject section = sections.optJSONObject(i);
+            if (section != null) block.addView(sectionBlock(section));
+        }
+        return block;
+    }
+
+    private LinearLayout sectionBlock(JSONObject section) {
+        LinearLayout block = nestedBlock(Color.rgb(248, 251, 249));
+        String adviser = section.optString("adviser", "").trim();
+        block.addView(Ui.text(this, section.optString("name", "Section"), 13, Ui.INK, Typeface.BOLD));
+        block.addView(Ui.text(this, adviser.isEmpty() ? "Adviser: Not assigned" : "Adviser: " + adviser, 11, Color.rgb(84, 98, 94), Typeface.BOLD));
+        JSONArray students = section.optJSONArray("students");
+        if (students == null || students.length() == 0) {
+            block.addView(Ui.text(this, "No students in this section.", 11, Color.rgb(102, 116, 112), Typeface.NORMAL));
+            return block;
+        }
+        for (int i = 0; i < Math.min(students.length(), 60); i++) {
+            JSONObject student = students.optJSONObject(i);
+            if (student == null) continue;
+            TextView line = Ui.text(this, studentName(student) + studentMeta(student), 11, Color.rgb(37, 48, 47), Typeface.NORMAL);
+            line.setPadding(Ui.dp(this, 8), Ui.dp(this, 5), Ui.dp(this, 8), Ui.dp(this, 5));
+            block.addView(line);
+        }
+        if (students.length() > 60) {
+            block.addView(Ui.text(this, "+" + (students.length() - 60) + " more students", 11, Ui.GREEN_DARK, Typeface.BOLD));
+        }
+        return block;
+    }
+
+    private LinearLayout nestedBlock(int color) {
+        LinearLayout block = new LinearLayout(this);
+        block.setOrientation(LinearLayout.VERTICAL);
+        block.setPadding(Ui.dp(this, 10), Ui.dp(this, 9), Ui.dp(this, 10), Ui.dp(this, 9));
+        block.setBackground(Ui.strokeBg(color, Color.rgb(229, 238, 234), Ui.dp(this, 12)));
+        block.setLayoutParams(Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 8), 0, 0));
+        return block;
     }
 
     private void renderReports(boolean animate) {
@@ -399,7 +467,7 @@ public class DashboardActivity extends Activity {
 
             LinearLayout totalsCard = sectionCard("Daily Summary", "Updated " + timeNow());
             GridLayout grid = metricGrid();
-            addMetric(grid, "Enrolled", totals.optInt("enrolled"), "students", Ui.GREEN_SOFT, Ui.GREEN_DARK);
+            addMetric(grid, "Students", totals.optInt("enrolled"), "total", Ui.GREEN_SOFT, Ui.GREEN_DARK);
             addMetric(grid, "Present", totals.optInt("present"), "today", Ui.GREEN_SOFT, Ui.GREEN_DARK);
             addMetric(grid, "Absent", totals.optInt("absent"), "today", Color.rgb(255, 239, 239), Ui.RED);
             addMetric(grid, "Rate", totals.optInt("rate"), "percent", Color.rgb(255, 248, 231), Ui.AMBER);
@@ -447,9 +515,9 @@ public class DashboardActivity extends Activity {
     private void renderAlerts(boolean animate) {
         content.addView(sectionHeader("Alerts", "Absence flags and system notifications."));
 
-        LinearLayout quick = sectionCard("Notification Test", "Send a sample alert to this phone.");
-        Button test = compactButton("Send sample notification", Ui.GREEN_DARK);
-        test.setOnClickListener(v -> sendNotification("1 Student Absent 2+ Days", "Flagged student: Sample Learner (SCH-001)"));
+        LinearLayout quick = sectionCard("Notification Test", "Verify the 2-day flagged student alert on this phone.");
+        Button test = compactButton("Send 2-day flagged alert", Ui.GREEN_DARK);
+        test.setOnClickListener(v -> sendFlaggedNotificationTest());
         quick.addView(test, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 44)));
         content.addView(quick, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 10)));
 
@@ -460,7 +528,7 @@ public class DashboardActivity extends Activity {
             for (int i = 0; i < Math.min(absenceFlags.length(), 60); i++) {
                 JSONObject row = absenceFlags.optJSONObject(i);
                 if (row == null) continue;
-                flags.addView(recordRow(row.optString("name", "Student"), row.optString("school_name", ""), row.optString("absent_days", "2") + " consecutive days", Ui.AMBER));
+                flags.addView(flaggedRow(row));
             }
         }
         content.addView(flags, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 10)));
@@ -485,6 +553,52 @@ public class DashboardActivity extends Activity {
             Ui.reveal(quick, 60);
             Ui.reveal(flags, 100);
         }
+    }
+
+    private LinearLayout flaggedRow(JSONObject row) {
+        LinearLayout item = recordRow(row.optString("name", "Student"), row.optString("school_name", ""), row.optString("absent_days", "2") + " consecutive days", Ui.AMBER);
+        item.setOnClickListener(v -> contactAdviser(row));
+        Button contact = compactButton("Contact adviser", Ui.AMBER);
+        contact.setTextSize(11);
+        contact.setOnClickListener(v -> contactAdviser(row));
+        item.addView(contact, Ui.lp(Ui.dp(this, 116), Ui.dp(this, 38)));
+        return item;
+    }
+
+    private void sendFlaggedNotificationTest() {
+        if (absenceFlags.length() > 0) {
+            JSONObject first = absenceFlags.optJSONObject(0);
+            String name = first == null ? "Student" : first.optString("name", "Student");
+            String school = first == null ? "" : first.optString("school_name", "");
+            sendNotification(absenceFlags.length() + " Students Absent 2+ Days", "Flagged student: " + name + (school.isEmpty() ? "" : " - " + school));
+            return;
+        }
+        sendNotification("2-Day Absence Alert Test", "No current flagged students. This test confirms the alert channel is working.");
+    }
+
+    private void contactAdviser(JSONObject row) {
+        String adviser = row.optString("adviser", "").trim();
+        String phone = firstNonEmpty(row.optString("adviser_contact", ""), row.optString("school_contact", ""));
+        String student = row.optString("name", "flagged student");
+        String school = row.optString("school_name", "");
+        String message = "Student: " + student + "\nSchool: " + school + "\nAdviser: " + (adviser.isEmpty() ? "Not assigned" : adviser);
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this)
+                .setTitle("Contact Adviser")
+                .setMessage(message)
+                .setNegativeButton("Close", null);
+        if (!phone.isEmpty()) {
+            builder.setPositiveButton("Call", (dialog, which) -> startActivity(new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + phone))));
+        } else {
+            builder.setPositiveButton("OK", null);
+        }
+        builder.setNeutralButton("Share", (dialog, which) -> {
+            Intent share = new Intent(Intent.ACTION_SEND);
+            share.setType("text/plain");
+            share.putExtra(Intent.EXTRA_TEXT, message);
+            startActivity(Intent.createChooser(share, "Contact adviser"));
+        });
+        builder.show();
     }
 
     private void renderRemoteArray(String path, ArrayRenderer renderer) {
@@ -570,6 +684,22 @@ public class DashboardActivity extends Activity {
         int rate = school.optInt("rate", enrolled > 0 ? Math.round((present * 100f) / enrolled) : 0);
         String detail = present + " of " + enrolled + " present - " + rate + "%";
         return recordRow(school.optString("name", "School"), detail, school.optInt("teachers_present") + "/" + school.optInt("teachers_total") + " teachers", rate >= 75 ? Ui.GREEN_DARK : Ui.AMBER);
+    }
+
+    private String studentName(JSONObject student) {
+        String first = student.optString("firstname", "").trim();
+        String last = student.optString("lastname", "").trim();
+        String full = (first + " " + last).trim();
+        return full.isEmpty() ? "Student" : full;
+    }
+
+    private String studentMeta(JSONObject student) {
+        String lrn = student.optString("lrn", "").trim();
+        String status = student.optString("status", "").trim();
+        String meta = "";
+        if (!lrn.isEmpty()) meta += " - " + lrn;
+        if (!status.isEmpty()) meta += " - " + status;
+        return meta;
     }
 
     private LinearLayout recordRow(String title, String subtitle, String meta, int accent) {
@@ -677,7 +807,7 @@ public class DashboardActivity extends Activity {
     }
 
     private void addLiveFooter() {
-        liveStatus = Ui.text(this, "Live. Updated " + timeNow(), 11, Color.rgb(93, 108, 104), Typeface.NORMAL);
+        liveStatus = Ui.text(this, "LIVE", 11, Ui.GREEN_DARK, Typeface.BOLD);
         liveStatus.setGravity(Gravity.CENTER);
         content.addView(liveStatus, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 10), 0, 0));
     }
@@ -721,7 +851,7 @@ public class DashboardActivity extends Activity {
     }
 
     private void updateLiveText(String text) {
-        if (liveStatus != null) liveStatus.setText(text);
+        if (liveStatus != null) liveStatus.setText("LIVE");
     }
 
     private void logout() {
@@ -768,6 +898,12 @@ public class DashboardActivity extends Activity {
         if (value == null || value.trim().isEmpty() || "null".equalsIgnoreCase(value)) return "--";
         String clean = value.trim();
         return clean.length() >= 5 ? clean.substring(0, 5) : clean;
+    }
+
+    private String firstNonEmpty(String first, String second) {
+        String a = first == null ? "" : first.trim();
+        if (!a.isEmpty()) return a;
+        return second == null ? "" : second.trim();
     }
 
     private String compactName(String name) {

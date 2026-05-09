@@ -72,6 +72,19 @@ final class Ui {
         return Math.round(value * context.getResources().getDisplayMetrics().density);
     }
 
+    static int systemBarHeight(Context context, String name) {
+        int id = context.getResources().getIdentifier(name, "dimen", "android");
+        return id > 0 ? context.getResources().getDimensionPixelSize(id) : 0;
+    }
+
+    static int statusBarHeight(Context context) {
+        return systemBarHeight(context, "status_bar_height");
+    }
+
+    static int navigationBarHeight(Context context) {
+        return systemBarHeight(context, "navigation_bar_height");
+    }
+
     static LinearLayout.LayoutParams marginLp(int width, int height, int left, int top, int right, int bottom) {
         LinearLayout.LayoutParams lp = lp(width, height);
         lp.setMargins(left, top, right, bottom);
@@ -84,6 +97,9 @@ final class Ui {
 
     static void setBars(Window window, int statusColor, boolean lightStatus, int navColor) {
         if (Build.VERSION.SDK_INT >= 21) {
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
             window.setStatusBarColor(statusColor);
             window.setNavigationBarColor(navColor);
         }

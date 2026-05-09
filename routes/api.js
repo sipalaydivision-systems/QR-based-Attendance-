@@ -492,8 +492,24 @@ router.get('/realtime-poll', requireAuth, async (req, res) => {
             `SELECT COUNT(*) as cnt FROM teachers WHERE status != 'deleted'` + schoolWhere,
             schoolParams
         );
+        const [schoolRows] = await db.query(
+            `SELECT COUNT(*) as cnt, COALESCE(SUM(CRC32(CONCAT_WS('|', id, name, status, COALESCE(contact, '')))), 0) as checksum FROM schools WHERE 1=1` + (schoolId ? ' AND id = ?' : ''),
+            schoolId ? [schoolId] : []
+        );
+        const [gradeRows] = await db.query(
+            `SELECT COUNT(*) as cnt, COALESCE(SUM(CRC32(CONCAT_WS('|', id, name, COALESCE(school_id, '')))), 0) as checksum FROM grade_levels WHERE 1=1` + schoolWhere,
+            schoolParams
+        );
+        const [sectionRows] = await db.query(
+            `SELECT COUNT(*) as cnt, COALESCE(SUM(CRC32(CONCAT_WS('|', id, name, COALESCE(adviser, ''), COALESCE(status, ''), COALESCE(grade_level_id, ''), COALESCE(school_id, '')))), 0) as checksum FROM sections WHERE 1=1` + schoolWhere,
+            schoolParams
+        );
+        const [notificationRows] = await db.query(
+            `SELECT COUNT(*) as cnt, MAX(created_at) as latest FROM notifications WHERE 1=1` + schoolWhere,
+            schoolParams
+        );
 
-        const raw = `${countRows[0].cnt}-${latestRows[0].latest || ''}-${studentRows[0].cnt}-${studentRows[0].active}-${studentRows[0].inactive}-${teacherRows[0].cnt}`;
+        const raw = `${countRows[0].cnt}-${latestRows[0].latest || ''}-${studentRows[0].cnt}-${studentRows[0].active}-${studentRows[0].inactive}-${teacherRows[0].cnt}-${schoolRows[0].cnt}-${schoolRows[0].checksum}-${gradeRows[0].cnt}-${gradeRows[0].checksum}-${sectionRows[0].cnt}-${sectionRows[0].checksum}-${notificationRows[0].cnt}-${notificationRows[0].latest || ''}`;
         const hash = crypto.createHash('md5').update(raw).digest('hex').substring(0, 12);
         const changed = hash !== clientHash;
 
@@ -822,6 +838,64 @@ router.delete('/sections/:id', requireAuth, async (req, res) => {
         return res.json({ success: true });
     } catch (err) {
         return res.status(500).json({ error: 'Failed to delete section.' });
+    }
+});
+
+// ---- Mobile: School structure tree ----
+router.get('/mobile-school-structure', requireAuth, async (req, res) => {
+    try {
+        const schoolId = applySchoolFilter(req);
+        const schoolWhere = schoolId ? ' WHERE s.id = ?' : '';
+        const schoolParams = schoolId ? [schoolId] : [];
+
+        const [schools] = await db.query(`SELECT s.*,
+            (SELECT COUNT(*) FROM students st WHERE st.school_id = s.id AND st.status = 'active') as student_count,
+            (SELECT COUNT(*) FROM teachers t WHERE t.school_id = s.id AND t.status = 'active') as teacher_count
+            FROM schools s${schoolWhere} ORDER BY s.name`, schoolParams);
+
+        const [grades] = await db.query(
+            `SELECT gl.* FROM grade_levels gl WHERE 1=1${schoolId ? ' AND gl.school_id = ?' : ''} ORDER BY gl.name`,
+            schoolId ? [schoolId] : []
+        );
+        const [sections] = await db.query(
+            `SELECT sec.* FROM sections sec WHERE 1=1${schoolId ? ' AND sec.school_id = ?' : ''} ORDER BY sec.name`,
+            schoolId ? [schoolId] : []
+        );
+        const [students] = await db.query(
+            `SELECT id, lrn, firstname, lastname, middlename, grade_level_id, section_id, school_id, status, category
+             FROM students WHERE status != 'deleted'${schoolId ? ' AND school_id = ?' : ''} ORDER BY lastname, firstname`,
+            schoolId ? [schoolId] : []
+        );
+
+        const sectionsByGrade = new Map();
+        sections.forEach(section => {
+            section.students = [];
+            if (!sectionsByGrade.has(section.grade_level_id)) sectionsByGrade.set(section.grade_level_id, []);
+            sectionsByGrade.get(section.grade_level_id).push(section);
+        });
+
+        const sectionsById = new Map(sections.map(section => [section.id, section]));
+        students.forEach(student => {
+            const section = sectionsById.get(student.section_id);
+            if (section) section.students.push(student);
+        });
+
+        const gradesBySchool = new Map();
+        grades.forEach(grade => {
+            grade.sections = sectionsByGrade.get(grade.id) || [];
+            if (!gradesBySchool.has(grade.school_id)) gradesBySchool.set(grade.school_id, []);
+            gradesBySchool.get(grade.school_id).push(grade);
+        });
+
+        const payload = schools.map(school => ({
+            ...school,
+            grade_levels: gradesBySchool.get(school.id) || []
+        }));
+
+        return res.json({ schools: payload });
+    } catch (err) {
+        console.error('Mobile school structure error:', err);
+        return res.status(500).json({ error: 'Failed to load mobile school structure.' });
     }
 });
 
@@ -1320,8 +1394,8 @@ router.get('/reports/absentees', requireAuth, async (req, res) => {
     const date = req.query.date || new Date().toISOString().slice(0, 10);
     const schoolId = applySchoolFilter(req);
     try {
-        let query = `SELECT s.id, s.firstname, s.lastname, s.lrn, sc.name as school_name,
-                gl.name as grade_name, sec.name as section_name
+        let query = `SELECT s.id, s.firstname, s.lastname, s.lrn, s.section_id, sc.name as school_name,
+                sc.contact as school_contact, gl.name as grade_name, sec.name as section_name, sec.adviser
             FROM students s
             LEFT JOIN schools sc ON s.school_id = sc.id
             LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id

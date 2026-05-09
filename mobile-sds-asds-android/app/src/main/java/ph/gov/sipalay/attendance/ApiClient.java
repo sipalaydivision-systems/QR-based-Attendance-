@@ -70,9 +70,9 @@ final class ApiClient {
             String bundled = SessionStore.getBundledBaseUrl(context);
 
             Set<String> candidates = new LinkedHashSet<>();
-            addCandidate(candidates, current);
             addCandidate(candidates, bundled);
             candidates.addAll(loadRemoteConfigCandidates(context));
+            addCandidate(candidates, current);
             for (String known : getKnownBaseUrlCandidates()) {
                 addCandidate(candidates, known);
             }
@@ -130,8 +130,7 @@ final class ApiClient {
 
     private static List<String> getKnownBaseUrlCandidates() {
         return Arrays.asList(
-                "https://sdo-sipalay-website-production.up.railway.app",
-                "https://web-production-5f74a.up.railway.app"
+                "https://school-attendance-qrbased.up.railway.app"
         );
     }
 
