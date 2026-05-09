@@ -143,7 +143,7 @@ public class WebAppActivity extends Activity {
             finish();
             return;
         }
-        webView.loadUrl(SessionStore.getBaseUrl(this) + "/dashboard?app=1");
+        webView.loadUrl(SessionStore.getBaseUrl(this) + "/app?app=1");
     }
 
     private void injectAppMode() {
