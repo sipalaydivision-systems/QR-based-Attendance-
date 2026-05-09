@@ -57,38 +57,51 @@ public class MainActivity extends Activity {
     }
 
     private void showSplash() {
+        Ui.setBars(getWindow(), Ui.PRIMARY_DARK, false, Ui.PRIMARY_DARK);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER);
-        root.setPadding(48, 48, 48, 48);
-        root.setBackground(Ui.verticalGradient(android.graphics.Color.rgb(214, 219, 238), android.graphics.Color.rgb(246, 247, 252), 0));
+        root.setPadding(Ui.dp(this, 34), Ui.dp(this, 42), Ui.dp(this, 34), Ui.dp(this, 42));
+        root.setBackground(Ui.verticalGradient(Ui.PRIMARY, Ui.PRIMARY_DARK, 0));
 
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setGravity(Gravity.CENTER);
-        card.setPadding(34, 40, 34, 40);
-        card.setBackground(Ui.verticalGradient(Ui.PRIMARY, android.graphics.Color.rgb(255, 132, 36), 36));
-        Ui.elevate(card, 14);
-        root.addView(card, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        card.setPadding(0, 0, 0, 0);
+        root.addView(card, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
 
         ImageView logo = new ImageView(this);
         logo.setImageResource(getResources().getIdentifier("system_logo", "drawable", getPackageName()));
         logo.setAdjustViewBounds(true);
-        card.addView(logo, new LinearLayout.LayoutParams(132, 132));
+        logo.setBackground(Ui.strokeBg(android.graphics.Color.argb(42, 255, 255, 255), android.graphics.Color.argb(60, 255, 255, 255), Ui.dp(this, 26)));
+        logo.setPadding(Ui.dp(this, 12), Ui.dp(this, 12), Ui.dp(this, 12), Ui.dp(this, 12));
+        card.addView(logo, new LinearLayout.LayoutParams(Ui.dp(this, 106), Ui.dp(this, 106)));
 
-        TextView title = Ui.text(this, "School Attendance", 24, android.graphics.Color.WHITE, Typeface.BOLD);
+        TextView title = Ui.text(this, "EduTrack", 38, android.graphics.Color.WHITE, Typeface.BOLD);
         title.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams titleLp = Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 18, 0, 8);
+        LinearLayout.LayoutParams titleLp = Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 34), 0, Ui.dp(this, 8));
         card.addView(title, titleLp);
 
-        TextView subtitle = Ui.text(this, "Loading mobile dashboard", 14, android.graphics.Color.rgb(255, 237, 222), Typeface.NORMAL);
+        TextView subtitle = Ui.text(this, "Attendance Monitoring System", 18, android.graphics.Color.rgb(255, 238, 226), Typeface.NORMAL);
         subtitle.setGravity(Gravity.CENTER);
         card.addView(subtitle, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
+        TextView division = Ui.text(this, "SDO - Sipalay City", 14, android.graphics.Color.argb(190, 255, 255, 255), Typeface.NORMAL);
+        division.setGravity(Gravity.CENTER);
+        card.addView(division, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 50), 0, 0));
+
+        LinearLayout loadingRow = new LinearLayout(this);
+        loadingRow.setGravity(Gravity.CENTER);
+        loadingRow.setOrientation(LinearLayout.HORIZONTAL);
+
         ProgressBar bar = new ProgressBar(this);
-        card.addView(bar, Ui.marginLp(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 26, 0, 0));
+        loadingRow.addView(bar, new LinearLayout.LayoutParams(Ui.dp(this, 34), Ui.dp(this, 34)));
+        TextView loading = Ui.text(this, "Loading", 16, android.graphics.Color.argb(210, 255, 255, 255), Typeface.NORMAL);
+        loadingRow.addView(loading, Ui.marginLp(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, Ui.dp(this, 12), 0, 0, 0));
+        root.addView(loadingRow, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 70)));
         setContentView(root);
         Ui.reveal(card, 50);
+        Ui.pulse(logo);
     }
 
     private boolean applyConfigurationIntent(Intent intent) {

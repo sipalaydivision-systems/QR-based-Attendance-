@@ -4,8 +4,10 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.content.Context;
+import android.os.Build;
 import android.view.animation.DecelerateInterpolator;
 import android.view.View;
+import android.view.Window;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -64,6 +66,10 @@ final class Ui {
         return new LinearLayout.LayoutParams(width, height);
     }
 
+    static int dp(Context context, int value) {
+        return Math.round(value * context.getResources().getDisplayMetrics().density);
+    }
+
     static LinearLayout.LayoutParams marginLp(int width, int height, int left, int top, int right, int bottom) {
         LinearLayout.LayoutParams lp = lp(width, height);
         lp.setMargins(left, top, right, bottom);
@@ -72,6 +78,22 @@ final class Ui {
 
     static void elevate(View view, float value) {
         view.setElevation(value);
+    }
+
+    static void setBars(Window window, int statusColor, boolean lightStatus, int navColor) {
+        if (Build.VERSION.SDK_INT >= 21) {
+            window.setStatusBarColor(statusColor);
+            window.setNavigationBarColor(navColor);
+        }
+        if (Build.VERSION.SDK_INT >= 23) {
+            int flags = window.getDecorView().getSystemUiVisibility();
+            if (lightStatus) {
+                flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            } else {
+                flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            }
+            window.getDecorView().setSystemUiVisibility(flags);
+        }
     }
 
     static void reveal(View view, long delayMs) {

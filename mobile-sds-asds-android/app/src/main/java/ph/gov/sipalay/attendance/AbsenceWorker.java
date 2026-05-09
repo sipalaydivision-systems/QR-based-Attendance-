@@ -66,9 +66,9 @@ public class AbsenceWorker extends Worker {
             JSONObject first = flags.optJSONObject(0);
             String firstName = first == null ? "student" : first.optString("name", "student");
             String body = flags.length() == 1
-                    ? firstName + " has reached 2-day absence."
-                    : flags.length() + " students reached 2-day absence. First: " + firstName + ".";
-            notify(context, "2-Day Absence Alert", body);
+                    ? "Flagged student: " + firstName
+                    : "Flagged students: " + flags.length() + " total. First: " + firstName + ".";
+            notify(context, flags.length() + " Students Absent 2+ Days", body);
             SessionStore.prefs(context).edit().putString("last_absence_notification", key).apply();
             return Result.success();
         } catch (SecurityException e) {
