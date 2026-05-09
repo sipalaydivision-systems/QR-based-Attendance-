@@ -1,5 +1,5 @@
 <resources>
     <string name="app_name">School Attendance Division</string>
-    <string name="base_url"></string>
+    <string name="base_url">https://school-attendance-qrbased.up.railway.app</string>
     <string name="config_url">https://raw.githubusercontent.com/sipalaydivision-systems/QR-based-Attendance-/main/public/mobile-config.json</string>
 </resources>
