@@ -42,30 +42,42 @@ public class LoginActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER);
-        root.setPadding(28, 34, 28, 34);
-        root.setBackground(Ui.gradient(android.graphics.Color.rgb(230, 244, 255), android.graphics.Color.rgb(248, 250, 252), 0));
+        root.setPadding(28, 28, 28, 28);
+        root.setBackground(Ui.verticalGradient(android.graphics.Color.rgb(214, 219, 238), android.graphics.Color.rgb(246, 247, 252), 0));
         scroll.addView(root, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT));
 
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setGravity(Gravity.CENTER_HORIZONTAL);
-        card.setPadding(34, 34, 34, 30);
-        card.setBackground(Ui.strokeBg(Ui.CARD, android.graphics.Color.rgb(226, 232, 240), 34));
-        Ui.elevate(card, 10);
-        root.addView(card, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        LinearLayout phone = new LinearLayout(this);
+        phone.setOrientation(LinearLayout.VERTICAL);
+        phone.setGravity(Gravity.CENTER_HORIZONTAL);
+        phone.setBackground(Ui.strokeBg(Ui.CARD, Ui.LINE, 34));
+        Ui.elevate(phone, 14);
+        root.addView(phone, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        LinearLayout hero = new LinearLayout(this);
+        hero.setOrientation(LinearLayout.VERTICAL);
+        hero.setGravity(Gravity.CENTER);
+        hero.setPadding(28, 34, 28, 34);
+        hero.setBackground(Ui.verticalGradient(Ui.PRIMARY, android.graphics.Color.rgb(255, 130, 36), 34));
+        phone.addView(hero, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, 300));
 
         ImageView logo = new ImageView(this);
         logo.setImageResource(getResources().getIdentifier("system_logo", "drawable", getPackageName()));
         logo.setAdjustViewBounds(true);
-        card.addView(logo, Ui.lp(92, 92));
+        hero.addView(logo, Ui.lp(96, 96));
 
-        TextView title = Ui.text(this, "School Attendance QR based Systems", 25, Ui.INK, Typeface.BOLD);
+        TextView title = Ui.text(this, "School Attendance", 25, android.graphics.Color.WHITE, Typeface.BOLD);
         title.setGravity(Gravity.CENTER);
-        card.addView(title, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 16, 0, 0));
+        hero.addView(title, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 18, 0, 0));
 
-        TextView subtitle = Ui.text(this, "Division Mobile Dashboard", 15, Ui.MUTED, Typeface.NORMAL);
+        TextView subtitle = Ui.text(this, "QR based mobile dashboard", 14, android.graphics.Color.WHITE, Typeface.NORMAL);
         subtitle.setGravity(Gravity.CENTER);
-        card.addView(subtitle, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 6, 0, 22));
+        hero.addView(subtitle, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 8, 0, 0));
+
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setGravity(Gravity.CENTER_HORIZONTAL);
+        card.setPadding(34, 28, 34, 32);
+        phone.addView(card, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
         errorBox = Ui.text(this, "", 14, Ui.RED, Typeface.BOLD);
         errorBox.setGravity(Gravity.CENTER);
@@ -76,19 +88,17 @@ public class LoginActivity extends Activity {
 
         username = field("Username", false);
         password = field("Password", true);
-        card.addView(label("Username"));
         card.addView(username, fieldParams());
-        card.addView(label("Password"));
         card.addView(password, fieldParams());
 
         signIn = new Button(this);
-        signIn.setText("Sign In");
+        signIn.setText("LOGIN");
         signIn.setTextColor(android.graphics.Color.WHITE);
-        signIn.setTextSize(16);
+        signIn.setTextSize(14);
         signIn.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         signIn.setAllCaps(false);
-        signIn.setBackground(Ui.gradient(Ui.PRIMARY, android.graphics.Color.rgb(67, 56, 202), 24));
-        card.addView(signIn, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, 112, 0, 12, 0, 0));
+        signIn.setBackground(Ui.gradient(Ui.PLUM, android.graphics.Color.rgb(105, 48, 105), 44));
+        card.addView(signIn, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, 86, 0, 8, 0, 0));
 
         progress = new ProgressBar(this);
         progress.setVisibility(View.GONE);
@@ -96,6 +106,7 @@ public class LoginActivity extends Activity {
 
         signIn.setOnClickListener(v -> login());
         setContentView(scroll);
+        Ui.reveal(phone, 80);
     }
 
     private TextView label(String value) {
@@ -110,7 +121,9 @@ public class LoginActivity extends Activity {
         e.setSingleLine(true);
         e.setTextSize(16);
         e.setPadding(22, 0, 22, 0);
-        e.setBackground(Ui.strokeBg(android.graphics.Color.rgb(248, 250, 252), android.graphics.Color.rgb(203, 213, 225), 18));
+        e.setTextColor(Ui.PLUM);
+        e.setHintTextColor(android.graphics.Color.rgb(155, 125, 158));
+        e.setBackground(Ui.strokeBg(android.graphics.Color.WHITE, Ui.PLUM, 44));
         if (secret) e.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         return e;
     }
@@ -135,6 +148,7 @@ public class LoginActivity extends Activity {
                 AbsenceWorker.schedule(this);
                 runOnUiThread(() -> {
                     startActivity(new Intent(this, DashboardActivity.class));
+                    overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
                     finish();
                 });
             } catch (Exception e) {
@@ -155,7 +169,8 @@ public class LoginActivity extends Activity {
     private void setLoading(boolean loading) {
         progress.setVisibility(loading ? View.VISIBLE : View.GONE);
         signIn.setEnabled(!loading);
-        signIn.setText(loading ? "Signing in..." : "Sign In");
+        signIn.setText(loading ? "Signing in..." : "LOGIN");
+        if (loading) Ui.pulse(signIn);
         if (loading) errorBox.setVisibility(View.GONE);
     }
 
@@ -167,7 +182,7 @@ public class LoginActivity extends Activity {
 
     private LinearLayout.LayoutParams fieldParams() {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 96);
-        lp.setMargins(0, 8, 0, 18);
+        lp.setMargins(0, 0, 0, 18);
         return lp;
     }
 }

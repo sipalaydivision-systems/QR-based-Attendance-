@@ -1,8 +1,15 @@
 package ph.gov.sipalay.attendance;
 
+import android.Manifest;
 import android.app.Activity;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Typeface;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -14,6 +21,8 @@ import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.core.app.NotificationCompat;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -27,6 +36,7 @@ public class DashboardActivity extends Activity {
     private ProgressBar progress;
     private TextView status;
     private Button refresh;
+    private static final String TEST_CHANNEL_ID = "mobile_app_test_notifications";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,9 +55,9 @@ public class DashboardActivity extends Activity {
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setPadding(24, 20, 24, 18);
-        header.setBackgroundColor(android.graphics.Color.WHITE);
-        Ui.elevate(header, 5);
+        header.setPadding(22, 18, 22, 16);
+        header.setBackground(Ui.gradient(Ui.PRIMARY, android.graphics.Color.rgb(255, 132, 36), 0));
+        Ui.elevate(header, 8);
 
         ImageView logo = new ImageView(this);
         logo.setImageResource(getResources().getIdentifier("system_logo", "drawable", getPackageName()));
@@ -56,8 +66,8 @@ public class DashboardActivity extends Activity {
 
         LinearLayout titleBox = new LinearLayout(this);
         titleBox.setOrientation(LinearLayout.VERTICAL);
-        TextView title = Ui.text(this, "Division Dashboard", 18, Ui.INK, Typeface.BOLD);
-        TextView name = Ui.text(this, SessionStore.getFullname(this), 13, Ui.MUTED, Typeface.NORMAL);
+        TextView title = Ui.text(this, "Division Dashboard", 18, android.graphics.Color.WHITE, Typeface.BOLD);
+        TextView name = Ui.text(this, SessionStore.getFullname(this), 13, android.graphics.Color.rgb(255, 236, 220), Typeface.NORMAL);
         titleBox.addView(title);
         titleBox.addView(name);
         header.addView(titleBox, Ui.marginLp(0, LinearLayout.LayoutParams.WRAP_CONTENT, 14, 0, 0, 0));
@@ -72,6 +82,7 @@ public class DashboardActivity extends Activity {
             SessionStore.clear(this);
             AbsenceWorker.cancel(this);
             startActivity(new Intent(this, LoginActivity.class));
+            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
             finish();
         });
         header.addView(logout);
@@ -85,7 +96,7 @@ public class DashboardActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(22, 24, 22, 42);
+        content.setPadding(20, 22, 20, 42);
         scroll.addView(content);
         root.addView(scroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
         setContentView(root);
@@ -121,17 +132,18 @@ public class DashboardActivity extends Activity {
 
         LinearLayout hero = new LinearLayout(this);
         hero.setOrientation(LinearLayout.VERTICAL);
-        hero.setPadding(26, 24, 26, 24);
-        hero.setBackground(Ui.gradient(android.graphics.Color.rgb(22, 163, 74), android.graphics.Color.rgb(21, 128, 61), 28));
-        Ui.elevate(hero, 5);
+        hero.setPadding(24, 24, 24, 24);
+        hero.setBackground(Ui.gradient(Ui.PRIMARY, Ui.PRIMARY_DARK, 28));
+        Ui.elevate(hero, 8);
 
         TextView greeting = Ui.text(this, greeting() + ", " + SessionStore.getFullname(this), 21, android.graphics.Color.WHITE, Typeface.BOLD);
         hero.addView(greeting);
-        TextView date = Ui.text(this, new SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.US).format(new Date()), 14, android.graphics.Color.rgb(220, 252, 231), Typeface.NORMAL);
+        TextView date = Ui.text(this, new SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.US).format(new Date()), 14, android.graphics.Color.rgb(255, 237, 222), Typeface.NORMAL);
         hero.addView(date, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 8, 0, 0));
         TextView rate = Ui.text(this, d.optInt("attendance_rate") + "% today's attendance rate", 17, android.graphics.Color.WHITE, Typeface.BOLD);
         hero.addView(rate, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 18, 0, 0));
         content.addView(hero, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        Ui.reveal(hero, 0);
 
         String reason = d.optString("non_school_day_reason", "");
         if (!d.optBoolean("is_school_day", true) && !reason.isEmpty()) {
@@ -144,16 +156,18 @@ public class DashboardActivity extends Activity {
         GridLayout grid = new GridLayout(this);
         grid.setColumnCount(2);
         content.addView(grid, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 18, 0, 0));
+        Ui.reveal(grid, 80);
 
-        addMetric(grid, "Schools", d.optInt("total_schools"), Ui.PRIMARY);
-        addMetric(grid, "Students", d.optInt("total_students"), Ui.PRIMARY);
+        addMetric(grid, "Schools", d.optInt("total_schools"), Ui.PLUM);
+        addMetric(grid, "Students", d.optInt("total_students"), Ui.PLUM);
         addMetric(grid, "Present", d.optInt("students_present"), Ui.GREEN);
         addMetric(grid, "Absent", d.optInt("students_absent"), Ui.RED);
         addMetric(grid, "2-Day", flags.length(), Ui.AMBER);
-        addMetric(grid, "Teachers", d.optInt("total_teachers"), Ui.PRIMARY);
+        addMetric(grid, "Teachers", d.optInt("total_teachers"), Ui.PLUM);
         addMetric(grid, "T. Present", d.optInt("teachers_present"), Ui.GREEN);
         addMetric(grid, "T. Absent", d.optInt("teachers_absent"), Ui.RED);
 
+        addNotificationTestSection();
         addAbsenceSection(flags);
         addSchoolRates(d.optJSONArray("schools"));
 
@@ -164,21 +178,30 @@ public class DashboardActivity extends Activity {
 
     private void renderLoadingCards() {
         content.removeAllViews();
-        TextView loading = Ui.text(this, "Loading dashboard...", 18, Ui.INK, Typeface.BOLD);
+        LinearLayout loading = new LinearLayout(this);
+        loading.setOrientation(LinearLayout.VERTICAL);
         loading.setGravity(Gravity.CENTER);
-        loading.setPadding(20, 70, 20, 70);
-        loading.setBackground(Ui.strokeBg(android.graphics.Color.WHITE, android.graphics.Color.rgb(219, 227, 239), 24));
+        loading.setPadding(24, 58, 24, 58);
+        loading.setBackground(Ui.gradient(Ui.PRIMARY, Ui.PRIMARY_DARK, 28));
+        Ui.elevate(loading, 8);
+        TextView mark = Ui.text(this, "Loading dashboard", 20, android.graphics.Color.WHITE, Typeface.BOLD);
+        TextView sub = Ui.text(this, "Syncing live attendance data...", 14, android.graphics.Color.rgb(255, 237, 222), Typeface.NORMAL);
+        sub.setGravity(Gravity.CENTER);
+        loading.addView(mark);
+        loading.addView(sub, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 10, 0, 0));
         content.addView(loading, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        Ui.reveal(loading, 0);
+        Ui.pulse(loading);
     }
 
     private void addMetric(GridLayout grid, String label, int value, int accent) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(18, 18, 18, 18);
-        card.setBackground(Ui.strokeBg(Ui.CARD, android.graphics.Color.rgb(219, 227, 239), 22));
-        Ui.elevate(card, 3);
+        card.setBackground(Ui.strokeBg(Ui.CARD, Ui.LINE, 22));
+        Ui.elevate(card, 4);
 
-        TextView number = Ui.text(this, String.valueOf(value), 27, Ui.INK, Typeface.BOLD);
+        TextView number = Ui.text(this, String.valueOf(value), 27, Ui.PLUM, Typeface.BOLD);
         TextView text = Ui.text(this, label, 12, Ui.MUTED, Typeface.BOLD);
         TextView bar = new TextView(this);
         bar.setBackground(Ui.bg(accent, 8));
@@ -198,11 +221,12 @@ public class DashboardActivity extends Activity {
         LinearLayout section = new LinearLayout(this);
         section.setOrientation(LinearLayout.VERTICAL);
         section.setPadding(22, 20, 22, 22);
-        section.setBackground(Ui.strokeBg(Ui.CARD, android.graphics.Color.rgb(219, 227, 239), 22));
+        section.setBackground(Ui.strokeBg(Ui.CARD, Ui.LINE, 22));
         Ui.elevate(section, 3);
         content.addView(section, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 10, 0, 0));
+        Ui.reveal(section, 170);
 
-        TextView title = Ui.text(this, "2-Day Absence Alerts", 18, Ui.INK, Typeface.BOLD);
+        TextView title = Ui.text(this, "2-Day Absence Alerts", 18, Ui.PLUM, Typeface.BOLD);
         section.addView(title);
 
         if (flags.length() == 0) {
@@ -219,7 +243,7 @@ public class DashboardActivity extends Activity {
             if (st == null) continue;
             TextView row = Ui.text(this, st.optString("name", "Student") + "\n" + st.optString("school_name", "") + " - " + st.optString("grade_name", ""), 14, Ui.INK, Typeface.BOLD);
             row.setPadding(18, 14, 18, 14);
-            row.setBackground(Ui.bg(android.graphics.Color.rgb(248, 250, 252), 16));
+            row.setBackground(Ui.bg(Ui.PLUM_SOFT, 16));
             section.addView(row, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 10, 0, 0));
         }
     }
@@ -229,11 +253,12 @@ public class DashboardActivity extends Activity {
         LinearLayout section = new LinearLayout(this);
         section.setOrientation(LinearLayout.VERTICAL);
         section.setPadding(22, 20, 22, 22);
-        section.setBackground(Ui.strokeBg(Ui.CARD, android.graphics.Color.rgb(219, 227, 239), 22));
+        section.setBackground(Ui.strokeBg(Ui.CARD, Ui.LINE, 22));
         Ui.elevate(section, 3);
         content.addView(section, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 16, 0, 0));
+        Ui.reveal(section, 230);
 
-        TextView title = Ui.text(this, "Schools by Attendance Rate", 18, Ui.INK, Typeface.BOLD);
+        TextView title = Ui.text(this, "Schools by Attendance Rate", 18, Ui.PLUM, Typeface.BOLD);
         section.addView(title);
 
         int limit = Math.min(schools.length(), 8);
@@ -242,7 +267,7 @@ public class DashboardActivity extends Activity {
             if (school == null) continue;
             TextView row = Ui.text(this, school.optString("name") + "\n" + school.optInt("present") + " present of " + school.optInt("enrollment") + " - " + school.optInt("rate") + "%", 14, Ui.INK, Typeface.BOLD);
             row.setPadding(18, 14, 18, 14);
-            row.setBackground(Ui.bg(android.graphics.Color.rgb(248, 250, 252), 16));
+            row.setBackground(Ui.bg(Ui.PLUM_SOFT, 16));
             section.addView(row, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 10, 0, 0));
         }
     }
@@ -258,13 +283,70 @@ public class DashboardActivity extends Activity {
         progress.setVisibility(loading ? View.VISIBLE : View.GONE);
         refresh.setEnabled(!loading);
         refresh.setText(loading ? "Loading" : "Refresh");
+        if (loading) Ui.pulse(refresh);
     }
 
     private Button smallButton(String text) {
         Button b = new Button(this);
         b.setText(text);
         b.setTextSize(12);
+        b.setTextColor(Ui.PLUM);
+        b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         b.setAllCaps(false);
+        b.setBackground(Ui.bg(android.graphics.Color.WHITE, 34));
         return b;
+    }
+
+    private void addNotificationTestSection() {
+        LinearLayout section = new LinearLayout(this);
+        section.setOrientation(LinearLayout.VERTICAL);
+        section.setPadding(22, 20, 22, 22);
+        section.setBackground(Ui.strokeBg(Ui.CARD, Ui.LINE, 22));
+        Ui.elevate(section, 3);
+        content.addView(section, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 2, 0, 12));
+
+        TextView title = Ui.text(this, "Notification Test", 18, Ui.PLUM, Typeface.BOLD);
+        TextView body = Ui.text(this, "Send a test alert to this phone.", 14, Ui.MUTED, Typeface.NORMAL);
+        Button test = new Button(this);
+        test.setText("SEND TEST NOTIFICATION");
+        test.setTextColor(android.graphics.Color.WHITE);
+        test.setTextSize(13);
+        test.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        test.setAllCaps(false);
+        test.setBackground(Ui.gradient(Ui.PRIMARY, Ui.PRIMARY_DARK, 44));
+        test.setOnClickListener(v -> sendTestNotification());
+        section.addView(title);
+        section.addView(body, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 6, 0, 14));
+        section.addView(test, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, 86));
+        Ui.reveal(section, 120);
+    }
+
+    private void sendTestNotification() {
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 42);
+            Toast.makeText(this, "Allow notifications, then tap Test again.", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager == null) return;
+        if (Build.VERSION.SDK_INT >= 26) {
+            NotificationChannel channel = new NotificationChannel(TEST_CHANNEL_ID, "Mobile App Test Notifications", NotificationManager.IMPORTANCE_HIGH);
+            channel.setDescription("Used to verify that mobile app notifications are working.");
+            manager.createNotificationChannel(channel);
+        }
+
+        Intent intent = new Intent(this, DashboardActivity.class);
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, 3001, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, TEST_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle("Notification test successful")
+                .setContentText("Your attendance mobile app can send phone notifications.")
+                .setStyle(new NotificationCompat.BigTextStyle().bigText("Your attendance mobile app can send phone notifications."))
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_HIGH);
+        manager.notify(3001, builder.build());
+        Toast.makeText(this, "Test notification sent.", Toast.LENGTH_SHORT).show();
     }
 }
