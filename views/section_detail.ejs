@@ -10,6 +10,87 @@ if (user && user.role === 'superintendent') {
     schoolsBackLabel = 'Back to Dashboard';
 }
 %>
+<style>
+.section-warning-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+    border: 1px solid #fcd34d;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+}
+.section-warning-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f59e0b;
+    color: #fff;
+    flex-shrink: 0;
+    box-shadow: 0 4px 10px rgba(245, 158, 11, 0.2);
+}
+.section-warning-title {
+    color: #92400e;
+    font-weight: 700;
+    font-size: 1rem;
+    line-height: 1.2;
+}
+.section-warning-desc {
+    color: #a16207;
+    font-size: 0.875rem;
+    margin-top: 2px;
+    line-height: 1.35;
+}
+.section-alert {
+    display: none;
+    align-items: flex-start;
+    gap: 10px;
+    border: 1px solid #f59e0b;
+    border-radius: 10px;
+    background: #fffbeb;
+    padding: 10px 12px;
+    margin-bottom: 16px;
+}
+.section-alert-icon {
+    color: #d97706;
+    font-size: 1.1rem;
+    margin-top: 1px;
+    flex-shrink: 0;
+}
+.section-alert-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #92400e;
+    line-height: 1.2;
+}
+.section-alert-text {
+    color: #a16207;
+    font-size: 0.85rem;
+    margin-top: 2px;
+    line-height: 1.35;
+}
+@media (max-width: 768px) {
+    .section-warning-card {
+        padding: 10px 12px;
+        gap: 10px;
+    }
+    .section-warning-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 0.9rem;
+    }
+    .section-warning-title {
+        font-size: 0.9rem;
+    }
+    .section-warning-desc {
+        font-size: 0.8rem;
+    }
+}
+</style>
 
 <!-- Breadcrumb -->
 <nav class="breadcrumb-nav">
@@ -44,21 +125,21 @@ if (user && user.role === 'superintendent') {
 </div>
 
 <!-- No Adviser Warning -->
-<div class="teacher-card" id="noAdviserCard" style="display:none;background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%)">
-    <div class="teacher-avatar" style="background:#f59e0b;color:#fff"><i class="fa fa-exclamation-triangle"></i></div>
-    <div class="teacher-info">
-        <div class="teacher-name" style="color:#92400e"><i class="fa fa-exclamation-circle" style="color:#f59e0b;margin-right:6px"></i>No Adviser Assigned</div>
-        <div class="teacher-detail" style="color:#a16207">This section does not have an adviser assigned yet.</div>
+<div class="section-warning-card" id="noAdviserCard" style="display:none;">
+    <div class="section-warning-icon"><i class="fa fa-exclamation-triangle"></i></div>
+    <div>
+        <div class="section-warning-title">No Adviser Assigned</div>
+        <div class="section-warning-desc">This section does not have an adviser assigned yet.</div>
     </div>
 </div>
 
 <!-- Non-School-Day Banner -->
-<div id="nonSchoolDayBanner" style="display:none;background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%);border:1px solid #f59e0b;border-radius:var(--radius);padding:16px 20px;margin-bottom:16px;display:none">
-    <div style="display:flex;align-items:center;gap:12px">
-        <i class="fa fa-calendar-times" style="font-size:1.5rem;color:#d97706"></i>
+<div id="nonSchoolDayBanner" class="section-alert">
+    <i class="fa fa-calendar-times section-alert-icon"></i>
+    <div>
+        <div class="section-alert-title">No Classes Today</div>
         <div>
-            <div style="font-weight:600;color:#92400e">No Classes Today</div>
-            <div style="color:#a16207;font-size:.9rem" id="nonSchoolDayReason">Attendance data shown is for reference only.</div>
+            <div id="nonSchoolDayReason" class="section-alert-text">Attendance data shown is for reference only.</div>
         </div>
     </div>
 </div>
@@ -163,7 +244,7 @@ async function loadData() {
         if (sdRes && !sdRes.isSchoolDay) {
             var type = sdRes.type || 'Non-school Day';
             var reason = sdRes.reason;
-            banner.style.display = '';
+            banner.style.display = 'flex';
             document.getElementById('nonSchoolDayReason').textContent = 'No classes due to ' + String(type).toLowerCase() + (reason ? ' - ' + reason : '') + '. Attendance data shown is for reference only.';
         } else {
             banner.style.display = 'none';
