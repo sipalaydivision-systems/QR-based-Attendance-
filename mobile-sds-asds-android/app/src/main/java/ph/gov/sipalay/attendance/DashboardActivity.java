@@ -79,6 +79,7 @@ public class DashboardActivity extends Activity {
         AbsenceWorker.schedule(this);
         buildShell();
         renderLoading("Syncing live records...");
+        handler.postDelayed(this::sendWelcomeNotification, 900);
         loadDashboard(true);
         handler.postDelayed(poller, POLL_MS);
     }
@@ -118,13 +119,9 @@ public class DashboardActivity extends Activity {
         titleLp.weight = 1;
         top.addView(titleBox, titleLp);
 
-        refreshButton = headerButton("Sync");
-        refreshButton.setOnClickListener(v -> loadDashboard(true));
-        top.addView(refreshButton, Ui.marginLp(Ui.dp(this, 60), Ui.dp(this, 36), 0, 0, Ui.dp(this, 8), 0));
-
         Button logout = headerButton("Out");
         logout.setOnClickListener(v -> logout());
-        top.addView(logout, Ui.lp(Ui.dp(this, 52), Ui.dp(this, 36)));
+        top.addView(logout, Ui.lp(Ui.dp(this, 58), Ui.dp(this, 36)));
         header.addView(top);
 
         LinearLayout chips = new LinearLayout(this);
@@ -301,7 +298,7 @@ public class DashboardActivity extends Activity {
         if (animate) Ui.reveal(ringPanel, 40);
 
         if (!dashboard.optBoolean("is_school_day", true)) {
-            TextView note = Ui.text(this, dashboard.optString("non_school_day_reason", "No classes today."), 13, Color.rgb(141, 71, 0), Typeface.BOLD);
+            TextView note = Ui.text(this, nonSchoolDayAlertText(), 13, Color.rgb(141, 71, 0), Typeface.BOLD);
             note.setPadding(Ui.dp(this, 12), Ui.dp(this, 10), Ui.dp(this, 12), Ui.dp(this, 10));
             note.setBackground(Ui.strokeBg(Color.rgb(255, 248, 232), Color.rgb(252, 190, 93), Ui.dp(this, 14)));
             content.addView(note, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 10)));
@@ -798,7 +795,7 @@ public class DashboardActivity extends Activity {
     private void sendFlaggedNotificationTest() {
         if (absenceFlags.length() > 0) {
             JSONObject first = absenceFlags.optJSONObject(0);
-            sendNotification(absenceFlags.length() + " Students Absent 2+ Days", first == null ? "Flagged student details unavailable." : absenceNotificationBody(first));
+            sendNotification(absenceTitle(absenceFlags.length()), first == null ? "Flagged student details unavailable." : absenceNotificationBody(first));
             return;
         }
         Toast.makeText(this, "No live 2-day flagged students found.", Toast.LENGTH_LONG).show();
@@ -840,15 +837,19 @@ public class DashboardActivity extends Activity {
         String grade = valueOrDash(row.optString("grade_name", ""));
         String section = valueOrDash(row.optString("section_name", ""));
         String lrn = valueOrDash(row.optString("lrn", ""));
-        return grade + " - " + section + " - LRN " + lrn + " - " + row.optInt("absent_days", 2) + " days absent";
+        return readableSelectedDateFull() + " - " + grade + " - " + section + " - LRN " + lrn
+                + " - " + row.optInt("absent_days", 2) + " days absent"
+                + " - Adviser: " + valueOrDash(row.optString("adviser", ""));
     }
 
     private String absenceNotificationBody(JSONObject row) {
         return row.optString("name", "Student")
+                + " | " + readableSelectedDateFull()
                 + " | " + valueOrDash(row.optString("grade_name", ""))
                 + " - " + valueOrDash(row.optString("section_name", ""))
                 + " | LRN: " + valueOrDash(row.optString("lrn", ""))
-                + " | " + row.optInt("absent_days", 2) + " days absent";
+                + " | " + row.optInt("absent_days", 2) + " days absent"
+                + " | Adviser: " + valueOrDash(row.optString("adviser", ""));
     }
 
     private String valueOrDash(String value) {
@@ -920,6 +921,8 @@ public class DashboardActivity extends Activity {
     private LinearLayout sectionHeader(String title, String subtitle) {
         LinearLayout card = panel();
         card.setPadding(Ui.dp(this, 14), Ui.dp(this, 12), Ui.dp(this, 14), Ui.dp(this, 12));
+        card.setMinimumHeight(Ui.dp(this, 74));
+        card.setLayoutParams(Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 12)));
         card.setBackground(Ui.gradient(Color.WHITE, Color.rgb(241, 253, 247), Ui.dp(this, 18)));
         card.addView(Ui.text(this, title, 21, Ui.INK, Typeface.BOLD));
         card.addView(Ui.text(this, subtitle, 12, Color.rgb(101, 116, 112), Typeface.NORMAL), Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 2), 0, 0));
@@ -930,6 +933,8 @@ public class DashboardActivity extends Activity {
     private LinearLayout sectionCard(String title, String subtitle) {
         LinearLayout card = panel();
         card.setPadding(Ui.dp(this, 14), Ui.dp(this, 14), Ui.dp(this, 14), Ui.dp(this, 14));
+        card.setMinimumHeight(Ui.dp(this, 92));
+        card.setLayoutParams(Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 12)));
         TextView titleView = Ui.text(this, title, 16, Ui.INK, Typeface.BOLD);
         TextView subtitleView = Ui.text(this, subtitle, 11, Color.rgb(102, 116, 112), Typeface.NORMAL);
         card.addView(titleView);
@@ -971,7 +976,8 @@ public class DashboardActivity extends Activity {
     private LinearLayout recordRow(String title, String subtitle, String meta, int accent) {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10));
+        row.setMinimumHeight(Ui.dp(this, 68));
+        row.setPadding(Ui.dp(this, 10), Ui.dp(this, 11), Ui.dp(this, 10), Ui.dp(this, 11));
         row.setBackground(Ui.bg(Color.rgb(248, 251, 249), Ui.dp(this, 12)));
 
         TextView marker = Ui.text(this, "", 1, accent, Typeface.BOLD);
@@ -988,7 +994,7 @@ public class DashboardActivity extends Activity {
         if (!metaView.getText().toString().isEmpty()) copy.addView(metaView);
         row.addView(copy, Ui.marginLp(0, LinearLayout.LayoutParams.WRAP_CONTENT, Ui.dp(this, 10), 0, 0, 0));
         ((LinearLayout.LayoutParams) copy.getLayoutParams()).weight = 1;
-        LinearLayout.LayoutParams lp = Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 8));
+        LinearLayout.LayoutParams lp = Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 10));
         row.setLayoutParams(lp);
         return row;
     }
@@ -1003,7 +1009,7 @@ public class DashboardActivity extends Activity {
     private void addMetric(GridLayout grid, String label, int value, String caption, int iconBg, int accent) {
         LinearLayout card = panel();
         card.setPadding(Ui.dp(this, 12), Ui.dp(this, 11), Ui.dp(this, 12), Ui.dp(this, 11));
-        card.setMinimumHeight(Ui.dp(this, 78));
+        card.setMinimumHeight(Ui.dp(this, 86));
 
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -1127,7 +1133,7 @@ public class DashboardActivity extends Activity {
         if (progress != null) progress.setVisibility(loading && !dashboardReady ? View.VISIBLE : View.GONE);
         if (refreshButton != null) {
             refreshButton.setEnabled(true);
-            refreshButton.setText("Sync");
+            refreshButton.setText("");
         }
     }
 
@@ -1169,6 +1175,23 @@ public class DashboardActivity extends Activity {
 
     private String readableDate() {
         return new SimpleDateFormat("EEE, MMM d", Locale.US).format(new Date());
+    }
+
+    private String readableSelectedDateFull() {
+        try {
+            Date date = new SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(selectedDate);
+            return new SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.US).format(date);
+        } catch (Exception e) {
+            return new SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.US).format(new Date());
+        }
+    }
+
+    private String nonSchoolDayAlertText() {
+        String reason = dashboard.optString("non_school_day_reason", "").trim();
+        if (reason.isEmpty() || reason.matches("^[A-Za-z]+$")) {
+            reason = "No classes today. Attendance data is shown for reference only.";
+        }
+        return readableSelectedDateFull() + ": " + reason;
     }
 
     private String timeNow() {
@@ -1213,14 +1236,18 @@ public class DashboardActivity extends Activity {
         String last = SessionStore.prefs(this).getString("last_native_absence_notification", "");
         if (key.equals(last)) return;
         JSONObject first = flags.optJSONObject(0);
-        sendNotification(flags.length() + " Students Absent 2+ Days", first == null ? "Flagged student details unavailable." : absenceNotificationBody(first));
+        sendNotification(absenceTitle(flags.length()), first == null ? "Flagged student details unavailable." : absenceNotificationBody(first), false);
         SessionStore.prefs(this).edit().putString("last_native_absence_notification", key).apply();
     }
 
     private void sendNotification(String title, String body) {
+        sendNotification(title, body, true);
+    }
+
+    private void sendNotification(String title, String body, boolean showToast) {
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 42);
-            Toast.makeText(this, "Allow notifications, then try again.", Toast.LENGTH_LONG).show();
+            if (showToast) Toast.makeText(this, "Allow notifications, then try again.", Toast.LENGTH_LONG).show();
             return;
         }
         NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
@@ -1241,7 +1268,16 @@ public class DashboardActivity extends Activity {
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_HIGH);
         manager.notify(3001, builder.build());
-        Toast.makeText(this, "Notification sent.", Toast.LENGTH_SHORT).show();
+        if (showToast) Toast.makeText(this, "Notification sent.", Toast.LENGTH_SHORT).show();
+    }
+
+    private String absenceTitle(int count) {
+        return count == 1 ? "1 student absent 2+ days" : count + " students absent 2+ days";
+    }
+
+    private void sendWelcomeNotification() {
+        String name = compactName(SessionStore.getFullname(this));
+        sendNotification("WELCOME", greeting() + ", " + name, false);
     }
 
     private interface ArrayRenderer {

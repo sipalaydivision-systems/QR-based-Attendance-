@@ -7,6 +7,8 @@ import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
@@ -43,6 +45,7 @@ public class LoginActivity extends Activity {
         scroll.setFillViewport(true);
         scroll.setClipToPadding(false);
         scroll.setSmoothScrollingEnabled(true);
+        scroll.setPadding(0, 0, 0, Ui.navigationBarHeight(this) + Ui.dp(this, 140));
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -53,18 +56,18 @@ public class LoginActivity extends Activity {
         LinearLayout hero = new LinearLayout(this);
         hero.setOrientation(LinearLayout.VERTICAL);
         hero.setGravity(Gravity.CENTER);
-        hero.setPadding(Ui.dp(this, 24), Ui.statusBarHeight(this) + Ui.dp(this, 18), Ui.dp(this, 24), Ui.dp(this, 46));
+        hero.setPadding(Ui.dp(this, 24), Ui.statusBarHeight(this) + Ui.dp(this, 14), Ui.dp(this, 24), Ui.dp(this, 38));
         hero.setBackground(Ui.verticalGradient(Ui.GREEN, Ui.GREEN_DARK, 0));
-        root.addView(hero, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 246) + Math.min(Ui.statusBarHeight(this), Ui.dp(this, 26))));
+        root.addView(hero, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 230) + Math.min(Ui.statusBarHeight(this), Ui.dp(this, 26))));
 
         ImageView logo = new ImageView(this);
         logo.setImageResource(getResources().getIdentifier("system_logo", "drawable", getPackageName()));
         logo.setAdjustViewBounds(true);
         logo.setBackground(Ui.strokeBg(android.graphics.Color.argb(40, 255, 255, 255), android.graphics.Color.argb(70, 255, 255, 255), Ui.dp(this, 22)));
         logo.setPadding(Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10));
-        hero.addView(logo, Ui.lp(Ui.dp(this, 72), Ui.dp(this, 72)));
+        hero.addView(logo, Ui.lp(Ui.dp(this, 68), Ui.dp(this, 68)));
 
-        TextView title = Ui.text(this, "Edutrack", 30, android.graphics.Color.WHITE, Typeface.BOLD);
+        TextView title = Ui.text(this, "Edutrack", 29, android.graphics.Color.WHITE, Typeface.BOLD);
         title.setGravity(Gravity.CENTER);
         hero.addView(title, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 14), 0, 0));
 
@@ -74,16 +77,16 @@ public class LoginActivity extends Activity {
 
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(Ui.dp(this, 22), Ui.dp(this, 22), Ui.dp(this, 22), Ui.dp(this, 22));
-        card.setBackground(Ui.bg(android.graphics.Color.WHITE, Ui.dp(this, 24)));
+        card.setPadding(Ui.dp(this, 22), Ui.dp(this, 20), Ui.dp(this, 22), Ui.dp(this, 20));
+        card.setBackground(Ui.strokeBg(android.graphics.Color.WHITE, android.graphics.Color.rgb(231, 238, 234), Ui.dp(this, 24)));
         Ui.elevate(card, 16);
-        LinearLayout.LayoutParams cardLp = Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, Ui.dp(this, 20), -Ui.dp(this, 42), Ui.dp(this, 20), 0);
+        LinearLayout.LayoutParams cardLp = Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, Ui.dp(this, 22), -Ui.dp(this, 34), Ui.dp(this, 22), 0);
         root.addView(card, cardLp);
 
-        TextView welcome = Ui.text(this, "Welcome Back", 25, Ui.INK, Typeface.BOLD);
+        TextView welcome = Ui.text(this, "Welcome Back", 24, Ui.INK, Typeface.BOLD);
         card.addView(welcome);
 
-        TextView continueText = Ui.text(this, "Sign in to your attendance dashboard", 14, android.graphics.Color.rgb(102, 116, 112), Typeface.NORMAL);
+        TextView continueText = Ui.text(this, "Sign in to your attendance dashboard", 13, android.graphics.Color.rgb(102, 116, 112), Typeface.NORMAL);
         card.addView(continueText, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 2), 0, Ui.dp(this, 18)));
 
         errorBox = Ui.text(this, "", 14, Ui.RED, Typeface.BOLD);
@@ -98,15 +101,21 @@ public class LoginActivity extends Activity {
         card.addView(label("Password"));
         password = field("Enter your password", true);
         card.addView(password, fieldParams());
+        username.setOnFocusChangeListener((v, hasFocus) -> {
+            if (hasFocus) new Handler(Looper.getMainLooper()).postDelayed(() -> scroll.smoothScrollTo(0, username.getTop()), 220);
+        });
+        password.setOnFocusChangeListener((v, hasFocus) -> {
+            if (hasFocus) new Handler(Looper.getMainLooper()).postDelayed(() -> scroll.smoothScrollTo(0, signIn.getBottom()), 220);
+        });
 
         signIn = new Button(this);
         signIn.setText("Sign In");
         signIn.setTextColor(android.graphics.Color.WHITE);
-        signIn.setTextSize(18);
+        signIn.setTextSize(17);
         signIn.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         signIn.setAllCaps(false);
         signIn.setBackground(Ui.gradient(Ui.GREEN, Ui.GREEN_DARK, Ui.dp(this, 18)));
-        card.addView(signIn, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 52), 0, Ui.dp(this, 8), 0, 0));
+        card.addView(signIn, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 50), 0, Ui.dp(this, 8), 0, 0));
 
         progress = new ProgressBar(this);
         progress.setVisibility(View.GONE);
@@ -115,7 +124,7 @@ public class LoginActivity extends Activity {
         progressWrap.addView(progress, Ui.lp(Ui.dp(this, 38), Ui.dp(this, 38)));
         card.addView(progressWrap, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 8), 0, 0));
 
-        TextView footer = Ui.text(this, "Attendance Monitoring System\nv1.0.7", 13, android.graphics.Color.rgb(148, 163, 158), Typeface.NORMAL);
+        TextView footer = Ui.text(this, "Attendance Monitoring System\nv1.0.10", 13, android.graphics.Color.rgb(148, 163, 158), Typeface.NORMAL);
         footer.setGravity(Gravity.CENTER);
         root.addView(footer, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 24), 0, Ui.dp(this, 110)));
 

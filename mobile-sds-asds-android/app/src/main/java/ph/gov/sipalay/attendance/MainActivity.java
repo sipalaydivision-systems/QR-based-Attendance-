@@ -8,6 +8,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
+import android.view.View;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
@@ -17,18 +19,22 @@ public class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean serverUnavailableShown = false;
     private boolean openingDashboard = false;
+    private ProgressBar splashProgressBar;
+    private TextView splashPercent;
+    private int splashProgress = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         showSplash();
+        startSplashProgress();
         applyConfigurationIntent(getIntent());
         handler.postDelayed(() -> {
             if (!openingDashboard && !serverUnavailableShown && !SessionStore.hasConfiguredBaseUrl(this)) {
                 showServerUnavailable();
             }
-        }, 1200);
-        handler.postDelayed(this::checkServerAndOpen, 80);
+        }, 2800);
+        handler.postDelayed(this::checkServerAndOpen, 2300);
     }
 
     @Override
@@ -59,11 +65,17 @@ public class MainActivity extends Activity {
 
     private void showSplash() {
         Ui.setBars(getWindow(), Ui.GREEN_DARK, false, Ui.GREEN_DARK);
+        FrameLayout stage = new FrameLayout(this);
+        stage.setBackground(Ui.verticalGradient(Ui.GREEN, Ui.GREEN_DARK, 0));
+        addMovingBand(stage, 0, 70, 9000);
+        addMovingBand(stage, 170, -85, 11000);
+        addMovingBand(stage, 340, 55, 10000);
+
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER);
         root.setPadding(Ui.dp(this, 34), Ui.dp(this, 42), Ui.dp(this, 34), Ui.dp(this, 42));
-        root.setBackground(Ui.verticalGradient(Ui.GREEN, Ui.GREEN_DARK, 0));
+        stage.addView(root, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT));
 
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
@@ -91,17 +103,58 @@ public class MainActivity extends Activity {
         division.setGravity(Gravity.CENTER);
         card.addView(division, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 50), 0, 0));
 
-        LinearLayout loadingRow = new LinearLayout(this);
-        loadingRow.setGravity(Gravity.CENTER);
-        loadingRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout loadingWrap = new LinearLayout(this);
+        loadingWrap.setGravity(Gravity.CENTER);
+        loadingWrap.setOrientation(LinearLayout.VERTICAL);
+        loadingWrap.setPadding(Ui.dp(this, 18), Ui.dp(this, 10), Ui.dp(this, 18), Ui.dp(this, 10));
 
-        ProgressBar bar = new ProgressBar(this);
-        loadingRow.addView(bar, new LinearLayout.LayoutParams(Ui.dp(this, 26), Ui.dp(this, 26)));
-        TextView loading = Ui.text(this, "Opening", 14, android.graphics.Color.argb(210, 255, 255, 255), Typeface.NORMAL);
-        loadingRow.addView(loading, Ui.marginLp(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, Ui.dp(this, 12), 0, 0, 0));
-        root.addView(loadingRow, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 70)));
-        setContentView(root);
+        splashProgressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        splashProgressBar.setIndeterminate(false);
+        splashProgressBar.setMax(100);
+        splashProgressBar.setProgress(0);
+        loadingWrap.addView(splashProgressBar, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 8)));
+
+        splashPercent = Ui.text(this, "Opening 0%", 14, android.graphics.Color.argb(220, 255, 255, 255), Typeface.BOLD);
+        splashPercent.setGravity(Gravity.CENTER);
+        loadingWrap.addView(splashPercent, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 12), 0, 0));
+        root.addView(loadingWrap, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 76)));
+        setContentView(stage);
         Ui.reveal(card, 10);
+    }
+
+    private void addMovingBand(FrameLayout stage, int topDp, int driftDp, long duration) {
+        View band = new View(this);
+        band.setAlpha(0.16f);
+        band.setBackground(Ui.gradient(android.graphics.Color.argb(90, 255, 255, 255), android.graphics.Color.argb(10, 255, 255, 255), Ui.dp(this, 18)));
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 88));
+        lp.topMargin = Ui.dp(this, topDp);
+        lp.leftMargin = -Ui.dp(this, 80);
+        lp.rightMargin = -Ui.dp(this, 80);
+        stage.addView(band, lp);
+        band.animate()
+                .translationX(Ui.dp(this, driftDp))
+                .alpha(0.28f)
+                .setDuration(duration)
+                .withEndAction(() -> band.animate().translationX(0).alpha(0.16f).setDuration(duration).start())
+                .start();
+    }
+
+    private void startSplashProgress() {
+        splashProgress = 0;
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (isFinishing() || splashProgressBar == null) return;
+                splashProgress = Math.min(100, splashProgress + 2);
+                splashProgressBar.setProgress(splashProgress);
+                if (splashPercent != null) splashPercent.setText("Opening " + splashProgress + "%");
+                if (splashProgress >= 100) {
+                    checkServerAndOpen();
+                    return;
+                }
+                handler.postDelayed(this, 36);
+            }
+        });
     }
 
     private boolean applyConfigurationIntent(Intent intent) {

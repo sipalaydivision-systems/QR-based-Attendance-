@@ -67,7 +67,7 @@ public class AbsenceWorker extends Worker {
             String body = flags.length() == 1
                     ? absenceNotificationBody(first)
                     : flags.length() + " flagged. First: " + absenceNotificationBody(first);
-            notify(context, flags.length() + " Students Absent 2+ Days", body);
+            notify(context, absenceTitle(flags.length()), body);
             SessionStore.prefs(context).edit().putString("last_absence_notification", key).apply();
             return Result.success();
         } catch (SecurityException e) {
@@ -115,13 +115,19 @@ public class AbsenceWorker extends Worker {
     private String absenceNotificationBody(JSONObject row) {
         if (row == null) return "Flagged student details unavailable.";
         return row.optString("name", "Student")
+                + " | " + new SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.US).format(new Date())
                 + " | " + valueOrDash(row.optString("grade_name", ""))
                 + " - " + valueOrDash(row.optString("section_name", ""))
                 + " | LRN: " + valueOrDash(row.optString("lrn", ""))
-                + " | " + row.optInt("absent_days", 2) + " days absent";
+                + " | " + row.optInt("absent_days", 2) + " days absent"
+                + " | Adviser: " + valueOrDash(row.optString("adviser", ""));
     }
 
     private String valueOrDash(String value) {
         return value == null || value.trim().isEmpty() ? "-" : value.trim();
+    }
+
+    private String absenceTitle(int count) {
+        return count == 1 ? "1 student absent 2+ days" : count + " students absent 2+ days";
     }
 }
