@@ -58,6 +58,8 @@ public class DashboardActivity extends Activity {
     private String lastHash = "";
     private String selectedDate = "";
     private int selectedSchoolId = -1;
+    private int selectedGradeId = -1;
+    private int selectedSectionId = -1;
     private boolean fetching = false;
     private boolean dashboardReady = false;
 
@@ -182,6 +184,8 @@ public class DashboardActivity extends Activity {
         if (tab.equals(currentTab) && dashboardReady) return;
         if ("schools".equals(tab) && !"schools".equals(currentTab)) {
             selectedSchoolId = -1;
+            selectedGradeId = -1;
+            selectedSectionId = -1;
         }
         currentTab = tab;
         updateNav();
@@ -455,7 +459,11 @@ public class DashboardActivity extends Activity {
     }
 
     private void renderSchools(boolean animate) {
-        content.addView(sectionHeader("Schools", selectedSchoolId < 0 ? "Tap a school to view grade levels, sections, advisers, and students." : "School details from the live database."));
+        String sub = "Tap a school to view grade levels.";
+        if (selectedSchoolId >= 0 && selectedGradeId < 0) sub = "Tap a grade level to view sections.";
+        if (selectedGradeId >= 0 && selectedSectionId < 0) sub = "Tap a section to view adviser and students.";
+        if (selectedSectionId >= 0) sub = "Students assigned to this section.";
+        content.addView(sectionHeader("Schools", sub));
         renderRemoteObject("/api/mobile-school-structure", data -> {
             JSONArray schools = data.optJSONArray("schools");
             currentSchools = schools == null ? new JSONArray() : schools;
@@ -483,6 +491,8 @@ public class DashboardActivity extends Activity {
                 );
                 row.setOnClickListener(v -> {
                     selectedSchoolId = school.optInt("id", -1);
+                    selectedGradeId = -1;
+                    selectedSectionId = -1;
                     renderCurrentTab(true);
                 });
                 card.addView(row);
@@ -496,26 +506,60 @@ public class DashboardActivity extends Activity {
     private void renderSchoolDetail(JSONObject school, boolean animate) {
         if (school == null) {
             selectedSchoolId = -1;
+            selectedGradeId = -1;
+            selectedSectionId = -1;
             renderSchoolList(currentSchools, animate);
             return;
         }
+        JSONArray grades = school.optJSONArray("grade_levels");
+        if (selectedGradeId >= 0) {
+            JSONObject grade = findGrade(grades, selectedGradeId);
+            if (grade != null) {
+                if (selectedSectionId >= 0) {
+                    JSONObject section = findSection(grade.optJSONArray("sections"), selectedSectionId);
+                    renderSectionDetail(school, grade, section, animate);
+                    return;
+                }
+                renderGradeDetail(school, grade, animate);
+                return;
+            }
+            selectedGradeId = -1;
+            selectedSectionId = -1;
+        }
+
         LinearLayout card = sectionCard(school.optString("name", "School"), school.optInt("student_count") + " students - " + school.optInt("teacher_count") + " teachers");
         Button back = compactButton("Back to schools", Ui.GREEN_DARK);
         back.setOnClickListener(v -> {
             selectedSchoolId = -1;
+            selectedGradeId = -1;
+            selectedSectionId = -1;
             renderCurrentTab(true);
         });
         card.addView(back, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 42), 0, 0, 0, Ui.dp(this, 10)));
         String contact = school.optString("contact", "").trim();
         if (!contact.isEmpty()) card.addView(Ui.text(this, "Contact: " + contact, 11, Color.rgb(84, 98, 94), Typeface.BOLD));
 
-        JSONArray grades = school.optJSONArray("grade_levels");
         if (grades == null || grades.length() == 0) {
             card.addView(emptyText("No grade levels assigned."));
         } else {
             for (int g = 0; g < grades.length(); g++) {
                 JSONObject grade = grades.optJSONObject(g);
-                if (grade != null) card.addView(gradeBlock(grade));
+                if (grade == null) continue;
+                JSONArray sections = grade.optJSONArray("sections");
+                int sectionCount = sections == null ? 0 : sections.length();
+                int studentCount = countStudentsInGrade(grade);
+                LinearLayout row = recordRow(
+                        grade.optString("name", "Grade Level"),
+                        sectionCount + " section(s)",
+                        studentCount + " students",
+                        Ui.GREEN_DARK
+                );
+                row.setOnClickListener(v -> {
+                    selectedGradeId = grade.optInt("id", -1);
+                    selectedSectionId = -1;
+                    renderCurrentTab(true);
+                });
+                card.addView(row);
             }
         }
         content.addView(card);
@@ -523,42 +567,77 @@ public class DashboardActivity extends Activity {
         if (animate) Ui.reveal(card, 80);
     }
 
-    private LinearLayout gradeBlock(JSONObject grade) {
-        LinearLayout block = nestedBlock(Color.WHITE);
-        block.addView(Ui.text(this, grade.optString("name", "Grade Level"), 13, Ui.GREEN_DARK, Typeface.BOLD));
+    private void renderGradeDetail(JSONObject school, JSONObject grade, boolean animate) {
         JSONArray sections = grade.optJSONArray("sections");
+        LinearLayout card = sectionCard(grade.optString("name", "Grade Level"), school.optString("name", "School"));
+        Button back = compactButton("Back to " + school.optString("name", "School"), Ui.GREEN_DARK);
+        back.setOnClickListener(v -> {
+            selectedGradeId = -1;
+            selectedSectionId = -1;
+            renderCurrentTab(true);
+        });
+        card.addView(back, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 42), 0, 0, 0, Ui.dp(this, 10)));
         if (sections == null || sections.length() == 0) {
-            block.addView(Ui.text(this, "No sections yet.", 11, Color.rgb(102, 116, 112), Typeface.NORMAL));
-            return block;
+            card.addView(emptyText("No sections assigned to this grade."));
+        } else {
+            for (int i = 0; i < sections.length(); i++) {
+                JSONObject section = sections.optJSONObject(i);
+                if (section == null) continue;
+                JSONArray students = section.optJSONArray("students");
+                int studentCount = students == null ? 0 : students.length();
+                String adviser = section.optString("adviser", "").trim();
+                LinearLayout row = recordRow(
+                        section.optString("name", "Section"),
+                        adviser.isEmpty() ? "No adviser assigned" : "Adviser: " + adviser,
+                        studentCount + " students",
+                        adviser.isEmpty() ? Ui.AMBER : Ui.GREEN_DARK
+                );
+                row.setOnClickListener(v -> {
+                    selectedSectionId = section.optInt("id", -1);
+                    renderCurrentTab(true);
+                });
+                card.addView(row);
+            }
         }
-        for (int i = 0; i < sections.length(); i++) {
-            JSONObject section = sections.optJSONObject(i);
-            if (section != null) block.addView(sectionBlock(section));
-        }
-        return block;
+        content.addView(card);
+        addLiveFooter();
+        if (animate) Ui.reveal(card, 80);
     }
 
-    private LinearLayout sectionBlock(JSONObject section) {
-        LinearLayout block = nestedBlock(Color.rgb(248, 251, 249));
+    private void renderSectionDetail(JSONObject school, JSONObject grade, JSONObject section, boolean animate) {
+        if (section == null) {
+            selectedSectionId = -1;
+            renderGradeDetail(school, grade, animate);
+            return;
+        }
+        LinearLayout card = sectionCard(section.optString("name", "Section"), grade.optString("name", "Grade Level") + " - " + school.optString("name", "School"));
+        Button back = compactButton("Back to " + grade.optString("name", "Grade Level"), Ui.GREEN_DARK);
+        back.setOnClickListener(v -> {
+            selectedSectionId = -1;
+            renderCurrentTab(true);
+        });
+        card.addView(back, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 42), 0, 0, 0, Ui.dp(this, 10)));
+
         String adviser = section.optString("adviser", "").trim();
-        block.addView(Ui.text(this, section.optString("name", "Section"), 13, Ui.INK, Typeface.BOLD));
-        block.addView(Ui.text(this, adviser.isEmpty() ? "Adviser: Not assigned" : "Adviser: " + adviser, 11, Color.rgb(84, 98, 94), Typeface.BOLD));
+        card.addView(summaryPill("Adviser", adviser.isEmpty() ? "No adviser assigned" : adviser, adviser.isEmpty() ? Ui.AMBER : Ui.GREEN_DARK));
         JSONArray students = section.optJSONArray("students");
         if (students == null || students.length() == 0) {
-            block.addView(Ui.text(this, "No students in this section.", 11, Color.rgb(102, 116, 112), Typeface.NORMAL));
-            return block;
+            card.addView(emptyText("No students assigned to this section."));
+        } else {
+            for (int i = 0; i < Math.min(students.length(), 120); i++) {
+                JSONObject student = students.optJSONObject(i);
+                if (student == null) continue;
+                String meta = "LRN: " + firstNonEmpty(student.optString("lrn", ""), "-")
+                        + " - Adviser: " + (adviser.isEmpty() ? "No adviser assigned" : adviser);
+                card.addView(recordRow(studentName(student), meta, student.optString("status", "active"), Ui.GREEN_DARK));
+            }
+            if (students.length() > 120) {
+                card.addView(Ui.text(this, "+" + (students.length() - 120) + " more students", 11, Ui.GREEN_DARK, Typeface.BOLD));
+            }
         }
-        for (int i = 0; i < Math.min(students.length(), 60); i++) {
-            JSONObject student = students.optJSONObject(i);
-            if (student == null) continue;
-            TextView line = Ui.text(this, studentName(student) + studentMeta(student), 11, Color.rgb(37, 48, 47), Typeface.NORMAL);
-            line.setPadding(Ui.dp(this, 8), Ui.dp(this, 5), Ui.dp(this, 8), Ui.dp(this, 5));
-            block.addView(line);
-        }
-        if (students.length() > 60) {
-            block.addView(Ui.text(this, "+" + (students.length() - 60) + " more students", 11, Ui.GREEN_DARK, Typeface.BOLD));
-        }
-        return block;
+        content.addView(card);
+        addLiveFooter();
+        if (animate) Ui.reveal(card, 80);
     }
 
     private LinearLayout nestedBlock(int color) {
@@ -576,6 +655,37 @@ public class DashboardActivity extends Activity {
             if (school != null && school.optInt("id", -1) == id) return school;
         }
         return null;
+    }
+
+    private JSONObject findGrade(JSONArray grades, int id) {
+        if (grades == null) return null;
+        for (int i = 0; i < grades.length(); i++) {
+            JSONObject grade = grades.optJSONObject(i);
+            if (grade != null && grade.optInt("id", -1) == id) return grade;
+        }
+        return null;
+    }
+
+    private JSONObject findSection(JSONArray sections, int id) {
+        if (sections == null) return null;
+        for (int i = 0; i < sections.length(); i++) {
+            JSONObject section = sections.optJSONObject(i);
+            if (section != null && section.optInt("id", -1) == id) return section;
+        }
+        return null;
+    }
+
+    private int countStudentsInGrade(JSONObject grade) {
+        int count = 0;
+        JSONArray sections = grade.optJSONArray("sections");
+        if (sections == null) return 0;
+        for (int i = 0; i < sections.length(); i++) {
+            JSONObject section = sections.optJSONObject(i);
+            if (section == null) continue;
+            JSONArray students = section.optJSONArray("students");
+            if (students != null) count += students.length();
+        }
+        return count;
     }
 
     private void renderReports(boolean animate) {
@@ -676,21 +786,19 @@ public class DashboardActivity extends Activity {
     }
 
     private LinearLayout flaggedRow(JSONObject row) {
-        LinearLayout item = recordRow(row.optString("name", "Student"), row.optString("school_name", ""), row.optString("absent_days", "2") + " consecutive days", Ui.AMBER);
+        LinearLayout item = recordRow(row.optString("name", "Student"), row.optString("school_name", ""), absenceFlagSummary(row), Ui.AMBER);
         item.setOnClickListener(v -> contactAdviser(row));
-        Button contact = compactButton("Contact adviser", Ui.AMBER);
+        Button contact = compactButton("Please contact adviser", Ui.AMBER);
         contact.setTextSize(11);
         contact.setOnClickListener(v -> contactAdviser(row));
-        item.addView(contact, Ui.lp(Ui.dp(this, 116), Ui.dp(this, 38)));
+        item.addView(contact, Ui.lp(Ui.dp(this, 148), Ui.dp(this, 38)));
         return item;
     }
 
     private void sendFlaggedNotificationTest() {
         if (absenceFlags.length() > 0) {
             JSONObject first = absenceFlags.optJSONObject(0);
-            String name = first == null ? "Student" : first.optString("name", "Student");
-            String school = first == null ? "" : first.optString("school_name", "");
-            sendNotification(absenceFlags.length() + " Students Absent 2+ Days", "Flagged student: " + name + (school.isEmpty() ? "" : " - " + school));
+            sendNotification(absenceFlags.length() + " Students Absent 2+ Days", first == null ? "Flagged student details unavailable." : absenceNotificationBody(first));
             return;
         }
         Toast.makeText(this, "No live 2-day flagged students found.", Toast.LENGTH_LONG).show();
@@ -701,10 +809,17 @@ public class DashboardActivity extends Activity {
         String phone = firstNonEmpty(row.optString("adviser_contact", ""), row.optString("school_contact", ""));
         String student = row.optString("name", "flagged student");
         String school = row.optString("school_name", "");
-        String message = "Student: " + student + "\nSchool: " + school + "\nAdviser: " + (adviser.isEmpty() ? "Not assigned" : adviser);
+        String message = "Please contact adviser about this 2-day absence flag."
+                + "\n\nStudent: " + student
+                + "\nGrade: " + valueOrDash(row.optString("grade_name", ""))
+                + "\nSection: " + valueOrDash(row.optString("section_name", ""))
+                + "\nLRN: " + valueOrDash(row.optString("lrn", ""))
+                + "\nDays absent: " + row.optInt("absent_days", 2)
+                + "\nSchool: " + school
+                + "\nAdviser: " + (adviser.isEmpty() ? "Not assigned" : adviser);
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this)
-                .setTitle("Contact Adviser")
+                .setTitle("Please contact adviser")
                 .setMessage(message)
                 .setNegativeButton("Close", null);
         if (!phone.isEmpty()) {
@@ -719,6 +834,25 @@ public class DashboardActivity extends Activity {
             startActivity(Intent.createChooser(share, "Contact adviser"));
         });
         builder.show();
+    }
+
+    private String absenceFlagSummary(JSONObject row) {
+        String grade = valueOrDash(row.optString("grade_name", ""));
+        String section = valueOrDash(row.optString("section_name", ""));
+        String lrn = valueOrDash(row.optString("lrn", ""));
+        return grade + " - " + section + " - LRN " + lrn + " - " + row.optInt("absent_days", 2) + " days absent";
+    }
+
+    private String absenceNotificationBody(JSONObject row) {
+        return row.optString("name", "Student")
+                + " | " + valueOrDash(row.optString("grade_name", ""))
+                + " - " + valueOrDash(row.optString("section_name", ""))
+                + " | LRN: " + valueOrDash(row.optString("lrn", ""))
+                + " | " + row.optInt("absent_days", 2) + " days absent";
+    }
+
+    private String valueOrDash(String value) {
+        return value == null || value.trim().isEmpty() ? "-" : value.trim();
     }
 
     private void renderRemoteArray(String path, ArrayRenderer renderer) {
@@ -1079,8 +1213,7 @@ public class DashboardActivity extends Activity {
         String last = SessionStore.prefs(this).getString("last_native_absence_notification", "");
         if (key.equals(last)) return;
         JSONObject first = flags.optJSONObject(0);
-        String name = first == null ? "student" : first.optString("name", "student");
-        sendNotification(flags.length() + " Students Absent 2+ Days", "Flagged students: " + name);
+        sendNotification(flags.length() + " Students Absent 2+ Days", first == null ? "Flagged student details unavailable." : absenceNotificationBody(first));
         SessionStore.prefs(this).edit().putString("last_native_absence_notification", key).apply();
     }
 

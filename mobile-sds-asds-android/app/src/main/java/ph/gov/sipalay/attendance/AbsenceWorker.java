@@ -64,10 +64,9 @@ public class AbsenceWorker extends Worker {
             if (key.equals(last)) return Result.success();
 
             JSONObject first = flags.optJSONObject(0);
-            String firstName = first == null ? "student" : first.optString("name", "student");
             String body = flags.length() == 1
-                    ? "Flagged student: " + firstName
-                    : "Flagged students: " + flags.length() + " total. First: " + firstName + ".";
+                    ? absenceNotificationBody(first)
+                    : flags.length() + " flagged. First: " + absenceNotificationBody(first);
             notify(context, flags.length() + " Students Absent 2+ Days", body);
             SessionStore.prefs(context).edit().putString("last_absence_notification", key).apply();
             return Result.success();
@@ -111,5 +110,18 @@ public class AbsenceWorker extends Worker {
                 .setPriority(NotificationCompat.PRIORITY_HIGH);
 
         manager.notify(2001, builder.build());
+    }
+
+    private String absenceNotificationBody(JSONObject row) {
+        if (row == null) return "Flagged student details unavailable.";
+        return row.optString("name", "Student")
+                + " | " + valueOrDash(row.optString("grade_name", ""))
+                + " - " + valueOrDash(row.optString("section_name", ""))
+                + " | LRN: " + valueOrDash(row.optString("lrn", ""))
+                + " | " + row.optInt("absent_days", 2) + " days absent";
+    }
+
+    private String valueOrDash(String value) {
+        return value == null || value.trim().isEmpty() ? "-" : value.trim();
     }
 }
