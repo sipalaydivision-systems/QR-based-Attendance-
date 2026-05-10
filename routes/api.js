@@ -344,12 +344,12 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
             schoolParams
         );
 
-        // 2-day absence flagged students (absent today and previous school day)
+        // 2-day absence flagged students (absent on last 2 school days)
         const prevSchoolDay = await getPreviousSchoolDay(date, schoolId);
         const [flaggedAbsent] = await db.query(
             `SELECT COUNT(*) as count FROM students s WHERE s.status = 'active'
-             AND s.id NOT IN (SELECT person_id FROM attendance WHERE person_type='student' AND date=?)
-             AND s.id NOT IN (SELECT person_id FROM attendance WHERE person_type='student' AND date=?)` + (schoolId ? ' AND s.school_id = ?' : ''),
+             AND s.id NOT IN (SELECT person_id FROM attendance WHERE person_type='student' AND date=? AND time_in IS NOT NULL)
+             AND s.id NOT IN (SELECT person_id FROM attendance WHERE person_type='student' AND date=? AND time_in IS NOT NULL)` + (schoolId ? ' AND s.school_id = ?' : ''),
             [date, prevSchoolDay, ...(schoolId ? [schoolId] : [])]
         );
 
@@ -1423,40 +1423,70 @@ router.get('/absence-flags', requireAuth, async (req, res) => {
     let schoolId = applySchoolFilter(req);
     if (!schoolId && req.query.school_id) schoolId = parseInt(req.query.school_id, 10);
     try {
-        const today = new Date().toISOString().slice(0, 10);
+        const baseDate = req.query.date || new Date().toISOString().slice(0, 10);
         const checkDates = [];
-        for (let i = 0; i < days; i++) {
-            const d = new Date();
-            d.setDate(d.getDate() - i);
-            checkDates.push(d.toISOString().slice(0, 10));
+        const cursor = new Date(baseDate + 'T00:00:00');
+        let guard = 0;
+        while (checkDates.length < days && guard < 60) {
+            const dStr = cursor.toISOString().slice(0, 10);
+            const schoolDay = await checkSchoolDay(dStr, schoolId);
+            if (schoolDay.isSchoolDay) checkDates.push(dStr);
+            cursor.setDate(cursor.getDate() - 1);
+            guard++;
         }
+        if (!checkDates.length) return res.json([]);
 
-        let query = `SELECT s.id, s.firstname, s.lastname, s.lrn, sc.name as school_name,
-                gl.name as grade_name, sec.name as section_name
+        let studentQuery = `SELECT s.id, s.firstname, s.lastname, s.lrn, s.school_id, sc.name as school_name,
+                gl.name as grade_name, sec.name as section_name, sec.adviser
             FROM students s
             LEFT JOIN schools sc ON s.school_id = sc.id
             LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id
             LEFT JOIN sections sec ON s.section_id = sec.id
             WHERE s.status = 'active'`;
         const params = [];
-        if (schoolId) { query += ' AND s.school_id = ?'; params.push(schoolId); }
+        if (schoolId) { studentQuery += ' AND s.school_id = ?'; params.push(schoolId); }
+        let teacherQuery = `SELECT t.id, t.firstname, t.lastname, t.employee_id, t.school_id, sc.name as school_name
+            FROM teachers t
+            LEFT JOIN schools sc ON t.school_id = sc.id
+            WHERE t.status = 'active'`;
+        if (schoolId) teacherQuery += ' AND t.school_id = ?';
 
-        const [students] = await db.query(query, params);
-        const flagged = [];
-
-        for (const student of students) {
-            const [att] = await db.query(
-                `SELECT date FROM attendance WHERE person_type = 'student' AND person_id = ? AND date IN (${checkDates.map(() => '?').join(',')})`,
-                [student.id, ...checkDates]
-            );
-            if (att.length === 0) {
-                flagged.push({
-                    ...student,
-                    absent_days: days,
-                    name: student.firstname + ' ' + student.lastname
-                });
-            }
+        const [students, teachers] = await Promise.all([
+            db.query(studentQuery, params).then(r => r[0]),
+            db.query(teacherQuery, params).then(r => r[0])
+        ]);
+        const allDatesSql = checkDates.map(() => '?').join(',');
+        const attendanceParams = [...checkDates];
+        let attendanceQuery = `SELECT person_type, person_id
+            FROM attendance
+            WHERE date IN (${allDatesSql}) AND time_in IS NOT NULL AND person_type IN ('student', 'teacher')`;
+        if (schoolId) {
+            attendanceQuery += ' AND school_id = ?';
+            attendanceParams.push(schoolId);
         }
+        attendanceQuery += ' GROUP BY person_type, person_id';
+        const [attendanceRows] = await db.query(attendanceQuery, attendanceParams);
+        const presentSet = new Set(attendanceRows.map(r => `${r.person_type}-${r.person_id}`));
+
+        const flaggedStudents = students
+            .filter(student => !presentSet.has(`student-${student.id}`))
+            .map(student => ({
+                ...student,
+                person_type: 'student',
+                absent_days: checkDates.length,
+                requested_days: days,
+                name: student.firstname + ' ' + student.lastname
+            }));
+        const flaggedTeachers = teachers
+            .filter(teacher => !presentSet.has(`teacher-${teacher.id}`))
+            .map(teacher => ({
+                ...teacher,
+                person_type: 'teacher',
+                absent_days: checkDates.length,
+                requested_days: days,
+                name: teacher.firstname + ' ' + teacher.lastname
+            }));
+        const flagged = [...flaggedStudents, ...flaggedTeachers];
 
         return res.json(flagged);
     } catch (err) {

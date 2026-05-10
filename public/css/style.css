@@ -6,14 +6,14 @@
 
 :root {
     /* Brand */
-    --primary:        #4f46e5;
-    --primary-light:  #6366f1;
-    --primary-dark:   #3730a3;
-    --primary-bg:     rgba(79,70,229,0.08);
+    --primary:        #0a9a6a;
+    --primary-light:  #12b981;
+    --primary-dark:   #087454;
+    --primary-bg:     rgba(10,154,106,0.10);
 
     /* Semantic */
     --success:  #16a34a;
-    --warning:  #d97706;
+    --warning:  #dd7a0b;
     --danger:   #dc2626;
     --info:     #2563eb;
 
@@ -30,7 +30,7 @@
     --gray-900: #0f172a;
 
     /* Sidebar */
-    --sidebar-bg:       #0f172a;
+    --sidebar-bg:       #0f2e2b;
     --sidebar-hover:    rgba(255,255,255,0.06);
     --sidebar-active:   rgba(99,102,241,0.2);
     --sidebar-text:     #94a3b8;

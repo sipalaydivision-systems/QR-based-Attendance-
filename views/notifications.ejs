@@ -81,13 +81,22 @@ async function loadNotifications() {
 
         if (studentFlags.length > 0) {
             document.getElementById('absStudents').innerHTML = studentFlags.map(function(f){
-                return '<tr><td><strong>'+f.person_name+'</strong></td><td><span class="school-code">'+(f.school_name||'-')+'</span></td><td>'+(f.grade_name||'-')+' / '+(f.section_name||'-')+'</td><td>'+(f.adviser||'-')+'</td></tr>';
+                return '<tr><td><strong>'+(f.name || f.person_name || '-')
+                    +'</strong></td><td><span class="school-code">'+(f.school_name||'-')
+                    +'</span></td><td>'+(f.grade_name||'-')+' / '+(f.section_name||'-')
+                    +'</td><td>'+(f.adviser||'-')+'</td></tr>';
             }).join('');
+        } else {
+            document.getElementById('absStudents').innerHTML = '<tr><td colspan="4" class="text-center text-muted">No consecutive absences detected</td></tr>';
         }
         if (teacherFlags.length > 0) {
             document.getElementById('absTeachers').innerHTML = teacherFlags.map(function(f){
-                return '<tr><td><strong>'+f.person_name+'</strong></td><td>'+(f.employee_id||'-')+'</td><td><span class="school-code">'+(f.school_name||'-')+'</span></td></tr>';
+                return '<tr><td><strong>'+(f.name || f.person_name || '-')
+                    +'</strong></td><td>'+(f.employee_id||'-')
+                    +'</td><td><span class="school-code">'+(f.school_name||'-')+'</span></td></tr>';
             }).join('');
+        } else {
+            document.getElementById('absTeachers').innerHTML = '<tr><td colspan="3" class="text-center text-muted">No consecutive absences detected</td></tr>';
         }
     } catch(e) { console.error('Absence flags:', e); }
 

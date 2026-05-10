@@ -71,14 +71,85 @@
 </div>
 
 <style>
+.qr-grid {
+    align-items: start;
+}
+.qr-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+.qr-card-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+.qr-image {
+    object-fit: contain;
+}
+.qr-name {
+    line-height: 1.3;
+    text-align: center;
+}
+.qr-detail {
+    text-align: center;
+}
 @media print {
     .no-print, .sidebar, .topbar, .menu-btn, .live-indicator { display: none !important; }
     .content { margin-left: 0 !important; }
-    .page-content { padding: 0 !important; }
-    .qr-grid { display: grid; grid-template-columns: repeat(4, 1fr) !important; gap: 8px !important; }
-    .qr-card { break-inside: avoid; box-shadow: none; border: 1px solid #ddd; }
-    .qr-card .qr-card-header { background: #333 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .qr-image { width: 100px !important; height: 100px !important; }
+    .page-content { padding: 8mm !important; }
+    .page-header { margin-bottom: 4mm !important; }
+    .qr-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 48mm) !important;
+        justify-content: start;
+        gap: 4mm !important;
+    }
+    .qr-card {
+        width: 48mm;
+        min-height: 72mm;
+        break-inside: avoid;
+        page-break-inside: avoid;
+        box-shadow: none;
+        border: 0.3mm solid #ccd4df;
+        border-radius: 2.5mm;
+        overflow: hidden;
+    }
+    .qr-card .qr-card-header {
+        background: #0f2e2b !important;
+        color: #ffffff !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        font-size: 8.5pt !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.2px;
+        line-height: 1.35;
+        text-align: center;
+        padding: 3.5mm 2.5mm !important;
+        min-height: 14mm;
+    }
+    .qr-card .qr-card-body {
+        padding: 3.2mm 2.8mm !important;
+        gap: 1.2mm !important;
+    }
+    .qr-image {
+        width: 26mm !important;
+        height: 26mm !important;
+    }
+    .qr-name {
+        font-size: 10pt !important;
+        font-weight: 700 !important;
+    }
+    .qr-detail {
+        font-size: 8.2pt !important;
+        line-height: 1.25 !important;
+    }
+    .qr-code-text {
+        font-size: 7.2pt !important;
+        padding: 2.2mm !important;
+        border-top: 0.2mm solid #e2e8f0 !important;
+    }
 }
 </style>
 
