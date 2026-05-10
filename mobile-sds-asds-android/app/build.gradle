@@ -4,7 +4,8 @@ plugins {
 
 android {
     namespace "ph.gov.sipalay.attendance"
-    compileSdk 35
+    compileSdk 34
+    buildToolsVersion "34.0.0"
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -14,9 +15,9 @@ android {
     defaultConfig {
         applicationId "ph.gov.sipalay.attendance"
         minSdk 23
-        targetSdk 35
-        versionCode 8
-        versionName "1.0.7"
+        targetSdk 34
+        versionCode 9
+        versionName "1.0.8"
     }
 }
 
