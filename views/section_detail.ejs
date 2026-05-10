@@ -196,12 +196,13 @@ if (user && user.role === 'superintendent') {
                     <th style="width:50px">#</th>
                     <th>Student Name</th>
                     <th>LRN</th>
+                    <th>Adviser</th>
                     <th>Time In</th>
                     <th>Time Out</th>
                     <th>Status</th>
                 </tr>
             </thead>
-            <tbody id="studentBody"><tr><td colspan="6" class="text-center text-muted" style="padding:40px">Loading...</td></tr></tbody>
+            <tbody id="studentBody"><tr><td colspan="7" class="text-center text-muted" style="padding:40px">Loading...</td></tr></tbody>
         </table>
     </div>
 </div>
@@ -212,12 +213,21 @@ var sectionId = <%= sectionId %>;
 var gradeId = <%= typeof gradeId !== 'undefined' ? gradeId : 0 %>;
 var allStudents = [];
 var attendanceMap = {};
+var currentAdviser = 'No adviser assigned';
+var appSuffix = window.location.search.indexOf('app=1') !== -1 ? '?app=1' : '';
 
 // Set today's date
 var now = new Date();
 var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 document.getElementById('todayDate').textContent = months[now.getMonth()] + ' ' + now.getDate() + ', ' + now.getFullYear();
 var todayStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+
+if (appSuffix) {
+    var backBtnEl = document.getElementById('backBtn');
+    if (backBtnEl) backBtnEl.href = backBtnEl.href + (backBtnEl.href.indexOf('?') === -1 ? '?app=1' : '&app=1');
+    var bcSchoolEl = document.getElementById('bcSchool');
+    if (bcSchoolEl) bcSchoolEl.href = bcSchoolEl.href + (bcSchoolEl.href.indexOf('?') === -1 ? '?app=1' : '&app=1');
+}
 
 function formatTime12(timeStr) {
     if (!timeStr) return '';
@@ -266,9 +276,9 @@ async function loadData() {
         if (sec && sec.grade_level_id) {
             gradeId = sec.grade_level_id;
             document.getElementById('bcGrade').innerHTML = '<i class="fa fa-layer-group"></i> ' + gradeName;
-            document.getElementById('bcGrade').href = '/admin/school/' + schoolId + '/grade/' + gradeId;
+            document.getElementById('bcGrade').href = '/admin/school/' + schoolId + '/grade/' + gradeId + appSuffix;
             document.getElementById('backBtn').innerHTML = '<i class="fa fa-arrow-left"></i> Back to ' + gradeName;
-            document.getElementById('backBtn').href = '/admin/school/' + schoolId + '/grade/' + gradeId;
+            document.getElementById('backBtn').href = '/admin/school/' + schoolId + '/grade/' + gradeId + appSuffix;
         }
         document.getElementById('bcSection').innerHTML = '<i class="fa fa-door-open"></i> ' + (sec ? sec.name : 'Section');
         document.getElementById('secName').textContent = sec ? sec.name : 'Section';
@@ -283,9 +293,11 @@ async function loadData() {
             var parts = sec.adviser.trim().split(/\s+/);
             document.getElementById('tcAvatar').textContent = parts[0] ? parts[0][0].toUpperCase() : '?';
             document.getElementById('tcName').textContent = sec.adviser;
+            currentAdviser = sec.adviser;
         } else {
             document.getElementById('teacherCard').style.display = 'none';
             document.getElementById('noAdviserCard').style.display = '';
+            currentAdviser = 'No adviser assigned';
         }
 
         // KPI
@@ -315,12 +327,13 @@ async function loadData() {
 }
 
 function renderStudents() {
+    function esc(v){ return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
     var visible = allStudents.filter(function(s){return s.status === 'active' || s.status === 'inactive';});
     var activeCount = allStudents.filter(function(s){return s.status === 'active';}).length;
     document.getElementById('studentCountBadge').textContent = visible.length;
 
     if (visible.length === 0) {
-        document.getElementById('studentBody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:60px 20px;color:var(--text-muted)"><div class="empty-state"><i class="fa fa-user-graduate" style="font-size:3rem;opacity:.3;margin-bottom:16px"></i><h3>No Students Found</h3><p>No students are enrolled in this section.</p></div></td></tr>';
+        document.getElementById('studentBody').innerHTML = '<tr><td colspan="7" style="text-align:center;padding:60px 20px;color:var(--text-muted)"><div class="empty-state"><i class="fa fa-user-graduate" style="font-size:3rem;opacity:.3;margin-bottom:16px"></i><h3>No Students Found</h3><p>No students are enrolled in this section.</p></div></td></tr>';
         return;
     }
 
@@ -356,6 +369,7 @@ function renderStudents() {
             '<td class="student-num">'+(idx+1)+'</td>'+
             '<td><div class="student-name-cell"><div class="'+avatarClass+'">'+initial+'</div><span class="student-name-text">'+fullName+'</span></div></td>'+
             '<td><span class="lrn-badge">'+(s.lrn||'\u2014')+'</span></td>'+
+            '<td>' + esc(currentAdviser ? currentAdviser : '\u2014') + '</td>'+
             '<td>'+(isStudentInactive ? '<span style="color:var(--gray-400)">---</span>' : timeInHtml)+'</td>'+
             '<td>'+(isStudentInactive ? '<span style="color:var(--gray-400)">---</span>' : timeOutHtml)+'</td>'+
             '<td><span class="'+badgeClass+'">'+statusLabel+'</span></td>'+

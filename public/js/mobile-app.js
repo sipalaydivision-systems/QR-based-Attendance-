@@ -32,7 +32,8 @@
     return result === 'granted';
   }
 
-  async function notify(title, body) {
+  async function notify(title, body, extra) {
+    extra = extra || {};
     if (window.EduTrackNative && typeof window.EduTrackNative.notify === 'function') {
       window.EduTrackNative.notify(title, body);
       return;
@@ -48,11 +49,18 @@
           body: body,
           icon: '/uploads/logos/system-logo.png',
           badge: '/uploads/logos/system-logo.png',
-          tag: 'absence-2day-alert',
-          renotify: true
+          tag: extra.tag || 'absence-2day-alert',
+          renotify: true,
+          data: extra.data || {},
+          actions: extra.actions || []
         });
         return;
+      }
     }
+    new Notification(title, {
+      body: body,
+      icon: '/uploads/logos/system-logo.png'
+    });
   }
 
   function isMobileAppShell() {
@@ -272,12 +280,6 @@
     updateMobileDashboardShell();
   }
 
-    new Notification(title, {
-      body: body,
-      icon: '/uploads/logos/system-logo.png'
-    });
-  }
-
   async function checkAbsenceFlagsAndNotify() {
     try {
       var res = await fetch('/api/absence-flags?days=2', { credentials: 'same-origin' });
@@ -306,10 +308,29 @@
         var studentName = (sample.firstname && sample.lastname)
           ? (sample.lastname + ', ' + sample.firstname)
           : (sample.name || 'Student');
+        var gradeSection = (sample.grade_name || '-') + ' / ' + (sample.section_name || '-');
+        var lrn = sample.lrn || '-';
+        var days = sample.absent_days || 2;
+        var adviser = sample.adviser || 'Assigned adviser';
+        var detail = studentName + ' | ' + gradeSection + ' | LRN ' + lrn + ' | ' + days + ' days absent';
         var msg = newlyFlagged.length === 1
-          ? (studentName + ' has reached 2-day absence.')
-          : (newlyFlagged.length + ' students reached 2-day absence. First: ' + studentName + '.');
-        notify('2-Day Absence Alert', msg);
+          ? detail
+          : (newlyFlagged.length + ' students flagged. First: ' + detail);
+        var contact = (sample.school_contact || '').trim();
+        var contactUrl = '';
+        if (contact && /@/.test(contact)) {
+          contactUrl = 'mailto:' + encodeURIComponent(contact) + '?subject=' + encodeURIComponent('Absence Alert - ' + studentName) + '&body=' + encodeURIComponent('Please check absence alert for ' + studentName + ' (' + gradeSection + ', LRN: ' + lrn + ', ' + days + ' days absent). Adviser: ' + adviser + '.');
+        } else if (contact) {
+          var digits = contact.replace(/[^0-9+]/g, '');
+          if (digits) {
+            contactUrl = 'sms:' + encodeURIComponent(digits) + '?body=' + encodeURIComponent('Please check absence alert for ' + studentName + ' (' + gradeSection + ', LRN: ' + lrn + ', ' + days + ' days absent). Adviser: ' + adviser + '.');
+          }
+        }
+        notify('2-Day Absence Alert', msg, {
+          tag: 'absence-2day-alert',
+          data: { url: '/admin/notifications?app=1', contactUrl: contactUrl },
+          actions: [{ action: 'contact-adviser', title: 'Please contact adviser' }]
+        });
       }
     } catch (_) {}
   }
@@ -332,6 +353,14 @@
   async function initMobileAppFeatures() {
     cleanupOldDays();
     await registerServiceWorker();
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', function (event) {
+        var payload = event && event.data ? event.data : {};
+        if (payload.type === 'edutrack-open-url' && payload.url) {
+          window.location.href = payload.url;
+        }
+      });
+    }
     enhanceMobileApp();
 
     setTimeout(function () {

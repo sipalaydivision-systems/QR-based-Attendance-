@@ -156,10 +156,12 @@
                 <tr>
                     <th>#</th>
                     <th>Student Name</th>
-                    <th>LRN</th>
-                    <th>School</th>
                     <th>Grade</th>
                     <th>Section</th>
+                    <th>LRN</th>
+                    <th>Days Absent</th>
+                    <th>Adviser</th>
+                    <th>Action</th>
                 </tr>
             </thead>
             <tbody id="flaggedBody"></tbody>
@@ -299,8 +301,21 @@
             var data = await res.json();
             var tbody = document.getElementById('flaggedBody');
             if (!data.length) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No flagged students.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No flagged students.</td></tr>';
                 return;
+            }
+            function esc(v){ return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+            function contactBtn(s) {
+                var contact = (s.school_contact || '').trim();
+                var msg = encodeURIComponent('Please check absence alert for ' + (s.lastname + ', ' + s.firstname) + ' (' + (s.grade_name || '-') + ' / ' + (s.section_name || '-') + ', LRN: ' + (s.lrn || '-') + '). Total days absent: ' + (s.absent_days || 2) + '.');
+                if (contact && /@/.test(contact)) {
+                    return '<a class="btn btn-sm btn-outline" href="mailto:' + encodeURIComponent(contact) + '?subject=' + encodeURIComponent('Absence Alert') + '&body=' + msg + '">Please contact adviser</a>';
+                }
+                var digits = contact.replace(/[^0-9+]/g, '');
+                if (digits) {
+                    return '<a class="btn btn-sm btn-outline" href="sms:' + encodeURIComponent(digits) + '?body=' + msg + '">Please contact adviser</a>';
+                }
+                return '<button class="btn btn-sm btn-secondary" type="button" onclick="alert(\'No adviser contact saved. Please update school/adviser contact details first.\')">Please contact adviser</button>';
             }
             tbody.innerHTML = data.map(function(s, i) {
                 return '<tr>' +
@@ -308,13 +323,15 @@
                     '<td>' +
                         '<div class="student-name-cell">' +
                         '<div class="student-avatar" style="background:#fee2e2;color:#dc2626;">' + s.firstname.charAt(0).toUpperCase() + '</div>' +
-                        '<span style="font-weight:600;">' + s.lastname + ', ' + s.firstname + '</span>' +
+                        '<span style="font-weight:600;">' + esc(s.lastname + ', ' + s.firstname) + '</span>' +
                         '</div>' +
                     '</td>' +
-                    '<td><span class="lrn-badge">' + (s.lrn || '—') + '</span></td>' +
-                    '<td>' + (s.school_name || '—') + '</td>' +
-                    '<td>' + (s.grade_name  || '—') + '</td>' +
+                    '<td>' + (s.grade_name || '—') + '</td>' +
                     '<td>' + (s.section_name || '—') + '</td>' +
+                    '<td><span class="lrn-badge">' + (s.lrn || '—') + '</span></td>' +
+                    '<td><span class="badge badge-absent">' + (s.absent_days || 2) + ' days</span></td>' +
+                    '<td>' + (s.adviser || '—') + '</td>' +
+                    '<td>' + contactBtn(s) + '</td>' +
                 '</tr>';
             }).join('');
         } catch (e) { console.error('Flagged error:', e); }
@@ -340,3 +357,4 @@
 </script>
 
 <%- include('partials/footer') %>
+

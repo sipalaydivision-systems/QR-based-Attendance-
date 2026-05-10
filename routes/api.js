@@ -1436,8 +1436,8 @@ router.get('/absence-flags', requireAuth, async (req, res) => {
         }
         if (!checkDates.length) return res.json([]);
 
-        let studentQuery = `SELECT s.id, s.firstname, s.lastname, s.lrn, s.school_id, sc.name as school_name,
-                gl.name as grade_name, sec.name as section_name, sec.adviser
+        let studentQuery = `SELECT s.id, s.firstname, s.lastname, s.lrn, s.school_id, s.section_id, sc.name as school_name,
+                sc.contact as school_contact, gl.name as grade_name, sec.name as section_name, sec.adviser
             FROM students s
             LEFT JOIN schools sc ON s.school_id = sc.id
             LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id
@@ -1445,7 +1445,7 @@ router.get('/absence-flags', requireAuth, async (req, res) => {
             WHERE s.status = 'active'`;
         const params = [];
         if (schoolId) { studentQuery += ' AND s.school_id = ?'; params.push(schoolId); }
-        let teacherQuery = `SELECT t.id, t.firstname, t.lastname, t.employee_id, t.school_id, sc.name as school_name
+        let teacherQuery = `SELECT t.id, t.firstname, t.lastname, t.employee_id, t.school_id, sc.name as school_name, sc.contact as school_contact
             FROM teachers t
             LEFT JOIN schools sc ON t.school_id = sc.id
             WHERE t.status = 'active'`;

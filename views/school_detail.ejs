@@ -33,6 +33,12 @@ if (user && user.role === 'superintendent') {
 var schoolId = <%= schoolId %>;
 var schoolData = null;
 var allStudents = [], allSections = [], allGrades = [];
+var appSuffix = window.location.search.indexOf('app=1') !== -1 ? '?app=1' : '';
+
+if (appSuffix) {
+    var back = document.querySelector('.back-btn');
+    if (back) back.href = back.href + (back.href.indexOf('?') === -1 ? '?app=1' : '&app=1');
+}
 
 async function loadAll() {
     try {
@@ -93,7 +99,7 @@ function renderGrades() {
             studentCount += allStudents.filter(function(st){return st.section_id === sec.id;}).length;
         });
 
-        return '<a href="/admin/school/'+schoolId+'/grade/'+gradeId+'" class="browser-card grade-card">'+
+        return '<a href="/admin/school/'+schoolId+'/grade/'+gradeId+ appSuffix +'" class="browser-card grade-card">'+
             '<div class="card-top-accent"></div>'+
             '<div class="card-body-inner">'+
                 '<div class="card-icon-wrap">'+

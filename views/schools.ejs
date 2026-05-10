@@ -17,6 +17,7 @@
 <script>
 async function loadSchools() {
     try {
+        var appSuffix = window.location.search.indexOf('app=1') !== -1 ? '?app=1' : '';
         var res = await fetch('/api/schools');
         var schools = await res.json();
 
@@ -34,7 +35,7 @@ async function loadSchools() {
             var iconHtml = s.logo
                 ? '<img src="'+s.logo+'" alt="" style="width:48px;height:48px;object-fit:contain;border-radius:8px">'
                 : '<i class="fa-solid fa-school"></i>';
-            return '<a href="/admin/school/'+s.id+'" class="school-card-v2" style="text-decoration:none;color:inherit;display:block">'+
+            return '<a href="/admin/school/'+s.id+ appSuffix +'" class="school-card-v2" style="text-decoration:none;color:inherit;display:block">'+
                 '<div class="sc-header">'+
                     '<div class="sc-icon">'+iconHtml+'</div>'+
                     '<span class="badge badge-active">active</span>'+

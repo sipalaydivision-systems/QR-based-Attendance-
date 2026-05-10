@@ -17,14 +17,17 @@
         <table class="data-table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>School</th>
-                    <th>Grade &amp; Section</th>
+                    <th>Student</th>
+                    <th>Grade</th>
+                    <th>Section</th>
+                    <th>LRN</th>
+                    <th>Days Absent</th>
                     <th>Adviser</th>
+                    <th>Action</th>
                 </tr>
             </thead>
             <tbody id="absStudents">
-                <tr><td colspan="4" class="text-center text-muted">No consecutive absences detected</td></tr>
+                <tr><td colspan="7" class="text-center text-muted">No consecutive absences detected</td></tr>
             </tbody>
         </table>
     </div>
@@ -70,6 +73,34 @@
 <% } %>
 
 <script>
+function escapeHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+function buildAdviserAction(flag) {
+    var adviser = flag.adviser || 'Assigned adviser';
+    var contact = (flag.school_contact || '').trim();
+    var student = flag.name || ((flag.lastname || '') + ', ' + (flag.firstname || '')).trim() || 'Student';
+    var gradeSection = (flag.grade_name || '-') + ' / ' + (flag.section_name || '-');
+    var body = 'Please check absence alert for ' + student + ' (' + gradeSection + ', LRN: ' + (flag.lrn || '-') + '). Total days absent: ' + (flag.absent_days || 2) + '.';
+    var encodedBody = encodeURIComponent(body);
+    var encodedTitle = encodeURIComponent('Absence Alert - ' + student);
+
+    if (contact && /@/.test(contact)) {
+        return '<a class="btn btn-sm btn-outline" href="mailto:' + encodeURIComponent(contact) + '?subject=' + encodedTitle + '&body=' + encodedBody + '">Please contact adviser</a>';
+    }
+    if (contact) {
+        var digits = contact.replace(/[^0-9+]/g, '');
+        if (digits) {
+            return '<a class="btn btn-sm btn-outline" href="sms:' + encodeURIComponent(digits) + '?body=' + encodedBody + '">Please contact adviser</a>';
+        }
+    }
+    return '<button class="btn btn-sm btn-secondary" type="button" onclick="alert(\'No adviser contact saved for ' + escapeHtml(adviser) + '. Please update the school/adviser contact details first.\')">Please contact adviser</button>';
+}
 async function loadNotifications() {
     try {
         // Load absence flags
@@ -81,13 +112,17 @@ async function loadNotifications() {
 
         if (studentFlags.length > 0) {
             document.getElementById('absStudents').innerHTML = studentFlags.map(function(f){
-                return '<tr><td><strong>'+(f.name || f.person_name || '-')
-                    +'</strong></td><td><span class="school-code">'+(f.school_name||'-')
-                    +'</span></td><td>'+(f.grade_name||'-')+' / '+(f.section_name||'-')
-                    +'</td><td>'+(f.adviser||'-')+'</td></tr>';
+                return '<tr><td><strong>' + escapeHtml(f.name || f.person_name || '-')
+                    +'</strong><div style="font-size:0.72rem;color:var(--gray-500);margin-top:2px;">'+ escapeHtml(f.school_name || '-') +'</div></td>'
+                    +'<td>' + escapeHtml(f.grade_name || '-') + '</td>'
+                    +'<td>' + escapeHtml(f.section_name || '-') + '</td>'
+                    +'<td><span class="lrn-badge">' + escapeHtml(f.lrn || '-') + '</span></td>'
+                    +'<td><span class="badge badge-absent">' + escapeHtml(f.absent_days || 2) + ' days</span></td>'
+                    +'<td>' + escapeHtml(f.adviser || '-') + '</td>'
+                    +'<td>' + buildAdviserAction(f) + '</td></tr>';
             }).join('');
         } else {
-            document.getElementById('absStudents').innerHTML = '<tr><td colspan="4" class="text-center text-muted">No consecutive absences detected</td></tr>';
+            document.getElementById('absStudents').innerHTML = '<tr><td colspan="7" class="text-center text-muted">No consecutive absences detected</td></tr>';
         }
         if (teacherFlags.length > 0) {
             document.getElementById('absTeachers').innerHTML = teacherFlags.map(function(f){

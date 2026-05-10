@@ -37,6 +37,14 @@ var schoolId = <%= schoolId %>;
 var gradeId = <%= gradeId %>;
 var schoolData = null, gradeData = null;
 var allStudents = [], allSections = [];
+var appSuffix = window.location.search.indexOf('app=1') !== -1 ? '?app=1' : '';
+
+if (appSuffix) {
+    var back = document.getElementById('backBtn');
+    if (back) back.href = back.href + (back.href.indexOf('?') === -1 ? '?app=1' : '&app=1');
+    var bcSchoolLink = document.getElementById('bcSchool');
+    if (bcSchoolLink) bcSchoolLink.href = bcSchoolLink.href + (bcSchoolLink.href.indexOf('?') === -1 ? '?app=1' : '&app=1');
+}
 
 async function loadAll() {
     try {
@@ -83,7 +91,7 @@ function renderSections() {
             ? '<p><i class="fa fa-chalkboard-teacher"></i> ' + adviser + '</p>'
             : '<p style="color:var(--warning)"><i class="fa fa-exclamation-triangle"></i> No adviser assigned</p>';
 
-        return '<a href="/admin/school/'+schoolId+'/grade/'+gradeId+'/section/'+sec.id+'" class="browser-card" style="aspect-ratio:auto">'+
+        return '<a href="/admin/school/'+schoolId+'/grade/'+gradeId+'/section/'+sec.id+ appSuffix +'" class="browser-card" style="aspect-ratio:auto">'+
             '<div class="card-top-accent"></div>'+
             '<div class="card-body-inner">'+
                 '<div class="'+iconClass+'">'+
