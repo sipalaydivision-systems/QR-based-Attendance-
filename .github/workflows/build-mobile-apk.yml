@@ -1,4 +1,4 @@
-name: Build Mobile APK
+name: Publish Mobile APK
 
 on:
   push:
@@ -13,41 +13,16 @@ permissions:
   contents: write
 
 jobs:
-  build-apk:
+  publish-apk:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: 8.10.2
-
-      - name: Build installable debug APK
-        run: gradle -p mobile-sds-asds-android assembleDebug
-
-      - name: Publish APK into web download folder
+      - name: Verify committed Flutter APK
         run: |
-          cp mobile-sds-asds-android/app/build/outputs/apk/debug/app-debug.apk public/downloads/school-attendance-division.apk
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add public/downloads/school-attendance-division.apk public/mobile-config.json mobile-sds-asds-android/app/src/main/res/values/strings.xml
-          if git diff --cached --quiet; then
-            echo "APK did not change."
-          else
-            git commit -m "Update mobile APK"
-            git push
-          fi
+          test -s public/downloads/school-attendance-division.apk
+          echo "Using committed Flutter release APK for the Railway /mobile-app download."
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
