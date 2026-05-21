@@ -49,11 +49,11 @@ class EdutrackApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF009A67)),
-        scaffoldBackgroundColor: const Color(0xFFF2F7F4),
+        scaffoldBackgroundColor: const Color(0xFFF4FFFB),
         useMaterial3: true,
         navigationBarTheme: NavigationBarThemeData(
-          backgroundColor: Colors.white,
-          indicatorColor: const Color(0xFFE4FFF4),
+          backgroundColor: Colors.transparent,
+          indicatorColor: const Color(0xFFDFFFF5),
           labelTextStyle: WidgetStateProperty.resolveWith(
             (states) => TextStyle(
               fontSize: 11,
@@ -61,15 +61,15 @@ class EdutrackApp extends StatelessWidget {
                   ? FontWeight.w900
                   : FontWeight.w700,
               color: states.contains(WidgetState.selected)
-                  ? const Color(0xFF007D55)
-                  : const Color(0xFF6D7C77),
+                  ? const Color(0xFF005F6B)
+                  : const Color(0xFF657681),
             ),
           ),
           iconTheme: WidgetStateProperty.resolveWith(
             (states) => IconThemeData(
               color: states.contains(WidgetState.selected)
-                  ? const Color(0xFF007D55)
-                  : const Color(0xFF63736E),
+                  ? const Color(0xFF008B8E)
+                  : const Color(0xFF657681),
             ),
           ),
         ),
@@ -376,8 +376,18 @@ class LiveMeshPainter extends CustomPainter {
     final base = Paint()
       ..shader = LinearGradient(
         colors: lightMode
-            ? const [Color(0xFFF4FBF8), Color(0xFFFFFFFF)]
-            : const [Color(0xFF0DBC7A), Color(0xFF00885B), Color(0xFF006747)],
+            ? const [
+                Color(0xFFF7FFFC),
+                Color(0xFFE8FFF8),
+                Color(0xFFF3F7FF),
+                Color(0xFFFFFBEB),
+              ]
+            : const [
+                Color(0xFF00A676),
+                Color(0xFF00C2B8),
+                Color(0xFF0077B6),
+                Color(0xFF006747),
+              ],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ).createShader(rect);
@@ -392,31 +402,68 @@ class LiveMeshPainter extends CustomPainter {
 
     final t = value * math.pi * 2;
     blob(
-      lightMode ? const Color(0xFFBFF8DF) : Colors.white,
-      Offset(size.width * (.08 + .02 * math.sin(t)), size.height * .18),
-      size.width * .42,
+      lightMode ? const Color(0xFF7FFFE2) : const Color(0xFFB9FFF1),
+      Offset(size.width * (.08 + .025 * math.sin(t)), size.height * .17),
+      size.width * .44,
     );
     blob(
-      lightMode ? const Color(0xFFE5FFF3) : const Color(0xFF8AFFD1),
-      Offset(size.width * (.90 + .02 * math.cos(t)), size.height * .34),
-      size.width * .46,
+      lightMode ? const Color(0xFFB9E7FF) : const Color(0xFF80F7FF),
+      Offset(size.width * (.88 + .025 * math.cos(t)), size.height * .34),
+      size.width * .48,
     );
     blob(
-      lightMode ? const Color(0xFFFFF6D9) : const Color(0xFFFFD166),
-      Offset(size.width * (.48 + .015 * math.sin(t * 1.2)), size.height * .90),
-      size.width * .36,
+      lightMode ? const Color(0xFFFFE7A8) : const Color(0xFFFFD166),
+      Offset(size.width * (.48 + .02 * math.sin(t * 1.2)), size.height * .90),
+      size.width * .38,
+    );
+    blob(
+      lightMode ? const Color(0xFFE6D7FF) : const Color(0xFFC4B5FD),
+      Offset(size.width * (.66 + .02 * math.cos(t * 1.6)), size.height * .08),
+      size.width * .28,
     );
 
     final ringPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2
-      ..color = (lightMode ? const Color(0xFF009A67) : Colors.white).withValues(
+      ..color = (lightMode ? const Color(0xFF00A6A6) : Colors.white).withValues(
         alpha: .045 + intensity * .04,
       );
     final radarCenter = Offset(size.width * .50, size.height * .30);
     for (var i = 0; i < 5; i++) {
       final radius = size.width * (.12 + i * .055) + math.sin(t) * 2;
       canvas.drawCircle(radarCenter, radius, ringPaint);
+    }
+
+    final facetPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..color = (lightMode ? const Color(0xFF00C2B8) : Colors.white).withValues(
+        alpha: .055 + intensity * .035,
+      );
+    final fillFacet = Paint()
+      ..style = PaintingStyle.fill
+      ..shader = LinearGradient(
+        colors: [
+          Colors.white.withValues(alpha: lightMode ? .20 : .10),
+          const Color(0xFF80F7FF).withValues(alpha: lightMode ? .12 : .08),
+          const Color(0xFFC4B5FD).withValues(alpha: lightMode ? .10 : .07),
+        ],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ).createShader(rect);
+
+    for (var i = 0; i < 5; i++) {
+      final x = size.width * (.08 + i * .22) + math.sin(t + i) * 5;
+      final y = size.height * (.18 + (i % 3) * .22) + math.cos(t * .8 + i) * 5;
+      final w = size.width * (.16 + (i % 2) * .04);
+      final path = Path()
+        ..moveTo(x, y)
+        ..lineTo(x + w * .55, y - w * .18)
+        ..lineTo(x + w, y + w * .38)
+        ..lineTo(x + w * .28, y + w * .72)
+        ..close();
+      canvas.drawPath(path, fillFacet);
+      canvas.drawPath(path, facetPaint);
     }
   }
 
@@ -486,9 +533,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      Color(0xFF05B777),
-                      Color(0xFF009765),
-                      Color(0xFF007A55),
+                      Color(0xFF00A676),
+                      Color(0xFF00C2B8),
+                      Color(0xFF0077B6),
+                      Color(0xFF006747),
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -601,7 +649,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         height: 56,
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: [Color(0xFF10B981), Color(0xFF00885B)],
+                            colors: [
+                              Color(0xFF00E5C8),
+                              Color(0xFF00A676),
+                              Color(0xFF0077B6),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
@@ -644,7 +698,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 18),
                       const Center(
                         child: Text(
-                          'Attendance Monitoring System\nv2.0.4',
+                          'Attendance Monitoring System\nv2.0.5',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Color(0xFF91A09B),
@@ -824,13 +878,15 @@ class _HomeShellState extends State<HomeShell> {
           filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: .72),
+              color: Colors.white.withValues(alpha: .48),
               border: Border(
-                top: BorderSide(color: Colors.white.withValues(alpha: .70)),
+                top: BorderSide(
+                  color: const Color(0xFFBFFDF2).withValues(alpha: .76),
+                ),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF0B3428).withValues(alpha: .08),
+                  color: const Color(0xFF00A6A6).withValues(alpha: .10),
                   blurRadius: 24,
                   offset: const Offset(0, -8),
                 ),
@@ -895,13 +951,15 @@ class Header extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: .66),
+              color: Colors.white.withValues(alpha: .46),
               borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: Colors.white.withValues(alpha: .70)),
+              border: Border.all(
+                color: const Color(0xFFBFFDF2).withValues(alpha: .76),
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF0B3428).withValues(alpha: .08),
-                  blurRadius: 24,
+                  color: const Color(0xFF00A6A6).withValues(alpha: .12),
+                  blurRadius: 30,
                   offset: const Offset(0, 12),
                 ),
               ],
@@ -979,9 +1037,9 @@ class Header extends StatelessWidget {
   Widget _chip(Widget child) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
     decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: .52),
+      color: Colors.white.withValues(alpha: .42),
       borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: Colors.white.withValues(alpha: .72)),
+      border: Border.all(color: const Color(0xFFBFFDF2).withValues(alpha: .72)),
     ),
     child: DefaultTextStyle(
       style: const TextStyle(
@@ -1034,7 +1092,12 @@ class DashboardPage extends StatelessWidget {
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFF10B981), Color(0xFF00885B)],
+                colors: [
+                  Color(0xFF00A676),
+                  Color(0xFF00C2B8),
+                  Color(0xFF42D4FF),
+                  Color(0xFF7C3AED),
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -1042,7 +1105,7 @@ class DashboardPage extends StatelessWidget {
               boxShadow: [
                 BoxShadow(
                   color: const Color(0xFF00885B).withValues(alpha: .24),
-                  blurRadius: 28,
+                  blurRadius: 36,
                   offset: const Offset(0, 16),
                 ),
               ],
@@ -1058,9 +1121,11 @@ class DashboardPage extends StatelessWidget {
                         vertical: 7,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: .16),
+                        color: Colors.white.withValues(alpha: .18),
                         borderRadius: BorderRadius.circular(99),
-                        border: Border.all(color: Colors.white24),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: .36),
+                        ),
                       ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
@@ -1150,13 +1215,23 @@ class DashboardPage extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: Colors.white,
+              gradient: LinearGradient(
+                colors: [
+                  Colors.white.withValues(alpha: .72),
+                  const Color(0xFFE8FFF8).withValues(alpha: .58),
+                  const Color(0xFFEAF6FF).withValues(alpha: .52),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: const Color(0xFFE1EFE9)),
+              border: Border.all(
+                color: const Color(0xFFBFFDF2).withValues(alpha: .70),
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF0B3428).withValues(alpha: .08),
-                  blurRadius: 24,
+                  color: const Color(0xFF00A6A6).withValues(alpha: .10),
+                  blurRadius: 28,
                   offset: const Offset(0, 14),
                 ),
               ],
@@ -1298,9 +1373,17 @@ class DashboardChip extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(11),
     decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: .15),
+      gradient: LinearGradient(
+        colors: [
+          Colors.white.withValues(alpha: .22),
+          const Color(0xFFB9FFF1).withValues(alpha: .12),
+          const Color(0xFFC4B5FD).withValues(alpha: .10),
+        ],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
       borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: Colors.white.withValues(alpha: .18)),
+      border: Border.all(color: Colors.white.withValues(alpha: .34)),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1375,7 +1458,13 @@ class ReportsPage extends StatelessWidget {
                   height: 54,
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [Color(0xFF10B981), Color(0xFF00885B)],
+                      colors: [
+                        Color(0xFF00E5C8),
+                        Color(0xFF00A676),
+                        Color(0xFF42D4FF),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(20),
                   ),
@@ -1831,17 +1920,26 @@ class PremiumCard extends StatelessWidget {
         width: double.infinity,
         padding: padding,
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: .68),
+          gradient: LinearGradient(
+            colors: [
+              Colors.white.withValues(alpha: .62),
+              const Color(0xFFE8FFF8).withValues(alpha: .46),
+              const Color(0xFFEAF6FF).withValues(alpha: .38),
+              const Color(0xFFF6F0FF).withValues(alpha: .30),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
           borderRadius: BorderRadius.circular(28),
           border: Border.all(
             color:
                 border?.withValues(alpha: .65) ??
-                Colors.white.withValues(alpha: .72),
+                const Color(0xFFBFFDF2).withValues(alpha: .74),
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF0B3428).withValues(alpha: .075),
-              blurRadius: 28,
+              color: const Color(0xFF00A6A6).withValues(alpha: .09),
+              blurRadius: 30,
               offset: const Offset(0, 14),
             ),
           ],
@@ -1929,9 +2027,19 @@ class RecordTile extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 78),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: .50),
+          gradient: LinearGradient(
+            colors: [
+              Colors.white.withValues(alpha: .46),
+              const Color(0xFFE8FFF8).withValues(alpha: .28),
+              const Color(0xFFEAF6FF).withValues(alpha: .22),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
           borderRadius: BorderRadius.circular(19),
-          border: Border.all(color: Colors.white.withValues(alpha: .62)),
+          border: Border.all(
+            color: const Color(0xFFBFFDF2).withValues(alpha: .62),
+          ),
         ),
         child: Row(
           children: [
@@ -2016,12 +2124,22 @@ class Metric extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: .58),
+          gradient: LinearGradient(
+            colors: [
+              Colors.white.withValues(alpha: .52),
+              const Color(0xFFE8FFF8).withValues(alpha: .34),
+              const Color(0xFFEAF6FF).withValues(alpha: .28),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
           borderRadius: BorderRadius.circular(23),
-          border: Border.all(color: Colors.white.withValues(alpha: .70)),
+          border: Border.all(
+            color: const Color(0xFFBFFDF2).withValues(alpha: .72),
+          ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF0B3428).withValues(alpha: .06),
+              color: const Color(0xFF00A6A6).withValues(alpha: .07),
               blurRadius: 18,
               offset: const Offset(0, 10),
             ),
