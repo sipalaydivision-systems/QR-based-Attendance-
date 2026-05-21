@@ -265,7 +265,7 @@ class _SplashGateState extends State<SplashGate>
                                 const LiveDot(),
                                 const SizedBox(width: 8),
                                 const Text(
-                                  'LIVE BOOT',
+                                  'CONNECTING TO SERVER',
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w900,
@@ -384,7 +384,7 @@ class LiveMeshPainter extends CustomPainter {
 
     void blob(Color color, Offset center, double radius) {
       final paint = Paint()
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 26)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 42)
         ..color = color.withValues(alpha: intensity);
       canvas.drawCircle(center, radius, paint);
     }
@@ -392,39 +392,30 @@ class LiveMeshPainter extends CustomPainter {
     final t = value * math.pi * 2;
     blob(
       lightMode ? const Color(0xFFBFF8DF) : Colors.white,
-      Offset(size.width * (.14 + .05 * math.sin(t)), size.height * .22),
-      size.width * .34,
-    );
-    blob(
-      lightMode ? const Color(0xFFE3FFF2) : const Color(0xFF8AFFD1),
-      Offset(size.width * (.86 + .05 * math.cos(t)), size.height * .38),
+      Offset(size.width * (.08 + .02 * math.sin(t)), size.height * .18),
       size.width * .42,
     );
     blob(
+      lightMode ? const Color(0xFFE5FFF3) : const Color(0xFF8AFFD1),
+      Offset(size.width * (.90 + .02 * math.cos(t)), size.height * .34),
+      size.width * .46,
+    );
+    blob(
       lightMode ? const Color(0xFFFFF6D9) : const Color(0xFFFFD166),
-      Offset(size.width * (.42 + .04 * math.sin(t * 1.3)), size.height * .86),
-      size.width * .30,
+      Offset(size.width * (.48 + .015 * math.sin(t * 1.2)), size.height * .90),
+      size.width * .36,
     );
 
-    final linePaint = Paint()
+    final ringPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
+      ..strokeWidth = 1.2
       ..color = (lightMode ? const Color(0xFF009A67) : Colors.white).withValues(
-        alpha: .045 + intensity * .035,
+        alpha: .045 + intensity * .04,
       );
-    for (var i = 0; i < 8; i++) {
-      final y = size.height * (i / 7) + math.sin(t + i) * 8;
-      final path = Path()
-        ..moveTo(0, y)
-        ..cubicTo(
-          size.width * .28,
-          y - 22,
-          size.width * .58,
-          y + 24,
-          size.width,
-          y - 6,
-        );
-      canvas.drawPath(path, linePaint);
+    final radarCenter = Offset(size.width * .50, size.height * .30);
+    for (var i = 0; i < 5; i++) {
+      final radius = size.width * (.12 + i * .055) + math.sin(t) * 2;
+      canvas.drawCircle(radarCenter, radius, ringPaint);
     }
   }
 
@@ -484,13 +475,13 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       resizeToAvoidBottomInset: true,
       body: CustomPaint(
-        painter: LiveMeshPainter(.35, intensity: .32, lightMode: true),
+        painter: LiveMeshPainter(.35, intensity: .22, lightMode: true),
         child: CustomScrollView(
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           slivers: [
             SliverToBoxAdapter(
               child: Container(
-                height: 315,
+                height: 286,
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
@@ -540,7 +531,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             SliverToBoxAdapter(
               child: Transform.translate(
-                offset: const Offset(0, -50),
+                offset: const Offset(0, -28),
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(
                     22,
@@ -549,7 +540,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     math.max(28, bottomInset + 24),
                   ),
                   child: PremiumCard(
-                    padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -654,7 +645,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 18),
                         const Center(
                           child: Text(
-                            'Attendance Monitoring System\nv2.0.1',
+                            'Attendance Monitoring System\nv2.0.3',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: Color(0xFF91A09B),
@@ -665,31 +656,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ],
                     ),
-                  ),
-                ),
-              ),
-            ),
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 28),
-                  child: Wrap(
-                    alignment: WrapAlignment.center,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 8,
-                    children: const [
-                      LiveDot(color: Color(0xFFEF4444)),
-                      Text(
-                        'Secure live connection to Railway server',
-                        style: TextStyle(
-                          color: Color(0xFF74827E),
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
                   ),
                 ),
               ),
@@ -1045,83 +1011,141 @@ class DashboardPage extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
         children: [
           Container(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFFFFFFFF), Color(0xFFEFFFF8)],
+                colors: [Color(0xFF10B981), Color(0xFF00885B)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: const Color(0xFFDDF3EA)),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF007D55).withValues(alpha: .08),
-                  blurRadius: 26,
+                  color: const Color(0xFF00885B).withValues(alpha: .24),
+                  blurRadius: 28,
+                  offset: const Offset(0, 16),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: .16),
+                        borderRadius: BorderRadius.circular(99),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          LiveDot(color: Color(0xFFFF3B30)),
+                          SizedBox(width: 7),
+                          Text(
+                            'LIVE DASHBOARD',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: .6,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Spacer(),
+                    const Icon(
+                      Icons.dashboard_customize_rounded,
+                      color: Colors.white,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  greeting(),
+                  style: const TextStyle(
+                    color: Color(0xFFD9FFF0),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  api.fullname,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 25,
+                    fontWeight: FontWeight.w900,
+                    height: 1.04,
+                    letterSpacing: -.7,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  fullDate(),
+                  style: const TextStyle(
+                    color: Color(0xFFD9FFF0),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DashboardChip(
+                        label: 'Students',
+                        value: '$active',
+                        icon: Icons.groups_rounded,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: DashboardChip(
+                        label: 'Present',
+                        value: '$present',
+                        icon: Icons.how_to_reg_rounded,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: DashboardChip(
+                        label: 'Alerts',
+                        value: '${flags.length}',
+                        icon: Icons.warning_rounded,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: const Color(0xFFE1EFE9)),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0B3428).withValues(alpha: .08),
+                  blurRadius: 24,
                   offset: const Offset(0, 14),
                 ),
               ],
             ),
             child: Row(
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        greeting(),
-                        style: const TextStyle(
-                          color: Color(0xFF00885B),
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        api.fullname,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          height: 1.05,
-                          letterSpacing: -.5,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        fullDate(),
-                        style: const TextStyle(
-                          color: Color(0xFF6C7B76),
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE4FFF4),
-                    borderRadius: BorderRadius.circular(22),
-                  ),
-                  child: const Icon(
-                    Icons.insights_rounded,
-                    color: Color(0xFF00885B),
-                    size: 30,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          PremiumCard(
-            border: const Color(0xFFB7F5DD),
-            padding: const EdgeInsets.all(18),
-            child: Row(
-              children: [
                 SizedBox(
-                  width: 142,
-                  height: 142,
+                  width: 136,
+                  height: 136,
                   child: CustomPaint(
                     painter: RingPainter(rate),
                     child: Center(
@@ -1157,10 +1181,11 @@ class DashboardPage extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Today Overview',
+                        'Today Analytics',
                         style: TextStyle(
-                          fontSize: 18,
+                          fontSize: 19,
                           fontWeight: FontWeight.w900,
+                          letterSpacing: -.3,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -1172,8 +1197,18 @@ class DashboardPage extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      RateBar('Students present', rate),
-                      InfoPill('2-day flags', '${flags.length} active'),
+                      RateBar('Live rate', rate),
+                      const SizedBox(height: 2),
+                      Text(
+                        absent == 1
+                            ? '1 student absent'
+                            : '$absent students absent',
+                        style: const TextStyle(
+                          color: Color(0xFF74827E),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1226,6 +1261,55 @@ class DashboardPage extends StatelessWidget {
       ),
     );
   }
+}
+
+class DashboardChip extends StatelessWidget {
+  const DashboardChip({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+  final String label;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(11),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: .15),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: Colors.white.withValues(alpha: .18)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: Colors.white, size: 18),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+            height: 1,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Color(0xFFD9FFF0),
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class AttendancePage extends StatelessWidget {
