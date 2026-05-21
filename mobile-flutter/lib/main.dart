@@ -48,12 +48,12 @@ class EdutrackApp extends StatelessWidget {
       title: AppConfig.appName,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4BB4F5)),
-        scaffoldBackgroundColor: const Color(0xFF67BDF2),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0EA66E)),
+        scaffoldBackgroundColor: const Color(0xFF52C993),
         useMaterial3: true,
         navigationBarTheme: NavigationBarThemeData(
           backgroundColor: Colors.transparent,
-          indicatorColor: const Color(0xFFDFF3FF),
+          indicatorColor: const Color(0xFFDFFFF0),
           labelTextStyle: WidgetStateProperty.resolveWith(
             (states) => TextStyle(
               fontSize: 11,
@@ -61,15 +61,15 @@ class EdutrackApp extends StatelessWidget {
                   ? FontWeight.w900
                   : FontWeight.w700,
               color: states.contains(WidgetState.selected)
-                  ? const Color(0xFF075D94)
-                  : const Color(0xFF657681),
+                  ? const Color(0xFF006747)
+                  : const Color(0xFF60756E),
             ),
           ),
           iconTheme: WidgetStateProperty.resolveWith(
             (states) => IconThemeData(
               color: states.contains(WidgetState.selected)
-                  ? const Color(0xFF1479B8)
-                  : const Color(0xFF657681),
+                  ? const Color(0xFF00885B)
+                  : const Color(0xFF60756E),
             ),
           ),
         ),
@@ -374,7 +374,7 @@ class LiveMeshPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
     final base = Paint()
-      ..color = lightMode ? const Color(0xFF66BDF2) : const Color(0xFF48A9E8);
+      ..color = lightMode ? const Color(0xFF52C993) : const Color(0xFF0EA66E);
     canvas.drawRect(rect, base);
 
     void blob(Color color, Offset center, double radius) {
@@ -391,17 +391,17 @@ class LiveMeshPainter extends CustomPainter {
       size.width * .36,
     );
     blob(
-      const Color(0xFFD7F2FF),
+      const Color(0xFFD9FFED),
       Offset(size.width * (.88 + .025 * math.cos(t)), size.height * .34),
       size.width * .40,
     );
     blob(
-      const Color(0xFFA9DBFF),
+      const Color(0xFFB8F5D2),
       Offset(size.width * (.48 + .02 * math.sin(t * 1.2)), size.height * .90),
       size.width * .34,
     );
     blob(
-      const Color(0xFFBFE8FF),
+      const Color(0xFFE2FFF1),
       Offset(size.width * (.66 + .02 * math.cos(t * 1.6)), size.height * .08),
       size.width * .28,
     );
@@ -409,7 +409,7 @@ class LiveMeshPainter extends CustomPainter {
     final ringPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2
-      ..color = (lightMode ? const Color(0xFF2B8FD1) : Colors.white).withValues(
+      ..color = (lightMode ? const Color(0xFF00885B) : Colors.white).withValues(
         alpha: .045 + intensity * .04,
       );
     final radarCenter = Offset(size.width * .50, size.height * .30);
@@ -421,7 +421,7 @@ class LiveMeshPainter extends CustomPainter {
     final facetPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1
-      ..color = (lightMode ? const Color(0xFF2B8FD1) : Colors.white).withValues(
+      ..color = (lightMode ? const Color(0xFF00885B) : Colors.white).withValues(
         alpha: .055 + intensity * .035,
       );
     final fillFacet = Paint()
@@ -458,11 +458,30 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   final username = TextEditingController();
   final password = TextEditingController();
+  late final AnimationController backgroundController;
   bool loading = false;
   String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    backgroundController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 8),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    backgroundController.dispose();
+    username.dispose();
+    password.dispose();
+    super.dispose();
+  }
 
   Future<void> submit() async {
     if (username.text.trim().isEmpty || password.text.isEmpty) {
@@ -498,8 +517,16 @@ class _LoginScreenState extends State<LoginScreen> {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      body: CustomPaint(
-        painter: LiveMeshPainter(.35, intensity: .20, lightMode: true),
+      body: AnimatedBuilder(
+        animation: backgroundController,
+        builder: (context, child) => CustomPaint(
+          painter: LiveMeshPainter(
+            backgroundController.value,
+            intensity: .16,
+            lightMode: true,
+          ),
+          child: child,
+        ),
         child: CustomScrollView(
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           slivers: [
@@ -507,7 +534,7 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Container(
                 height: 252,
                 decoration: const BoxDecoration(
-                  color: Color(0xFF4BB4F5),
+                  color: Color(0xFF0EA66E),
                   borderRadius: BorderRadius.only(
                     bottomLeft: Radius.circular(36),
                     bottomRight: Radius.circular(36),
@@ -615,12 +642,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         width: double.infinity,
                         height: 56,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF279FE6),
+                          color: const Color(0xFF00885B),
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
                               color: const Color(
-                                0xFF1479B8,
+                                0xFF006747,
                               ).withValues(alpha: .25),
                               blurRadius: 18,
                               offset: const Offset(0, 10),
@@ -657,7 +684,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 18),
                       const Center(
                         child: Text(
-                          'Attendance Monitoring System\nv2.0.6',
+                          'Attendance Monitoring System\nv2.0.7',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Color(0xFF91A09B),
@@ -702,12 +729,12 @@ class _LoginScreenState extends State<LoginScreen> {
       hintText: hint,
       prefixIcon: Icon(icon, color: const Color(0xFF00885B)),
       filled: true,
-      fillColor: Colors.white.withValues(alpha: .58),
+      fillColor: Colors.white.withValues(alpha: .42),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(18),
-        borderSide: BorderSide(color: Colors.white.withValues(alpha: .70)),
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: .58)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(18),
@@ -725,17 +752,23 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends State<HomeShell>
+    with SingleTickerProviderStateMixin {
   int tab = 0;
   Map<String, dynamic> dashboard = {};
   List<dynamic> flags = [];
   bool loading = true;
   String? error;
   Timer? timer;
+  late final AnimationController backgroundController;
 
   @override
   void initState() {
     super.initState();
+    backgroundController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 9),
+    )..repeat();
     load();
     timer = Timer.periodic(
       const Duration(seconds: 6),
@@ -746,6 +779,7 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void dispose() {
     timer?.cancel();
+    backgroundController.dispose();
     super.dispose();
   }
 
@@ -800,9 +834,17 @@ class _HomeShellState extends State<HomeShell> {
       AlertsPage(flags: flags),
     ];
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F7F4),
-      body: CustomPaint(
-        painter: LiveMeshPainter(.24, intensity: .12, lightMode: true),
+      backgroundColor: const Color(0xFF52C993),
+      body: AnimatedBuilder(
+        animation: backgroundController,
+        builder: (context, child) => CustomPaint(
+          painter: LiveMeshPainter(
+            backgroundController.value,
+            intensity: .13,
+            lightMode: true,
+          ),
+          child: child,
+        ),
         child: Column(
           children: [
             Header(
@@ -837,13 +879,13 @@ class _HomeShellState extends State<HomeShell> {
           filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
           child: Container(
             decoration: BoxDecoration(
-              color: const Color(0xFFE8F6FF).withValues(alpha: .42),
+              color: const Color(0xFFE7FFF2).withValues(alpha: .28),
               border: Border(
-                top: BorderSide(color: Colors.white.withValues(alpha: .70)),
+                top: BorderSide(color: Colors.white.withValues(alpha: .50)),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF1479B8).withValues(alpha: .20),
+                  color: const Color(0xFF00885B).withValues(alpha: .12),
                   blurRadius: 24,
                   offset: const Offset(0, -8),
                 ),
@@ -908,12 +950,12 @@ class Header extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
             decoration: BoxDecoration(
-              color: const Color(0xFFE8F6FF).withValues(alpha: .44),
+              color: const Color(0xFFE7FFF2).withValues(alpha: .30),
               borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: Colors.white.withValues(alpha: .68)),
+              border: Border.all(color: Colors.white.withValues(alpha: .55)),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF1479B8).withValues(alpha: .22),
+                  color: const Color(0xFF00885B).withValues(alpha: .12),
                   blurRadius: 30,
                   offset: const Offset(0, 12),
                 ),
@@ -954,9 +996,9 @@ class Header extends StatelessWidget {
                       onPressed: onLogout,
                       style: IconButton.styleFrom(
                         backgroundColor: const Color(
-                          0xFF279FE6,
+                          0xFF00885B,
                         ).withValues(alpha: .12),
-                        foregroundColor: const Color(0xFF1479B8),
+                        foregroundColor: const Color(0xFF00885B),
                       ),
                       icon: const Icon(Icons.logout_rounded),
                     ),
@@ -992,13 +1034,13 @@ class Header extends StatelessWidget {
   Widget _chip(Widget child) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
     decoration: BoxDecoration(
-      color: const Color(0xFFE8F6FF).withValues(alpha: .42),
+      color: const Color(0xFFE7FFF2).withValues(alpha: .24),
       borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: Colors.white.withValues(alpha: .62)),
+      border: Border.all(color: Colors.white.withValues(alpha: .45)),
     ),
     child: DefaultTextStyle(
       style: const TextStyle(
-        color: Color(0xFF075D94),
+        color: Color(0xFF006747),
         fontWeight: FontWeight.w900,
         fontSize: 12,
       ),
@@ -1046,11 +1088,11 @@ class DashboardPage extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: const Color(0xFF4BB4F5),
+              color: const Color(0xFF0EA66E),
               borderRadius: BorderRadius.circular(28),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF1479B8).withValues(alpha: .30),
+                  color: const Color(0xFF00885B).withValues(alpha: .30),
                   blurRadius: 36,
                   offset: const Offset(0, 16),
                 ),
@@ -1161,12 +1203,12 @@ class DashboardPage extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: const Color(0xFFE8F6FF).withValues(alpha: .50),
+              color: const Color(0xFFE7FFF2).withValues(alpha: .30),
               borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: Colors.white.withValues(alpha: .68)),
+              border: Border.all(color: Colors.white.withValues(alpha: .52)),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF1479B8).withValues(alpha: .22),
+                  color: const Color(0xFF00885B).withValues(alpha: .12),
                   blurRadius: 28,
                   offset: const Offset(0, 14),
                 ),
@@ -1309,9 +1351,9 @@ class DashboardChip extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(11),
     decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: .20),
+      color: Colors.white.withValues(alpha: .13),
       borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: Colors.white.withValues(alpha: .40)),
+      border: Border.all(color: Colors.white.withValues(alpha: .28)),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1385,7 +1427,7 @@ class ReportsPage extends StatelessWidget {
                   width: 54,
                   height: 54,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF279FE6),
+                    color: const Color(0xFF00885B),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: const Icon(
@@ -1840,23 +1882,23 @@ class PremiumCard extends StatelessWidget {
         width: double.infinity,
         padding: padding,
         decoration: BoxDecoration(
-          color: const Color(0xFFE8F6FF).withValues(alpha: .52),
+          color: const Color(0xFFE7FFF2).withValues(alpha: .30),
           borderRadius: BorderRadius.circular(28),
           border: Border.all(
             color:
                 border?.withValues(alpha: .65) ??
-                Colors.white.withValues(alpha: .72),
+                Colors.white.withValues(alpha: .55),
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF1479B8).withValues(alpha: .24),
-              blurRadius: 30,
-              offset: const Offset(0, 14),
+              color: const Color(0xFF00885B).withValues(alpha: .10),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
             ),
             BoxShadow(
-              color: Colors.white.withValues(alpha: .36),
-              blurRadius: 10,
-              offset: const Offset(-4, -4),
+              color: Colors.white.withValues(alpha: .22),
+              blurRadius: 8,
+              offset: const Offset(-3, -3),
             ),
           ],
         ),
@@ -1943,9 +1985,9 @@ class RecordTile extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 78),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: const Color(0xFFE8F6FF).withValues(alpha: .40),
+          color: const Color(0xFFE7FFF2).withValues(alpha: .22),
           borderRadius: BorderRadius.circular(19),
-          border: Border.all(color: Colors.white.withValues(alpha: .62)),
+          border: Border.all(color: Colors.white.withValues(alpha: .42)),
         ),
         child: Row(
           children: [
@@ -2030,17 +2072,17 @@ class Metric extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
-          color: const Color(0xFFE8F6FF).withValues(alpha: .44),
+          color: const Color(0xFFE7FFF2).withValues(alpha: .24),
           borderRadius: BorderRadius.circular(23),
-          border: Border.all(color: Colors.white.withValues(alpha: .70)),
+          border: Border.all(color: Colors.white.withValues(alpha: .50)),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF1479B8).withValues(alpha: .18),
-              blurRadius: 18,
-              offset: const Offset(0, 10),
+              color: const Color(0xFF00885B).withValues(alpha: .10),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
             ),
             BoxShadow(
-              color: Colors.white.withValues(alpha: .30),
+              color: Colors.white.withValues(alpha: .18),
               blurRadius: 8,
               offset: const Offset(-3, -3),
             ),
