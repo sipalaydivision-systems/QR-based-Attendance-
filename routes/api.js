@@ -79,6 +79,99 @@ async function getPreviousSchoolDay(dateStr, schoolId) {
     return fallback.toISOString().slice(0, 10);
 }
 
+async function getRecentSchoolDates(baseDate, schoolId, limit) {
+    const dates = [];
+    const cursor = new Date(baseDate + 'T00:00:00');
+    let guard = 0;
+    while (dates.length < limit && guard < 160) {
+        const dStr = cursor.toISOString().slice(0, 10);
+        const schoolDay = await checkSchoolDay(dStr, schoolId);
+        if (schoolDay.isSchoolDay) dates.push(dStr);
+        cursor.setDate(cursor.getDate() - 1);
+        guard++;
+    }
+    return dates;
+}
+
+async function getConsecutiveAbsenceFlags({ baseDate, schoolId, days = 2, includeTeachers = true, maxScanDays = 45 }) {
+    const threshold = Math.max(1, Number(days) || 2);
+    const scanLimit = Math.max(threshold, Math.min(Number(maxScanDays) || 45, 120));
+    const schoolDates = await getRecentSchoolDates(baseDate, schoolId, scanLimit);
+    if (schoolDates.length < threshold) return [];
+
+    let studentQuery = `SELECT s.id, s.firstname, s.lastname, s.lrn, s.school_id, s.section_id, sc.name as school_name,
+            sc.contact as school_contact, gl.name as grade_name, sec.name as section_name, sec.adviser
+        FROM students s
+        LEFT JOIN schools sc ON s.school_id = sc.id
+        LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id
+        LEFT JOIN sections sec ON s.section_id = sec.id
+        WHERE s.status = 'active'`;
+    const studentParams = [];
+    if (schoolId) { studentQuery += ' AND s.school_id = ?'; studentParams.push(schoolId); }
+
+    let teacherQuery = `SELECT t.id, t.firstname, t.lastname, t.employee_id, t.school_id, sc.name as school_name, sc.contact as school_contact
+        FROM teachers t
+        LEFT JOIN schools sc ON t.school_id = sc.id
+        WHERE t.status = 'active'`;
+    const teacherParams = [];
+    if (schoolId) { teacherQuery += ' AND t.school_id = ?'; teacherParams.push(schoolId); }
+
+    const [students, teachers] = await Promise.all([
+        db.query(studentQuery, studentParams).then(r => r[0]),
+        includeTeachers ? db.query(teacherQuery, teacherParams).then(r => r[0]) : Promise.resolve([])
+    ]);
+
+    const allDatesSql = schoolDates.map(() => '?').join(',');
+    const attendanceParams = [...schoolDates];
+    let attendanceQuery = `SELECT person_type, person_id, date
+        FROM attendance
+        WHERE date IN (${allDatesSql}) AND time_in IS NOT NULL AND person_type IN ('student', 'teacher')`;
+    if (schoolId) {
+        attendanceQuery += ' AND school_id = ?';
+        attendanceParams.push(schoolId);
+    }
+    const [attendanceRows] = await db.query(attendanceQuery, attendanceParams);
+    const presentSet = new Set(attendanceRows.map(r => {
+        const d = r.date instanceof Date ? r.date.toISOString().slice(0, 10) : String(r.date).slice(0, 10);
+        return `${r.person_type}-${r.person_id}-${d}`;
+    }));
+
+    function consecutiveDaysAbsent(type, id) {
+        let count = 0;
+        for (const d of schoolDates) {
+            if (presentSet.has(`${type}-${id}-${d}`)) break;
+            count++;
+        }
+        return count;
+    }
+
+    const flaggedStudents = students
+        .map(student => ({ student, absentDays: consecutiveDaysAbsent('student', student.id) }))
+        .filter(item => item.absentDays >= threshold)
+        .map(({ student, absentDays }) => ({
+            ...student,
+            person_type: 'student',
+            absent_days: absentDays,
+            requested_days: threshold,
+            checked_dates: schoolDates.slice(0, absentDays),
+            name: `${student.firstname} ${student.lastname}`.trim()
+        }));
+
+    const flaggedTeachers = teachers
+        .map(teacher => ({ teacher, absentDays: consecutiveDaysAbsent('teacher', teacher.id) }))
+        .filter(item => item.absentDays >= threshold)
+        .map(({ teacher, absentDays }) => ({
+            ...teacher,
+            person_type: 'teacher',
+            absent_days: absentDays,
+            requested_days: threshold,
+            checked_dates: schoolDates.slice(0, absentDays),
+            name: `${teacher.firstname} ${teacher.lastname}`.trim()
+        }));
+
+    return [...flaggedStudents, ...flaggedTeachers];
+}
+
 // GET /api/is-school-day
 router.get('/is-school-day', requireAuth, async (req, res) => {
     try {
@@ -344,14 +437,14 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
             schoolParams
         );
 
-        // 2-day absence flagged students (absent on last 2 school days)
-        const prevSchoolDay = await getPreviousSchoolDay(date, schoolId);
-        const [flaggedAbsent] = await db.query(
-            `SELECT COUNT(*) as count FROM students s WHERE s.status = 'active'
-             AND s.id NOT IN (SELECT person_id FROM attendance WHERE person_type='student' AND date=? AND time_in IS NOT NULL)
-             AND s.id NOT IN (SELECT person_id FROM attendance WHERE person_type='student' AND date=? AND time_in IS NOT NULL)` + (schoolId ? ' AND s.school_id = ?' : ''),
-            [date, prevSchoolDay, ...(schoolId ? [schoolId] : [])]
-        );
+        // 2-day absence flagged students (counts consecutive school-day absences)
+        const flaggedAbsent = await getConsecutiveAbsenceFlags({
+            baseDate: date,
+            schoolId,
+            days: 2,
+            includeTeachers: false,
+            maxScanDays: 45
+        });
 
         // Check if today is a school day (uses helper with holidays + weekends + overrides)
         const schoolDayResult = await checkSchoolDay(date, schoolId);
@@ -372,7 +465,7 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
             teachers_absent: Math.max(0, teacherRows[0].count - presentTeachers[0].count),
             attendance_rate: totalActive > 0 ? Math.min(100, Math.round((totalPresent / totalActive) * 100)) : 0,
             inactive_students: inactiveStudents[0].count,
-            flagged_absent_2day: flaggedAbsent[0].count,
+            flagged_absent_2day: flaggedAbsent.length,
             is_school_day: isSchoolDay,
             non_school_day_reason: nonSchoolDayReason,
             non_school_day_type: nonSchoolDayType,
@@ -1424,69 +1517,14 @@ router.get('/absence-flags', requireAuth, async (req, res) => {
     if (!schoolId && req.query.school_id) schoolId = parseInt(req.query.school_id, 10);
     try {
         const baseDate = req.query.date || new Date().toISOString().slice(0, 10);
-        const checkDates = [];
-        const cursor = new Date(baseDate + 'T00:00:00');
-        let guard = 0;
-        while (checkDates.length < days && guard < 60) {
-            const dStr = cursor.toISOString().slice(0, 10);
-            const schoolDay = await checkSchoolDay(dStr, schoolId);
-            if (schoolDay.isSchoolDay) checkDates.push(dStr);
-            cursor.setDate(cursor.getDate() - 1);
-            guard++;
-        }
-        if (!checkDates.length) return res.json([]);
-
-        let studentQuery = `SELECT s.id, s.firstname, s.lastname, s.lrn, s.school_id, s.section_id, sc.name as school_name,
-                sc.contact as school_contact, gl.name as grade_name, sec.name as section_name, sec.adviser
-            FROM students s
-            LEFT JOIN schools sc ON s.school_id = sc.id
-            LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id
-            LEFT JOIN sections sec ON s.section_id = sec.id
-            WHERE s.status = 'active'`;
-        const params = [];
-        if (schoolId) { studentQuery += ' AND s.school_id = ?'; params.push(schoolId); }
-        let teacherQuery = `SELECT t.id, t.firstname, t.lastname, t.employee_id, t.school_id, sc.name as school_name, sc.contact as school_contact
-            FROM teachers t
-            LEFT JOIN schools sc ON t.school_id = sc.id
-            WHERE t.status = 'active'`;
-        if (schoolId) teacherQuery += ' AND t.school_id = ?';
-
-        const [students, teachers] = await Promise.all([
-            db.query(studentQuery, params).then(r => r[0]),
-            db.query(teacherQuery, params).then(r => r[0])
-        ]);
-        const allDatesSql = checkDates.map(() => '?').join(',');
-        const attendanceParams = [...checkDates];
-        let attendanceQuery = `SELECT person_type, person_id
-            FROM attendance
-            WHERE date IN (${allDatesSql}) AND time_in IS NOT NULL AND person_type IN ('student', 'teacher')`;
-        if (schoolId) {
-            attendanceQuery += ' AND school_id = ?';
-            attendanceParams.push(schoolId);
-        }
-        attendanceQuery += ' GROUP BY person_type, person_id';
-        const [attendanceRows] = await db.query(attendanceQuery, attendanceParams);
-        const presentSet = new Set(attendanceRows.map(r => `${r.person_type}-${r.person_id}`));
-
-        const flaggedStudents = students
-            .filter(student => !presentSet.has(`student-${student.id}`))
-            .map(student => ({
-                ...student,
-                person_type: 'student',
-                absent_days: checkDates.length,
-                requested_days: days,
-                name: student.firstname + ' ' + student.lastname
-            }));
-        const flaggedTeachers = teachers
-            .filter(teacher => !presentSet.has(`teacher-${teacher.id}`))
-            .map(teacher => ({
-                ...teacher,
-                person_type: 'teacher',
-                absent_days: checkDates.length,
-                requested_days: days,
-                name: teacher.firstname + ' ' + teacher.lastname
-            }));
-        const flagged = [...flaggedStudents, ...flaggedTeachers];
+        const includeTeachers = req.query.include_teachers !== '0';
+        const flagged = await getConsecutiveAbsenceFlags({
+            baseDate,
+            schoolId,
+            days,
+            includeTeachers,
+            maxScanDays: parseInt(req.query.max_days, 10) || 45
+        });
 
         return res.json(flagged);
     } catch (err) {

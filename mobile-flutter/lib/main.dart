@@ -16,6 +16,12 @@ class AppConfig {
 }
 
 final notifications = FlutterLocalNotificationsPlugin();
+const alertsChannel = AndroidNotificationChannel(
+  'edutrack_alerts',
+  'Edutrack Alerts',
+  description: 'Attendance monitoring alerts',
+  importance: Importance.high,
+);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,6 +30,11 @@ Future<void> main() async {
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     ),
   );
+  await notifications
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin
+      >()
+      ?.createNotificationChannel(alertsChannel);
   runApp(const EdutrackApp());
 }
 
@@ -766,7 +777,7 @@ class _HomeShellState extends State<HomeShell> {
     try {
       final results = await Future.wait([
         widget.api.map('/api/dashboard-data?date=${date()}'),
-        widget.api.list('/api/absence-flags?days=2'),
+        widget.api.list('/api/absence-flags?days=2&include_teachers=0'),
       ]);
       dashboard = results[0] as Map<String, dynamic>;
       flags = results[1] as List<dynamic>;
@@ -1498,6 +1509,27 @@ class AlertsPage extends StatelessWidget {
         subtitle: 'Verify the 2-day flagged student alert on this phone.',
         child: FilledButton.icon(
           onPressed: () async {
+            final granted = await ensureNotificationPermission();
+            if (!granted) {
+              if (context.mounted) {
+                showDialog(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    title: const Text('Notifications are blocked'),
+                    content: const Text(
+                      'Please allow Edutrack notifications in your phone settings, then press the test button again.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Close'),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              return;
+            }
             if (flags.isEmpty) {
               await showLocalNotification(
                 'Edutrack alert test',
@@ -1564,7 +1596,7 @@ class FlagTile extends StatelessWidget {
                 builder: (_) => AlertDialog(
                   title: const Text('Please contact adviser'),
                   content: Text(
-                    'Student: ${row['name'] ?? 'Student'}\nGrade: ${row['grade_name'] ?? '-'}\nSection: ${row['section_name'] ?? '-'}\nLRN: ${row['lrn'] ?? '-'}\nDays absent: ${row['absent_days'] ?? 2}\nAdviser: ${row['adviser'] ?? '-'}',
+                    'Student: ${row['name'] ?? 'Student'}\nGrade: ${row['grade_name'] ?? '-'}\nSection: ${row['section_name'] ?? '-'}\nLRN: ${row['lrn'] ?? '-'}\nDays absent: ${absenceDays(row)}\nAdviser: ${row['adviser'] ?? '-'}',
                   ),
                   actions: [
                     TextButton(
@@ -2080,17 +2112,30 @@ Future<void> notifyAbsenceFlags(List flags, SharedPreferences prefs) async {
   await prefs.setString('last_absence_key', key);
 }
 
-Future<void> showLocalNotification(
+Future<bool> ensureNotificationPermission() async {
+  final android = notifications
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin
+      >();
+  return await android?.requestNotificationsPermission() ?? true;
+}
+
+Future<bool> showLocalNotification(
   String title,
   String body, {
   bool showToast = true,
 }) async {
+  final granted = await ensureNotificationPermission();
+  if (!granted) return false;
   const android = AndroidNotificationDetails(
     'edutrack_alerts',
     'Edutrack Alerts',
     channelDescription: 'Attendance monitoring alerts',
     importance: Importance.high,
     priority: Priority.high,
+    category: AndroidNotificationCategory.status,
+    visibility: NotificationVisibility.public,
+    ticker: 'Edutrack attendance alert',
   );
   await notifications.show(
     DateTime.now().millisecondsSinceEpoch ~/ 1000,
@@ -2098,12 +2143,20 @@ Future<void> showLocalNotification(
     body,
     const NotificationDetails(android: android),
   );
+  return true;
 }
 
 String absenceTitle(int count) =>
     count == 1 ? '1 student absent 2+ days' : '$count students absent 2+ days';
 String absenceBody(Map<String, dynamic> row) =>
-    '${row['name'] ?? 'Student'} | ${fullDate()} | ${row['grade_name'] ?? '-'} - ${row['section_name'] ?? '-'} | LRN: ${row['lrn'] ?? '-'} | ${row['absent_days'] ?? 2} days absent | Adviser: ${row['adviser'] ?? '-'}';
+    '${row['name'] ?? 'Student'} | ${fullDate()} | ${row['grade_name'] ?? '-'} - ${row['section_name'] ?? '-'} | LRN: ${row['lrn'] ?? '-'} | ${absenceDays(row)} absent | Adviser: ${row['adviser'] ?? '-'}';
+
+String absenceDays(Map<String, dynamic> row) {
+  final days = intValue(row['absent_days']);
+  final count = days <= 0 ? 2 : days;
+  return count == 1 ? '1 day' : '$count days';
+}
+
 String safeReason(dynamic value) {
   final clean = '${value ?? ''}'.trim();
   return clean.isEmpty || RegExp(r'^[A-Za-z]+$').hasMatch(clean)
