@@ -346,20 +346,81 @@ class PulseRingPainter extends CustomPainter {
       oldDelegate.pulse != pulse;
 }
 
-class LiveDot extends StatelessWidget {
-  const LiveDot({super.key, this.color = Colors.white});
+class LiveDot extends StatefulWidget {
+  const LiveDot({
+    super.key,
+    this.color = Colors.white,
+    this.pulse = true,
+    this.size = 8,
+  });
   final Color color;
+  final bool pulse;
+  final double size;
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: 8,
-    height: 8,
+  State<LiveDot> createState() => _LiveDotState();
+}
+
+class _LiveDotState extends State<LiveDot> with SingleTickerProviderStateMixin {
+  late final AnimationController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.pulse) {
+      return _dot(
+        widget.size,
+        widget.color,
+        widget.color.withValues(alpha: .35),
+      );
+    }
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, child) {
+        final pulse = .35 + controller.value * .55;
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: widget.size + 10 * pulse,
+              height: widget.size + 10 * pulse,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: widget.color.withValues(alpha: .12 * pulse),
+              ),
+            ),
+            _dot(
+              widget.size,
+              widget.color,
+              widget.color.withValues(alpha: .55),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _dot(double size, Color fill, Color glow) => Container(
+    width: size,
+    height: size,
     decoration: BoxDecoration(
-      color: color,
+      color: fill,
       shape: BoxShape.circle,
-      boxShadow: [
-        BoxShadow(color: color.withValues(alpha: .45), blurRadius: 10),
-      ],
+      boxShadow: [BoxShadow(color: glow, blurRadius: 10)],
     ),
   );
 }
@@ -935,25 +996,25 @@ class Header extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.fromLTRB(
         14,
-        MediaQuery.paddingOf(context).top + 8,
+        MediaQuery.paddingOf(context).top + 6,
         14,
-        8,
+        6,
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(24),
         child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
           child: Container(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: .92),
-              borderRadius: BorderRadius.circular(28),
+              color: Colors.white.withValues(alpha: .95),
+              borderRadius: BorderRadius.circular(24),
               border: Border.all(color: const Color(0xFFE2E9E5)),
               boxShadow: [
                 BoxShadow(
                   color: const Color(0xFF111827).withValues(alpha: .08),
-                  blurRadius: 22,
-                  offset: const Offset(0, 8),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
                 ),
               ],
             ),
@@ -961,8 +1022,8 @@ class Header extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const AppLogo(size: 46),
-                    const SizedBox(width: 12),
+                    const AppLogo(size: 40),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -971,9 +1032,20 @@ class Header extends StatelessWidget {
                             AppConfig.appName,
                             style: TextStyle(
                               color: Color(0xFF0F211B),
-                              fontSize: 21,
+                              fontSize: 19,
                               fontWeight: FontWeight.w900,
-                              letterSpacing: -.4,
+                              letterSpacing: -.3,
+                            ),
+                          ),
+                          const SizedBox(height: 1),
+                          const Text(
+                            AppConfig.subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Color(0xFF6D7A74),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                           Text(
@@ -981,42 +1053,34 @@ class Header extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              color: Color(0xFF64726B),
+                              color: Color(0xFF4F5E57),
                               fontWeight: FontWeight.w700,
+                              fontSize: 12,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    IconButton.filledTonal(
-                      onPressed: onLogout,
-                      style: IconButton.styleFrom(
-                        backgroundColor: const Color(
-                          0xFF138A64,
-                        ).withValues(alpha: .12),
-                        foregroundColor: const Color(0xFF138A64),
-                      ),
-                      icon: const Icon(Icons.logout_rounded),
-                    ),
+                    _actionIcon(icon: Icons.logout_rounded, onTap: onLogout),
                   ],
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 10),
                 Row(
                   children: [
                     _chip(
                       const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          LiveDot(color: Color(0xFFFF3B30)),
+                          LiveDot(color: Color(0xFFFF3B30), size: 9),
                           SizedBox(width: 7),
                           Text('LIVE'),
                         ],
                       ),
                     ),
                     const SizedBox(width: 8),
-                    _chip(Text(shortDate())),
+                    _chip(Text(shortDate()), dense: true),
                     const SizedBox(width: 8),
-                    Expanded(child: _chip(Center(child: Text(date())))),
+                    Expanded(child: _chip(Text(date()), dense: true)),
                   ],
                 ),
               ],
@@ -1027,22 +1091,41 @@ class Header extends StatelessWidget {
     );
   }
 
-  Widget _chip(Widget child) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+  Widget _chip(Widget child, {bool dense = false}) => Container(
+    padding: EdgeInsets.symmetric(
+      horizontal: dense ? 11 : 12,
+      vertical: dense ? 7 : 8,
+    ),
     decoration: BoxDecoration(
-      color: const Color(0xFFF5F7F6),
-      borderRadius: BorderRadius.circular(16),
+      color: const Color(0xFFF7FAF8),
+      borderRadius: BorderRadius.circular(14),
       border: Border.all(color: const Color(0xFFDCE6E1)),
     ),
     child: DefaultTextStyle(
       style: const TextStyle(
         color: Color(0xFF0F6E52),
         fontWeight: FontWeight.w900,
-        fontSize: 12,
+        fontSize: 11.5,
       ),
       child: child,
     ),
   );
+
+  Widget _actionIcon({required IconData icon, required VoidCallback onTap}) =>
+      Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: const Color(0xFFEAF7F1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFD7EDE3)),
+        ),
+        child: IconButton(
+          padding: EdgeInsets.zero,
+          onPressed: onTap,
+          icon: Icon(icon, size: 20, color: const Color(0xFF138A64)),
+        ),
+      );
 }
 
 class DashboardPage extends StatelessWidget {
@@ -1074,12 +1157,47 @@ class DashboardPage extends StatelessWidget {
     final present = intValue(dashboard['students_present']);
     final rate = intValue(dashboard['attendance_rate']);
     final absent = intValue(dashboard['students_absent']);
-    final teachers = intValue(dashboard['total_teachers']);
-    final teachersPresent = intValue(dashboard['teachers_present']);
     final schools = (dashboard['schools'] as List?) ?? [];
     final schoolRates = schools
         .map((item) => intValue((item as Map)['rate']))
         .toList();
+
+    Future<void> openAbsentDetails({
+      String? targetDate,
+      String? title,
+      bool isSchoolDay = true,
+    }) async {
+      final day = targetDate ?? date();
+      if (!isSchoolDay) {
+        if (!context.mounted) return;
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('No classes'),
+            content: Text('No classes on ${readableDate(day)}.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+      if (!context.mounted) return;
+      await showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => AbsentStudentsSheet(
+          api: api,
+          targetDate: day,
+          title: title ?? 'Absent Students',
+        ),
+      );
+    }
+
     return RefreshIndicator(
       onRefresh: () => onRefresh(silent: false),
       child: ListView(
@@ -1120,12 +1238,12 @@ class DashboardPage extends StatelessWidget {
                           LiveDot(color: Color(0xFFFF3B30)),
                           SizedBox(width: 7),
                           Text(
-                            'LIVE DASHBOARD',
+                            'LIVE',
                             style: TextStyle(
                               color: Color(0xFF0F6E52),
                               fontSize: 11,
                               fontWeight: FontWeight.w900,
-                              letterSpacing: .6,
+                              letterSpacing: .4,
                             ),
                           ),
                         ],
@@ -1187,9 +1305,11 @@ class DashboardPage extends StatelessWidget {
                       value: '$absent',
                       icon: Icons.person_off_rounded,
                       accent: const Color(0xFFDC2626),
+                      onTap: () =>
+                          openAbsentDetails(title: 'Absent Students Today'),
                     ),
                     KpiPill(
-                      label: '2-Day',
+                      label: 'Alerts',
                       value: '${flags.length}',
                       icon: Icons.warning_rounded,
                       accent: const Color(0xFFF97316),
@@ -1272,14 +1392,22 @@ class DashboardPage extends StatelessWidget {
                       const SizedBox(height: 12),
                       RateBar('Live rate', rate),
                       const SizedBox(height: 2),
-                      Text(
-                        absent == 1
-                            ? '1 student absent'
-                            : '$absent students absent',
-                        style: const TextStyle(
-                          color: Color(0xFF74827E),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                      InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () =>
+                            openAbsentDetails(title: 'Absent Students Today'),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Text(
+                            absent == 1
+                                ? '1 student absent'
+                                : '$absent students absent',
+                            style: const TextStyle(
+                              color: Color(0xFF74827E),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -1296,59 +1424,24 @@ class DashboardPage extends StatelessWidget {
           ],
           const SizedBox(height: 12),
           PremiumCard(
-            title: 'Data Visualization',
-            subtitle: 'Live attendance and staffing insights',
+            title: 'Weekly Absence Analytics',
+            subtitle: 'Absent students per day (Mon-Sun)',
             child: Column(
               children: [
-                SizedBox(
-                  width: double.infinity,
-                  height: 170,
-                  child: AttendanceBarChart(
-                    values: [
-                      active,
-                      present,
-                      absent,
-                      teachers,
-                      teachersPresent,
-                      flags.length,
-                    ],
-                    labels: const [
-                      'Students',
-                      'Present',
-                      'Absent',
-                      'Teachers',
-                      'T. Present',
-                      '2-Day',
-                    ],
-                    colors: const [
-                      Color(0xFF138A64),
-                      Color(0xFF10B981),
-                      Color(0xFFDC2626),
-                      Color(0xFF0EA5E9),
-                      Color(0xFF2563EB),
-                      Color(0xFFF97316),
-                    ],
+                WeeklyAbsenceAnalytics(
+                  api: api,
+                  onDayTap: (dayDate, isSchoolDay) => openAbsentDetails(
+                    targetDate: dayDate,
+                    title: 'Absent Students - ${readableDate(dayDate)}',
+                    isSchoolDay: isSchoolDay,
                   ),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: const [
-                    ChartLegend(color: Color(0xFF138A64), label: 'Students'),
-                    ChartLegend(color: Color(0xFF10B981), label: 'Present'),
-                    ChartLegend(color: Color(0xFFDC2626), label: 'Absent'),
-                    ChartLegend(color: Color(0xFF0EA5E9), label: 'Teachers'),
-                    ChartLegend(color: Color(0xFF2563EB), label: 'T. Present'),
-                    ChartLegend(color: Color(0xFFF97316), label: '2-Day'),
-                  ],
                 ),
                 if (schoolRates.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   const Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      'School Attendance Trend',
+                      'Attendance Trend by School',
                       style: TextStyle(
                         fontWeight: FontWeight.w900,
                         fontSize: 15,
@@ -1386,177 +1479,485 @@ class KpiPill extends StatelessWidget {
     required this.value,
     required this.icon,
     this.accent = const Color(0xFF138A64),
+    this.onTap,
   });
   final String label;
   final String value;
   final IconData icon;
   final Color accent;
+  final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
-    decoration: BoxDecoration(
-      color: const Color(0xFFF5F7F6),
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: const Color(0xFFDCE6E1)),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, color: accent, size: 16),
-        const SizedBox(height: 6),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Color(0xFF111827),
-            fontSize: 18,
-            fontWeight: FontWeight.w900,
-            height: 1,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Color(0xFF5C6E66),
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class ChartLegend extends StatelessWidget {
-  const ChartLegend({super.key, required this.color, required this.label});
-  final Color color;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: const Color(0xFFE1E9E4)),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: const TextStyle(
-            color: Color(0xFF5C6E66),
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class AttendanceBarChart extends StatelessWidget {
-  const AttendanceBarChart({
-    super.key,
-    required this.values,
-    required this.labels,
-    required this.colors,
-  });
-  final List<int> values;
-  final List<String> labels;
-  final List<Color> colors;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      Expanded(
-        child: CustomPaint(
-          painter: AttendanceBarPainter(values: values, colors: colors),
-          child: const SizedBox.expand(),
-        ),
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(14),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F7F6),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFDCE6E1)),
       ),
-      const SizedBox(height: 8),
-      Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (var i = 0; i < values.length; i++)
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '${values[i]}',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF1F2937),
-                    ),
-                  ),
-                  Text(
-                    labels[i],
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF6B7280),
-                    ),
-                  ),
-                ],
-              ),
+          Icon(icon, color: accent, size: 16),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Color(0xFF111827),
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              height: 1,
             ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFF5C6E66),
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         ],
       ),
-    ],
+    ),
   );
 }
 
-class AttendanceBarPainter extends CustomPainter {
-  AttendanceBarPainter({required this.values, required this.colors});
-  final List<int> values;
-  final List<Color> colors;
+class WeeklyAbsenceAnalytics extends StatefulWidget {
+  const WeeklyAbsenceAnalytics({
+    super.key,
+    required this.api,
+    required this.onDayTap,
+  });
+  final ApiService api;
+  final void Function(String dayDate, bool isSchoolDay) onDayTap;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final grid = Paint()
-      ..color = const Color(0xFFE5ECE8)
-      ..strokeWidth = 1;
-    for (var i = 1; i <= 4; i++) {
-      final y = (size.height - 4) * i / 5;
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
-    }
+  State<WeeklyAbsenceAnalytics> createState() => _WeeklyAbsenceAnalyticsState();
+}
 
-    final maxValue = math.max(1, values.fold<int>(0, (a, b) => math.max(a, b)));
-    final itemWidth = size.width / values.length;
-    final barWidth = itemWidth * .56;
-    for (var i = 0; i < values.length; i++) {
-      final value = values[i].toDouble();
-      final height = ((size.height - 10) * (value / maxValue))
-          .clamp(6, size.height - 10)
-          .toDouble();
-      final left = i * itemWidth + (itemWidth - barWidth) / 2;
-      final rect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(left, size.height - height, barWidth, height),
-        const Radius.circular(10),
-      );
-      final paint = Paint()..color = colors[i];
-      canvas.drawRRect(rect, paint);
+class _WeeklyAbsenceAnalyticsState extends State<WeeklyAbsenceAnalytics> {
+  bool loading = true;
+  String? error;
+  List<Map<String, dynamic>> week = [];
+  Timer? timer;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+    timer = Timer.periodic(
+      const Duration(seconds: 90),
+      (_) => load(silent: true),
+    );
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> load({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        loading = true;
+        error = null;
+      });
+    }
+    try {
+      final days = currentWeekDates(date());
+      final futures = days
+          .map((d) => widget.api.map('/api/dashboard-data?date=$d'))
+          .toList();
+      final results = await Future.wait(futures);
+      final built = <Map<String, dynamic>>[];
+      for (var i = 0; i < days.length; i++) {
+        final data = results[i];
+        final isSchoolDay = data['is_school_day'] == true;
+        final absent = isSchoolDay ? intValue(data['students_absent']) : 0;
+        built.add({
+          'date': days[i],
+          'label': weekdayShort(days[i]),
+          'day': dayOfMonth(days[i]),
+          'isSchoolDay': isSchoolDay,
+          'absent': absent,
+        });
+      }
+      if (!mounted) return;
+      setState(() {
+        week = built;
+        loading = false;
+        error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        loading = false;
+        error = e.toString();
+      });
     }
   }
 
   @override
-  bool shouldRepaint(AttendanceBarPainter oldDelegate) =>
-      oldDelegate.values != values || oldDelegate.colors != colors;
+  Widget build(BuildContext context) {
+    if (loading && week.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 26),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (error != null && week.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        child: Text(
+          'Failed to load weekly absence analytics.',
+          style: const TextStyle(
+            color: Color(0xFFB91C1C),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+    }
+    final maxAbsent = week.fold<int>(1, (maxVal, d) {
+      final value = intValue(d['absent']);
+      return value > maxVal ? value : maxVal;
+    });
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Tap a day to view absent students',
+          style: TextStyle(
+            color: Color(0xFF64726B),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 10),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final day in week)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: WeekDayAbsenceTile(
+                    label: '${day['label']}',
+                    dayNumber: '${day['day']}',
+                    absent: intValue(day['absent']),
+                    isSchoolDay: day['isSchoolDay'] == true,
+                    maxAbsent: maxAbsent,
+                    onTap: () => widget.onDayTap(
+                      '${day['date']}',
+                      day['isSchoolDay'] == true,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class WeekDayAbsenceTile extends StatelessWidget {
+  const WeekDayAbsenceTile({
+    super.key,
+    required this.label,
+    required this.dayNumber,
+    required this.absent,
+    required this.isSchoolDay,
+    required this.maxAbsent,
+    required this.onTap,
+  });
+  final String label;
+  final String dayNumber;
+  final int absent;
+  final bool isSchoolDay;
+  final int maxAbsent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final barHeight = isSchoolDay
+        ? (18 + (absent / math.max(1, maxAbsent)) * 50).toDouble()
+        : 8.0;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: 62,
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 9),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FBF9),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFDCE6E1)),
+        ),
+        child: Column(
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                color: Color(0xFF64726B),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            Text(
+              dayNumber,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFF1F2937),
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 5),
+            SizedBox(
+              height: 56,
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 350),
+                  width: 18,
+                  height: barHeight,
+                  decoration: BoxDecoration(
+                    color: isSchoolDay
+                        ? const Color(0xFFDC2626).withValues(alpha: .88)
+                        : const Color(0xFFCBD5D1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              isSchoolDay ? '$absent' : '-',
+              style: TextStyle(
+                color: isSchoolDay
+                    ? const Color(0xFFB91C1C)
+                    : const Color(0xFF94A3B8),
+                fontWeight: FontWeight.w900,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class AbsentStudentsSheet extends StatefulWidget {
+  const AbsentStudentsSheet({
+    super.key,
+    required this.api,
+    required this.targetDate,
+    required this.title,
+  });
+  final ApiService api;
+  final String targetDate;
+  final String title;
+
+  @override
+  State<AbsentStudentsSheet> createState() => _AbsentStudentsSheetState();
+}
+
+class _AbsentStudentsSheetState extends State<AbsentStudentsSheet> {
+  bool loading = true;
+  String? error;
+  List<Map<String, dynamic>> rows = [];
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    try {
+      final result = await Future.wait([
+        widget.api.list('/api/reports/absentees?date=${widget.targetDate}'),
+        widget.api.list(
+          '/api/absence-flags?days=1&include_teachers=0&date=${widget.targetDate}',
+        ),
+      ]);
+      final absentees = result[0];
+      final flags = result[1];
+      final absentDaysById = <String, int>{};
+      for (final item in flags) {
+        final row = Map<String, dynamic>.from(item as Map);
+        absentDaysById['${row['id']}'] = math.max(
+          1,
+          intValue(row['absent_days']),
+        );
+      }
+
+      final mapped = absentees.map<Map<String, dynamic>>((item) {
+        final row = Map<String, dynamic>.from(item as Map);
+        final id = '${row['id']}';
+        final first = '${row['firstname'] ?? ''}'.trim();
+        final last = '${row['lastname'] ?? ''}'.trim();
+        final name = '$first $last'.trim();
+        return {
+          ...row,
+          'name': name.isEmpty ? 'Student' : name,
+          'attendance_status': 'Absent',
+          'absent_days': absentDaysById[id] ?? 1,
+        };
+      }).toList();
+
+      if (!mounted) return;
+      setState(() {
+        rows = mapped;
+        loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        loading = false;
+        error = e.toString();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => DraggableScrollableSheet(
+    initialChildSize: .86,
+    minChildSize: .55,
+    maxChildSize: .94,
+    builder: (context, controller) => Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFFF5F7F6),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 10),
+          Container(
+            width: 44,
+            height: 4,
+            decoration: BoxDecoration(
+              color: const Color(0xFFCAD5CF),
+              borderRadius: BorderRadius.circular(99),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 10, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.title,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      Text(
+                        readableDate(widget.targetDate),
+                        style: const TextStyle(
+                          color: Color(0xFF64726B),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: loading
+                ? const Center(child: CircularProgressIndicator())
+                : error != null
+                ? Center(
+                    child: Text(
+                      'Failed to load absent student details.',
+                      style: const TextStyle(
+                        color: Color(0xFFB91C1C),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  )
+                : rows.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No absent students found for this day.',
+                      style: TextStyle(color: Color(0xFF64726B)),
+                    ),
+                  )
+                : ListView(
+                    controller: controller,
+                    padding: const EdgeInsets.fromLTRB(14, 8, 14, 22),
+                    children: [
+                      for (final row in rows)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: PremiumCard(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${row['name'] ?? 'Student'}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Grade: ${row['grade_name'] ?? '-'} | Section: ${row['section_name'] ?? '-'}',
+                                  style: const TextStyle(
+                                    color: Color(0xFF4F5E57),
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'LRN: ${row['lrn'] ?? '-'} | Adviser: ${row['adviser'] ?? '-'}',
+                                  style: const TextStyle(
+                                    color: Color(0xFF5E6B65),
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Status: ${row['attendance_status'] ?? 'Absent'} | Absent days: ${row['absent_days'] ?? 1}',
+                                  style: const TextStyle(
+                                    color: Color(0xFFB91C1C),
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class SchoolTrendChart extends StatelessWidget {
@@ -1828,6 +2229,7 @@ class _SchoolsPageState extends State<SchoolsPage> {
             subtitle: '${item['address'] ?? 'No address saved'}',
             meta:
                 '${intValue(item['student_count'])} students - ${intValue(item['teacher_count'])} teachers',
+            leading: SchoolLogoAvatar(item),
             onTap: () => setState(() => school = item),
           ),
       ],
@@ -2196,6 +2598,50 @@ class SectionTitle extends StatelessWidget {
   );
 }
 
+class SchoolLogoAvatar extends StatelessWidget {
+  const SchoolLogoAvatar(this.school, {super.key, this.size = 42});
+  final Map school;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final logo = '${school['logo'] ?? ''}'.trim();
+    final name = '${school['name'] ?? 'School'}';
+    if (logo.isEmpty) return _fallback(name);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: size,
+        height: size,
+        color: const Color(0xFFF1F5F3),
+        child: Image.network(
+          absoluteUrl(logo),
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => _fallback(name),
+        ),
+      ),
+    );
+  }
+
+  Widget _fallback(String name) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      color: const Color(0xFFEAF7F1),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: const Color(0xFFD7EDE3)),
+    ),
+    alignment: Alignment.center,
+    child: Text(
+      initials(name),
+      style: const TextStyle(
+        color: Color(0xFF138A64),
+        fontWeight: FontWeight.w900,
+      ),
+    ),
+  );
+}
+
 class RecordTile extends StatelessWidget {
   const RecordTile({
     super.key,
@@ -2204,12 +2650,14 @@ class RecordTile extends StatelessWidget {
     required this.meta,
     this.onTap,
     this.color = const Color(0xFF00885B),
+    this.leading,
   });
   final String title;
   final String subtitle;
   final String meta;
   final VoidCallback? onTap;
   final Color color;
+  final Widget? leading;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -2227,21 +2675,22 @@ class RecordTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: .10),
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: Icon(
-                onTap == null
-                    ? Icons.person_rounded
-                    : Icons.chevron_right_rounded,
-                color: color,
-                size: 22,
-              ),
-            ),
+            leading ??
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: .10),
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Icon(
+                    onTap == null
+                        ? Icons.person_rounded
+                        : Icons.chevron_right_rounded,
+                    color: color,
+                    size: 22,
+                  ),
+                ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -2650,7 +3099,48 @@ int countStudents(dynamic grade) =>
       (sum, section) =>
           sum + (((section as Map)['students'] as List?) ?? []).length,
     );
+
+String absoluteUrl(String path) {
+  final clean = path.trim();
+  if (clean.isEmpty) return clean;
+  if (clean.startsWith('http://') || clean.startsWith('https://')) {
+    return clean;
+  }
+  if (clean.startsWith('/')) return '${AppConfig.baseUrl}$clean';
+  return '${AppConfig.baseUrl}/$clean';
+}
+
+String initials(String text) {
+  final parts = text
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .toList();
+  if (parts.isEmpty) return 'S';
+  if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+  return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+}
+
 int intValue(dynamic value) => int.tryParse('$value') ?? 0;
+
+List<String> currentWeekDates(String baseDate) {
+  final base = DateTime.tryParse(baseDate) ?? DateTime.now();
+  final monday = base.subtract(Duration(days: base.weekday - 1));
+  return List.generate(7, (index) {
+    final d = monday.add(Duration(days: index));
+    return '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  });
+}
+
+String weekdayShort(String dayDate) {
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  final parsed = DateTime.tryParse(dayDate);
+  if (parsed == null) return '-';
+  return days[parsed.weekday - 1];
+}
+
+int dayOfMonth(String dayDate) => DateTime.tryParse(dayDate)?.day ?? 0;
+
 String date() {
   final now = DateTime.now();
   return '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
@@ -2702,6 +3192,35 @@ String fullDate() {
   ];
   final now = DateTime.now();
   return '${days[now.weekday - 1]}, ${months[now.month - 1]} ${now.day}, ${now.year}';
+}
+
+String readableDate(String dayDate) {
+  const months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  const days = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+  final parsed = DateTime.tryParse(dayDate);
+  if (parsed == null) return dayDate;
+  return '${days[parsed.weekday - 1]}, ${months[parsed.month - 1]} ${parsed.day}, ${parsed.year}';
 }
 
 String greeting() {
