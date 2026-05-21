@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -475,13 +476,13 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       resizeToAvoidBottomInset: true,
       body: CustomPaint(
-        painter: LiveMeshPainter(.35, intensity: .22, lightMode: true),
+        painter: LiveMeshPainter(.35, intensity: .20, lightMode: true),
         child: CustomScrollView(
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           slivers: [
             SliverToBoxAdapter(
               child: Container(
-                height: 286,
+                height: 252,
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
@@ -530,132 +531,129 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
             SliverToBoxAdapter(
-              child: Transform.translate(
-                offset: const Offset(0, -28),
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    22,
-                    0,
-                    22,
-                    math.max(28, bottomInset + 24),
-                  ),
-                  child: PremiumCard(
-                    padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Welcome Back',
-                          style: TextStyle(
-                            fontSize: 29,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -.5,
-                          ),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  18,
+                  20,
+                  math.max(30, bottomInset + 26),
+                ),
+                child: PremiumCard(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Welcome Back',
+                        style: TextStyle(
+                          fontSize: 30,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -.7,
                         ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Sign in to monitor live attendance.',
-                          style: TextStyle(
-                            color: Color(0xFF667872),
-                            fontWeight: FontWeight.w600,
-                          ),
+                      ),
+                      const SizedBox(height: 5),
+                      const Text(
+                        'Sign in to monitor live attendance.',
+                        style: TextStyle(
+                          color: Color(0xFF667872),
+                          fontWeight: FontWeight.w700,
                         ),
-                        if (error != null) ...[
-                          const SizedBox(height: 14),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFFEFEF),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: const Color(0xFFFECACA),
-                              ),
-                            ),
-                            child: Text(
-                              error!,
-                              style: const TextStyle(
-                                color: Color(0xFFB91C1C),
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 22),
-                        _label('Username'),
-                        _field(
-                          username,
-                          'Enter your username',
-                          icon: Icons.person_rounded,
-                        ),
+                      ),
+                      if (error != null) ...[
                         const SizedBox(height: 14),
-                        _label('Password'),
-                        _field(
-                          password,
-                          'Enter your password',
-                          secret: true,
-                          icon: Icons.lock_rounded,
-                        ),
-                        const SizedBox(height: 24),
                         Container(
                           width: double.infinity,
-                          height: 56,
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF10B981), Color(0xFF00885B)],
-                            ),
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(
-                                  0xFF00885B,
-                                ).withValues(alpha: .25),
-                                blurRadius: 18,
-                                offset: const Offset(0, 10),
-                              ),
-                            ],
+                            color: const Color(
+                              0xFFFFEFEF,
+                            ).withValues(alpha: .84),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFFECACA)),
                           ),
-                          child: FilledButton(
-                            onPressed: loading ? null : submit,
-                            style: FilledButton.styleFrom(
-                              backgroundColor: Colors.transparent,
-                              shadowColor: Colors.transparent,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                            ),
-                            child: loading
-                                ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Text(
-                                    'Sign In',
-                                    style: TextStyle(
-                                      fontSize: 17,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        const Center(
                           child: Text(
-                            'Attendance Monitoring System\nv2.0.3',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Color(0xFF91A09B),
-                              fontWeight: FontWeight.w600,
-                              height: 1.35,
+                            error!,
+                            style: const TextStyle(
+                              color: Color(0xFFB91C1C),
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
                         ),
                       ],
-                    ),
+                      const SizedBox(height: 22),
+                      _label('Username'),
+                      _field(
+                        username,
+                        'Enter your username',
+                        icon: Icons.person_rounded,
+                      ),
+                      const SizedBox(height: 14),
+                      _label('Password'),
+                      _field(
+                        password,
+                        'Enter your password',
+                        secret: true,
+                        icon: Icons.lock_rounded,
+                      ),
+                      const SizedBox(height: 24),
+                      Container(
+                        width: double.infinity,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF10B981), Color(0xFF00885B)],
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(
+                                0xFF00885B,
+                              ).withValues(alpha: .25),
+                              blurRadius: 18,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                        child: FilledButton(
+                          onPressed: loading ? null : submit,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                          ),
+                          child: loading
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text(
+                                  'Sign In',
+                                  style: TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      const Center(
+                        child: Text(
+                          'Attendance Monitoring System\nv2.0.4',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Color(0xFF91A09B),
+                            fontWeight: FontWeight.w600,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -691,12 +689,12 @@ class _LoginScreenState extends State<LoginScreen> {
       hintText: hint,
       prefixIcon: Icon(icon, color: const Color(0xFF00885B)),
       filled: true,
-      fillColor: const Color(0xFFF8FBF9),
+      fillColor: Colors.white.withValues(alpha: .58),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: Color(0xFFD6DED9)),
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: .70)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(18),
@@ -790,69 +788,85 @@ class _HomeShellState extends State<HomeShell> {
     ];
     return Scaffold(
       backgroundColor: const Color(0xFFF2F7F4),
-      body: Column(
-        children: [
-          Header(
-            api: widget.api,
-            onLogout: () async {
-              final navigator = Navigator.of(context);
-              await widget.api.logout();
-              if (mounted) {
-                navigator.pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => LoginScreen(api: widget.api),
-                  ),
-                );
-              }
-            },
-          ),
-          Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 250),
-              child: pages[tab],
+      body: CustomPaint(
+        painter: LiveMeshPainter(.24, intensity: .15, lightMode: true),
+        child: Column(
+          children: [
+            Header(
+              api: widget.api,
+              onLogout: () async {
+                final navigator = Navigator.of(context);
+                await widget.api.logout();
+                if (mounted) {
+                  navigator.pushReplacement(
+                    MaterialPageRoute(
+                      builder: (_) => LoginScreen(api: widget.api),
+                    ),
+                  );
+                }
+              },
             ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: .08),
-              blurRadius: 24,
-              offset: const Offset(0, -8),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                child: pages[tab],
+              ),
             ),
           ],
         ),
-        child: SafeArea(
-          top: false,
-          child: NavigationBar(
-            height: 70,
-            selectedIndex: tab,
-            onDestinationSelected: (value) => setState(() => tab = value),
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.dashboard_customize_rounded),
-                label: 'Home',
+      ),
+      bottomNavigationBar: ClipRRect(
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(26),
+          topRight: Radius.circular(26),
+        ),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .72),
+              border: Border(
+                top: BorderSide(color: Colors.white.withValues(alpha: .70)),
               ),
-              NavigationDestination(
-                icon: Icon(Icons.fact_check_rounded),
-                label: 'Attendance',
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0B3428).withValues(alpha: .08),
+                  blurRadius: 24,
+                  offset: const Offset(0, -8),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              top: false,
+              child: NavigationBar(
+                height: 70,
+                backgroundColor: Colors.transparent,
+                selectedIndex: tab,
+                onDestinationSelected: (value) => setState(() => tab = value),
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.dashboard_customize_rounded),
+                    label: 'Home',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.fact_check_rounded),
+                    label: 'Attendance',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.account_balance_rounded),
+                    label: 'Schools',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.insert_chart_rounded),
+                    label: 'Report',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.notifications_active_rounded),
+                    label: 'Alerts',
+                  ),
+                ],
               ),
-              NavigationDestination(
-                icon: Icon(Icons.account_balance_rounded),
-                label: 'Schools',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.insert_chart_rounded),
-                label: 'Report',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.notifications_active_rounded),
-                label: 'Alerts',
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -867,89 +881,95 @@ class Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const radius = BorderRadius.only(
-      bottomLeft: Radius.circular(28),
-      bottomRight: Radius.circular(28),
-    );
-    return ClipRRect(
-      borderRadius: radius,
-      child: CustomPaint(
-        painter: LiveMeshPainter(.2, intensity: .18),
-        child: Container(
-          padding: EdgeInsets.fromLTRB(
-            18,
-            MediaQuery.paddingOf(context).top + 12,
-            18,
-            16,
-          ),
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF10B981), Color(0xFF00885B), Color(0xFF007052)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        14,
+        MediaQuery.paddingOf(context).top + 8,
+        14,
+        8,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .66),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: Colors.white.withValues(alpha: .70)),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0B3428).withValues(alpha: .08),
+                  blurRadius: 24,
+                  offset: const Offset(0, 12),
+                ),
+              ],
             ),
-          ),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  const AppLogo(size: 46),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          AppConfig.appName,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 21,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -.4,
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    const AppLogo(size: 46),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            AppConfig.appName,
+                            style: TextStyle(
+                              color: Color(0xFF0F211B),
+                              fontSize: 21,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -.4,
+                            ),
                           ),
-                        ),
-                        Text(
-                          api.fullname,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFFE0FFF2),
-                            fontWeight: FontWeight.w700,
+                          Text(
+                            api.fullname,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF60756E),
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  IconButton.filledTonal(
-                    onPressed: onLogout,
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.white.withValues(alpha: .18),
-                      foregroundColor: Colors.white,
+                    IconButton.filledTonal(
+                      onPressed: onLogout,
+                      style: IconButton.styleFrom(
+                        backgroundColor: const Color(
+                          0xFF009A67,
+                        ).withValues(alpha: .12),
+                        foregroundColor: const Color(0xFF00885B),
+                      ),
+                      icon: const Icon(Icons.logout_rounded),
                     ),
-                    icon: const Icon(Icons.logout_rounded),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  _chip(
-                    const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        LiveDot(color: Color(0xFFFF3B30)),
-                        SizedBox(width: 7),
-                        Text('LIVE'),
-                      ],
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    _chip(
+                      const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          LiveDot(color: Color(0xFFFF3B30)),
+                          SizedBox(width: 7),
+                          Text('LIVE'),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  _chip(Text(shortDate())),
-                  const SizedBox(width: 8),
-                  Expanded(child: _chip(Center(child: Text(date())))),
-                ],
-              ),
-            ],
+                    const SizedBox(width: 8),
+                    _chip(Text(shortDate())),
+                    const SizedBox(width: 8),
+                    Expanded(child: _chip(Center(child: Text(date())))),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -959,14 +979,14 @@ class Header extends StatelessWidget {
   Widget _chip(Widget child) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
     decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: .17),
+      color: Colors.white.withValues(alpha: .52),
       borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: Colors.white.withValues(alpha: .10)),
+      border: Border.all(color: Colors.white.withValues(alpha: .72)),
     ),
     child: DefaultTextStyle(
       style: const TextStyle(
-        color: Colors.white,
-        fontWeight: FontWeight.w800,
+        color: Color(0xFF0F6F52),
+        fontWeight: FontWeight.w900,
         fontSize: 12,
       ),
       child: child,
@@ -1344,23 +1364,65 @@ class ReportsPage extends StatelessWidget {
       final totals = (snapshot.data!['totals'] as Map?) ?? {};
       final schools = (snapshot.data!['schools'] as List?) ?? [];
       return ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
         children: [
-          const SectionTitle(
-            'Reports',
-            'Daily summary and school attendance rates.',
+          PremiumCard(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF10B981), Color(0xFF00885B)],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Icon(
+                    Icons.insert_chart_rounded,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Reports',
+                        style: TextStyle(
+                          fontSize: 25,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -.65,
+                        ),
+                      ),
+                      Text(
+                        'Live daily insight - ${shortDate()}',
+                        style: const TextStyle(
+                          color: Color(0xFF667872),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const LiveDot(color: Color(0xFFFF3B30)),
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           PremiumCard(
             title: 'Daily Summary',
-            subtitle: 'Updated live',
+            subtitle: 'Synced from the web system',
             child: GridView.count(
               physics: const NeverScrollableScrollPhysics(),
               shrinkWrap: true,
               crossAxisCount: 2,
-              childAspectRatio: 1.8,
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
+              childAspectRatio: 1.62,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
               children: [
                 Metric(
                   Icons.groups,
@@ -1390,19 +1452,19 @@ class ReportsPage extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           PremiumCard(
-            title: 'School Rates',
-            subtitle: '${schools.length} school records',
+            title: 'School Insights',
+            subtitle: '${schools.length} live school record(s)',
             child: Column(
               children: [
                 for (final item in schools.take(60))
-                  RecordTile(
-                    title: '${(item as Map)['name'] ?? 'School'}',
-                    subtitle:
-                        '${intValue(item['present'])} of ${intValue(item['enrolled'] ?? item['student_count'])} present',
-                    meta: '${intValue(item['rate'])}% attendance',
+                  RateBar(
+                    '${(item as Map)['name'] ?? 'School'}',
+                    intValue(item['rate']),
                   ),
+                if (schools.isEmpty)
+                  const EmptyText('No school report records yet.'),
               ],
             ),
           ),
@@ -1761,43 +1823,57 @@ class PremiumCard extends StatelessWidget {
   final EdgeInsetsGeometry padding;
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: padding,
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(26),
-      border: Border.all(color: border ?? const Color(0xFFE4ECE8)),
-      boxShadow: [
-        BoxShadow(
-          color: const Color(0xFF0B3428).withValues(alpha: .075),
-          blurRadius: 24,
-          offset: const Offset(0, 12),
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: BorderRadius.circular(28),
+    child: BackdropFilter(
+      filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+      child: Container(
+        width: double.infinity,
+        padding: padding,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .68),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(
+            color:
+                border?.withValues(alpha: .65) ??
+                Colors.white.withValues(alpha: .72),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF0B3428).withValues(alpha: .075),
+              blurRadius: 28,
+              offset: const Offset(0, 14),
+            ),
+          ],
         ),
-      ],
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (title != null)
-          Text(
-            title!,
-            style: const TextStyle(
-              fontSize: 19,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -.25,
-            ),
-          ),
-        if (subtitle != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 2, bottom: 12),
-            child: Text(
-              subtitle!,
-              style: const TextStyle(color: Color(0xFF667872)),
-            ),
-          ),
-        child,
-      ],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (title != null)
+              Text(
+                title!,
+                style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -.25,
+                  color: Color(0xFF0F211B),
+                ),
+              ),
+            if (subtitle != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 2, bottom: 12),
+                child: Text(
+                  subtitle!,
+                  style: const TextStyle(
+                    color: Color(0xFF667872),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            child,
+          ],
+        ),
+      ),
     ),
   );
 }
@@ -1853,9 +1929,9 @@ class RecordTile extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 78),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FBF9),
+          color: Colors.white.withValues(alpha: .50),
           borderRadius: BorderRadius.circular(19),
-          border: Border.all(color: const Color(0xFFE9F1ED)),
+          border: Border.all(color: Colors.white.withValues(alpha: .62)),
         ),
         child: Row(
           children: [
@@ -1933,63 +2009,75 @@ class Metric extends StatelessWidget {
   final Color color;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(13),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(23),
-      border: Border.all(color: const Color(0xFFE4ECE8)),
-      boxShadow: [
-        BoxShadow(
-          color: const Color(0xFF0B3428).withValues(alpha: .06),
-          blurRadius: 18,
-          offset: const Offset(0, 10),
-        ),
-      ],
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: .11),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(icon, color: color, size: 21),
-            ),
-            const Spacer(),
-            Text(
-              value,
-              style: const TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 26,
-                height: 1,
-                letterSpacing: -.5,
-              ),
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: BorderRadius.circular(23),
+    child: BackdropFilter(
+      filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+      child: Container(
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .58),
+          borderRadius: BorderRadius.circular(23),
+          border: Border.all(color: Colors.white.withValues(alpha: .70)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF0B3428).withValues(alpha: .06),
+              blurRadius: 18,
+              offset: const Offset(0, 10),
             ),
           ],
         ),
-        Column(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: .11),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, color: color, size: 21),
+                ),
+                const Spacer(),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 26,
+                    height: 1,
+                    letterSpacing: -.5,
+                  ),
+                ),
+              ],
             ),
-            Text(
-              caption,
-              style: const TextStyle(color: Color(0xFF74827E), fontSize: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                  ),
+                ),
+                Text(
+                  caption,
+                  style: const TextStyle(
+                    color: Color(0xFF74827E),
+                    fontSize: 10,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
-      ],
+      ),
     ),
   );
 }
