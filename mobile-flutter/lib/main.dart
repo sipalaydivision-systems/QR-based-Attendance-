@@ -1076,6 +1076,10 @@ class DashboardPage extends StatelessWidget {
     final absent = intValue(dashboard['students_absent']);
     final teachers = intValue(dashboard['total_teachers']);
     final teachersPresent = intValue(dashboard['teachers_present']);
+    final schools = (dashboard['schools'] as List?) ?? [];
+    final schoolRates = schools
+        .map((item) => intValue((item as Map)['rate']))
+        .toList();
     return RefreshIndicator(
       onRefresh: () => onRefresh(silent: false),
       child: ListView(
@@ -1163,31 +1167,32 @@ class DashboardPage extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 18),
-                Row(
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    Expanded(
-                      child: DashboardChip(
-                        label: 'Students',
-                        value: '$active',
-                        icon: Icons.groups_rounded,
-                      ),
+                    KpiPill(
+                      label: 'Students',
+                      value: '$active',
+                      icon: Icons.groups_rounded,
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: DashboardChip(
-                        label: 'Present',
-                        value: '$present',
-                        icon: Icons.how_to_reg_rounded,
-                      ),
+                    KpiPill(
+                      label: 'Present',
+                      value: '$present',
+                      icon: Icons.how_to_reg_rounded,
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: DashboardChip(
-                        label: 'Alerts',
-                        value: '${flags.length}',
-                        icon: Icons.warning_rounded,
-                      ),
+                    KpiPill(
+                      label: 'Absent',
+                      value: '$absent',
+                      icon: Icons.person_off_rounded,
+                      accent: const Color(0xFFDC2626),
+                    ),
+                    KpiPill(
+                      label: '2-Day',
+                      value: '${flags.length}',
+                      icon: Icons.warning_rounded,
+                      accent: const Color(0xFFF97316),
                     ),
                   ],
                 ),
@@ -1290,94 +1295,332 @@ class DashboardPage extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 12),
-          GridView.count(
-            physics: const NeverScrollableScrollPhysics(),
-            shrinkWrap: true,
-            crossAxisCount: 2,
-            childAspectRatio: 1.62,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            children: [
-              Metric(Icons.groups, 'Students', '$active', 'active'),
-              Metric(Icons.how_to_reg, 'Present', '$present', 'today'),
-              Metric(
-                Icons.person_off,
-                'Absent',
-                '$absent',
-                'now',
-                color: const Color(0xFFDC2626),
-              ),
-              Metric(
-                Icons.warning,
-                '2-Day',
-                '${flags.length}',
-                'flagged',
-                color: const Color(0xFFF97316),
-              ),
-              Metric(Icons.co_present, 'Teachers', '$teachers', 'active'),
-              Metric(
-                Icons.verified_user,
-                'T. Present',
-                '$teachersPresent',
-                'today',
-              ),
-            ],
+          PremiumCard(
+            title: 'Data Visualization',
+            subtitle: 'Live attendance and staffing insights',
+            child: Column(
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  height: 170,
+                  child: AttendanceBarChart(
+                    values: [
+                      active,
+                      present,
+                      absent,
+                      teachers,
+                      teachersPresent,
+                      flags.length,
+                    ],
+                    labels: const [
+                      'Students',
+                      'Present',
+                      'Absent',
+                      'Teachers',
+                      'T. Present',
+                      '2-Day',
+                    ],
+                    colors: const [
+                      Color(0xFF138A64),
+                      Color(0xFF10B981),
+                      Color(0xFFDC2626),
+                      Color(0xFF0EA5E9),
+                      Color(0xFF2563EB),
+                      Color(0xFFF97316),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: const [
+                    ChartLegend(color: Color(0xFF138A64), label: 'Students'),
+                    ChartLegend(color: Color(0xFF10B981), label: 'Present'),
+                    ChartLegend(color: Color(0xFFDC2626), label: 'Absent'),
+                    ChartLegend(color: Color(0xFF0EA5E9), label: 'Teachers'),
+                    ChartLegend(color: Color(0xFF2563EB), label: 'T. Present'),
+                    ChartLegend(color: Color(0xFFF97316), label: '2-Day'),
+                  ],
+                ),
+                if (schoolRates.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'School Attendance Trend',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 100,
+                    child: SchoolTrendChart(
+                      rates: schoolRates.take(10).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  for (final item in schools.take(4))
+                    RateBar(
+                      '${(item as Map)['name'] ?? 'School'}',
+                      intValue(item['rate']),
+                    ),
+                ],
+              ],
+            ),
           ),
-          const SizedBox(height: 14),
-          Analytics(schools: (dashboard['schools'] as List?) ?? []),
         ],
       ),
     );
   }
 }
 
-class DashboardChip extends StatelessWidget {
-  const DashboardChip({
+class KpiPill extends StatelessWidget {
+  const KpiPill({
     super.key,
     required this.label,
     required this.value,
     required this.icon,
+    this.accent = const Color(0xFF138A64),
   });
   final String label;
   final String value;
   final IconData icon;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(11),
+    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
     decoration: BoxDecoration(
       color: const Color(0xFFF5F7F6),
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(14),
       border: Border.all(color: const Color(0xFFDCE6E1)),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: const Color(0xFF138A64), size: 18),
-        const SizedBox(height: 8),
+        Icon(icon, color: accent, size: 16),
+        const SizedBox(height: 6),
         Text(
           value,
           style: const TextStyle(
             color: Color(0xFF111827),
-            fontSize: 20,
+            fontSize: 18,
             fontWeight: FontWeight.w900,
             height: 1,
           ),
         ),
-        const SizedBox(height: 3),
+        const SizedBox(height: 2),
         Text(
           label,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             color: Color(0xFF5C6E66),
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: FontWeight.w800,
           ),
         ),
       ],
     ),
   );
+}
+
+class ChartLegend extends StatelessWidget {
+  const ChartLegend({super.key, required this.color, required this.label});
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: const Color(0xFFE1E9E4)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFF5C6E66),
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class AttendanceBarChart extends StatelessWidget {
+  const AttendanceBarChart({
+    super.key,
+    required this.values,
+    required this.labels,
+    required this.colors,
+  });
+  final List<int> values;
+  final List<String> labels;
+  final List<Color> colors;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      Expanded(
+        child: CustomPaint(
+          painter: AttendanceBarPainter(values: values, colors: colors),
+          child: const SizedBox.expand(),
+        ),
+      ),
+      const SizedBox(height: 8),
+      Row(
+        children: [
+          for (var i = 0; i < values.length; i++)
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${values[i]}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF1F2937),
+                    ),
+                  ),
+                  Text(
+                    labels[i],
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    ],
+  );
+}
+
+class AttendanceBarPainter extends CustomPainter {
+  AttendanceBarPainter({required this.values, required this.colors});
+  final List<int> values;
+  final List<Color> colors;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final grid = Paint()
+      ..color = const Color(0xFFE5ECE8)
+      ..strokeWidth = 1;
+    for (var i = 1; i <= 4; i++) {
+      final y = (size.height - 4) * i / 5;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
+    }
+
+    final maxValue = math.max(1, values.fold<int>(0, (a, b) => math.max(a, b)));
+    final itemWidth = size.width / values.length;
+    final barWidth = itemWidth * .56;
+    for (var i = 0; i < values.length; i++) {
+      final value = values[i].toDouble();
+      final height = ((size.height - 10) * (value / maxValue))
+          .clamp(6, size.height - 10)
+          .toDouble();
+      final left = i * itemWidth + (itemWidth - barWidth) / 2;
+      final rect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(left, size.height - height, barWidth, height),
+        const Radius.circular(10),
+      );
+      final paint = Paint()..color = colors[i];
+      canvas.drawRRect(rect, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(AttendanceBarPainter oldDelegate) =>
+      oldDelegate.values != values || oldDelegate.colors != colors;
+}
+
+class SchoolTrendChart extends StatelessWidget {
+  const SchoolTrendChart({super.key, required this.rates});
+  final List<int> rates;
+
+  @override
+  Widget build(BuildContext context) => CustomPaint(
+    painter: SchoolTrendPainter(rates),
+    child: const SizedBox.expand(),
+  );
+}
+
+class SchoolTrendPainter extends CustomPainter {
+  SchoolTrendPainter(this.rates);
+  final List<int> rates;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (rates.isEmpty) return;
+    final line = Paint()
+      ..color = const Color(0xFF138A64)
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke;
+    final fill = Paint()
+      ..color = const Color(0xFF138A64).withValues(alpha: .10)
+      ..style = PaintingStyle.fill;
+    final dot = Paint()..color = const Color(0xFF0F6E52);
+    final grid = Paint()
+      ..color = const Color(0xFFE5ECE8)
+      ..strokeWidth = 1;
+
+    for (var i = 1; i <= 3; i++) {
+      final y = size.height * i / 4;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
+    }
+
+    final step = rates.length == 1 ? 0.0 : size.width / (rates.length - 1);
+    final path = Path();
+    final fillPath = Path();
+
+    for (var i = 0; i < rates.length; i++) {
+      final x = i * step;
+      final normalized = rates[i].clamp(0, 100).toDouble() / 100;
+      final y = size.height - normalized * (size.height - 8) - 4;
+      if (i == 0) {
+        path.moveTo(x, y);
+        fillPath.moveTo(x, size.height);
+        fillPath.lineTo(x, y);
+      } else {
+        path.lineTo(x, y);
+        fillPath.lineTo(x, y);
+      }
+      canvas.drawCircle(Offset(x, y), 3.2, dot);
+    }
+    fillPath.lineTo(size.width, size.height);
+    fillPath.close();
+    canvas.drawPath(fillPath, fill);
+    canvas.drawPath(path, line);
+  }
+
+  @override
+  bool shouldRepaint(SchoolTrendPainter oldDelegate) =>
+      oldDelegate.rates != rates;
 }
 
 class AttendancePage extends StatelessWidget {
