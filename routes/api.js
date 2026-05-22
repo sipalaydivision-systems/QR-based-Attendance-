@@ -815,10 +815,13 @@ router.post('/schools', requireAuth, async (req, res) => {
 });
 
 router.put('/schools/:id', requireAuth, async (req, res) => {
-    const { name, school_id_code, address, contact, status } = req.body;
+    const { name, school_id_code, address, contact, status, logo } = req.body;
     try {
-        await db.query('UPDATE schools SET name=?, school_id_code=?, address=?, contact=?, status=? WHERE id=?',
-            [name, school_id_code || null, address || null, contact || null, status || 'active', req.params.id]);
+        const [[existing]] = await db.query('SELECT logo FROM schools WHERE id = ?', [req.params.id]);
+        if (!existing) return res.status(404).json({ error: 'School not found.' });
+        const keepLogo = typeof logo === 'string' && logo.trim() ? logo.trim() : existing.logo;
+        await db.query('UPDATE schools SET name=?, school_id_code=?, address=?, contact=?, status=?, logo=? WHERE id=?',
+            [name, school_id_code || null, address || null, contact || null, status || 'active', keepLogo || null, req.params.id]);
         return res.json({ success: true });
     } catch (err) {
         return res.status(500).json({ error: 'Failed to update school.' });
@@ -1507,6 +1510,90 @@ router.get('/reports/absentees', requireAuth, async (req, res) => {
     } catch (err) {
         console.error('Absentee list error:', err);
         return res.status(500).json({ error: 'Failed to generate absentee list.' });
+    }
+});
+
+// ---- Mobile/Web: Date Attendance Details ----
+router.get('/date-attendance-details', requireAuth, async (req, res) => {
+    const targetDate = req.query.date || new Date().toISOString().slice(0, 10);
+    const schoolId = applySchoolFilter(req);
+    try {
+        const schoolFilter = schoolId ? ' AND s.school_id = ?' : '';
+        const schoolParams = schoolId ? [schoolId] : [];
+        const schoolDay = await checkSchoolDay(targetDate, schoolId);
+
+        const [[totalRow]] = await db.query(
+            `SELECT COUNT(*) as cnt FROM students s WHERE s.status = 'active'` + schoolFilter,
+            schoolParams
+        );
+
+        let presentQuery = `SELECT s.id, s.firstname, s.lastname, s.lrn,
+                gl.name as grade_name, sec.name as section_name, sec.adviser,
+                sc.name as school_name,
+                CASE WHEN SUM(CASE WHEN a.status = 'late' THEN 1 ELSE 0 END) > 0 THEN 'Late' ELSE 'Present' END as attendance_status
+            FROM attendance a
+            INNER JOIN students s ON a.person_id = s.id
+            LEFT JOIN schools sc ON s.school_id = sc.id
+            LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id
+            LEFT JOIN sections sec ON s.section_id = sec.id
+            WHERE a.person_type = 'student'
+              AND s.status = 'active'
+              AND a.date = ?
+              AND a.time_in IS NOT NULL`;
+        const presentParams = [targetDate];
+        if (schoolId) { presentQuery += ' AND a.school_id = ?'; presentParams.push(schoolId); }
+        presentQuery += ` GROUP BY s.id, s.firstname, s.lastname, s.lrn, gl.name, sec.name, sec.adviser, sc.name
+                          ORDER BY s.lastname, s.firstname`;
+
+        let absentQuery = `SELECT s.id, s.firstname, s.lastname, s.lrn,
+                gl.name as grade_name, sec.name as section_name, sec.adviser,
+                sc.name as school_name
+            FROM students s
+            LEFT JOIN schools sc ON s.school_id = sc.id
+            LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id
+            LEFT JOIN sections sec ON s.section_id = sec.id
+            WHERE s.status = 'active'
+              AND s.id NOT IN (
+                  SELECT person_id FROM attendance
+                  WHERE person_type='student' AND date = ? AND time_in IS NOT NULL
+              )`;
+        const absentParams = [targetDate];
+        if (schoolId) { absentQuery += ' AND s.school_id = ?'; absentParams.push(schoolId); }
+        absentQuery += ' ORDER BY s.lastname, s.firstname';
+
+        const [presentRows, absentRows] = await Promise.all([
+            db.query(presentQuery, presentParams).then(r => r[0]),
+            db.query(absentQuery, absentParams).then(r => r[0]),
+        ]);
+
+        const presentStudents = presentRows.map(row => ({
+            ...row,
+            name: `${row.firstname || ''} ${row.lastname || ''}`.trim() || 'Student',
+            attendance_status: row.attendance_status || 'Present',
+            attendance_date: targetDate
+        }));
+        const absentStudents = absentRows.map(row => ({
+            ...row,
+            name: `${row.firstname || ''} ${row.lastname || ''}`.trim() || 'Student',
+            attendance_status: 'Absent',
+            attendance_date: targetDate
+        }));
+
+        return res.json({
+            date: targetDate,
+            is_school_day: schoolDay.isSchoolDay,
+            non_school_day_reason: schoolDay.reason,
+            totals: {
+                students_total: totalRow.cnt,
+                present: presentStudents.length,
+                absent: absentStudents.length
+            },
+            present_students: presentStudents,
+            absent_students: absentStudents
+        });
+    } catch (err) {
+        console.error('Date attendance details error:', err);
+        return res.status(500).json({ error: 'Failed to load date attendance details.' });
     }
 });
 
