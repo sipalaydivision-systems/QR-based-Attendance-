@@ -381,34 +381,48 @@ class _LiveDotState extends State<LiveDot> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final hostSize = widget.size + 12;
     if (!widget.pulse) {
-      return _dot(
-        widget.size,
-        widget.color,
-        widget.color.withValues(alpha: .35),
+      return SizedBox(
+        width: hostSize,
+        height: hostSize,
+        child: Center(
+          child: _dot(
+            widget.size,
+            widget.color,
+            widget.color.withValues(alpha: .35),
+          ),
+        ),
       );
     }
     return AnimatedBuilder(
       animation: controller,
       builder: (context, child) {
-        final pulse = .35 + controller.value * .55;
-        return Stack(
-          alignment: Alignment.center,
-          children: [
-            Container(
-              width: widget.size + 10 * pulse,
-              height: widget.size + 10 * pulse,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: widget.color.withValues(alpha: .12 * pulse),
+        final pulse = .72 + controller.value * .28;
+        return SizedBox(
+          width: hostSize,
+          height: hostSize,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Transform.scale(
+                scale: pulse,
+                child: Container(
+                  width: hostSize,
+                  height: hostSize,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: widget.color.withValues(alpha: .12),
+                  ),
+                ),
               ),
-            ),
-            _dot(
-              widget.size,
-              widget.color,
-              widget.color.withValues(alpha: .55),
-            ),
-          ],
+              _dot(
+                widget.size,
+                widget.color,
+                widget.color.withValues(alpha: .55),
+              ),
+            ],
+          ),
         );
       },
     );
@@ -1220,43 +1234,6 @@ class DashboardPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 7,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEAF7F1),
-                        borderRadius: BorderRadius.circular(99),
-                        border: Border.all(color: const Color(0xFFD7EDE3)),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          LiveDot(color: Color(0xFFFF3B30)),
-                          SizedBox(width: 7),
-                          Text(
-                            'LIVE',
-                            style: TextStyle(
-                              color: Color(0xFF0F6E52),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: .4,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Spacer(),
-                    const Icon(
-                      Icons.dashboard_customize_rounded,
-                      color: Color(0xFF0F6E52),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
                 Text(
                   greeting(),
                   style: const TextStyle(
@@ -1307,12 +1284,6 @@ class DashboardPage extends StatelessWidget {
                       accent: const Color(0xFFDC2626),
                       onTap: () =>
                           openAbsentDetails(title: 'Absent Students Today'),
-                    ),
-                    KpiPill(
-                      label: 'Alerts',
-                      value: '${flags.length}',
-                      icon: Icons.warning_rounded,
-                      accent: const Color(0xFFF97316),
                     ),
                   ],
                 ),
@@ -1425,7 +1396,7 @@ class DashboardPage extends StatelessWidget {
           const SizedBox(height: 12),
           PremiumCard(
             title: 'Weekly Absence Analytics',
-            subtitle: 'Absent students per day (Mon-Sun)',
+            subtitle: 'Absent students per day (Mon-Fri)',
             child: Column(
               children: [
                 WeeklyAbsenceAnalytics(
@@ -1433,6 +1404,15 @@ class DashboardPage extends StatelessWidget {
                   onDayTap: (dayDate, isSchoolDay) => openAbsentDetails(
                     targetDate: dayDate,
                     title: 'Absent Students - ${readableDate(dayDate)}',
+                    isSchoolDay: isSchoolDay,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                DailyAttendanceCalendar(
+                  api: api,
+                  onAbsentTap: (selectedDate, isSchoolDay) => openAbsentDetails(
+                    targetDate: selectedDate,
+                    title: 'Absent Students - ${readableDate(selectedDate)}',
                     isSchoolDay: isSchoolDay,
                   ),
                 ),
@@ -1572,7 +1552,7 @@ class _WeeklyAbsenceAnalyticsState extends State<WeeklyAbsenceAnalytics> {
       });
     }
     try {
-      final days = currentWeekDates(date());
+      final days = weekdayDatesOfWeek(date());
       final futures = days
           .map((d) => widget.api.map('/api/dashboard-data?date=$d'))
           .toList();
@@ -1753,6 +1733,167 @@ class WeekDayAbsenceTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class DailyAttendanceCalendar extends StatefulWidget {
+  const DailyAttendanceCalendar({
+    super.key,
+    required this.api,
+    required this.onAbsentTap,
+  });
+  final ApiService api;
+  final void Function(String selectedDate, bool isSchoolDay) onAbsentTap;
+
+  @override
+  State<DailyAttendanceCalendar> createState() =>
+      _DailyAttendanceCalendarState();
+}
+
+class _DailyAttendanceCalendarState extends State<DailyAttendanceCalendar> {
+  late DateTime focusedDate;
+  bool loading = false;
+  String? error;
+  int present = 0;
+  int absent = 0;
+  int total = 0;
+  bool isSchoolDay = true;
+
+  @override
+  void initState() {
+    super.initState();
+    focusedDate = DateTime.now();
+    loadForDate(focusedDate);
+  }
+
+  String get selectedDateString =>
+      '${focusedDate.year.toString().padLeft(4, '0')}-${focusedDate.month.toString().padLeft(2, '0')}-${focusedDate.day.toString().padLeft(2, '0')}';
+
+  Future<void> loadForDate(DateTime value) async {
+    setState(() {
+      focusedDate = value;
+      loading = true;
+      error = null;
+    });
+    try {
+      final map = await widget.api.map(
+        '/api/dashboard-data?date=$selectedDateString',
+      );
+      if (!mounted) return;
+      setState(() {
+        total = intValue(map['active_students'] ?? map['total_students']);
+        present = intValue(map['students_present']);
+        absent = intValue(map['students_absent']);
+        isSchoolDay = map['is_school_day'] == true;
+        loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        loading = false;
+        error = e.toString();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          'Select a date',
+          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+        ),
+      ),
+      const SizedBox(height: 8),
+      Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FBF9),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFDCE6E1)),
+        ),
+        child: CalendarDatePicker(
+          initialDate: focusedDate,
+          firstDate: DateTime.now().subtract(const Duration(days: 365 * 2)),
+          lastDate: DateTime.now().add(const Duration(days: 365)),
+          onDateChanged: loadForDate,
+        ),
+      ),
+      const SizedBox(height: 10),
+      if (loading)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 10),
+          child: Center(child: CircularProgressIndicator()),
+        )
+      else if (error != null)
+        const Text(
+          'Failed to load selected-date totals.',
+          style: TextStyle(
+            color: Color(0xFFB91C1C),
+            fontWeight: FontWeight.w700,
+          ),
+        )
+      else
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE1E9E4)),
+          ),
+          child: Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            children: [
+              _statPill(
+                'Date',
+                readableDate(selectedDateString),
+                const Color(0xFF4F5E57),
+              ),
+              _statPill('Students', '$total', const Color(0xFF138A64)),
+              _statPill('Present', '$present', const Color(0xFF10B981)),
+              InkWell(
+                onTap: () =>
+                    widget.onAbsentTap(selectedDateString, isSchoolDay),
+                borderRadius: BorderRadius.circular(10),
+                child: _statPill('Absent', '$absent', const Color(0xFFDC2626)),
+              ),
+              if (!isSchoolDay)
+                _statPill('Status', 'No Classes', const Color(0xFF9CA3AF)),
+            ],
+          ),
+        ),
+    ],
+  );
+
+  Widget _statPill(String label, String value, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .08),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: color.withValues(alpha: .25)),
+    ),
+    child: RichText(
+      text: TextSpan(
+        style: const TextStyle(fontSize: 12),
+        children: [
+          TextSpan(
+            text: '$label: ',
+            style: const TextStyle(
+              color: Color(0xFF6B7280),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          TextSpan(
+            text: value,
+            style: TextStyle(color: color, fontWeight: FontWeight.w900),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class AbsentStudentsSheet extends StatefulWidget {
@@ -3123,10 +3264,10 @@ String initials(String text) {
 
 int intValue(dynamic value) => int.tryParse('$value') ?? 0;
 
-List<String> currentWeekDates(String baseDate) {
+List<String> weekdayDatesOfWeek(String baseDate) {
   final base = DateTime.tryParse(baseDate) ?? DateTime.now();
   final monday = base.subtract(Duration(days: base.weekday - 1));
-  return List.generate(7, (index) {
+  return List.generate(5, (index) {
     final d = monday.add(Duration(days: index));
     return '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
   });
