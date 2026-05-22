@@ -94,7 +94,7 @@ async function loadTeachers() {
     var school = document.getElementById('filterSchool').value;
     var search = document.getElementById('teacherSearch').value;
     var params = new URLSearchParams();
-    if (school) params.append('school', school);
+    if (school) params.append('school_id', school);
     if (search) params.append('search', search);
     var res = await fetch('/api/teachers?' + params);
     allTeachers = await res.json();

@@ -23,6 +23,35 @@ function getDashboardUrl(role) {
     }
 }
 
+function normalizeSchoolKey(value) {
+    return String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim()
+        .replace(/\s+/g, ' ');
+}
+
+function findSchoolMatch(schools, input) {
+    const target = normalizeSchoolKey(input);
+    if (!target) return null;
+
+    for (const school of schools) {
+        const keys = [school.name, school.school_id_code, school.school_code];
+        for (const rawKey of keys) {
+            const key = normalizeSchoolKey(rawKey);
+            if (key && key === target) return school;
+        }
+    }
+
+    for (const school of schools) {
+        const key = normalizeSchoolKey(school.name);
+        if (!key) continue;
+        if (key.includes(target) || target.includes(key)) return school;
+    }
+
+    return null;
+}
+
 // ---- Dashboard Pages ----
 // Each route enforces that the session user's role matches.
 // If the session was overwritten by another login (same browser),
@@ -236,7 +265,8 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
         return res.status(400).json({ error: 'No file uploaded.' });
     }
     const category = req.body.category || 'student';
-    const defaultSchoolId = req.body.school_id || null;
+    const parsedDefaultSchoolId = parseInt(req.body.school_id, 10);
+    const defaultSchoolId = Number.isFinite(parsedDefaultSchoolId) ? parsedDefaultSchoolId : null;
     let rows = [];
 
     try {
@@ -294,14 +324,24 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
             return { firstname: words[0], lastname: words[words.length - 1], middlename: words.slice(1, -1).join(' ') };
         }
 
-        async function resolveSchoolPreview(schoolName, fallbackId) {
-            if (!schoolName) {
-                if (!fallbackId) return { id: null, name: '' };
-                const [s] = await db.query('SELECT id, name FROM schools WHERE id = ?', [fallbackId]);
-                return s.length > 0 ? s[0] : { id: fallbackId, name: '' };
+        const [schools] = await db.query("SELECT id, name, school_id_code, school_code FROM schools WHERE status = 'active' ORDER BY name");
+        const fallbackSchool = defaultSchoolId ? schools.find(s => Number(s.id) === Number(defaultSchoolId)) : null;
+        const impliedDefaultSchool = fallbackSchool || (schools.length === 1 ? schools[0] : null);
+
+        async function resolveSchoolPreview(schoolName) {
+            const rawSchoolName = String(schoolName || '').trim();
+            if (!rawSchoolName) {
+                if (impliedDefaultSchool) return { id: impliedDefaultSchool.id, name: impliedDefaultSchool.name };
+                return { id: null, name: '', error: 'School is required. Provide School value or choose a default school.' };
             }
-            const [found] = await db.query('SELECT id, name FROM schools WHERE name = ? LIMIT 1', [schoolName]);
-            return found.length > 0 ? found[0] : { id: null, name: schoolName, error: 'School not found' };
+
+            const matchedSchool = findSchoolMatch(schools, rawSchoolName);
+            if (matchedSchool) return { id: matchedSchool.id, name: matchedSchool.name };
+
+            if (impliedDefaultSchool) {
+                return { id: impliedDefaultSchool.id, name: impliedDefaultSchool.name, warning: 'School not matched, used default school.' };
+            }
+            return { id: null, name: rawSchoolName, error: 'School not found' };
         }
 
         async function checkGrade(gradeStr) {
@@ -351,7 +391,7 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
                 if (!fn && !ln) { entry.status = 'error'; entry.error = 'Missing name'; }
 
                 const schoolName = row['School'] || row['school'] || '';
-                const school = await resolveSchoolPreview(schoolName, defaultSchoolId);
+                const school = await resolveSchoolPreview(schoolName);
                 const gradeStr = row['Grade'] || row['grade'];
                 const gradeErr = validateGradeForSchool(gradeStr, school.name || schoolName);
                 if (gradeErr) { entry.status = 'error'; entry.error = gradeErr; }
@@ -386,7 +426,7 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
                 if (!fn && !ln) { entry.status = 'error'; entry.error = 'Missing student name'; }
 
                 const schoolName = row['School'] || row['school'] || '';
-                const school = await resolveSchoolPreview(schoolName, defaultSchoolId);
+                const school = await resolveSchoolPreview(schoolName);
                 const gradeStr = row['Grade'] || row['grade'];
                 const gradeErr = validateGradeForSchool(gradeStr, school.name || schoolName);
                 if (gradeErr) { entry.status = 'error'; entry.error = gradeErr; }
@@ -430,7 +470,8 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
         return res.status(400).json({ error: 'No file uploaded.' });
     }
     const category = req.body.category || 'student'; // student, teacher, shs_student
-    const defaultSchoolId = req.body.school_id || null;
+    const parsedDefaultSchoolId = parseInt(req.body.school_id, 10);
+    const defaultSchoolId = Number.isFinite(parsedDefaultSchoolId) ? parsedDefaultSchoolId : null;
     const errors = [];
     let imported = 0;
     let updated = 0;
@@ -493,11 +534,28 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
             return { firstname: words[0], lastname: words[words.length - 1], middlename: words.slice(1, -1).join(' ') };
         }
 
+        const [[autoActivateOnScanSetting]] = await db.query("SELECT setting_value FROM settings WHERE setting_key='auto_activate_on_scan' LIMIT 1");
+        const importedStatus = String(autoActivateOnScanSetting?.setting_value || '1') === '1' ? 'inactive' : 'active';
+
+        const [schools] = await db.query("SELECT id, name, school_id_code, school_code FROM schools WHERE status = 'active' ORDER BY name");
+        const fallbackSchool = defaultSchoolId ? schools.find(s => Number(s.id) === Number(defaultSchoolId)) : null;
+        const impliedDefaultSchool = fallbackSchool || (schools.length === 1 ? schools[0] : null);
+
         // Helper: resolve school_id by name
-        async function resolveSchool(schoolName, fallbackId) {
-            if (!schoolName) return fallbackId;
-            const [found] = await db.query('SELECT id FROM schools WHERE name = ? LIMIT 1', [schoolName]);
-            return found.length > 0 ? found[0].id : fallbackId;
+        async function resolveSchool(schoolName) {
+            const rawSchoolName = String(schoolName || '').trim();
+            if (!rawSchoolName) {
+                if (impliedDefaultSchool) return { id: impliedDefaultSchool.id, name: impliedDefaultSchool.name };
+                return { id: null, name: '', error: 'School is required. Provide School value or choose a default school.' };
+            }
+
+            const matchedSchool = findSchoolMatch(schools, rawSchoolName);
+            if (matchedSchool) return { id: matchedSchool.id, name: matchedSchool.name };
+
+            if (impliedDefaultSchool) {
+                return { id: impliedDefaultSchool.id, name: impliedDefaultSchool.name, warning: 'School not matched, used default school.' };
+            }
+            return { id: null, name: rawSchoolName, error: 'School not found' };
         }
 
         // Helper: resolve grade_level_id by grade number (auto-creates if missing)
@@ -562,10 +620,12 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                     const mn = middlename || row.middlename || '';
                     if (!fn && !ln) { errors.push({ row: rn, message: 'Missing name' }); continue; }
 
-                    const schoolId = await resolveSchool(row['School'] || row['school'], defaultSchoolId);
+                    const schoolInfo = await resolveSchool(row['School'] || row['school']);
+                    if (schoolInfo.error) { errors.push({ row: rn, message: schoolInfo.error }); continue; }
+                    const schoolId = schoolInfo.id;
                     const gradeStr = row['Grade'] || row['grade'];
                     // Validate grade vs school type
-                    const schoolName = row['School'] || row['school'] || '';
+                    const schoolName = schoolInfo.name || row['School'] || row['school'] || '';
                     const gradeErr = validateGradeForSchool(gradeStr, schoolName);
                     if (gradeErr) { errors.push({ row: rn, message: gradeErr }); continue; }
                     const gradeId = await resolveGrade(gradeStr, schoolId);
@@ -577,7 +637,7 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                         if (existing.length > 0) {
                             await db.query(
                                 'UPDATE teachers SET firstname=?, lastname=?, middlename=?, school_id=?, status=? WHERE id=?',
-                                [fn, ln, mn || null, schoolId || null, 'inactive', existing[0].id]
+                                [fn, ln, mn || null, schoolId || null, importedStatus, existing[0].id]
                             );
                             updated++;
                             continue;
@@ -586,7 +646,7 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                     const qr_code = empId ? 'TCH-' + empId : 'TCH-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);
                     await db.query(
                         'INSERT INTO teachers (employee_id, firstname, lastname, middlename, school_id, qr_code, status) VALUES (?,?,?,?,?,?,?)',
-                        [empId, fn, ln, mn || null, schoolId || null, qr_code, 'inactive']
+                        [empId, fn, ln, mn || null, schoolId || null, qr_code, importedStatus]
                     );
                     imported++;
                 } else {
@@ -607,10 +667,12 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                     const mn = middlename || row.middlename || '';
                     if (!fn && !ln) { errors.push({ row: rn, message: 'Missing student name' }); continue; }
 
-                    const schoolId = await resolveSchool(row['School'] || row['school'], defaultSchoolId);
+                    const schoolInfo = await resolveSchool(row['School'] || row['school']);
+                    if (schoolInfo.error) { errors.push({ row: rn, message: schoolInfo.error }); continue; }
+                    const schoolId = schoolInfo.id;
                     const gradeStr = row['Grade'] || row['grade'];
                     // Validate grade vs school type
-                    const schoolName = row['School'] || row['school'] || '';
+                    const schoolName = schoolInfo.name || row['School'] || row['school'] || '';
                     const gradeErr = validateGradeForSchool(gradeStr, schoolName);
                     if (gradeErr) { errors.push({ row: rn, message: gradeErr }); continue; }
                     const gradeId = await resolveGrade(gradeStr, schoolId);
@@ -622,7 +684,7 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                         if (existing.length > 0) {
                             await db.query(
                                 'UPDATE students SET firstname=?, lastname=?, middlename=?, school_id=?, grade_level_id=?, section_id=?, guardian_contact=?, category=?, status=? WHERE id=?',
-                                [fn, ln, mn || null, schoolId || null, gradeId || null, sectionId || null, guardianContact, category, 'inactive', existing[0].id]
+                                [fn, ln, mn || null, schoolId || null, gradeId || null, sectionId || null, guardianContact, category, importedStatus, existing[0].id]
                             );
                             updated++;
                             continue;
@@ -631,7 +693,7 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                     const qr_code = lrn ? 'STU-' + lrn : 'STU-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);
                     await db.query(
                         'INSERT INTO students (lrn, firstname, lastname, middlename, school_id, grade_level_id, section_id, guardian_contact, qr_code, category, status) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-                        [lrn, fn, ln, mn || null, schoolId || null, gradeId || null, sectionId || null, guardianContact, qr_code, category, 'inactive']
+                        [lrn, fn, ln, mn || null, schoolId || null, gradeId || null, sectionId || null, guardianContact, qr_code, category, importedStatus]
                     );
                     imported++;
                 }
