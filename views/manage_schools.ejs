@@ -285,7 +285,7 @@ function renderCards(items) {
     document.getElementById('cardView').innerHTML = items.map(function(s) {
         var statusCls = s.status === 'active' ? 'badge-active' : 'badge-inactive';
         var iconHtml = s.logo
-            ? '<img src="'+s.logo+'" alt="" style="width:48px;height:48px;object-fit:contain;border-radius:8px">'
+            ? "<img src=\"" + s.logo + "\" alt=\"\" style=\"width:48px;height:48px;object-fit:contain;border-radius:8px\" onerror=\"this.outerHTML='<i class=&quot;fa-solid fa-school&quot; style=&quot;font-size:1.75rem;color:var(--gray-400);&quot;></i>'\">"
             : '<i class="fa-solid fa-school" style="font-size:1.75rem;color:var(--gray-400);"></i>';
         return '<div class="school-card-v2" onclick="viewSchool('+s.id+')">'+ 
             '<div class="sc-header">'+

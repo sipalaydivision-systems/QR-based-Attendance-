@@ -33,7 +33,7 @@ async function loadSchools() {
 
         document.getElementById('schoolGrid').innerHTML = active.map(function(s) {
             var iconHtml = s.logo
-                ? '<img src="'+s.logo+'" alt="" style="width:48px;height:48px;object-fit:contain;border-radius:8px">'
+                ? "<img src=\"" + s.logo + "\" alt=\"\" style=\"width:48px;height:48px;object-fit:contain;border-radius:8px\" onerror=\"this.outerHTML='<i class=&quot;fa-solid fa-school&quot;></i>'\">"
                 : '<i class="fa-solid fa-school"></i>';
             return '<a href="/admin/school/'+s.id+ appSuffix +'" class="school-card-v2" style="text-decoration:none;color:inherit;display:block">'+
                 '<div class="sc-header">'+

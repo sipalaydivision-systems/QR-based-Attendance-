@@ -3029,17 +3029,39 @@ class SchoolLogoAvatar extends StatelessWidget {
     final logo = '${school['logo'] ?? ''}'.trim();
     final name = '${school['name'] ?? 'School'}';
     if (logo.isEmpty) return _fallback(name);
+    if (logo.startsWith('data:image/')) {
+      final commaIndex = logo.indexOf(',');
+      if (commaIndex > 0) {
+        try {
+          return _logoFrame(
+            Image.memory(
+              base64Decode(logo.substring(commaIndex + 1)),
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => _fallback(name),
+            ),
+          );
+        } catch (_) {
+          return _fallback(name);
+        }
+      }
+    }
+    return _logoFrame(
+      Image.network(
+        absoluteUrl(logo),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _fallback(name),
+      ),
+    );
+  }
+
+  Widget _logoFrame(Widget child) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: Container(
         width: size,
         height: size,
         color: const Color(0xFFF1F5F3),
-        child: Image.network(
-          absoluteUrl(logo),
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => _fallback(name),
-        ),
+        child: child,
       ),
     );
   }
@@ -3524,7 +3546,9 @@ int countStudents(dynamic grade) =>
 String absoluteUrl(String path) {
   final clean = path.trim();
   if (clean.isEmpty) return clean;
-  if (clean.startsWith('http://') || clean.startsWith('https://')) {
+  if (clean.startsWith('http://') ||
+      clean.startsWith('https://') ||
+      clean.startsWith('data:image/')) {
     return clean;
   }
   if (clean.startsWith('/')) return '${AppConfig.baseUrl}$clean';

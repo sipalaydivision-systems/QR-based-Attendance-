@@ -6,16 +6,9 @@ const router = express.Router();
 const db = require('../config/database');
 const { requireAuth, requireRole, applySchoolFilter } = require('../middleware/auth');
 
-// Logo upload config
-const logoStorage = multer.diskStorage({
-    destination: function (req, file, cb) { cb(null, path.join(__dirname, '..', 'public', 'uploads', 'logos')); },
-    filename: function (req, file, cb) {
-        const ext = path.extname(file.originalname).toLowerCase();
-        cb(null, 'school-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8) + ext);
-    }
-});
+// Logo upload config. Logos are stored as data URLs so Railway redeploys do not wipe uploaded files.
 const logoUpload = multer({
-    storage: logoStorage,
+    storage: multer.memoryStorage(),
     limits: { fileSize: 2 * 1024 * 1024 },
     fileFilter: function (req, file, cb) {
         const allowed = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
@@ -853,6 +846,10 @@ router.put('/schools/:id', requireAuth, async (req, res) => {
     }
 });
 
+function uploadedFileToDataUrl(file) {
+    return `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+}
+
 router.delete('/schools/:id', requireRole('super_admin'), async (req, res) => {
     try {
         const id = req.params.id;
@@ -1126,13 +1123,7 @@ router.put('/settings', requireAuth, async (req, res) => {
 // ---- System Logo Upload ----
 router.post('/settings/logo', requireAuth, (req, res) => {
     const systemLogoUpload = multer({
-        storage: multer.diskStorage({
-            destination: function (req, file, cb) { cb(null, path.join(__dirname, '..', 'public', 'uploads', 'logos')); },
-            filename: function (req, file, cb) {
-                const ext = path.extname(file.originalname).toLowerCase();
-                cb(null, 'system-logo' + ext);
-            }
-        }),
+        storage: multer.memoryStorage(),
         limits: { fileSize: 2 * 1024 * 1024 },
         fileFilter: function (req, file, cb) {
             const allowed = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
@@ -1146,7 +1137,7 @@ router.post('/settings/logo', requireAuth, (req, res) => {
         if (err) return res.status(400).json({ error: err.message });
         if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
         try {
-            const logoPath = '/uploads/logos/' + req.file.filename;
+            const logoPath = uploadedFileToDataUrl(req.file);
             await db.query(
                 "INSERT INTO settings (setting_key, setting_value) VALUES ('system_logo', ?) ON DUPLICATE KEY UPDATE setting_value = ?",
                 [logoPath, logoPath]
@@ -1161,7 +1152,7 @@ router.post('/settings/logo', requireAuth, (req, res) => {
 router.delete('/settings/logo', requireAuth, async (req, res) => {
     try {
         const [[row]] = await db.query("SELECT setting_value FROM settings WHERE setting_key='system_logo'");
-        if (row && row.setting_value) {
+        if (row && row.setting_value && String(row.setting_value).startsWith('/uploads/')) {
             const filePath = path.join(__dirname, '..', 'public', row.setting_value);
             const fs = require('fs');
             if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
@@ -1498,10 +1489,11 @@ router.get('/reports/daily-summary', requireAuth, async (req, res) => {
                 (SELECT COUNT(*) FROM students st WHERE st.school_id = s.id AND st.status = 'active') as enrolled,
                 (SELECT COUNT(DISTINCT a.person_id) FROM attendance a INNER JOIN students st ON a.person_id = st.id AND st.status = 'active' WHERE a.school_id = s.id AND a.person_type = 'student' AND a.date = ? AND a.time_in IS NOT NULL) as present,
                 (SELECT COUNT(DISTINCT a.person_id) FROM attendance a INNER JOIN students st ON a.person_id = st.id AND st.status = 'active' WHERE a.school_id = s.id AND a.person_type = 'student' AND a.date = ? AND a.status = 'late') as late_count,
+                (SELECT COUNT(DISTINCT a.person_id) FROM attendance a INNER JOIN students st ON a.person_id = st.id AND st.status = 'active' WHERE a.school_id = s.id AND a.person_type = 'student' AND a.date = ? AND a.status = 'absent') as absent_count,
                 (SELECT COUNT(*) FROM teachers t WHERE t.school_id = s.id AND t.status = 'active') as teachers_total,
                 (SELECT COUNT(DISTINCT a.person_id) FROM attendance a INNER JOIN teachers t ON a.person_id = t.id AND t.status = 'active' WHERE a.school_id = s.id AND a.person_type = 'teacher' AND a.date = ? AND a.time_in IS NOT NULL) as teachers_present
             FROM schools s WHERE s.status = 'active'`;
-        const params = [date, date, date];
+        const params = [date, date, date, date];
         if (schoolId) { query += ' AND s.id = ?'; params.push(schoolId); }
         query += ' ORDER BY s.name';
         const [rows] = await db.query(query, params);
@@ -1512,7 +1504,7 @@ router.get('/reports/daily-summary', requireAuth, async (req, res) => {
             enrolled: s.enrolled,
             present: s.present,
             late: s.late_count,
-            absent: Math.max(0, s.enrolled - s.present),
+            absent: s.absent_count || 0,
             rate: s.enrolled > 0 ? Math.min(100, Math.round((s.present / s.enrolled) * 100)) : 0,
             teachers_present: s.teachers_present || 0,
             teachers_total: s.teachers_total || 0
@@ -2010,7 +2002,7 @@ router.post('/schools/:id/logo', requireAuth, function(req, res) {
         if (err) return res.status(400).json({ error: err.message });
         if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
         try {
-            const logoPath = '/uploads/logos/' + req.file.filename;
+            const logoPath = uploadedFileToDataUrl(req.file);
             await db.query('UPDATE schools SET logo = ? WHERE id = ?', [logoPath, req.params.id]);
             return res.json({ success: true, logo: logoPath });
         } catch (e) {

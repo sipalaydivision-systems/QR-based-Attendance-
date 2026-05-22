@@ -335,7 +335,8 @@ function loadLogo() {
     fetch('/api/settings').then(function(r){ return r.json(); }).then(function(data){
         var logo = data.system_logo || (data['system_logo'] ? data['system_logo'] : null);
         if (logo) {
-            document.getElementById('logoPreview').innerHTML = '<img src="' + logo + '?' + Date.now() + '" alt="System Logo">';
+            var src = logo.indexOf('data:image/') === 0 ? logo : (logo + '?' + Date.now());
+            document.getElementById('logoPreview').innerHTML = '<img src="' + src + '" alt="System Logo">';
         }
     });
 }
@@ -347,7 +348,8 @@ document.getElementById('logoFile').addEventListener('change', function() {
     fd.append('logo', file);
     fetch('/api/settings/logo', { method: 'POST', body: fd }).then(function(r){ return r.json(); }).then(function(data){
         if (data.success) {
-            document.getElementById('logoPreview').innerHTML = '<img src="' + data.logo + '?' + Date.now() + '" alt="System Logo">';
+            var src = data.logo.indexOf('data:image/') === 0 ? data.logo : (data.logo + '?' + Date.now());
+            document.getElementById('logoPreview').innerHTML = '<img src="' + src + '" alt="System Logo">';
         } else {
             alert(data.error || 'Upload failed');
         }

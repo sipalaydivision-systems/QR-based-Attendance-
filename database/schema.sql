@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS schools (
     school_code VARCHAR(20) UNIQUE,
     address VARCHAR(500),
     contact VARCHAR(100),
-    logo VARCHAR(255),
+    logo MEDIUMTEXT,
     status ENUM('active','inactive') DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -196,7 +196,7 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 CREATE TABLE IF NOT EXISTS settings (
     id INT AUTO_INCREMENT PRIMARY KEY,
     setting_key VARCHAR(100) UNIQUE NOT NULL,
-    setting_value TEXT,
+    setting_value MEDIUMTEXT,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 

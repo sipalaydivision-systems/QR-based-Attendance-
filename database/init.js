@@ -20,6 +20,22 @@ async function ensureColumn(tableName, columnName, definition) {
     }
 }
 
+async function ensureColumnDefinition(tableName, columnName, definition) {
+    const [columns] = await db.query(
+        `SELECT COLUMN_NAME
+         FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = ?
+           AND COLUMN_NAME = ?`,
+        [tableName, columnName]
+    );
+
+    if (columns.length > 0) {
+        console.log(`Ensuring column definition ${tableName}.${columnName}...`);
+        await db.query(`ALTER TABLE ${tableName} MODIFY COLUMN ${columnName} ${definition}`);
+    }
+}
+
 async function init() {
     try {
         const schemaPath = path.join(__dirname, 'schema.sql');
@@ -41,6 +57,8 @@ async function init() {
         await ensureColumn('teachers', 'grade_level_id', 'INT NULL AFTER email');
         await ensureColumn('teachers', 'section_id', 'INT NULL AFTER grade_level_id');
         await ensureColumn('sections', 'adviser_teacher_id', 'INT NULL AFTER adviser');
+        await ensureColumnDefinition('schools', 'logo', 'MEDIUMTEXT');
+        await ensureColumnDefinition('settings', 'setting_value', 'MEDIUMTEXT');
 
         console.log('Running database seed...');
         require('./seed');
