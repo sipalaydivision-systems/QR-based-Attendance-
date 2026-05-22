@@ -1518,6 +1518,8 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
     const targetDate = req.query.date || new Date().toISOString().slice(0, 10);
     const schoolId = applySchoolFilter(req);
     try {
+        const today = new Date().toISOString().slice(0, 10);
+        const isFutureDate = targetDate > today;
         const schoolFilter = schoolId ? ' AND s.school_id = ?' : '';
         const schoolParams = schoolId ? [schoolId] : [];
         const schoolDay = await checkSchoolDay(targetDate, schoolId);
@@ -1526,6 +1528,23 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
             `SELECT COUNT(*) as cnt FROM students s WHERE s.status = 'active'` + schoolFilter,
             schoolParams
         );
+
+        // Prevent false absences on future dates, weekends, holidays, and declared non-school days.
+        if (isFutureDate || !schoolDay.isSchoolDay) {
+            return res.json({
+                date: targetDate,
+                is_future_date: isFutureDate,
+                is_school_day: schoolDay.isSchoolDay,
+                non_school_day_reason: schoolDay.reason,
+                totals: {
+                    students_total: totalRow.cnt,
+                    present: 0,
+                    absent: 0
+                },
+                present_students: [],
+                absent_students: []
+            });
+        }
 
         let presentQuery = `SELECT s.id, s.firstname, s.lastname, s.lrn,
                 gl.name as grade_name, sec.name as section_name, sec.adviser,
@@ -1566,13 +1585,38 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
             db.query(absentQuery, absentParams).then(r => r[0]),
         ]);
 
+        const streakFlags = await getConsecutiveAbsenceFlags({
+            baseDate: targetDate,
+            schoolId,
+            days: 1,
+            includeTeachers: false,
+            maxScanDays: 60
+        });
+        const streakByStudentId = new Map(
+            streakFlags.map(item => [String(item.id), item])
+        );
+
         const presentStudents = presentRows.map(row => ({
             ...row,
             name: `${row.firstname || ''} ${row.lastname || ''}`.trim() || 'Student',
             attendance_status: row.attendance_status || 'Present',
-            attendance_date: targetDate
+            attendance_date: targetDate,
+            absent_days: 0,
+            absent_from_date: null
         }));
         const absentStudents = absentRows.map(row => ({
+            ...(() => {
+                const streak = streakByStudentId.get(String(row.id));
+                const absentDays = Math.max(1, parseInt(streak?.absent_days, 10) || 1);
+                const checkedDates = Array.isArray(streak?.checked_dates) ? streak.checked_dates : [];
+                const absentFromDate = checkedDates.length
+                    ? checkedDates[checkedDates.length - 1]
+                    : targetDate;
+                return {
+                    absent_days: absentDays,
+                    absent_from_date: absentFromDate
+                };
+            })(),
             ...row,
             name: `${row.firstname || ''} ${row.lastname || ''}`.trim() || 'Student',
             attendance_status: 'Absent',

@@ -1451,6 +1451,7 @@ class KpiPill extends StatelessWidget {
     onTap: onTap,
     borderRadius: BorderRadius.circular(14),
     child: Container(
+      constraints: const BoxConstraints(minHeight: 78),
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
       decoration: BoxDecoration(
         color: const Color(0xFFF5F7F6),
@@ -2023,11 +2024,17 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
 
   Widget _studentDetailTile(Map<String, dynamic> row) {
     final name = '${row['name'] ?? 'Student'}';
+    final schoolName = '${row['school_name'] ?? '-'}';
     final grade = '${row['grade_name'] ?? '-'}';
     final section = '${row['section_name'] ?? '-'}';
     final lrn = '${row['lrn'] ?? '-'}';
     final adviser = '${row['adviser'] ?? '-'}';
     final status = '${row['attendance_status'] ?? '-'}';
+    final absentDays = intValue(row['absent_days']);
+    final absentFromDate = '${row['absent_from_date'] ?? ''}'.trim();
+    final absentInfo = absentDays > 0
+        ? 'Absent since: ${readableDate(absentFromDate.isEmpty ? widget.targetDate : absentFromDate)} | ${absentDays == 1 ? '1 day' : '$absentDays days'}'
+        : 'Attendance date: ${readableDate(widget.targetDate)}';
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: PremiumCard(
@@ -2042,6 +2049,15 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
             const SizedBox(height: 4),
             Text(
               'Grade: $grade | Section: $section',
+              style: const TextStyle(
+                color: Color(0xFF4F5E57),
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'School: $schoolName',
               style: const TextStyle(
                 color: Color(0xFF4F5E57),
                 fontWeight: FontWeight.w700,
@@ -2068,6 +2084,17 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
                 fontSize: 12,
               ),
             ),
+            if (status == 'Absent') ...[
+              const SizedBox(height: 2),
+              Text(
+                absentInfo,
+                style: const TextStyle(
+                  color: Color(0xFFB91C1C),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -2112,12 +2139,17 @@ class _AbsentStudentsSheetState extends State<AbsentStudentsSheet> {
       final absentees = result[0];
       final flags = result[1];
       final absentDaysById = <String, int>{};
+      final absentFromDateById = <String, String>{};
       for (final item in flags) {
         final row = Map<String, dynamic>.from(item as Map);
         absentDaysById['${row['id']}'] = math.max(
           1,
           intValue(row['absent_days']),
         );
+        final checkedDates = (row['checked_dates'] as List?) ?? const [];
+        if (checkedDates.isNotEmpty) {
+          absentFromDateById['${row['id']}'] = '${checkedDates.last}';
+        }
       }
 
       final mapped = absentees.map<Map<String, dynamic>>((item) {
@@ -2131,6 +2163,7 @@ class _AbsentStudentsSheetState extends State<AbsentStudentsSheet> {
           'name': name.isEmpty ? 'Student' : name,
           'attendance_status': 'Absent',
           'absent_days': absentDaysById[id] ?? 1,
+          'absent_from_date': absentFromDateById[id] ?? widget.targetDate,
         };
       }).toList();
 
@@ -2251,6 +2284,15 @@ class _AbsentStudentsSheetState extends State<AbsentStudentsSheet> {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
+                                  'School: ${row['school_name'] ?? '-'}',
+                                  style: const TextStyle(
+                                    color: Color(0xFF4F5E57),
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
                                   'LRN: ${row['lrn'] ?? '-'} | Adviser: ${row['adviser'] ?? '-'}',
                                   style: const TextStyle(
                                     color: Color(0xFF5E6B65),
@@ -2264,6 +2306,15 @@ class _AbsentStudentsSheetState extends State<AbsentStudentsSheet> {
                                   style: const TextStyle(
                                     color: Color(0xFFB91C1C),
                                     fontWeight: FontWeight.w900,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Absent since: ${readableDate('${row['absent_from_date'] ?? widget.targetDate}')}',
+                                  style: const TextStyle(
+                                    color: Color(0xFFB91C1C),
+                                    fontWeight: FontWeight.w800,
                                     fontSize: 12,
                                   ),
                                 ),
@@ -2564,6 +2615,22 @@ class _SchoolsPageState extends State<SchoolsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            children: [
+              SchoolLogoAvatar(school!, size: 48),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '${school!['name']}',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
           BackLine(
             'Back to schools',
             () => setState(() {
@@ -2594,6 +2661,22 @@ class _SchoolsPageState extends State<SchoolsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            children: [
+              SchoolLogoAvatar(school!, size: 38),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '${school!['name']}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
           BackLine(
             'Back to ${school!['name']}',
             () => setState(() {
@@ -2625,6 +2708,22 @@ class _SchoolsPageState extends State<SchoolsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            children: [
+              SchoolLogoAvatar(school!, size: 34),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${school!['name']}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           BackLine(
             'Back to ${grade!['name']}',
             () => setState(() => section = null),
