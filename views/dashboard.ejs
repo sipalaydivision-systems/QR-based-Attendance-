@@ -306,7 +306,7 @@
             }
             function esc(v){ return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
             function contactBtn(s) {
-                var contact = (s.school_contact || '').trim();
+                var contact = (s.adviser_contact || s.adviser_email || s.school_contact || '').trim();
                 var msg = encodeURIComponent('Please check absence alert for ' + (s.lastname + ', ' + s.firstname) + ' (' + (s.grade_name || '-') + ' / ' + (s.section_name || '-') + ', LRN: ' + (s.lrn || '-') + '). Total days absent: ' + (s.absent_days || 2) + '.');
                 if (contact && /@/.test(contact)) {
                     return '<a class="btn btn-sm btn-outline" href="mailto:' + encodeURIComponent(contact) + '?subject=' + encodeURIComponent('Absence Alert') + '&body=' + msg + '">Please contact adviser</a>';

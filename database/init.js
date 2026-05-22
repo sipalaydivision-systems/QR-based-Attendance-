@@ -36,6 +36,11 @@ async function init() {
 
         await ensureColumn('schools', 'school_id_code', 'VARCHAR(50) UNIQUE AFTER name');
         await ensureColumn('users', 'last_login', 'TIMESTAMP NULL AFTER status');
+        await ensureColumn('teachers', 'contact', 'VARCHAR(100) AFTER subject');
+        await ensureColumn('teachers', 'email', 'VARCHAR(255) AFTER contact');
+        await ensureColumn('teachers', 'grade_level_id', 'INT NULL AFTER email');
+        await ensureColumn('teachers', 'section_id', 'INT NULL AFTER grade_level_id');
+        await ensureColumn('sections', 'adviser_teacher_id', 'INT NULL AFTER adviser');
 
         console.log('Running database seed...');
         require('./seed');

@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS sections (
     grade_level_id INT,
     school_id INT,
     adviser VARCHAR(255),
+    adviser_teacher_id INT,
     status VARCHAR(20) DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (grade_level_id) REFERENCES grade_levels(id) ON DELETE SET NULL,
@@ -102,13 +103,20 @@ CREATE TABLE IF NOT EXISTS teachers (
     middlename VARCHAR(255),
     department VARCHAR(255),
     subject VARCHAR(255),
+    contact VARCHAR(100),
+    email VARCHAR(255),
+    grade_level_id INT,
+    section_id INT,
     school_id INT NOT NULL,
     qr_code VARCHAR(100) UNIQUE,
     status ENUM('active','inactive','deleted') DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE,
+    FOREIGN KEY (grade_level_id) REFERENCES grade_levels(id) ON DELETE SET NULL,
+    FOREIGN KEY (section_id) REFERENCES sections(id) ON DELETE SET NULL,
     INDEX idx_teachers_school (school_id),
+    INDEX idx_teachers_section (section_id),
     INDEX idx_teachers_qr (qr_code)
 ) ENGINE=InnoDB;
 

@@ -123,14 +123,15 @@ async function generateTeacher() {
     const dd = workbook.addWorksheet('Dropdowns', { state: 'veryHidden' });
     addDropdowns(dd);
 
-    sheet.columns = [{ width: 22 }, { width: 32 }, { width: 38 }, { width: 18 }, { width: 28 }, { width: 22 }];
+    sheet.columns = [{ width: 22 }, { width: 34 }, { width: 38 }, { width: 18 }, { width: 28 }, { width: 22 }, { width: 30 }];
     const row = sheet.getRow(1);
     setHeaderCell(row.getCell(1), 'Employee ID', '(e.g. EMP-001)');
-    setHeaderCell(row.getCell(2), 'Name', '(Last Name, First Name, Middle Name)');
+    setHeaderCell(row.getCell(2), 'Teacher/Adviser Name', '(Last Name, First Name, Middle Name)');
     setHeaderCell(row.getCell(3), 'School', '((Select from dropdown))');
     setHeaderCell(row.getCell(4), 'Grade', '((Select from dropdown))');
     setHeaderCell(row.getCell(5), 'Section', '(Capital first letter (e.g. Banana))');
     setHeaderCell(row.getCell(6), 'Contact Number', '(09XXXXXXXXX)');
+    setHeaderCell(row.getCell(7), 'Email', '(optional)');
     row.height = 40;
 
     applyValidation(sheet, 'C', 'Dropdowns!$A$1:$A$' + schoolList.length, 'Select School', 101);

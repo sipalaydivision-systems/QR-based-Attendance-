@@ -316,7 +316,7 @@
         var msg = newlyFlagged.length === 1
           ? detail
           : (newlyFlagged.length + ' students flagged. First: ' + detail);
-        var contact = (sample.school_contact || '').trim();
+        var contact = (sample.adviser_contact || sample.adviser_email || sample.school_contact || '').trim();
         var contactUrl = '';
         if (contact && /@/.test(contact)) {
           contactUrl = 'mailto:' + encodeURIComponent(contact) + '?subject=' + encodeURIComponent('Absence Alert - ' + studentName) + '&body=' + encodeURIComponent('Please check absence alert for ' + studentName + ' (' + gradeSection + ', LRN: ' + lrn + ', ' + days + ' days absent). Adviser: ' + adviser + '.');

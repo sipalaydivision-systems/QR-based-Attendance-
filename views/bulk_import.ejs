@@ -86,13 +86,13 @@
             </div>
             <div class="info-card" id="infoTeachers" style="display:none;">
                 <h4><i class="fa-solid fa-file-lines"></i> Teacher File Format</h4>
-                <div class="code-preview">Employee ID, Name, School, Grade, Section, Contact Number</div>
+                <div class="code-preview">Employee ID, Teacher/Adviser Name, School, Grade, Section, Contact Number, Email</div>
                 <ul class="info-list">
                     <li><span class="dot" style="background:var(--success);"></span> First row is treated as header (skipped)</li>
                     <li><span class="dot" style="background:var(--primary);"></span> Duplicate Employee IDs update existing records</li>
                     <li><span class="dot" style="background:var(--primary);"></span> QR codes auto-generated as TCH-{Employee ID}</li>
-                    <li><span class="dot" style="background:var(--primary);"></span> Section is auto-created if not found</li>
-                    <li><span class="dot" style="background:var(--gray-400);"></span> Contact Number is optional</li>
+                    <li><span class="dot" style="background:var(--primary);"></span> Existing school, grade, and section are matched before adviser assignment</li>
+                    <li><span class="dot" style="background:var(--gray-400);"></span> Contact Number and Email are optional</li>
                 </ul>
                 <a href="/export/template/teacher" class="btn btn-outline btn-block" style="margin-top:0.75rem;">&#x2B07; Download Teacher Template (.xlsx)</a>
             </div>

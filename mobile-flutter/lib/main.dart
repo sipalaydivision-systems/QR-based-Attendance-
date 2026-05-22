@@ -2736,8 +2736,10 @@ class _SchoolsPageState extends State<SchoolsPage> {
           for (final student in students)
             RecordTile(
               title: studentName(student),
-              subtitle: 'LRN: ${(student as Map)['lrn'] ?? '-'}',
-              meta: 'Status: ${student['status'] ?? 'active'}',
+              subtitle:
+                  '${(student as Map)['school_name'] ?? school!['name']} | ${student['grade_name'] ?? grade!['name']} - ${student['section_name'] ?? section!['name']}',
+              meta:
+                  'LRN: ${student['lrn'] ?? '-'} | Adviser: ${student['adviser'] ?? adviserText(section!).replaceFirst('Adviser: ', '')}',
             ),
           if (students.isEmpty)
             const EmptyText('No students assigned to this section.'),

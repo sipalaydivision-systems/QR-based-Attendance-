@@ -312,8 +312,6 @@ async function loadData() {
                 else if (att.status === 'late') late++;
                 else if (att.status === 'absent') absent++;
                 else present++;
-            } else {
-                absent++;
             }
         });
         document.getElementById('kTotal').textContent = totalActive;
@@ -346,7 +344,7 @@ function renderStudents() {
     document.getElementById('studentBody').innerHTML = visible.map(function(s, idx) {
         var isStudentInactive = s.status === 'inactive';
         var att = attendanceMap[s.id];
-        var status = isStudentInactive ? 'inactive' : (att ? att.status : 'absent');
+        var status = isStudentInactive ? 'inactive' : (att ? att.status : 'not recorded');
         var isAbsent = (status === 'absent');
         var rowClass = isStudentInactive ? ' class="row-inactive"' : (isAbsent ? ' class="row-absent"' : '');
         var initial = s.firstname ? s.firstname[0].toUpperCase() : '?';
@@ -363,7 +361,7 @@ function renderStudents() {
         }
 
         var statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
-        var badgeClass = isStudentInactive ? 'badge badge-inactive' : 'status-badge status-' + status;
+        var badgeClass = isStudentInactive ? 'badge badge-inactive' : (status === 'not recorded' ? 'badge badge-inactive' : 'status-badge status-' + status);
 
         return '<tr'+rowClass+'>'+
             '<td class="student-num">'+(idx+1)+'</td>'+

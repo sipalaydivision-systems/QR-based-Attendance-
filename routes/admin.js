@@ -31,6 +31,49 @@ function normalizeSchoolKey(value) {
         .replace(/\s+/g, ' ');
 }
 
+function normalizeLookupKey(value) {
+    return String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim()
+        .replace(/\s+/g, ' ');
+}
+
+function normalizeGradeKey(value) {
+    const raw = normalizeLookupKey(value);
+    const numberMatch = raw.match(/\d+/);
+    return numberMatch ? `grade ${parseInt(numberMatch[0], 10)}` : raw;
+}
+
+function normalizePersonName(value) {
+    return normalizeLookupKey(value).replace(/\b(ma|maria|mr|mrs|ms|dr)\b/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function fullName(firstname, lastname, middlename) {
+    return [firstname, middlename, lastname].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+}
+
+function displayName(firstname, lastname, middlename) {
+    return [firstname, middlename ? middlename.charAt(0) + '.' : '', lastname].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+}
+
+function getRowValue(row, keys) {
+    for (const key of keys) {
+        if (row[key] != null && String(row[key]).trim() !== '') return String(row[key]).trim();
+    }
+    const normalizedKeys = Object.keys(row).reduce((acc, key) => {
+        acc[normalizeLookupKey(key)] = key;
+        return acc;
+    }, {});
+    for (const key of keys) {
+        const actualKey = normalizedKeys[normalizeLookupKey(key)];
+        if (actualKey && row[actualKey] != null && String(row[actualKey]).trim() !== '') {
+            return String(row[actualKey]).trim();
+        }
+    }
+    return '';
+}
+
 function findSchoolMatch(schools, input) {
     const target = normalizeSchoolKey(input);
     if (!target) return null;
@@ -50,6 +93,54 @@ function findSchoolMatch(schools, input) {
     }
 
     return null;
+}
+
+async function findGradeByName(gradeStr, schoolId) {
+    const target = normalizeGradeKey(gradeStr);
+    if (!target) return null;
+    let query = 'SELECT id, name, school_id FROM grade_levels WHERE 1=1';
+    const params = [];
+    if (schoolId) {
+        query += ' AND (school_id = ? OR school_id IS NULL)';
+        params.push(schoolId);
+    }
+    const [rows] = await db.query(query, params);
+    return rows.find(row => normalizeGradeKey(row.name) === target) || null;
+}
+
+async function findSectionByName(sectionName, schoolId, gradeLevelId) {
+    const target = normalizeLookupKey(sectionName);
+    if (!target) return null;
+    let query = 'SELECT id, name, adviser, adviser_teacher_id, school_id, grade_level_id FROM sections WHERE 1=1';
+    const params = [];
+    if (schoolId) {
+        query += ' AND school_id = ?';
+        params.push(schoolId);
+    }
+    if (gradeLevelId) {
+        query += ' AND grade_level_id = ?';
+        params.push(gradeLevelId);
+    }
+    const [rows] = await db.query(query, params);
+    return rows.find(row => normalizeLookupKey(row.name) === target) || null;
+}
+
+async function findTeacherMatch(empId, firstname, lastname, middlename, schoolId) {
+    if (empId) {
+        const [byEmployeeId] = await db.query('SELECT id, status FROM teachers WHERE employee_id = ?', [empId]);
+        if (byEmployeeId.length > 0) return byEmployeeId[0];
+    }
+
+    const incomingName = normalizePersonName(fullName(firstname, lastname, middlename));
+    if (!incomingName || !schoolId) return null;
+    const [teachers] = await db.query(
+        'SELECT id, firstname, lastname, middlename, status FROM teachers WHERE school_id = ? AND status != ?',
+        [schoolId, 'deleted']
+    );
+    return teachers.find(teacher =>
+        normalizePersonName(fullName(teacher.firstname, teacher.lastname, teacher.middlename)) === incomingName
+        || normalizePersonName(`${teacher.lastname} ${teacher.firstname} ${teacher.middlename || ''}`) === incomingName
+    ) || null;
 }
 
 // ---- Dashboard Pages ----
@@ -383,38 +474,41 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
             let entry = { row: rn, status: 'ready', error: null };
 
             if (category === 'teacher') {
-                const empId = row['Employee ID'] || row['employee_id'] || null;
-                const rawName = row['Name'] || row['name'] || '';
+                const empId = getRowValue(row, ['Employee ID', 'Teacher ID', 'Teacher/Adviser ID', 'employee_id']) || null;
+                const rawName = getRowValue(row, ['Teacher/Adviser Name', 'Adviser Name', 'Teacher Name', 'Name', 'name']);
                 const { firstname, lastname, middlename } = parseName(rawName);
                 const fn = firstname || row.firstname || '';
                 const ln = lastname || row.lastname || '';
                 if (!fn && !ln) { entry.status = 'error'; entry.error = 'Missing name'; }
 
-                const schoolName = row['School'] || row['school'] || '';
+                const schoolName = getRowValue(row, ['School Name', 'School', 'school']);
                 const school = await resolveSchoolPreview(schoolName);
-                const gradeStr = row['Grade'] || row['grade'];
+                const gradeStr = getRowValue(row, ['Grade Level', 'Grade', 'grade']);
                 const gradeErr = validateGradeForSchool(gradeStr, school.name || schoolName);
                 if (gradeErr) { entry.status = 'error'; entry.error = gradeErr; }
-                const grade = gradeStr ? await checkGrade(gradeStr) : { id: null, name: '' };
-                const sectionName = row['Section'] || row['section'] || '';
-                const section = sectionName ? await checkSection(sectionName, school.id, grade.id) : { id: null, name: '' };
-                const contact = row['Contact Number'] || row['contact_number'] || '';
+                if (!gradeStr) { entry.status = 'error'; entry.error = 'Grade Level is required for adviser assignment'; }
+                const grade = gradeStr && school.id ? await findGradeByName(gradeStr, school.id) : null;
+                if (gradeStr && school.id && !grade) { entry.status = 'error'; entry.error = 'Grade level not found for this school'; }
+                const sectionName = getRowValue(row, ['Section Name', 'Section', 'section']);
+                if (!sectionName) { entry.status = 'error'; entry.error = 'Section Name is required for adviser assignment'; }
+                const section = sectionName && school.id && grade ? await findSectionByName(sectionName, school.id, grade.id) : null;
+                if (sectionName && school.id && grade && !section) { entry.status = 'error'; entry.error = 'Section not found under the selected school and grade'; }
+                const contact = getRowValue(row, ['Contact Number', 'Contact', 'Phone', 'Mobile', 'contact_number']);
+                const email = getRowValue(row, ['Email', 'Email Address', 'email']);
                 const qr_code = empId ? 'TCH-' + empId : 'TCH-auto';
 
                 // Check if existing
-                if (empId && entry.status !== 'error') {
-                    const [existing] = await db.query('SELECT id, status FROM teachers WHERE employee_id = ?', [empId]);
-                    if (existing.length > 0) {
-                        entry.status = existing[0].status === 'deleted' ? 'restore' : 'update';
-                    }
+                if (entry.status !== 'error') {
+                    const existing = await findTeacherMatch(empId, fn, ln, middlename, school.id);
+                    if (existing) entry.status = existing.status === 'deleted' ? 'restore' : 'update';
                 }
 
                 entry.empId = empId;
                 entry.name = ln && fn ? ln + ', ' + fn : fn || ln;
                 entry.school = school.name || '';
-                entry.grade = grade.name || '';
-                entry.section = section.name || '';
-                entry.contact = contact;
+                entry.grade = grade ? grade.name : '';
+                entry.section = section ? section.name : '';
+                entry.contact = email || contact;
                 entry.qr_code = qr_code;
                 if (school.error) { entry.status = 'error'; entry.error = school.error; }
             } else {
@@ -534,8 +628,7 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
             return { firstname: words[0], lastname: words[words.length - 1], middlename: words.slice(1, -1).join(' ') };
         }
 
-        const [[autoActivateOnScanSetting]] = await db.query("SELECT setting_value FROM settings WHERE setting_key='auto_activate_on_scan' LIMIT 1");
-        const importedStatus = String(autoActivateOnScanSetting?.setting_value || '1') === '1' ? 'inactive' : 'active';
+        const importedStatus = 'active';
 
         const [schools] = await db.query("SELECT id, name, school_id_code, school_code FROM schools WHERE status = 'active' ORDER BY name");
         const fallbackSchool = defaultSchoolId ? schools.find(s => Number(s.id) === Number(defaultSchoolId)) : null;
@@ -562,9 +655,8 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
         async function resolveGrade(gradeStr, schoolId) {
             if (!gradeStr) return null;
             const g = String(gradeStr).trim();
-            const [found] = await db.query('SELECT id FROM grade_levels WHERE name LIKE ? OR name LIKE ? LIMIT 1', ['%' + g, 'Grade ' + g]);
-            if (found.length > 0) return found[0].id;
-            // Auto-create grade level
+            const found = await findGradeByName(g, schoolId);
+            if (found) return found.id;
             const name = /^\d+$/.test(g) ? 'Grade ' + g : g;
             const [result] = await db.query('INSERT INTO grade_levels (name, school_id) VALUES (?, ?)', [name, schoolId || null]);
             return result.insertId;
@@ -573,14 +665,8 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
         // Helper: resolve or create section
         async function resolveSection(sectionName, schoolId, gradeLevelId) {
             if (!sectionName) return null;
-            let query = 'SELECT id FROM sections WHERE name = ?';
-            const params = [sectionName];
-            if (schoolId) { query += ' AND school_id = ?'; params.push(schoolId); }
-            if (gradeLevelId) { query += ' AND grade_level_id = ?'; params.push(gradeLevelId); }
-            query += ' LIMIT 1';
-            const [found] = await db.query(query, params);
-            if (found.length > 0) return found[0].id;
-            // Auto-create section
+            const found = await findSectionByName(sectionName, schoolId, gradeLevelId);
+            if (found) return found.id;
             const [result] = await db.query('INSERT INTO sections (name, school_id, grade_level_id) VALUES (?, ?, ?)', [sectionName, schoolId || null, gradeLevelId || null]);
             return result.insertId;
         }
@@ -603,9 +689,9 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
         for (const { row, rowNum: rn } of rows) {
             try {
                 if (category === 'teacher') {
-                    // New format: Employee ID, Name, School, Grade, Section, Contact Number
-                    const empId = row['Employee ID'] || row['employee_id'] || null;
-                    const rawName = row['Name'] || row['name'] || '';
+                    // New format: Employee ID, Teacher/Adviser Name, School, Grade, Section, Contact Number/Email
+                    const empId = getRowValue(row, ['Employee ID', 'Teacher ID', 'Teacher/Adviser ID', 'employee_id']) || null;
+                    const rawName = getRowValue(row, ['Teacher/Adviser Name', 'Adviser Name', 'Teacher Name', 'Name', 'name']);
                     const { firstname, lastname, middlename } = parseName(rawName);
 
                     if (!firstname && !lastname) {
@@ -620,33 +706,54 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                     const mn = middlename || row.middlename || '';
                     if (!fn && !ln) { errors.push({ row: rn, message: 'Missing name' }); continue; }
 
-                    const schoolInfo = await resolveSchool(row['School'] || row['school']);
+                    const schoolInfo = await resolveSchool(getRowValue(row, ['School Name', 'School', 'school']));
                     if (schoolInfo.error) { errors.push({ row: rn, message: schoolInfo.error }); continue; }
                     const schoolId = schoolInfo.id;
-                    const gradeStr = row['Grade'] || row['grade'];
+                    const gradeStr = getRowValue(row, ['Grade Level', 'Grade', 'grade']);
+                    if (!gradeStr) { errors.push({ row: rn, message: 'Grade Level is required for adviser assignment.' }); continue; }
                     // Validate grade vs school type
-                    const schoolName = schoolInfo.name || row['School'] || row['school'] || '';
+                    const schoolName = schoolInfo.name || getRowValue(row, ['School Name', 'School', 'school']);
                     const gradeErr = validateGradeForSchool(gradeStr, schoolName);
                     if (gradeErr) { errors.push({ row: rn, message: gradeErr }); continue; }
-                    const gradeId = await resolveGrade(gradeStr, schoolId);
-                    const sectionId = await resolveSection(row['Section'] || row['section'], schoolId, gradeId);
-                    const contact = row['Contact Number'] || row['contact_number'] || null;
+                    const grade = await findGradeByName(gradeStr, schoolId);
+                    if (!grade) { errors.push({ row: rn, message: `Grade level "${gradeStr}" was not found under ${schoolName}.` }); continue; }
+                    const gradeId = grade.id;
+                    const sectionName = getRowValue(row, ['Section Name', 'Section', 'section']);
+                    if (!sectionName) { errors.push({ row: rn, message: 'Section Name is required for adviser assignment.' }); continue; }
+                    const section = await findSectionByName(sectionName, schoolId, gradeId);
+                    if (!section) { errors.push({ row: rn, message: `Section "${sectionName}" was not found under ${schoolName} / ${grade.name}.` }); continue; }
+                    const sectionId = section.id;
+                    const contact = getRowValue(row, ['Contact Number', 'Contact', 'Phone', 'Mobile', 'contact_number']) || null;
+                    const email = getRowValue(row, ['Email', 'Email Address', 'email']) || null;
+                    const adviserName = displayName(fn, ln, mn);
 
-                    if (empId) {
-                        const [existing] = await db.query('SELECT id FROM teachers WHERE employee_id = ?', [empId]);
-                        if (existing.length > 0) {
-                            await db.query(
-                                'UPDATE teachers SET firstname=?, lastname=?, middlename=?, school_id=?, status=? WHERE id=?',
-                                [fn, ln, mn || null, schoolId || null, importedStatus, existing[0].id]
-                            );
-                            updated++;
-                            continue;
-                        }
+                    const existing = await findTeacherMatch(empId, fn, ln, mn, schoolId);
+                    if (existing) {
+                        await db.query(
+                            `UPDATE teachers
+                             SET employee_id=?, firstname=?, lastname=?, middlename=?, contact=?, email=?,
+                                 school_id=?, grade_level_id=?, section_id=?, status=?
+                             WHERE id=?`,
+                            [empId || null, fn, ln, mn || null, contact, email, schoolId, gradeId, sectionId, importedStatus, existing.id]
+                        );
+                        await db.query(
+                            'UPDATE sections SET adviser = ?, adviser_teacher_id = ? WHERE id = ?',
+                            [adviserName, existing.id, sectionId]
+                        );
+                        updated++;
+                        continue;
                     }
+
                     const qr_code = empId ? 'TCH-' + empId : 'TCH-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);
+                    const [teacherResult] = await db.query(
+                        `INSERT INTO teachers
+                            (employee_id, firstname, lastname, middlename, contact, email, school_id, grade_level_id, section_id, qr_code, status)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+                        [empId, fn, ln, mn || null, contact, email, schoolId, gradeId, sectionId, qr_code, importedStatus]
+                    );
                     await db.query(
-                        'INSERT INTO teachers (employee_id, firstname, lastname, middlename, school_id, qr_code, status) VALUES (?,?,?,?,?,?,?)',
-                        [empId, fn, ln, mn || null, schoolId || null, qr_code, importedStatus]
+                        'UPDATE sections SET adviser = ?, adviser_teacher_id = ? WHERE id = ?',
+                        [adviserName, teacherResult.insertId, sectionId]
                     );
                     imported++;
                 } else {

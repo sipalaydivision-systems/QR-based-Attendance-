@@ -83,7 +83,7 @@ function escapeHtml(value) {
 }
 function buildAdviserAction(flag) {
     var adviser = flag.adviser || 'Assigned adviser';
-    var contact = (flag.school_contact || '').trim();
+    var contact = (flag.adviser_contact || flag.adviser_email || flag.school_contact || '').trim();
     var student = flag.name || ((flag.lastname || '') + ', ' + (flag.firstname || '')).trim() || 'Student';
     var gradeSection = (flag.grade_name || '-') + ' / ' + (flag.section_name || '-');
     var body = 'Please check absence alert for ' + student + ' (' + gradeSection + ', LRN: ' + (flag.lrn || '-') + '). Total days absent: ' + (flag.absent_days || 2) + '.';
