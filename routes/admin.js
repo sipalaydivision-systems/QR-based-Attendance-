@@ -31,6 +31,18 @@ function normalizeSchoolKey(value) {
         .replace(/\s+/g, ' ');
 }
 
+function normalizeSchoolMeaningKey(value) {
+    const stopWords = new Set([
+        'school', 'elementary', 'primary', 'integrated', 'national',
+        'high', 'city', 'district', 'division', 'department', 'of', 'the',
+        'ng', 'si', 'es', 'nhs'
+    ]);
+    return normalizeSchoolKey(value)
+        .split(' ')
+        .filter(token => token && !stopWords.has(token))
+        .join(' ');
+}
+
 function normalizeLookupKey(value) {
     return String(value || '')
         .toLowerCase()
@@ -74,15 +86,47 @@ function getRowValue(row, keys) {
     return '';
 }
 
+function parseExcelCellValue(cell) {
+    const raw = cell ? cell.value : null;
+    if (raw == null) return '';
+    if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') {
+        return String(raw).trim();
+    }
+    if (raw instanceof Date) {
+        return raw.toISOString().slice(0, 10);
+    }
+    if (typeof raw === 'object') {
+        if (Array.isArray(raw.richText)) {
+            return raw.richText.map(item => item.text || '').join('').trim();
+        }
+        if (raw.text != null && String(raw.text).trim() !== '') {
+            return String(raw.text).trim();
+        }
+        if (raw.result != null && String(raw.result).trim() !== '') {
+            return String(raw.result).trim();
+        }
+        if (raw.hyperlink != null && String(raw.hyperlink).trim() !== '') {
+            // If the cell stores a hyperlink object, keep readable text first, then URL.
+            const display = raw.text != null ? String(raw.text).trim() : '';
+            return display || String(raw.hyperlink).trim();
+        }
+    }
+    return String(raw).trim();
+}
+
 function findSchoolMatch(schools, input) {
     const target = normalizeSchoolKey(input);
     if (!target) return null;
+    const targetMeaning = normalizeSchoolMeaningKey(input);
+    const targetTokens = targetMeaning.split(' ').filter(Boolean);
 
     for (const school of schools) {
         const keys = [school.name, school.school_id_code, school.school_code];
         for (const rawKey of keys) {
             const key = normalizeSchoolKey(rawKey);
             if (key && key === target) return school;
+            const meaningKey = normalizeSchoolMeaningKey(rawKey);
+            if (meaningKey && targetMeaning && meaningKey === targetMeaning) return school;
         }
     }
 
@@ -91,6 +135,30 @@ function findSchoolMatch(schools, input) {
         if (!key) continue;
         if (key.includes(target) || target.includes(key)) return school;
     }
+
+    // Token-based fuzzy fallback (handles extra middle tokens like "Agripino Alvarez" vs "Agripino").
+    let best = null;
+    const bestCandidates = [];
+    let bestScore = 0;
+    for (const school of schools) {
+        const schoolTokens = normalizeSchoolMeaningKey(school.name).split(' ').filter(Boolean);
+        if (!schoolTokens.length || !targetTokens.length) continue;
+        const overlap = schoolTokens.filter(token => targetTokens.includes(token)).length;
+        if (!overlap) continue;
+        const smaller = Math.min(schoolTokens.length, targetTokens.length);
+        const score = overlap / smaller;
+        const firstTokenMatch = schoolTokens[0] === targetTokens[0];
+        if (!firstTokenMatch || score < 0.8) continue;
+        if (score > bestScore) {
+            best = school;
+            bestScore = score;
+            bestCandidates.length = 0;
+            bestCandidates.push(school.id);
+        } else if (score === bestScore) {
+            bestCandidates.push(school.id);
+        }
+    }
+    if (best && bestCandidates.length === 1) return best;
 
     return null;
 }
@@ -384,7 +452,7 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
                 const obj = {};
                 row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
                     const key = headers[colNumber];
-                    if (key) obj[key] = cell.value != null ? String(cell.value).trim() : '';
+                    if (key) obj[key] = parseExcelCellValue(cell);
                 });
                 if (Object.values(obj).some(v => v !== '')) {
                     rows.push({ row: obj, rowNum: rowNumber });
@@ -599,7 +667,7 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                 const obj = {};
                 row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
                     const key = headers[colNumber];
-                    if (key) obj[key] = cell.value != null ? String(cell.value).trim() : '';
+                    if (key) obj[key] = parseExcelCellValue(cell);
                 });
                 if (Object.values(obj).some(v => v !== '')) {
                     rows.push({ row: obj, rowNum: rowNumber });
