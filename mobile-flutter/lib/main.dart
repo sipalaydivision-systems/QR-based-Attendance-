@@ -17,6 +17,8 @@ class AppConfig {
 }
 
 final notifications = FlutterLocalNotificationsPlugin();
+final appNavigatorKey = GlobalKey<NavigatorState>();
+String? startupNotificationPayload;
 const alertsChannel = AndroidNotificationChannel(
   'edutrack_alerts',
   'Edutrack Alerts',
@@ -30,12 +32,19 @@ Future<void> main() async {
     const InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     ),
+    onDidReceiveNotificationResponse: (response) {
+      openNotificationDestination(response.payload);
+    },
   );
   await notifications
       .resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin
       >()
       ?.createNotificationChannel(alertsChannel);
+  final launchDetails = await notifications.getNotificationAppLaunchDetails();
+  startupNotificationPayload = launchDetails?.didNotificationLaunchApp == true
+      ? launchDetails?.notificationResponse?.payload
+      : null;
   runApp(const EdutrackApp());
 }
 
@@ -46,6 +55,7 @@ class EdutrackApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: AppConfig.appName,
+      navigatorKey: appNavigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF138A64)),
@@ -178,8 +188,12 @@ class _SplashGateState extends State<SplashGate>
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) =>
-                api.isLoggedIn ? HomeShell(api: api) : LoginScreen(api: api),
+            builder: (_) => api.isLoggedIn
+                ? HomeShell(
+                    api: api,
+                    initialTab: startupNotificationPayload == 'alerts' ? 4 : 0,
+                  )
+                : LoginScreen(api: api),
           ),
         );
       }
@@ -198,7 +212,11 @@ class _SplashGateState extends State<SplashGate>
       body: AnimatedBuilder(
         animation: controller,
         builder: (context, child) => CustomPaint(
-          painter: LiveMeshPainter(controller.value, intensity: 1),
+          painter: LiveMeshPainter(
+            controller.value,
+            intensity: .42,
+            focusY: .36,
+          ),
           child: Stack(
             children: [
               SafeArea(
@@ -440,10 +458,16 @@ class _LiveDotState extends State<LiveDot> with SingleTickerProviderStateMixin {
 }
 
 class LiveMeshPainter extends CustomPainter {
-  LiveMeshPainter(this.value, {this.intensity = .5, this.lightMode = false});
+  LiveMeshPainter(
+    this.value, {
+    this.intensity = .5,
+    this.lightMode = false,
+    this.focusY,
+  });
   final double value;
   final double intensity;
   final bool lightMode;
+  final double? focusY;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -486,7 +510,7 @@ class LiveMeshPainter extends CustomPainter {
       ..strokeWidth = 1.2
       ..color = (lightMode ? const Color(0xFF138A64) : const Color(0xFF138A64))
           .withValues(alpha: .045 + intensity * .04);
-    final radarCenter = Offset(size.width * .50, size.height * .30);
+    final radarCenter = Offset(size.width * .50, size.height * (focusY ?? .30));
     for (var i = 0; i < 5; i++) {
       final radius = size.width * (.12 + i * .055) + math.sin(t) * 2;
       canvas.drawCircle(radarCenter, radius, ringPaint);
@@ -520,7 +544,8 @@ class LiveMeshPainter extends CustomPainter {
   bool shouldRepaint(LiveMeshPainter oldDelegate) =>
       oldDelegate.value != value ||
       oldDelegate.intensity != intensity ||
-      oldDelegate.lightMode != lightMode;
+      oldDelegate.lightMode != lightMode ||
+      oldDelegate.focusY != focusY;
 }
 
 class LoginScreen extends StatefulWidget {
@@ -757,7 +782,7 @@ class _LoginScreenState extends State<LoginScreen>
                       const SizedBox(height: 18),
                       const Center(
                         child: Text(
-                          'Attendance Monitoring System\nv2.0.8',
+                          'Attendance Monitoring System\nv2.1.4',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Color(0xFF77847E),
@@ -818,8 +843,9 @@ class _LoginScreenState extends State<LoginScreen>
 }
 
 class HomeShell extends StatefulWidget {
-  const HomeShell({super.key, required this.api});
+  const HomeShell({super.key, required this.api, this.initialTab = 0});
   final ApiService api;
+  final int initialTab;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -827,7 +853,7 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell>
     with SingleTickerProviderStateMixin {
-  int tab = 0;
+  late int tab;
   Map<String, dynamic> dashboard = {};
   List<dynamic> flags = [];
   bool loading = true;
@@ -838,6 +864,7 @@ class _HomeShellState extends State<HomeShell>
   @override
   void initState() {
     super.initState();
+    tab = widget.initialTab.clamp(0, 4);
     backgroundController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 9),
@@ -900,6 +927,7 @@ class _HomeShellState extends State<HomeShell>
         loading: loading,
         error: error,
         onRefresh: load,
+        onOpenTab: (value) => setState(() => tab = value.clamp(0, 4)),
       ),
       AttendancePage(api: widget.api),
       SchoolsPage(api: widget.api),
@@ -1077,7 +1105,7 @@ class Header extends StatelessWidget {
               const SizedBox(width: 8),
               _chip(Text(shortDate()), dense: true),
               const SizedBox(width: 8),
-              Expanded(child: _chip(Text(date()), dense: true)),
+              Flexible(child: _chip(Text(date()), dense: true)),
             ],
           ),
         ],
@@ -1131,6 +1159,7 @@ class DashboardPage extends StatelessWidget {
     required this.loading,
     required this.error,
     required this.onRefresh,
+    required this.onOpenTab,
   });
   final ApiService api;
   final Map<String, dynamic> dashboard;
@@ -1138,6 +1167,7 @@ class DashboardPage extends StatelessWidget {
   final bool loading;
   final String? error;
   final Future<void> Function({bool silent}) onRefresh;
+  final ValueChanged<int> onOpenTab;
 
   @override
   Widget build(BuildContext context) {
@@ -1382,7 +1412,7 @@ class DashboardPage extends StatelessWidget {
               '${fullDate()}: ${safeReason(dashboard['non_school_day_reason'])}',
             ),
           ],
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           PremiumCard(
             title: 'Weekly Absence Analytics',
             subtitle: 'Absent students per day (Mon-Fri)',
@@ -1801,9 +1831,11 @@ class DateAttendanceModal extends StatefulWidget {
     super.key,
     required this.api,
     required this.targetDate,
+    this.initialTab = 'present',
   });
   final ApiService api;
   final String targetDate;
+  final String initialTab;
 
   @override
   State<DateAttendanceModal> createState() => _DateAttendanceModalState();
@@ -1817,11 +1849,12 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
   int absentCount = 0;
   List<Map<String, dynamic>> presentRows = [];
   List<Map<String, dynamic>> absentRows = [];
-  String activeTab = 'present';
+  late String activeTab;
 
   @override
   void initState() {
     super.initState();
+    activeTab = widget.initialTab == 'absent' ? 'absent' : 'present';
     load();
   }
 
@@ -1843,7 +1876,9 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
         absentRows = absent;
         presentCount = intValue((data['totals'] as Map?)?['present']);
         absentCount = intValue((data['totals'] as Map?)?['absent']);
-        activeTab = presentCount > 0 ? 'present' : 'absent';
+        activeTab = widget.initialTab == 'absent'
+            ? 'absent'
+            : (presentCount > 0 ? 'present' : 'absent');
         loading = false;
       });
     } catch (e) {
@@ -2415,7 +2450,8 @@ class AttendancePage extends StatelessWidget {
       return RecordTile(
         title: '${row['person_name'] ?? 'Unknown'}',
         subtitle: '${row['person_type'] ?? 'person'}',
-        meta: 'In: ${row['time_in'] ?? '--'} | Out: ${out.isNotEmpty ? out : (monitoring.isNotEmpty ? monitoring : '--')}',
+        meta:
+            'In: ${row['time_in'] ?? '--'} | Out: ${out.isNotEmpty ? out : (monitoring.isNotEmpty ? monitoring : '--')}',
       );
     },
   );
@@ -2428,12 +2464,25 @@ class ReportsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
     future: api.map('/api/reports/daily-summary?date=${date()}'),
-    builder: (_, snapshot) {
+    builder: (context, snapshot) {
       if (!snapshot.hasData) {
         return const Center(child: CircularProgressIndicator());
       }
       final totals = (snapshot.data!['totals'] as Map?) ?? {};
       final schools = (snapshot.data!['schools'] as List?) ?? [];
+      Future<void> openDateDetails(String tab) async {
+        await showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => DateAttendanceModal(
+            api: api,
+            targetDate: date(),
+            initialTab: tab,
+          ),
+        );
+      }
+
       return ListView(
         padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
         children: [
@@ -2504,6 +2553,7 @@ class ReportsPage extends StatelessWidget {
                   'Present',
                   '${intValue(totals['present'])}',
                   'today',
+                  onTap: () => openDateDetails('present'),
                 ),
                 Metric(
                   Icons.person_off,
@@ -2511,6 +2561,7 @@ class ReportsPage extends StatelessWidget {
                   '${intValue(totals['absent'])}',
                   'today',
                   color: const Color(0xFFDC2626),
+                  onTap: () => openDateDetails('absent'),
                 ),
                 Metric(
                   Icons.percent,
@@ -2584,7 +2635,7 @@ class _SchoolsPageState extends State<SchoolsPage> {
                 ? 'Tap a grade level to view sections.'
                 : 'Tap a school to view grade levels.',
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           section != null
               ? sectionView()
               : grade != null
@@ -2769,7 +2820,7 @@ class AlertsPage extends StatelessWidget {
         'Alerts',
         '2-day absence alerts and notification checks.',
       ),
-      const SizedBox(height: 12),
+      const SizedBox(height: 16),
       PremiumCard(
         title: 'Notification Test',
         subtitle: 'Verify the 2-day flagged student alert on this phone.',
@@ -2807,6 +2858,7 @@ class AlertsPage extends StatelessWidget {
             await showLocalNotification(
               absenceTitle(flags.length),
               absenceBody(row),
+              payload: 'alerts',
             );
           },
           icon: const Icon(Icons.notifications_active),
@@ -2840,6 +2892,7 @@ class FlagTile extends StatelessWidget {
         title: '${row['name'] ?? 'Student'}',
         subtitle: '${row['school_name'] ?? ''}',
         meta: absenceBody(row),
+        metaMaxLines: 8,
         color: const Color(0xFFF97316),
       ),
       Align(
@@ -2909,7 +2962,7 @@ class FutureList extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         children: [
           SectionTitle(title, subtitle),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           PremiumCard(
             title: 'Today Records',
             subtitle: '${rows.length} synced record(s)',
@@ -3007,8 +3060,8 @@ class SectionTitle extends StatelessWidget {
   final String subtitle;
 
   @override
-  Widget build(BuildContext context) => PremiumCard(
-    padding: const EdgeInsets.all(18),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(4, 2, 4, 2),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -3021,7 +3074,13 @@ class SectionTitle extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 4),
-        Text(subtitle, style: const TextStyle(color: Color(0xFF667872))),
+        Text(
+          subtitle,
+          style: const TextStyle(
+            color: Color(0xFF667872),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ],
     ),
   );
@@ -3034,7 +3093,14 @@ class SchoolLogoAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final logo = '${school['logo'] ?? ''}'.trim();
+    var logo = '';
+    for (final key in ['logo', 'logo_url', 'logo_path', 'school_logo']) {
+      final value = '${school[key] ?? ''}'.trim();
+      if (value.isNotEmpty && value.toLowerCase() != 'null') {
+        logo = value;
+        break;
+      }
+    }
     final name = '${school['name'] ?? 'School'}';
     if (logo.isEmpty) return _fallback(name);
     if (logo.startsWith('data:image/')) {
@@ -3057,6 +3123,10 @@ class SchoolLogoAvatar extends StatelessWidget {
       Image.network(
         absoluteUrl(logo),
         fit: BoxFit.cover,
+        gaplessPlayback: true,
+        filterQuality: FilterQuality.medium,
+        loadingBuilder: (context, child, progress) =>
+            progress == null ? child : _fallback(name),
         errorBuilder: (context, error, stackTrace) => _fallback(name),
       ),
     );
@@ -3102,6 +3172,7 @@ class RecordTile extends StatelessWidget {
     this.onTap,
     this.color = const Color(0xFF00885B),
     this.leading,
+    this.metaMaxLines = 3,
   });
   final String title;
   final String subtitle;
@@ -3109,6 +3180,7 @@ class RecordTile extends StatelessWidget {
   final VoidCallback? onTap;
   final Color color;
   final Widget? leading;
+  final int metaMaxLines;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -3165,7 +3237,7 @@ class RecordTile extends StatelessWidget {
                   if (meta.trim().isNotEmpty)
                     Text(
                       meta,
-                      maxLines: 3,
+                      maxLines: metaMaxLines,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Color(0xFF6A7874),
@@ -3193,86 +3265,92 @@ class Metric extends StatelessWidget {
     this.caption, {
     super.key,
     this.color = const Color(0xFF00885B),
+    this.onTap,
   });
   final IconData icon;
   final String label;
   final String value;
   final String caption;
   final Color color;
+  final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => ClipRRect(
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
     borderRadius: BorderRadius.circular(23),
-    child: BackdropFilter(
-      filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-      child: Container(
-        padding: const EdgeInsets.all(13),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: .95),
-          borderRadius: BorderRadius.circular(23),
-          border: Border.all(color: const Color(0xFFDCE6E1)),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF111827).withValues(alpha: .06),
-              blurRadius: 14,
-              offset: const Offset(0, 6),
-            ),
-            BoxShadow(
-              color: Colors.white.withValues(alpha: .70),
-              blurRadius: 8,
-              offset: const Offset(-3, -3),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: .11),
-                    borderRadius: BorderRadius.circular(14),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(23),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Container(
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .95),
+            borderRadius: BorderRadius.circular(23),
+            border: Border.all(color: const Color(0xFFDCE6E1)),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF111827).withValues(alpha: .06),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+              BoxShadow(
+                color: Colors.white.withValues(alpha: .70),
+                blurRadius: 8,
+                offset: const Offset(-3, -3),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: .11),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(icon, color: color, size: 21),
                   ),
-                  child: Icon(icon, color: color, size: 21),
-                ),
-                const Spacer(),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 26,
-                    height: 1,
-                    letterSpacing: -.5,
+                  const Spacer(),
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 26,
+                      height: 1,
+                      letterSpacing: -.5,
+                    ),
                   ),
-                ),
-              ],
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 13,
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13,
+                    ),
                   ),
-                ),
-                Text(
-                  caption,
-                  style: const TextStyle(
-                    color: Color(0xFF74827E),
-                    fontSize: 10,
+                  Text(
+                    caption,
+                    style: const TextStyle(
+                      color: Color(0xFF74827E),
+                      fontSize: 10,
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     ),
@@ -3460,9 +3538,16 @@ class AppLogo extends StatelessWidget {
     height: size,
     padding: EdgeInsets.all(size * .12),
     decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: .18),
+      color: Colors.white.withValues(alpha: .82),
       borderRadius: BorderRadius.circular(size * .28),
-      border: Border.all(color: Colors.white24),
+      border: Border.all(color: const Color(0xFFDCEBE4)),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF0F6E52).withValues(alpha: .10),
+          blurRadius: size * .18,
+          offset: Offset(0, size * .06),
+        ),
+      ],
     ),
     child: Image.asset(AppConfig.logoAsset, fit: BoxFit.contain),
   );
@@ -3476,9 +3561,26 @@ Future<void> notifyAbsenceFlags(List flags, SharedPreferences prefs) async {
   await showLocalNotification(
     absenceTitle(flags.length),
     absenceBody(row),
+    payload: 'alerts',
     showToast: false,
   );
   await prefs.setString('last_absence_key', key);
+}
+
+Future<void> openNotificationDestination(String? payload) async {
+  if (payload != 'alerts') return;
+  final prefs = await SharedPreferences.getInstance();
+  final api = ApiService(prefs);
+  final navigator = appNavigatorKey.currentState;
+  if (navigator == null) return;
+  navigator.pushAndRemoveUntil(
+    MaterialPageRoute(
+      builder: (_) => api.isLoggedIn
+          ? HomeShell(api: api, initialTab: 4)
+          : LoginScreen(api: api),
+    ),
+    (_) => false,
+  );
 }
 
 Future<bool> ensureNotificationPermission() async {
@@ -3492,6 +3594,7 @@ Future<bool> ensureNotificationPermission() async {
 Future<bool> showLocalNotification(
   String title,
   String body, {
+  String? payload,
   bool showToast = true,
 }) async {
   final granted = await ensureNotificationPermission();
@@ -3511,14 +3614,21 @@ Future<bool> showLocalNotification(
     title,
     body,
     const NotificationDetails(android: android),
+    payload: payload,
   );
   return true;
 }
 
 String absenceTitle(int count) =>
     count == 1 ? '1 student absent 2+ days' : '$count students absent 2+ days';
-String absenceBody(Map<String, dynamic> row) =>
-    '${row['name'] ?? 'Student'} | ${fullDate()} | ${row['grade_name'] ?? '-'} - ${row['section_name'] ?? '-'} | LRN: ${row['lrn'] ?? '-'} | ${absenceDays(row)} absent | Adviser: ${row['adviser'] ?? '-'}';
+String absenceBody(Map<String, dynamic> row) {
+  final checkedDates = (row['checked_dates'] as List?) ?? const [];
+  final alertDate = checkedDates.isNotEmpty ? '${checkedDates.first}' : date();
+  final sinceDate = checkedDates.isNotEmpty
+      ? '${checkedDates.last}'
+      : alertDate;
+  return '${row['name'] ?? 'Student'} | ${readableDate(alertDate)} | ${row['grade_name'] ?? '-'} - ${row['section_name'] ?? '-'} | LRN: ${row['lrn'] ?? '-'} | ${absenceDays(row)} absent | Since: ${readableDate(sinceDate)} | Adviser: ${row['adviser'] ?? '-'}';
+}
 
 String absenceDays(Map<String, dynamic> row) {
   final days = intValue(row['absent_days']);
@@ -3552,8 +3662,9 @@ int countStudents(dynamic grade) =>
     );
 
 String absoluteUrl(String path) {
-  final clean = path.trim();
+  var clean = path.trim().replaceAll('\\', '/');
   if (clean.isEmpty) return clean;
+  if (clean.startsWith('public/')) clean = clean.substring(6);
   if (clean.startsWith('http://') ||
       clean.startsWith('https://') ||
       clean.startsWith('data:image/')) {

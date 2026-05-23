@@ -9,6 +9,8 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.net.Uri;
@@ -16,6 +18,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Base64;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
@@ -76,6 +79,10 @@ public class DashboardActivity extends Activity {
         super.onCreate(savedInstanceState);
         Ui.setBars(getWindow(), Ui.GREEN_DARK, false, Color.WHITE);
         selectedDate = today();
+        String requestedTab = getIntent() == null ? "" : getIntent().getStringExtra("tab");
+        if ("alerts".equals(requestedTab) || "schools".equals(requestedTab) || "reports".equals(requestedTab) || "attendance".equals(requestedTab)) {
+            currentTab = requestedTab;
+        }
         AbsenceWorker.schedule(this);
         buildShell();
         renderLoading("Syncing live records...");
@@ -300,6 +307,7 @@ public class DashboardActivity extends Activity {
         if (!dashboard.optBoolean("is_school_day", true)) {
             TextView note = Ui.text(this, nonSchoolDayAlertText(), 13, Color.rgb(141, 71, 0), Typeface.BOLD);
             note.setPadding(Ui.dp(this, 12), Ui.dp(this, 10), Ui.dp(this, 12), Ui.dp(this, 10));
+            note.setLineSpacing(Ui.dp(this, 2), 1.0f);
             note.setBackground(Ui.strokeBg(Color.rgb(255, 248, 232), Color.rgb(252, 190, 93), Ui.dp(this, 14)));
             content.addView(note, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 10)));
         }
@@ -480,7 +488,8 @@ public class DashboardActivity extends Activity {
             for (int i = 0; i < schools.length(); i++) {
                 JSONObject school = schools.optJSONObject(i);
                 if (school == null) continue;
-                LinearLayout row = recordRow(
+                LinearLayout row = schoolRecordRow(
+                        school,
                         school.optString("name", "School"),
                         school.optString("address", "No address saved"),
                         school.optInt("student_count") + " students - " + school.optInt("teacher_count") + " teachers",
@@ -525,6 +534,7 @@ public class DashboardActivity extends Activity {
         }
 
         LinearLayout card = sectionCard(school.optString("name", "School"), school.optInt("student_count") + " students - " + school.optInt("teacher_count") + " teachers");
+        card.addView(schoolHeaderRow(school), Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 10)));
         Button back = compactButton("Back to schools", Ui.GREEN_DARK);
         back.setOnClickListener(v -> {
             selectedSchoolId = -1;
@@ -567,6 +577,7 @@ public class DashboardActivity extends Activity {
     private void renderGradeDetail(JSONObject school, JSONObject grade, boolean animate) {
         JSONArray sections = grade.optJSONArray("sections");
         LinearLayout card = sectionCard(grade.optString("name", "Grade Level"), school.optString("name", "School"));
+        card.addView(schoolHeaderRow(school), Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 10)));
         Button back = compactButton("Back to " + school.optString("name", "School"), Ui.GREEN_DARK);
         back.setOnClickListener(v -> {
             selectedGradeId = -1;
@@ -608,6 +619,7 @@ public class DashboardActivity extends Activity {
             return;
         }
         LinearLayout card = sectionCard(section.optString("name", "Section"), grade.optString("name", "Grade Level") + " - " + school.optString("name", "School"));
+        card.addView(schoolHeaderRow(school), Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 10)));
         Button back = compactButton("Back to " + grade.optString("name", "Grade Level"), Ui.GREEN_DARK);
         back.setOnClickListener(v -> {
             selectedSectionId = -1;
@@ -783,12 +795,35 @@ public class DashboardActivity extends Activity {
     }
 
     private LinearLayout flaggedRow(JSONObject row) {
-        LinearLayout item = recordRow(row.optString("name", "Student"), row.optString("school_name", ""), absenceFlagSummary(row), Ui.AMBER);
-        item.setOnClickListener(v -> contactAdviser(row));
+        LinearLayout item = new LinearLayout(this);
+        item.setOrientation(LinearLayout.VERTICAL);
+        item.setPadding(Ui.dp(this, 12), Ui.dp(this, 12), Ui.dp(this, 12), Ui.dp(this, 12));
+        item.setBackground(Ui.strokeBg(Color.rgb(249, 251, 250), Color.rgb(224, 236, 231), Ui.dp(this, 18)));
+        item.setLayoutParams(Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 10)));
+
+        LinearLayout top = new LinearLayout(this);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        TextView icon = Ui.text(this, "!", 18, Ui.AMBER, Typeface.BOLD);
+        icon.setGravity(Gravity.CENTER);
+        icon.setBackground(Ui.bg(Color.rgb(255, 239, 223), Ui.dp(this, 14)));
+        top.addView(icon, Ui.lp(Ui.dp(this, 46), Ui.dp(this, 46)));
+
+        LinearLayout copy = new LinearLayout(this);
+        copy.setOrientation(LinearLayout.VERTICAL);
+        copy.addView(Ui.text(this, row.optString("name", "Student"), 15, Ui.INK, Typeface.BOLD));
+        copy.addView(Ui.text(this, row.optString("school_name", "School"), 12, Color.rgb(82, 96, 92), Typeface.NORMAL));
+        TextView detail = Ui.text(this, absenceFlagSummary(row), 11, Color.rgb(106, 120, 116), Typeface.BOLD);
+        detail.setLineSpacing(Ui.dp(this, 1), 1.0f);
+        copy.addView(detail);
+        top.addView(copy, Ui.marginLp(0, LinearLayout.LayoutParams.WRAP_CONTENT, Ui.dp(this, 10), 0, 0, 0));
+        ((LinearLayout.LayoutParams) copy.getLayoutParams()).weight = 1;
+        item.addView(top);
+
         Button contact = compactButton("Please contact adviser", Ui.AMBER);
-        contact.setTextSize(11);
+        contact.setTextSize(12);
         contact.setOnClickListener(v -> contactAdviser(row));
-        item.addView(contact, Ui.lp(Ui.dp(this, 148), Ui.dp(this, 38)));
+        item.addView(contact, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 40), 0, Ui.dp(this, 10), 0, 0));
+        item.setOnClickListener(v -> contactAdviser(row));
         return item;
     }
 
@@ -949,12 +984,104 @@ public class DashboardActivity extends Activity {
         return empty;
     }
 
+    private LinearLayout schoolHeaderRow(JSONObject school) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(Ui.dp(this, 10), Ui.dp(this, 9), Ui.dp(this, 10), Ui.dp(this, 9));
+        row.setBackground(Ui.bg(Color.rgb(248, 251, 249), Ui.dp(this, 14)));
+
+        ImageView logo = schoolLogoView(Ui.dp(this, 50));
+        loadLogoInto(logo, school);
+        row.addView(logo, Ui.lp(Ui.dp(this, 50), Ui.dp(this, 50)));
+
+        LinearLayout copy = new LinearLayout(this);
+        copy.setOrientation(LinearLayout.VERTICAL);
+        copy.addView(Ui.text(this, school.optString("name", "School"), 14, Ui.INK, Typeface.BOLD));
+        copy.addView(Ui.text(this, school.optString("address", "No address saved"), 11, Color.rgb(82, 96, 92), Typeface.NORMAL));
+        row.addView(copy, Ui.marginLp(0, LinearLayout.LayoutParams.WRAP_CONTENT, Ui.dp(this, 10), 0, 0, 0));
+        ((LinearLayout.LayoutParams) copy.getLayoutParams()).weight = 1;
+        return row;
+    }
+
     private LinearLayout compactSchoolRow(JSONObject school) {
         int enrolled = school.optInt("enrolled", school.optInt("enrollment", school.optInt("student_count")));
         int present = school.optInt("present");
         int rate = school.optInt("rate", enrolled > 0 ? Math.round((present * 100f) / enrolled) : 0);
         String detail = present + " of " + enrolled + " present - " + rate + "%";
-        return recordRow(school.optString("name", "School"), detail, school.optInt("teachers_present") + "/" + school.optInt("teachers_total") + " teachers", rate >= 75 ? Ui.GREEN_DARK : Ui.AMBER);
+        LinearLayout row = schoolRecordRow(school, school.optString("name", "School"), detail, school.optInt("teachers_present") + "/" + school.optInt("teachers_total") + " teachers", rate >= 75 ? Ui.GREEN_DARK : Ui.AMBER);
+        row.setOnClickListener(v -> {
+            selectedSchoolId = school.optInt("id", -1);
+            selectedGradeId = -1;
+            selectedSectionId = -1;
+            currentTab = "schools";
+            updateNav();
+            renderCurrentTab(true);
+        });
+        return row;
+    }
+
+    private LinearLayout schoolRecordRow(JSONObject school, String title, String subtitle, String meta, int accent) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setMinimumHeight(Ui.dp(this, 74));
+        row.setPadding(Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 10));
+        row.setBackground(Ui.bg(Color.rgb(248, 251, 249), Ui.dp(this, 14)));
+
+        ImageView logo = schoolLogoView(Ui.dp(this, 44));
+        loadLogoInto(logo, school);
+        row.addView(logo, Ui.lp(Ui.dp(this, 44), Ui.dp(this, 44)));
+
+        LinearLayout copy = new LinearLayout(this);
+        copy.setOrientation(LinearLayout.VERTICAL);
+        TextView titleView = Ui.text(this, title == null || title.trim().isEmpty() ? "School" : title.trim(), 14, Ui.INK, Typeface.BOLD);
+        TextView subView = Ui.text(this, subtitle == null ? "" : subtitle.trim(), 12, Color.rgb(82, 96, 92), Typeface.NORMAL);
+        TextView metaView = Ui.text(this, meta == null ? "" : meta.trim(), 11, accent, Typeface.BOLD);
+        copy.addView(titleView);
+        if (!subView.getText().toString().isEmpty()) copy.addView(subView);
+        if (!metaView.getText().toString().isEmpty()) copy.addView(metaView);
+        row.addView(copy, Ui.marginLp(0, LinearLayout.LayoutParams.WRAP_CONTENT, Ui.dp(this, 10), 0, 0, 0));
+        ((LinearLayout.LayoutParams) copy.getLayoutParams()).weight = 1;
+
+        TextView arrow = Ui.text(this, ">", 16, accent, Typeface.BOLD);
+        row.addView(arrow, Ui.lp(Ui.dp(this, 18), LinearLayout.LayoutParams.WRAP_CONTENT));
+        row.setLayoutParams(Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 10)));
+        return row;
+    }
+
+    private ImageView schoolLogoView(int sizePx) {
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(getResources().getIdentifier("system_logo", "drawable", getPackageName()));
+        logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        logo.setPadding(Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4));
+        logo.setBackground(Ui.strokeBg(Color.WHITE, Color.rgb(217, 236, 226), Ui.dp(this, 13)));
+        logo.setMinimumWidth(sizePx);
+        logo.setMinimumHeight(sizePx);
+        return logo;
+    }
+
+    private void loadLogoInto(ImageView image, JSONObject school) {
+        String logo = school == null ? "" : school.optString("logo", "").trim();
+        if (logo.isEmpty()) return;
+        if (logo.startsWith("data:image/")) {
+            int comma = logo.indexOf(',');
+            if (comma > 0) {
+                try {
+                    byte[] bytes = Base64.decode(logo.substring(comma + 1), Base64.DEFAULT);
+                    Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                    if (bitmap != null) image.setImageBitmap(bitmap);
+                } catch (Exception ignored) {}
+            }
+            return;
+        }
+        if (logo.startsWith("/") || logo.startsWith("http://") || logo.startsWith("https://")) {
+            new Thread(() -> {
+                try {
+                    byte[] bytes = ApiClient.getBytes(this, logo);
+                    Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                    if (bitmap != null) runOnUiThread(() -> image.setImageBitmap(bitmap));
+                } catch (Exception ignored) {}
+            }).start();
+        }
     }
 
     private String studentName(JSONObject student) {
@@ -1110,6 +1237,7 @@ public class DashboardActivity extends Activity {
         TextView chip = Ui.text(this, text, 11, Color.WHITE, Typeface.BOLD);
         chip.setGravity(Gravity.CENTER);
         chip.setPadding(Ui.dp(this, 10), 0, Ui.dp(this, 10), 0);
+        chip.setMinWidth(Ui.dp(this, text != null && text.matches("\\d{4}-\\d{2}-\\d{2}") ? 104 : 74));
         chip.setBackground(Ui.bg(Color.argb(34, 255, 255, 255), Ui.dp(this, 12)));
         return chip;
     }
@@ -1158,7 +1286,7 @@ public class DashboardActivity extends Activity {
     }
 
     private int activeStudents() {
-        int active = dashboard.optInt("active_students", dashboard.optInt("total_students"));
+        int active = dashboard.optInt("attendance_eligible_students", dashboard.optInt("active_students", dashboard.optInt("total_students")));
         return Math.max(0, active);
     }
 
@@ -1258,6 +1386,7 @@ public class DashboardActivity extends Activity {
             manager.createNotificationChannel(channel);
         }
         Intent intent = new Intent(this, DashboardActivity.class);
+        intent.putExtra("tab", "alerts");
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 3001, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)

@@ -548,7 +548,7 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
 
         // School-by-school breakdown (join on active status)
         let schoolBreakdownQuery = `
-            SELECT s.id, s.name,
+            SELECT s.id, s.name, s.logo,
                 (SELECT COUNT(*) FROM students st WHERE st.school_id = s.id AND st.status = 'active') as enrollment,
                 (SELECT COUNT(DISTINCT a.person_id) FROM attendance a INNER JOIN students st ON a.person_id = st.id AND st.status = 'active' WHERE a.school_id = s.id AND a.person_type = 'student' AND a.date = ? AND a.time_in IS NOT NULL) as present,
                 (SELECT COUNT(*) FROM teachers t WHERE t.school_id = s.id AND t.status = 'active') as teachers_total,
@@ -567,6 +567,7 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
             breakdown.push({
                 id: s.id,
                 name: s.name,
+                logo: s.logo,
                 enrollment: s.enrollment,
                 attendance_eligible_students: Math.max(eligible, s.present || 0),
                 present: s.present,
@@ -1697,7 +1698,7 @@ router.get('/reports/daily-summary', requireAuth, async (req, res) => {
     const schoolId = applySchoolFilter(req);
     try {
         let query = `
-            SELECT s.id, s.name,
+            SELECT s.id, s.name, s.logo,
                 (SELECT COUNT(*) FROM students st WHERE st.school_id = s.id AND st.status = 'active') as enrolled,
                 (SELECT COUNT(DISTINCT a.person_id) FROM attendance a INNER JOIN students st ON a.person_id = st.id AND st.status = 'active' WHERE a.school_id = s.id AND a.person_type = 'student' AND a.date = ? AND a.time_in IS NOT NULL) as present,
                 (SELECT COUNT(DISTINCT a.person_id) FROM attendance a INNER JOIN students st ON a.person_id = st.id AND st.status = 'active' WHERE a.school_id = s.id AND a.person_type = 'student' AND a.date = ? AND a.status = 'late') as late_count,
@@ -1715,6 +1716,7 @@ router.get('/reports/daily-summary', requireAuth, async (req, res) => {
             schools.push({
                 id: s.id,
                 name: s.name,
+                logo: s.logo,
                 enrolled: eligible,
                 present: s.present,
                 late: s.late_count,

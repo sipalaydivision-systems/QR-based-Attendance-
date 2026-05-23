@@ -5,6 +5,7 @@ import android.content.Context;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -62,6 +63,27 @@ final class ApiClient {
         if (conn.getResponseCode() == 401) throw new SecurityException("Session expired.");
         if (conn.getResponseCode() >= 400) throw new IllegalStateException(response);
         return response;
+    }
+
+    static byte[] getBytes(Context context, String pathOrUrl) throws Exception {
+        URL url = pathOrUrl.startsWith("http://") || pathOrUrl.startsWith("https://")
+                ? new URL(pathOrUrl)
+                : new URL(SessionStore.getBaseUrl(context) + pathOrUrl);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("GET");
+        conn.setConnectTimeout(30000);
+        conn.setReadTimeout(30000);
+        conn.setRequestProperty("Accept", "*/*");
+        String cookie = SessionStore.getCookie(context);
+        if (!cookie.isEmpty()) conn.setRequestProperty("Cookie", cookie);
+        if (conn.getResponseCode() == 401) throw new SecurityException("Session expired.");
+        if (conn.getResponseCode() >= 400) throw new IllegalStateException("Unable to load file.");
+        try (InputStream is = conn.getInputStream(); ByteArrayOutputStream os = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = is.read(buffer)) != -1) os.write(buffer, 0, read);
+            return os.toByteArray();
+        }
     }
 
     static void refreshBaseUrl(Context context) {
@@ -159,7 +181,8 @@ final class ApiClient {
             String response = read(conn);
             if (conn.getResponseCode() >= 400) return false;
             JSONObject info = new JSONObject(response);
-            return "school-attendance-qr-based-systems".equals(info.optString("app"));
+            String app = info.optString("app");
+            return "edutrack".equals(app) || "school-attendance-qr-based-systems".equals(app);
         } catch (Exception e) {
             try {
                 HttpURLConnection conn = (HttpURLConnection) new URL(normalized + "/login").openConnection();
@@ -170,7 +193,7 @@ final class ApiClient {
                 String response = read(conn);
                 String body = response == null ? "" : response.toLowerCase();
                 return conn.getResponseCode() < 400
-                        && (body.contains("school attendance qr based systems") || body.contains("qr attendance system"));
+                        && (body.contains("edutrack") || body.contains("school attendance qr based systems") || body.contains("qr attendance system"));
             } catch (Exception ignored) {
                 return false;
             }

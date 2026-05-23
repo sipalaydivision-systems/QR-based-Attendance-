@@ -93,6 +93,7 @@ public class AbsenceWorker extends Worker {
         }
 
         Intent intent = new Intent(context, DashboardActivity.class);
+        intent.putExtra("tab", "alerts");
         PendingIntent pendingIntent = PendingIntent.getActivity(
                 context,
                 100,

@@ -130,7 +130,7 @@ app.get('/app', (req, res) => {
 
 app.get('/api/app-info', (req, res) => {
     return res.json({
-        app: 'edutrack',
+        app: 'school-attendance-qr-based-systems',
         name: 'Edutrack',
         baseUrl: getPublicAppBaseUrl(req)
     });
