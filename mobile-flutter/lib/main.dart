@@ -23,6 +23,8 @@ class AppConfig {
 final notifications = FlutterLocalNotificationsPlugin();
 final appNavigatorKey = GlobalKey<NavigatorState>();
 String? startupNotificationPayload;
+String? startupNotificationActionId;
+Map<String, dynamic>? pendingAlertIntent;
 const alertsChannel = AndroidNotificationChannel(
   'edutrack_alerts',
   'Edutrack Alerts',
@@ -37,7 +39,10 @@ Future<void> main() async {
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     ),
     onDidReceiveNotificationResponse: (response) {
-      openNotificationDestination(response.payload);
+      openNotificationDestination(
+        response.payload,
+        actionId: response.actionId,
+      );
     },
   );
   await notifications
@@ -46,9 +51,14 @@ Future<void> main() async {
       >()
       ?.createNotificationChannel(alertsChannel);
   final launchDetails = await notifications.getNotificationAppLaunchDetails();
-  startupNotificationPayload = launchDetails?.didNotificationLaunchApp == true
-      ? launchDetails?.notificationResponse?.payload
-      : null;
+  if (launchDetails?.didNotificationLaunchApp == true) {
+    startupNotificationPayload = launchDetails?.notificationResponse?.payload;
+    startupNotificationActionId = launchDetails?.notificationResponse?.actionId;
+    pendingAlertIntent = notificationIntentFromPayload(
+      startupNotificationPayload,
+      actionId: startupNotificationActionId,
+    );
+  }
   runApp(const EdutrackApp());
 }
 
@@ -254,7 +264,8 @@ class _SplashGateState extends State<SplashGate>
             builder: (_) => api.isLoggedIn
                 ? HomeShell(
                     api: api,
-                    initialTab: startupNotificationPayload == 'alerts' ? 4 : 0,
+                    initialTab: pendingAlertIntent == null ? 0 : 4,
+                    initialAlertIntent: pendingAlertIntent,
                   )
                 : LoginScreen(api: api),
           ),
@@ -663,7 +674,13 @@ class _LoginScreenState extends State<LoginScreen>
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => HomeShell(api: widget.api)),
+        MaterialPageRoute(
+          builder: (_) => HomeShell(
+            api: widget.api,
+            initialTab: pendingAlertIntent == null ? 0 : 4,
+            initialAlertIntent: pendingAlertIntent,
+          ),
+        ),
       );
     } catch (e) {
       setState(() {
@@ -909,9 +926,15 @@ class _LoginScreenState extends State<LoginScreen>
 }
 
 class HomeShell extends StatefulWidget {
-  const HomeShell({super.key, required this.api, this.initialTab = 0});
+  const HomeShell({
+    super.key,
+    required this.api,
+    this.initialTab = 0,
+    this.initialAlertIntent,
+  });
   final ApiService api;
   final int initialTab;
+  final Map<String, dynamic>? initialAlertIntent;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -926,11 +949,13 @@ class _HomeShellState extends State<HomeShell>
   String? error;
   Timer? timer;
   late final AnimationController backgroundController;
+  Map<String, dynamic>? alertIntent;
 
   @override
   void initState() {
     super.initState();
     tab = widget.initialTab.clamp(0, 4);
+    alertIntent = widget.initialAlertIntent;
     backgroundController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 9),
@@ -1001,7 +1026,14 @@ class _HomeShellState extends State<HomeShell>
       AttendancePage(api: widget.api),
       SchoolsPage(api: widget.api),
       ReportsPage(api: widget.api),
-      AlertsPage(flags: flags),
+      AlertsPage(
+        flags: flags,
+        notificationIntent: alertIntent,
+        onIntentConsumed: () => setState(() {
+          alertIntent = null;
+          pendingAlertIntent = null;
+        }),
+      ),
     ];
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7F6),
@@ -2990,77 +3022,130 @@ class _SchoolsPageState extends State<SchoolsPage> {
   }
 }
 
-class AlertsPage extends StatelessWidget {
-  const AlertsPage({super.key, required this.flags});
+class AlertsPage extends StatefulWidget {
+  const AlertsPage({
+    super.key,
+    required this.flags,
+    this.notificationIntent,
+    this.onIntentConsumed,
+  });
   final List<dynamic> flags;
+  final Map<String, dynamic>? notificationIntent;
+  final VoidCallback? onIntentConsumed;
 
   @override
-  Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.all(16),
-    children: [
-      const SectionTitle(
-        'Alerts',
-        '2-day absence alerts and notification checks.',
-      ),
-      const SizedBox(height: 16),
-      PremiumCard(
-        title: 'Notification Test',
-        subtitle: 'Verify the 2-day flagged student alert on this phone.',
-        child: FilledButton.icon(
-          onPressed: () async {
-            final granted = await ensureNotificationPermission();
-            if (!granted) {
-              if (context.mounted) {
-                showDialog(
-                  context: context,
-                  builder: (_) => AlertDialog(
-                    title: const Text('Notifications are blocked'),
-                    content: const Text(
-                      'Please allow Edutrack notifications in your phone settings, then press the test button again.',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Close'),
+  State<AlertsPage> createState() => _AlertsPageState();
+}
+
+class _AlertsPageState extends State<AlertsPage> {
+  String? consumedIntentKey;
+
+  @override
+  void didUpdateWidget(covariant AlertsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nextKey = notificationIntentKey(widget.notificationIntent);
+    final oldKey = notificationIntentKey(oldWidget.notificationIntent);
+    if (nextKey != oldKey) consumedIntentKey = null;
+  }
+
+  Future<void> _consumeIntentIfNeeded() async {
+    final intent = widget.notificationIntent;
+    final key = notificationIntentKey(intent);
+    if (intent == null || key == null || key == consumedIntentKey) return;
+    consumedIntentKey = key;
+
+    final action = '${intent['action'] ?? 'view'}';
+    final rowFromIntent = intent['row'];
+    Map<String, dynamic>? row;
+    if (rowFromIntent is Map) {
+      row = Map<String, dynamic>.from(rowFromIntent);
+    } else if (widget.flags.isNotEmpty) {
+      row = Map<String, dynamic>.from(widget.flags.first as Map);
+    }
+
+    if (row != null && mounted) {
+      await FlagTile.openStudentDetailsModal(
+        context,
+        row,
+        openContactActions: action == 'contact',
+      );
+    }
+    widget.onIntentConsumed?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _consumeIntentIfNeeded();
+    });
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const SectionTitle(
+          'Alerts',
+          '2-day absence alerts and notification checks.',
+        ),
+        const SizedBox(height: 16),
+        PremiumCard(
+          title: 'Notification Test',
+          subtitle: 'Verify the 2-day flagged student alert on this phone.',
+          child: FilledButton.icon(
+            onPressed: () async {
+              final granted = await ensureNotificationPermission();
+              if (!granted) {
+                if (context.mounted) {
+                  showDialog(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      title: const Text('Notifications are blocked'),
+                      content: const Text(
+                        'Please allow Edutrack notifications in your phone settings, then press the test button again.',
                       ),
-                    ],
-                  ),
-                );
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Close'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                return;
               }
-              return;
-            }
-            if (flags.isEmpty) {
+              if (widget.flags.isEmpty) {
+                await showLocalNotification(
+                  'Edutrack alert test',
+                  'No live 2-day flagged students found.',
+                );
+                return;
+              }
+              final row = Map<String, dynamic>.from(widget.flags.first as Map);
               await showLocalNotification(
-                'Edutrack alert test',
-                'No live 2-day flagged students found.',
+                absenceTitle(widget.flags.length),
+                absenceBody(row, count: widget.flags.length),
+                payload: absenceNotificationPayload(widget.flags),
               );
-              return;
-            }
-            final row = Map<String, dynamic>.from(flags.first as Map);
-            await showLocalNotification(
-              absenceTitle(flags.length),
-              absenceBody(row),
-              payload: 'alerts',
-            );
-          },
-          icon: const Icon(Icons.notifications_active),
-          label: const Text('Send 2-day flagged alert'),
+            },
+            icon: const Icon(Icons.notifications_active),
+            label: const Text('Send 2-day flagged alert'),
+          ),
         ),
-      ),
-      const SizedBox(height: 12),
-      PremiumCard(
-        title: '2-Day Absence Alerts',
-        subtitle: '${flags.length} active flag(s)',
-        child: Column(
-          children: [
-            if (flags.isEmpty) const EmptyText('No 2-day absentees detected.'),
-            for (final item in flags)
-              FlagTile(Map<String, dynamic>.from(item as Map)),
-          ],
+        const SizedBox(height: 12),
+        PremiumCard(
+          title: '2-Day Absence Alerts',
+          subtitle: '${widget.flags.length} active flag(s)',
+          child: Column(
+            children: [
+              if (widget.flags.isEmpty)
+                const EmptyText('No 2-day absentees detected.'),
+              for (final item in widget.flags)
+                FlagTile(Map<String, dynamic>.from(item as Map)),
+            ],
+          ),
         ),
-      ),
-    ],
-  );
+      ],
+    );
+  }
 }
 
 class FlagTile extends StatelessWidget {
@@ -3083,7 +3168,11 @@ class FlagTile extends StatelessWidget {
     );
   }
 
-  Future<void> _openStudentDetails(BuildContext context) async {
+  static Future<void> openStudentDetailsModal(
+    BuildContext context,
+    Map<String, dynamic> row, {
+    bool openContactActions = false,
+  }) async {
     final studentName = '${row['name'] ?? 'Student'}';
     final lrn = '${row['lrn'] ?? '-'}';
     final schoolName = '${row['school_name'] ?? '-'}';
@@ -3150,7 +3239,7 @@ class FlagTile extends StatelessWidget {
                     _detailLine(
                       'School Name',
                       schoolName,
-                      trailing: _schoolNameWithLogo(schoolName),
+                      trailing: _schoolNameWithLogo(schoolName, row),
                     ),
                     _detailLine('Grade Level', grade),
                     _detailLine('Section', section),
@@ -3171,27 +3260,47 @@ class FlagTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
+              Row(
                 children: [
-                  FilledButton.icon(
-                    onPressed: () => contactAdviserViaCall(context, row),
-                    icon: const Icon(Icons.call_rounded, size: 18),
-                    label: const Text('Call Adviser'),
+                  Expanded(
+                    child: _contactActionButton(
+                      icon: Icons.call_rounded,
+                      label: 'Call',
+                      filled: true,
+                      onPressed: () => contactAdviserViaCall(context, row),
+                    ),
                   ),
-                  OutlinedButton.icon(
-                    onPressed: () => contactAdviserAlertViaSms(context, row),
-                    icon: const Icon(Icons.sms_rounded, size: 18),
-                    label: const Text('Send SMS'),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _contactActionButton(
+                      icon: Icons.sms_rounded,
+                      label: 'SMS',
+                      onPressed: () => contactAdviserAlertViaSms(context, row),
+                    ),
                   ),
-                  OutlinedButton.icon(
-                    onPressed: () => contactAdviserAlertViaEmail(context, row),
-                    icon: const Icon(Icons.email_rounded, size: 18),
-                    label: const Text('Send Email'),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _contactActionButton(
+                      icon: Icons.email_rounded,
+                      label: 'Email',
+                      onPressed: () =>
+                          contactAdviserAlertViaEmail(context, row),
+                    ),
                   ),
                 ],
               ),
+              if (openContactActions)
+                const Padding(
+                  padding: EdgeInsets.only(top: 10),
+                  child: Text(
+                    'Contact actions are ready below.',
+                    style: TextStyle(
+                      color: Color(0xFF0F6E52),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -3199,7 +3308,13 @@ class FlagTile extends StatelessWidget {
     );
   }
 
-  Widget _schoolNameWithLogo(String schoolName) => SizedBox(
+  Future<void> _openStudentDetails(BuildContext context) =>
+      openStudentDetailsModal(context, row);
+
+  static Widget _schoolNameWithLogo(
+    String schoolName,
+    Map<String, dynamic> row,
+  ) => SizedBox(
     width: 190,
     child: Row(
       mainAxisAlignment: MainAxisAlignment.end,
@@ -3225,43 +3340,75 @@ class FlagTile extends StatelessWidget {
     ),
   );
 
-  Widget _detailLine(String label, String value, {Widget? trailing}) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 6),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          flex: 2,
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: Color(0xFF5A6A64),
-              fontWeight: FontWeight.w700,
-              fontSize: 12,
+  static Widget _contactActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+    bool filled = false,
+  }) => SizedBox(
+    height: 46,
+    child: filled
+        ? FilledButton.icon(
+            onPressed: onPressed,
+            icon: Icon(icon, size: 16),
+            label: Text(label),
+            style: FilledButton.styleFrom(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+          )
+        : OutlinedButton.icon(
+            onPressed: onPressed,
+            icon: Icon(icon, size: 16),
+            label: Text(label),
+            style: OutlinedButton.styleFrom(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              side: const BorderSide(color: Color(0xFFBFD2CA)),
             ),
           ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          flex: 3,
-          child: Align(
-            alignment: Alignment.centerRight,
-            child:
-                trailing ??
-                Text(
-                  value,
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    color: Color(0xFF101C18),
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13,
-                  ),
-                ),
-          ),
-        ),
-      ],
-    ),
   );
+
+  static Widget _detailLine(String label, String value, {Widget? trailing}) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 2,
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: Color(0xFF5A6A64),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 3,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child:
+                    trailing ??
+                    Text(
+                      value,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        color: Color(0xFF101C18),
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
+                    ),
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
 class FutureList extends StatelessWidget {
@@ -4114,15 +4261,28 @@ Future<void> notifyAbsenceFlags(List flags, SharedPreferences prefs) async {
   final row = Map<String, dynamic>.from(flags.first as Map);
   await showLocalNotification(
     absenceTitle(flags.length),
-    absenceBody(row),
-    payload: 'alerts',
+    absenceBody(row, count: flags.length),
+    payload: absenceNotificationPayload(flags),
+    actions: const [
+      AndroidNotificationAction('view', 'View', showsUserInterface: true),
+      AndroidNotificationAction(
+        'contact_adviser',
+        'Contact Adviser',
+        showsUserInterface: true,
+      ),
+    ],
     showToast: false,
   );
   await prefs.setString('last_absence_key', key);
 }
 
-Future<void> openNotificationDestination(String? payload) async {
-  if (payload != 'alerts') return;
+Future<void> openNotificationDestination(
+  String? payload, {
+  String? actionId,
+}) async {
+  final intent = notificationIntentFromPayload(payload, actionId: actionId);
+  if (intent == null) return;
+  pendingAlertIntent = intent;
   final prefs = await SharedPreferences.getInstance();
   final api = ApiService(prefs);
   final navigator = appNavigatorKey.currentState;
@@ -4130,7 +4290,7 @@ Future<void> openNotificationDestination(String? payload) async {
   navigator.pushAndRemoveUntil(
     MaterialPageRoute(
       builder: (_) => api.isLoggedIn
-          ? HomeShell(api: api, initialTab: 4)
+          ? HomeShell(api: api, initialTab: 4, initialAlertIntent: intent)
           : LoginScreen(api: api),
     ),
     (_) => false,
@@ -4149,11 +4309,12 @@ Future<bool> showLocalNotification(
   String title,
   String body, {
   String? payload,
+  List<AndroidNotificationAction>? actions,
   bool showToast = true,
 }) async {
   final granted = await ensureNotificationPermission();
   if (!granted) return false;
-  const android = AndroidNotificationDetails(
+  final android = AndroidNotificationDetails(
     'edutrack_alerts',
     'Edutrack Alerts',
     channelDescription: 'Attendance monitoring alerts',
@@ -4162,26 +4323,86 @@ Future<bool> showLocalNotification(
     category: AndroidNotificationCategory.status,
     visibility: NotificationVisibility.public,
     ticker: 'Edutrack attendance alert',
+    actions: actions,
   );
   await notifications.show(
     DateTime.now().millisecondsSinceEpoch ~/ 1000,
     title,
     body,
-    const NotificationDetails(android: android),
+    NotificationDetails(android: android),
     payload: payload,
   );
   return true;
 }
 
-String absenceTitle(int count) =>
-    count == 1 ? '1 student absent 2+ days' : '$count students absent 2+ days';
-String absenceBody(Map<String, dynamic> row) {
-  final checkedDates = (row['checked_dates'] as List?) ?? const [];
-  final alertDate = checkedDates.isNotEmpty ? '${checkedDates.first}' : date();
-  final sinceDate = checkedDates.isNotEmpty
-      ? '${checkedDates.last}'
-      : alertDate;
-  return '${row['name'] ?? 'Student'} | ${readableDate(alertDate)} | ${row['grade_name'] ?? '-'} - ${row['section_name'] ?? '-'} | LRN: ${row['lrn'] ?? '-'} | ${absenceDays(row)} absent | Since: ${readableDate(sinceDate)} | Adviser: ${row['adviser'] ?? '-'}';
+String absenceTitle(int count) => count == 1
+    ? '1 Student Flagged for Absence'
+    : '$count Students Flagged for Absence';
+
+String absenceBody(Map<String, dynamic> row, {int count = 1}) {
+  if (count > 1) {
+    return 'Tap to view flagged students and adviser details.';
+  }
+  final student = '${row['name'] ?? 'Student'}';
+  final gradeSection =
+      '${row['grade_name'] ?? '-'} - ${row['section_name'] ?? '-'}';
+  final school = '${row['school_name'] ?? '-'}';
+  final days = absenceDays(row);
+  return '$student\n$gradeSection • $school\n$days Absent';
+}
+
+String absenceNotificationPayload(List flags) {
+  final first = flags.isNotEmpty
+      ? Map<String, dynamic>.from(flags.first as Map)
+      : <String, dynamic>{};
+  final row = {
+    'id': first['id'],
+    'name': first['name'],
+    'lrn': first['lrn'],
+    'school_name': first['school_name'],
+    'school_logo': first['school_logo'],
+    'grade_name': first['grade_name'],
+    'section_name': first['section_name'],
+    'absent_days': first['absent_days'],
+    'attendance_status': first['attendance_status'] ?? 'Absent',
+    'adviser': first['adviser'],
+    'adviser_contact': first['adviser_contact'],
+    'adviser_email': first['adviser_email'],
+  };
+  return jsonEncode({
+    'type': 'absence_alert',
+    'count': flags.length,
+    'row': row,
+  });
+}
+
+Map<String, dynamic>? notificationIntentFromPayload(
+  String? payload, {
+  String? actionId,
+}) {
+  if (payload == null || payload.trim().isEmpty) return null;
+  if (payload == 'alerts') {
+    return {'type': 'absence_alert', 'action': 'view'};
+  }
+  try {
+    final decoded = jsonDecode(payload);
+    if (decoded is! Map) return null;
+    final map = Map<String, dynamic>.from(decoded);
+    if ('${map['type']}' != 'absence_alert') return null;
+    final action = actionId == 'contact_adviser' ? 'contact' : 'view';
+    return {...map, 'action': action};
+  } catch (_) {
+    return null;
+  }
+}
+
+String? notificationIntentKey(Map<String, dynamic>? intent) {
+  if (intent == null) return null;
+  try {
+    return jsonEncode(intent);
+  } catch (_) {
+    return '${intent['type']}:${intent['action']}';
+  }
 }
 
 String absenceDays(Map<String, dynamic> row) {
