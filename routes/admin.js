@@ -57,6 +57,13 @@ function normalizeGradeKey(value) {
     return numberMatch ? `grade ${parseInt(numberMatch[0], 10)}` : raw;
 }
 
+function formatGradeLabel(value) {
+    const key = normalizeGradeKey(value);
+    const numberMatch = key.match(/^grade\s+(\d+)$/);
+    if (numberMatch) return `Grade ${parseInt(numberMatch[1], 10)}`;
+    return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
 function normalizePersonName(value) {
     return normalizeLookupKey(value).replace(/\b(ma|maria|mr|mrs|ms|dr)\b/g, '').replace(/\s+/g, ' ').trim();
 }
@@ -207,7 +214,15 @@ async function findGradeByName(gradeStr, schoolId) {
         params.push(schoolId);
     }
     const [rows] = await db.query(query, params);
-    return rows.find(row => normalizeGradeKey(row.name) === target) || null;
+    const matches = rows.filter(row => normalizeGradeKey(row.name) === target);
+    if (!matches.length) return null;
+    if (schoolId) {
+        const exactSchool = matches.find(row => Number(row.school_id) === Number(schoolId));
+        if (exactSchool) return exactSchool;
+        const globalRow = matches.find(row => row.school_id == null);
+        if (globalRow) return globalRow;
+    }
+    return matches[0];
 }
 
 async function findSectionByName(sectionName, schoolId, gradeLevelId) {
@@ -225,6 +240,49 @@ async function findSectionByName(sectionName, schoolId, gradeLevelId) {
     }
     const [rows] = await db.query(query, params);
     return rows.find(row => normalizeLookupKey(row.name) === target) || null;
+}
+
+async function findSectionByNameInSchool(sectionName, schoolId) {
+    const target = normalizeLookupKey(sectionName);
+    if (!target || !schoolId) return null;
+    const [rows] = await db.query(
+        'SELECT id, name, adviser, adviser_teacher_id, school_id, grade_level_id FROM sections WHERE school_id = ?',
+        [schoolId]
+    );
+    const matches = rows.filter(row => normalizeLookupKey(row.name) === target);
+    if (matches.length === 1) return matches[0];
+    return null;
+}
+
+function schoolCodePrefix(name) {
+    const compact = String(name || '')
+        .replace(/[^A-Za-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean);
+    const initial = compact.map(token => token.charAt(0)).join('').toUpperCase();
+    const clean = initial.replace(/[^A-Z0-9]/g, '').slice(0, 6);
+    return clean || 'SCH';
+}
+
+async function createSchoolRecord(rawName) {
+    const name = String(rawName || '').replace(/\s+/g, ' ').trim();
+    const prefix = schoolCodePrefix(name);
+    const [existingCodes] = await db.query(
+        'SELECT school_code FROM schools WHERE school_code LIKE ?',
+        [`${prefix}-%`]
+    );
+    const used = new Set(existingCodes.map(row => String(row.school_code || '').trim()));
+    let sequence = 1;
+    let code = `${prefix}-${String(sequence).padStart(3, '0')}`;
+    while (used.has(code)) {
+        sequence += 1;
+        code = `${prefix}-${String(sequence).padStart(3, '0')}`;
+    }
+    const [result] = await db.query(
+        'INSERT INTO schools (name, school_id_code, school_code, address, contact, status) VALUES (?, ?, ?, ?, ?, ?)',
+        [name, null, code, null, null, 'active']
+    );
+    return { id: result.insertId, name, school_id_code: null, school_code: code, status: 'active' };
 }
 
 async function findTeacherMatch(empId, firstname, lastname, middlename, schoolId) {
@@ -517,11 +575,12 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
             return { firstname: words[0], lastname: words[words.length - 1], middlename: words.slice(1, -1).join(' ') };
         }
 
-        const [schools] = await db.query("SELECT id, name, school_id_code, school_code FROM schools WHERE status = 'active' ORDER BY name");
+        const [schools] = await db.query("SELECT id, name, school_id_code, school_code, status FROM schools WHERE status IS NULL OR status != 'deleted' ORDER BY name");
         const fallbackSchool = defaultSchoolId ? schools.find(s => Number(s.id) === Number(defaultSchoolId)) : null;
         const impliedDefaultSchool = fallbackSchool || (schools.length === 1 ? schools[0] : null);
 
-        async function resolveSchoolPreview(schoolName) {
+        async function resolveSchoolPreview(schoolName, options = {}) {
+            const { allowCreate = false } = options;
             const rawSchoolName = String(schoolName || '').trim();
             if (!rawSchoolName) {
                 if (impliedDefaultSchool) return { id: impliedDefaultSchool.id, name: impliedDefaultSchool.name };
@@ -531,10 +590,8 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
             const matchedSchool = findSchoolMatch(schools, rawSchoolName);
             if (matchedSchool) return { id: matchedSchool.id, name: matchedSchool.name };
 
-            if (impliedDefaultSchool) {
-                return { id: impliedDefaultSchool.id, name: impliedDefaultSchool.name, warning: 'School not matched, used default school.' };
-            }
-            return { id: null, name: rawSchoolName, error: 'School not found' };
+            if (!allowCreate) return { id: null, name: rawSchoolName, error: 'School not found' };
+            return { id: null, name: rawSchoolName, willCreate: true };
         }
 
         async function checkGrade(gradeStr) {
@@ -584,17 +641,19 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
                 if (!fn && !ln) { entry.status = 'error'; entry.error = 'Missing name'; }
 
                 const schoolName = getRowValue(row, ['School Name', 'School', 'school']);
-                const school = await resolveSchoolPreview(schoolName);
+                const school = await resolveSchoolPreview(schoolName, { allowCreate: true });
                 const gradeStr = getRowValue(row, ['Grade Level', 'Grade', 'grade']);
                 const gradeErr = validateGradeForSchool(gradeStr, school.name || schoolName);
                 if (gradeErr) { entry.status = 'error'; entry.error = gradeErr; }
                 if (!gradeStr) { entry.status = 'error'; entry.error = 'Grade Level is required for adviser assignment'; }
                 const grade = gradeStr && school.id ? await findGradeByName(gradeStr, school.id) : null;
-                if (gradeStr && school.id && !grade) { entry.status = 'error'; entry.error = 'Grade level not found for this school'; }
                 const sectionName = getRowValue(row, ['Section Name', 'Section', 'section']);
                 if (!sectionName) { entry.status = 'error'; entry.error = 'Section Name is required for adviser assignment'; }
-                const section = sectionName && school.id && grade ? await findSectionByName(sectionName, school.id, grade.id) : null;
-                if (sectionName && school.id && grade && !section) { entry.status = 'error'; entry.error = 'Section not found under the selected school and grade'; }
+                let section = null;
+                if (sectionName && school.id && grade) {
+                    section = await findSectionByName(sectionName, school.id, grade.id);
+                    if (!section) section = await findSectionByNameInSchool(sectionName, school.id);
+                }
                 const contact = getRowValue(row, ['Contact Number', 'Contact', 'Phone', 'Mobile', 'contact_number']);
                 const email = getRowValue(row, ['Email', 'Email Address', 'email']);
                 const qr_code = empId ? 'TCH-' + empId : 'TCH-auto';
@@ -608,8 +667,11 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
                 entry.empId = empId;
                 entry.name = ln && fn ? ln + ', ' + fn : fn || ln;
                 entry.school = school.name || '';
-                entry.grade = grade ? grade.name : '';
-                entry.section = section ? section.name : '';
+                if (school.willCreate) entry.school += ' (new)';
+                entry.grade = grade ? grade.name : formatGradeLabel(gradeStr);
+                if (gradeStr && !grade) entry.grade += ' (new)';
+                entry.section = section ? section.name : String(sectionName || '').trim();
+                if (sectionName && !section) entry.section += ' (new)';
                 entry.contact = email || contact;
                 entry.qr_code = qr_code;
                 if (school.error) { entry.status = 'error'; entry.error = school.error; }
@@ -736,12 +798,13 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
 
         const importedStatus = 'active';
 
-        const [schools] = await db.query("SELECT id, name, school_id_code, school_code FROM schools WHERE status = 'active' ORDER BY name");
+        const [schools] = await db.query("SELECT id, name, school_id_code, school_code, status FROM schools WHERE status IS NULL OR status != 'deleted' ORDER BY name");
         const fallbackSchool = defaultSchoolId ? schools.find(s => Number(s.id) === Number(defaultSchoolId)) : null;
         const impliedDefaultSchool = fallbackSchool || (schools.length === 1 ? schools[0] : null);
 
         // Helper: resolve school_id by name
-        async function resolveSchool(schoolName) {
+        async function resolveSchool(schoolName, options = {}) {
+            const { allowCreate = false } = options;
             const rawSchoolName = String(schoolName || '').trim();
             if (!rawSchoolName) {
                 if (impliedDefaultSchool) return { id: impliedDefaultSchool.id, name: impliedDefaultSchool.name };
@@ -751,10 +814,10 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
             const matchedSchool = findSchoolMatch(schools, rawSchoolName);
             if (matchedSchool) return { id: matchedSchool.id, name: matchedSchool.name };
 
-            if (impliedDefaultSchool) {
-                return { id: impliedDefaultSchool.id, name: impliedDefaultSchool.name, warning: 'School not matched, used default school.' };
-            }
-            return { id: null, name: rawSchoolName, error: 'School not found' };
+            if (!allowCreate) return { id: null, name: rawSchoolName, error: 'School not found' };
+            const createdSchool = await createSchoolRecord(rawSchoolName);
+            schools.push(createdSchool);
+            return { id: createdSchool.id, name: createdSchool.name, created: true };
         }
 
         // Helper: resolve grade_level_id by grade number (auto-creates if missing)
@@ -763,16 +826,23 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
             const g = String(gradeStr).trim();
             const found = await findGradeByName(g, schoolId);
             if (found) return found.id;
-            const name = /^\d+$/.test(g) ? 'Grade ' + g : g;
+            const name = formatGradeLabel(g);
             const [result] = await db.query('INSERT INTO grade_levels (name, school_id) VALUES (?, ?)', [name, schoolId || null]);
             return result.insertId;
         }
 
         // Helper: resolve or create section
-        async function resolveSection(sectionName, schoolId, gradeLevelId) {
+        async function resolveSection(sectionName, schoolId, gradeLevelId, options = {}) {
+            const { allowSchoolWideFallback = false } = options;
             if (!sectionName) return null;
             const found = await findSectionByName(sectionName, schoolId, gradeLevelId);
             if (found) return found.id;
+            if (allowSchoolWideFallback) {
+                const sameSchoolSection = await findSectionByNameInSchool(sectionName, schoolId);
+                if (sameSchoolSection) {
+                    return sameSchoolSection.id;
+                }
+            }
             const [result] = await db.query('INSERT INTO sections (name, school_id, grade_level_id) VALUES (?, ?, ?)', [sectionName, schoolId || null, gradeLevelId || null]);
             return result.insertId;
         }
@@ -812,7 +882,10 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                     const mn = middlename || row.middlename || '';
                     if (!fn && !ln) { errors.push({ row: rn, message: 'Missing name' }); continue; }
 
-                    const schoolInfo = await resolveSchool(getRowValue(row, ['School Name', 'School', 'school']));
+                    const schoolInfo = await resolveSchool(
+                        getRowValue(row, ['School Name', 'School', 'school']),
+                        { allowCreate: true }
+                    );
                     if (schoolInfo.error) { errors.push({ row: rn, message: schoolInfo.error }); continue; }
                     const schoolId = schoolInfo.id;
                     const gradeStr = getRowValue(row, ['Grade Level', 'Grade', 'grade']);
@@ -821,14 +894,17 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                     const schoolName = schoolInfo.name || getRowValue(row, ['School Name', 'School', 'school']);
                     const gradeErr = validateGradeForSchool(gradeStr, schoolName);
                     if (gradeErr) { errors.push({ row: rn, message: gradeErr }); continue; }
-                    const grade = await findGradeByName(gradeStr, schoolId);
-                    if (!grade) { errors.push({ row: rn, message: `Grade level "${gradeStr}" was not found under ${schoolName}.` }); continue; }
-                    const gradeId = grade.id;
+                    let gradeId = await resolveGrade(gradeStr, schoolId);
                     const sectionName = getRowValue(row, ['Section Name', 'Section', 'section']);
                     if (!sectionName) { errors.push({ row: rn, message: 'Section Name is required for adviser assignment.' }); continue; }
-                    const section = await findSectionByName(sectionName, schoolId, gradeId);
-                    if (!section) { errors.push({ row: rn, message: `Section "${sectionName}" was not found under ${schoolName} / ${grade.name}.` }); continue; }
-                    const sectionId = section.id;
+                    const sectionId = await resolveSection(sectionName, schoolId, gradeId, { allowSchoolWideFallback: true });
+                    const [[sectionMeta]] = await db.query(
+                        'SELECT grade_level_id FROM sections WHERE id = ? LIMIT 1',
+                        [sectionId]
+                    );
+                    if (sectionMeta && sectionMeta.grade_level_id && Number(sectionMeta.grade_level_id) !== Number(gradeId)) {
+                        gradeId = sectionMeta.grade_level_id;
+                    }
                     const contact = getRowValue(row, ['Contact Number', 'Contact', 'Phone', 'Mobile', 'contact_number']) || null;
                     const email = getRowValue(row, ['Email', 'Email Address', 'email']) || null;
                     const adviserName = displayName(fn, ln, mn);
