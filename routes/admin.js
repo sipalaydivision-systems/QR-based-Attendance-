@@ -73,16 +73,50 @@ function getRowValue(row, keys) {
     for (const key of keys) {
         if (row[key] != null && String(row[key]).trim() !== '') return String(row[key]).trim();
     }
-    const normalizedKeys = Object.keys(row).reduce((acc, key) => {
-        acc[normalizeLookupKey(key)] = key;
-        return acc;
-    }, {});
+    const simplifyHeader = (value) => normalizeLookupKey(
+        String(value || '')
+            .replace(/\([^)]*\)/g, ' ')
+            .replace(/\[[^\]]*\]/g, ' ')
+            .replace(/\{[^}]*\}/g, ' ')
+    );
+
+    const rowKeys = Object.keys(row).map(rawKey => ({
+        rawKey,
+        norm: normalizeLookupKey(rawKey),
+        simple: simplifyHeader(rawKey)
+    }));
+
+    const candidates = [];
     for (const key of keys) {
-        const actualKey = normalizedKeys[normalizeLookupKey(key)];
-        if (actualKey && row[actualKey] != null && String(row[actualKey]).trim() !== '') {
-            return String(row[actualKey]).trim();
+        const norm = normalizeLookupKey(key);
+        const simple = simplifyHeader(key);
+        if (norm) candidates.push(norm);
+        if (simple && simple !== norm) candidates.push(simple);
+    }
+
+    const uniqueCandidates = [...new Set(candidates)];
+
+    // Exact normalized / simplified match.
+    for (const candidate of uniqueCandidates) {
+        const matched = rowKeys.find(item => item.norm === candidate || item.simple === candidate);
+        if (matched && row[matched.rawKey] != null && String(row[matched.rawKey]).trim() !== '') {
+            return String(row[matched.rawKey]).trim();
         }
     }
+
+    // Partial fallback for headers with helper text attached to the field name.
+    for (const candidate of uniqueCandidates) {
+        const matched = rowKeys.find(item =>
+            item.norm.startsWith(candidate + ' ')
+            || item.simple.startsWith(candidate + ' ')
+            || item.norm.includes(' ' + candidate + ' ')
+            || item.simple.includes(' ' + candidate + ' ')
+        );
+        if (matched && row[matched.rawKey] != null && String(row[matched.rawKey]).trim() !== '') {
+            return String(row[matched.rawKey]).trim();
+        }
+    }
+
     return '';
 }
 
