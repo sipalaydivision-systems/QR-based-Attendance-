@@ -1755,25 +1755,33 @@ class _WeeklyAbsenceAnalyticsState extends State<WeeklyAbsenceAnalytics> {
           ),
         ),
         const SizedBox(height: 10),
-        Row(
-          children: [
-            for (var i = 0; i < week.length; i++) ...[
-              Expanded(
-                child: WeekDayAbsenceTile(
-                  label: '${week[i]['label']}',
-                  dayNumber: '${week[i]['day']}',
-                  absent: intValue(week[i]['absent']),
-                  isSchoolDay: week[i]['isSchoolDay'] == true,
-                  maxAbsent: maxAbsent,
-                  onTap: () => widget.onDayTap(
-                    '${week[i]['date']}',
-                    week[i]['isSchoolDay'] == true,
+        LayoutBuilder(
+          builder: (context, constraints) {
+            const tileGap = 6.0;
+            final tileWidth = (constraints.maxWidth - (tileGap * 4)) / 5;
+            final compact = tileWidth < 58;
+            return Row(
+              children: [
+                for (var i = 0; i < week.length; i++) ...[
+                  Expanded(
+                    child: WeekDayAbsenceTile(
+                      label: '${week[i]['label']}',
+                      dayNumber: '${week[i]['day']}',
+                      absent: intValue(week[i]['absent']),
+                      isSchoolDay: week[i]['isSchoolDay'] == true,
+                      maxAbsent: maxAbsent,
+                      compact: compact,
+                      onTap: () => widget.onDayTap(
+                        '${week[i]['date']}',
+                        week[i]['isSchoolDay'] == true,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              if (i < week.length - 1) const SizedBox(width: 8),
-            ],
-          ],
+                  if (i < week.length - 1) const SizedBox(width: tileGap),
+                ],
+              ],
+            );
+          },
         ),
       ],
     );
@@ -1788,6 +1796,7 @@ class WeekDayAbsenceTile extends StatelessWidget {
     required this.absent,
     required this.isSchoolDay,
     required this.maxAbsent,
+    required this.compact,
     required this.onTap,
   });
   final String label;
@@ -1795,73 +1804,111 @@ class WeekDayAbsenceTile extends StatelessWidget {
   final int absent;
   final bool isSchoolDay;
   final int maxAbsent;
+  final bool compact;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final normalized = isSchoolDay
+        ? (absent / math.max(1, maxAbsent)).clamp(0.0, 1.0).toDouble()
+        : 0.0;
+    final trackHeight = compact ? 72.0 : 82.0;
+    final minBarHeight = compact ? 38.0 : 44.0;
     final barHeight = isSchoolDay
-        ? (24 + (absent / math.max(1, maxAbsent)) * 30).toDouble()
-        : 24.0;
+        ? minBarHeight + ((trackHeight - minBarHeight) * normalized)
+        : minBarHeight;
     final barLabel = isSchoolDay ? '$absent' : '-';
+    final barWidth = compact ? 24.0 : 28.0;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(16),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(8, 9, 8, 10),
+        padding: EdgeInsets.fromLTRB(6, compact ? 8 : 10, 6, compact ? 8 : 10),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FBF9),
-          borderRadius: BorderRadius.circular(14),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: const Color(0xFFDCE6E1)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF111827).withValues(alpha: .03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
           children: [
             Text(
               label,
-              style: const TextStyle(
-                fontSize: 11,
+              style: TextStyle(
+                fontSize: compact ? 10 : 11,
                 color: Color(0xFF64726B),
                 fontWeight: FontWeight.w800,
               ),
             ),
             Text(
               dayNumber,
-              style: const TextStyle(
-                fontSize: 13,
+              style: TextStyle(
+                fontSize: compact ? 12 : 13,
                 color: Color(0xFF1F2937),
                 fontWeight: FontWeight.w900,
               ),
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: compact ? 5 : 7),
             SizedBox(
-              height: 58,
-              child: Align(
+              height: trackHeight,
+              width: compact ? 30 : 34,
+              child: Stack(
                 alignment: Alignment.bottomCenter,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 350),
-                  width: 22,
-                  height: barHeight,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: isSchoolDay
-                        ? const Color(0xFFDC2626).withValues(alpha: .88)
-                        : const Color(0xFFCBD5D1),
-                    borderRadius: BorderRadius.circular(8),
+                children: [
+                  Container(
+                    width: barWidth,
+                    height: trackHeight,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0F4F2),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
                   ),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      barLabel,
-                      style: TextStyle(
-                        color: isSchoolDay
-                            ? Colors.white
-                            : const Color(0xFF6B7280),
-                        fontWeight: FontWeight.w900,
-                        fontSize: 10.5,
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 320),
+                    curve: Curves.easeOutCubic,
+                    width: barWidth,
+                    height: barHeight,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: isSchoolDay
+                          ? const Color(0xFFDC2626)
+                          : const Color(0xFFC4CFCA),
+                      borderRadius: BorderRadius.circular(99),
+                      boxShadow: isSchoolDay
+                          ? [
+                              BoxShadow(
+                                color: const Color(
+                                  0xFFDC2626,
+                                ).withValues(alpha: .22),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        barLabel,
+                        style: TextStyle(
+                          color: isSchoolDay
+                              ? Colors.white
+                              : const Color(0xFF6B7280),
+                          fontWeight: FontWeight.w900,
+                          fontSize: compact ? 11 : 12,
+                          height: 1,
+                        ),
                       ),
                     ),
                   ),
-                ),
+                ],
               ),
             ),
           ],
@@ -3124,6 +3171,18 @@ class _AlertsPageState extends State<AlertsPage> {
                 absenceTitle(widget.flags.length),
                 absenceBody(row, count: widget.flags.length),
                 payload: absenceNotificationPayload(widget.flags),
+                actions: const [
+                  AndroidNotificationAction(
+                    'view',
+                    'View',
+                    showsUserInterface: true,
+                  ),
+                  AndroidNotificationAction(
+                    'contact_adviser',
+                    'Contact Adviser',
+                    showsUserInterface: true,
+                  ),
+                ],
               );
             },
             icon: const Icon(Icons.notifications_active),
@@ -3157,14 +3216,79 @@ class FlagTile extends StatelessWidget {
     final schoolName = '${row['school_name'] ?? '-'}';
     final grade = '${row['grade_name'] ?? '-'}';
     final section = '${row['section_name'] ?? '-'}';
-    return RecordTile(
-      title: '${row['name'] ?? 'Student'}',
-      subtitle: '$schoolName • $grade • $section',
-      meta: '',
-      metaMaxLines: 1,
-      color: const Color(0xFFF97316),
-      leading: const SizedBox.shrink(),
-      onTap: () => _openStudentDetails(context),
+    final summary = '$schoolName | $grade - $section';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.white,
+        elevation: 0,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: () => _openStudentDetails(context),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFDDE7E2)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEE2E2),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: const Icon(
+                    Icons.person_rounded,
+                    color: Color(0xFFDC2626),
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${row['name'] ?? 'Student'}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF111827),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          height: 1.08,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        summary,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF5C6D66),
+                          fontSize: 12.8,
+                          fontWeight: FontWeight.w700,
+                          height: 1.25,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Color(0xFFF97316),
+                  size: 22,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -3189,12 +3313,12 @@ class FlagTile extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => DraggableScrollableSheet(
-        initialChildSize: .82,
-        minChildSize: .56,
-        maxChildSize: .92,
+        initialChildSize: .84,
+        minChildSize: .58,
+        maxChildSize: .94,
         builder: (context, controller) => Container(
           decoration: const BoxDecoration(
-            color: Color(0xFFF5F7F6),
+            color: Color(0xFFFDFEFD),
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: ListView(
@@ -3230,8 +3354,20 @@ class FlagTile extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              PremiumCard(
+              Container(
                 padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFDDE7E2)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF111827).withValues(alpha: .04),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
                 child: Column(
                   children: [
                     _detailLine('Student Name', studentName),
@@ -3243,8 +3379,8 @@ class FlagTile extends StatelessWidget {
                     ),
                     _detailLine('Grade Level', grade),
                     _detailLine('Section', section),
-                    _detailLine('Number of Days Absent', daysAbsent),
                     _detailLine('Attendance Status', status),
+                    _detailLine('Number of Days Absent', daysAbsent),
                     _detailLine('Adviser Name', adviserName),
                     _detailLine('Adviser Contact Number', adviserPhone),
                     _detailLine('Adviser Email Address', adviserEmail),
@@ -3260,34 +3396,46 @@ class FlagTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _contactActionButton(
-                      icon: Icons.call_rounded,
-                      label: 'Call',
-                      filled: true,
-                      onPressed: () => contactAdviserViaCall(context, row),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _contactActionButton(
-                      icon: Icons.sms_rounded,
-                      label: 'SMS',
-                      onPressed: () => contactAdviserAlertViaSms(context, row),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _contactActionButton(
-                      icon: Icons.email_rounded,
-                      label: 'Email',
-                      onPressed: () =>
-                          contactAdviserAlertViaEmail(context, row),
-                    ),
-                  ),
-                ],
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final wide = constraints.maxWidth >= 520;
+                  final buttonWidth = wide
+                      ? (constraints.maxWidth - 16) / 3
+                      : (constraints.maxWidth - 8) / 2;
+                  return Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      SizedBox(
+                        width: buttonWidth,
+                        child: _contactActionButton(
+                          icon: Icons.call_rounded,
+                          label: 'Call Adviser',
+                          filled: true,
+                          onPressed: () => contactAdviserViaCall(context, row),
+                        ),
+                      ),
+                      SizedBox(
+                        width: buttonWidth,
+                        child: _contactActionButton(
+                          icon: Icons.sms_rounded,
+                          label: 'Send SMS',
+                          onPressed: () =>
+                              contactAdviserAlertViaSms(context, row),
+                        ),
+                      ),
+                      SizedBox(
+                        width: buttonWidth,
+                        child: _contactActionButton(
+                          icon: Icons.email_rounded,
+                          label: 'Send Email',
+                          onPressed: () =>
+                              contactAdviserAlertViaEmail(context, row),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
               if (openContactActions)
                 const Padding(
@@ -3314,30 +3462,29 @@ class FlagTile extends StatelessWidget {
   static Widget _schoolNameWithLogo(
     String schoolName,
     Map<String, dynamic> row,
-  ) => SizedBox(
-    width: 190,
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        SchoolLogoAvatar({
-          'name': schoolName,
-          'school_logo': row['school_logo'],
-          'logo': row['school_logo'],
-        }, size: 28),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            schoolName,
-            textAlign: TextAlign.right,
-            style: const TextStyle(
-              color: Color(0xFF101C18),
-              fontWeight: FontWeight.w800,
-              fontSize: 13,
-            ),
+  ) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      SchoolLogoAvatar({
+        'name': schoolName,
+        'school_logo': row['school_logo'],
+        'logo': row['school_logo'],
+      }, size: 28),
+      const SizedBox(width: 8),
+      Flexible(
+        child: Text(
+          schoolName,
+          textAlign: TextAlign.right,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Color(0xFF101C18),
+            fontWeight: FontWeight.w800,
+            fontSize: 13,
           ),
         ),
-      ],
-    ),
+      ),
+    ],
   );
 
   static Widget _contactActionButton({
@@ -3346,27 +3493,37 @@ class FlagTile extends StatelessWidget {
     required VoidCallback onPressed,
     bool filled = false,
   }) => SizedBox(
-    height: 46,
+    height: 48,
     child: filled
         ? FilledButton.icon(
             onPressed: onPressed,
-            icon: Icon(icon, size: 16),
+            icon: Icon(icon, size: 17),
             label: Text(label),
             style: FilledButton.styleFrom(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              textStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           )
         : OutlinedButton.icon(
             onPressed: onPressed,
-            icon: Icon(icon, size: 16),
+            icon: Icon(icon, size: 17),
             label: Text(label),
             style: OutlinedButton.styleFrom(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
               side: const BorderSide(color: Color(0xFFBFD2CA)),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              textStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
   );
@@ -4348,7 +4505,7 @@ String absenceBody(Map<String, dynamic> row, {int count = 1}) {
       '${row['grade_name'] ?? '-'} - ${row['section_name'] ?? '-'}';
   final school = '${row['school_name'] ?? '-'}';
   final days = absenceDays(row);
-  return '$student\n$gradeSection • $school\n$days Absent';
+  return '$student\n$gradeSection | $school\n$days Absent';
 }
 
 String absenceNotificationPayload(List flags) {
