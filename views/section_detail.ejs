@@ -290,6 +290,8 @@ var gradeId = <%= typeof gradeId !== 'undefined' ? gradeId : 0 %>;
 var allStudents = [];
 var attendanceMap = {};
 var currentAdviser = 'No adviser assigned';
+var currentIsSchoolDay = true;
+var currentDateIsFuture = false;
 var appSuffix = window.location.search.indexOf('app=1') !== -1 ? '?app=1' : '';
 
 // Set today's date
@@ -335,6 +337,8 @@ async function loadData() {
         } else {
             banner.style.display = 'none';
         }
+        currentIsSchoolDay = !!(sdRes && sdRes.isSchoolDay);
+        currentDateIsFuture = todayStr > new Date().toISOString().slice(0, 10);
 
         allStudents = stuRes;
         var sec = secRes.find(function(s){return s.id === sectionId;});
@@ -388,6 +392,8 @@ async function loadData() {
                 else if (att.status === 'late') late++;
                 else if (att.status === 'absent') absent++;
                 else present++;
+            } else if (currentIsSchoolDay && !currentDateIsFuture) {
+                absent++;
             }
         });
         document.getElementById('kTotal').textContent = totalActive;
@@ -420,7 +426,7 @@ function renderStudents() {
     document.getElementById('studentBody').innerHTML = visible.map(function(s, idx) {
         var isStudentInactive = s.status === 'inactive';
         var att = attendanceMap[s.id];
-        var status = isStudentInactive ? 'inactive' : (att ? att.status : 'not recorded');
+        var status = isStudentInactive ? 'inactive' : (att ? att.status : ((currentIsSchoolDay && !currentDateIsFuture) ? 'absent' : 'not recorded'));
         var isAbsent = (status === 'absent');
         var rowClass = isStudentInactive ? ' class="row-inactive"' : (isAbsent ? ' class="row-absent"' : '');
         var initial = s.firstname ? s.firstname[0].toUpperCase() : '?';
@@ -434,6 +440,8 @@ function renderStudents() {
         }
         if (att && att.time_out) {
             timeOutHtml = '<span style="color:var(--primary);font-weight:500"><i class="fa fa-sign-out-alt" style="margin-right:4px"></i>' + formatTime12(att.time_out) + '</span>';
+        } else if (att && att.time_in) {
+            timeOutHtml = '<span style="color:var(--warning);font-weight:600"><i class="fa fa-hourglass-half" style="margin-right:4px"></i>Pending Time Out</span>';
         }
 
         var statusLabel = status.charAt(0).toUpperCase() + status.slice(1);

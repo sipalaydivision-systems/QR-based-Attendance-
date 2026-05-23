@@ -2030,6 +2030,7 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
     final lrn = '${row['lrn'] ?? '-'}';
     final adviser = '${row['adviser'] ?? '-'}';
     final status = '${row['attendance_status'] ?? '-'}';
+    final monitoring = '${row['monitoring_status'] ?? ''}'.trim();
     final absentDays = intValue(row['absent_days']);
     final absentFromDate = '${row['absent_from_date'] ?? ''}'.trim();
     final absentInfo = absentDays > 0
@@ -2075,7 +2076,7 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
             ),
             const SizedBox(height: 2),
             Text(
-              'Status: $status | Date: ${readableDate(widget.targetDate)}',
+              'Status: $status${monitoring.isNotEmpty ? ' | $monitoring' : ''} | Date: ${readableDate(widget.targetDate)}',
               style: TextStyle(
                 color: status == 'Absent'
                     ? const Color(0xFFB91C1C)
@@ -2405,11 +2406,15 @@ class AttendancePage extends StatelessWidget {
     subtitle: 'Live time-in and time-out records for today.',
     future: api.list('/api/attendance?date=${date()}'),
     empty: 'No attendance records yet today.',
-    builder: (row) => RecordTile(
-      title: '${row['person_name'] ?? 'Unknown'}',
-      subtitle: '${row['person_type'] ?? 'person'}',
-      meta: 'In: ${row['time_in'] ?? '--'} | Out: ${row['time_out'] ?? '--'}',
-    ),
+    builder: (row) {
+      final monitoring = '${row['monitoring_status'] ?? ''}'.trim();
+      final out = '${row['time_out'] ?? ''}'.trim();
+      return RecordTile(
+        title: '${row['person_name'] ?? 'Unknown'}',
+        subtitle: '${row['person_type'] ?? 'person'}',
+        meta: 'In: ${row['time_in'] ?? '--'} | Out: ${out.isNotEmpty ? out : (monitoring.isNotEmpty ? monitoring : '--')}',
+      );
+    },
   );
 }
 
