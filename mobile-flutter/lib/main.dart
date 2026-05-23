@@ -4244,17 +4244,6 @@ String? adviserPhoneFromRow(Map<String, dynamic> row) {
   return null;
 }
 
-String adviserContactSummary(Map<String, dynamic> row) {
-  final student = '${row['name'] ?? 'Student'}';
-  final school = '${row['school_name'] ?? '-'}';
-  final grade = '${row['grade_name'] ?? '-'}';
-  final section = '${row['section_name'] ?? '-'}';
-  final lrn = '${row['lrn'] ?? '-'}';
-  final days = absenceDays(row);
-  final adviser = '${row['adviser'] ?? 'No adviser assigned'}';
-  return 'Student: $student\nSchool: $school\nGrade: $grade\nSection: $section\nLRN: $lrn\nDays absent: $days\nAdviser: $adviser';
-}
-
 String adviserMessage(Map<String, dynamic> row) {
   final student = '${row['name'] ?? 'Student'}';
   final school = '${row['school_name'] ?? '-'}';
@@ -4286,24 +4275,29 @@ String alertEmailBody(Map<String, dynamic> row) {
       'Adviser Name: $adviserName';
 }
 
-Future<void> _showMissingContactDialog(
-  BuildContext context,
-  Map<String, dynamic> row,
-) async {
+Future<void> _showContactError(BuildContext context, String message) async {
   if (!context.mounted) return;
-  await showDialog(
-    context: context,
-    builder: (_) => AlertDialog(
-      title: const Text('Please contact adviser'),
-      content: Text(adviserContactSummary(row)),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Close'),
-        ),
-      ],
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  messenger?.hideCurrentSnackBar();
+  messenger?.showSnackBar(
+    SnackBar(
+      content: Text(message),
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 3),
     ),
   );
+}
+
+Future<void> _launchContactUri(
+  BuildContext context,
+  Uri uri, {
+  required String onFailure,
+}) async {
+  final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (!launched) {
+    if (!context.mounted) return;
+    await _showContactError(context, onFailure);
+  }
 }
 
 Future<void> contactAdviserViaCall(
@@ -4312,16 +4306,14 @@ Future<void> contactAdviserViaCall(
 ) async {
   final phone = adviserPhoneFromRow(row);
   if (phone == null) {
-    await _showMissingContactDialog(context, row);
+    await _showContactError(context, 'Adviser contact number is unavailable.');
     return;
   }
-  final uri = Uri(scheme: 'tel', path: phone);
-  if (await canLaunchUrl(uri)) {
-    await launchUrl(uri);
-    return;
-  }
-  if (!context.mounted) return;
-  await _showMissingContactDialog(context, row);
+  await _launchContactUri(
+    context,
+    Uri(scheme: 'tel', path: phone),
+    onFailure: 'Unable to open the phone dialer.',
+  );
 }
 
 Future<void> contactAdviserViaSms(
@@ -4330,17 +4322,14 @@ Future<void> contactAdviserViaSms(
 ) async {
   final phone = adviserPhoneFromRow(row);
   if (phone == null) {
-    await _showMissingContactDialog(context, row);
+    await _showContactError(context, 'Adviser contact number is unavailable.');
     return;
   }
-  final body = Uri.encodeComponent(adviserMessage(row));
-  final uri = Uri.parse('sms:$phone?body=$body');
-  if (await canLaunchUrl(uri)) {
-    await launchUrl(uri);
-    return;
-  }
-  if (!context.mounted) return;
-  await _showMissingContactDialog(context, row);
+  await _launchContactUri(
+    context,
+    Uri(scheme: 'sms', path: phone),
+    onFailure: 'Unable to open the SMS app.',
+  );
 }
 
 Future<void> contactAdviserViaEmail(
@@ -4349,23 +4338,21 @@ Future<void> contactAdviserViaEmail(
 ) async {
   final email = adviserEmailFromRow(row);
   if (email == null) {
-    await _showMissingContactDialog(context, row);
+    await _showContactError(context, 'Adviser email address is unavailable.');
     return;
   }
-  final uri = Uri(
-    scheme: 'mailto',
-    path: email,
-    queryParameters: {
-      'subject': 'Attendance Alert - ${row['name'] ?? 'Student'}',
-      'body': adviserMessage(row),
-    },
+  await _launchContactUri(
+    context,
+    Uri(
+      scheme: 'mailto',
+      path: email,
+      queryParameters: {
+        'subject': 'Attendance Alert - ${row['name'] ?? 'Student'}',
+        'body': adviserMessage(row),
+      },
+    ),
+    onFailure: 'Unable to open the email app.',
   );
-  if (await canLaunchUrl(uri)) {
-    await launchUrl(uri);
-    return;
-  }
-  if (!context.mounted) return;
-  await _showMissingContactDialog(context, row);
 }
 
 Future<void> contactAdviserAlertViaSms(
@@ -4374,16 +4361,14 @@ Future<void> contactAdviserAlertViaSms(
 ) async {
   final phone = adviserPhoneFromRow(row);
   if (phone == null) {
-    await _showMissingContactDialog(context, row);
+    await _showContactError(context, 'Adviser contact number is unavailable.');
     return;
   }
-  final uri = Uri.parse('sms:$phone');
-  if (await canLaunchUrl(uri)) {
-    await launchUrl(uri);
-    return;
-  }
-  if (!context.mounted) return;
-  await _showMissingContactDialog(context, row);
+  await _launchContactUri(
+    context,
+    Uri(scheme: 'sms', path: phone),
+    onFailure: 'Unable to open the SMS app.',
+  );
 }
 
 Future<void> contactAdviserAlertViaEmail(
@@ -4392,23 +4377,21 @@ Future<void> contactAdviserAlertViaEmail(
 ) async {
   final email = adviserEmailFromRow(row);
   if (email == null) {
-    await _showMissingContactDialog(context, row);
+    await _showContactError(context, 'Adviser email address is unavailable.');
     return;
   }
-  final uri = Uri(
-    scheme: 'mailto',
-    path: email,
-    queryParameters: {
-      'subject': alertEmailSubject(),
-      'body': alertEmailBody(row),
-    },
+  await _launchContactUri(
+    context,
+    Uri(
+      scheme: 'mailto',
+      path: email,
+      queryParameters: {
+        'subject': alertEmailSubject(),
+        'body': alertEmailBody(row),
+      },
+    ),
+    onFailure: 'Unable to open the email app.',
   );
-  if (await canLaunchUrl(uri)) {
-    await launchUrl(uri);
-    return;
-  }
-  if (!context.mounted) return;
-  await _showMissingContactDialog(context, row);
 }
 
 Future<void> notifyAbsenceFlags(List flags, SharedPreferences prefs) async {
