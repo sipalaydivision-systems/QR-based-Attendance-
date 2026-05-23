@@ -417,7 +417,7 @@ async function loadAdmins() {
             var lastLogin = u.last_login ? new Date(u.last_login).toLocaleString() : '-';
             var actions = '<button class="action-btn edit" onclick="editAdmin('+u.id+')" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>';
             if (u.role !== 'super_admin' || data.filter(function(x){return x.role==='super_admin'}).length > 1) {
-                actions += ' <button class="action-btn delete" onclick="deleteAdmin('+u.id+')" title="Delete"><i class="fa-solid fa-trash-can"></i></button>';
+                actions += ' <button class="action-btn delete" onclick="deleteAdmin('+u.id+')" title="Deactivate"><i class="fa-solid fa-user-slash"></i></button>';
             }
             return '<tr><td>'+u.username+'</td><td>'+u.fullname+'</td><td>'+roleBadge+'</td><td>'+school+'</td><td>'+lastLogin+'</td><td>'+actions+'</td></tr>';
         }).join('');
@@ -485,7 +485,7 @@ async function saveAdmin() {
 }
 
 async function deleteAdmin(id) {
-    if (!confirm('Delete this admin account?')) return;
+    if (!confirm('Deactivate this admin account? The user will no longer be able to sign in.')) return;
     await fetch('/api/users/' + id, { method: 'DELETE' });
     loadAdmins();
 }

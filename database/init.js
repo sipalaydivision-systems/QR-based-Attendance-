@@ -57,6 +57,7 @@ async function init() {
         await ensureColumn('teachers', 'grade_level_id', 'INT NULL AFTER email');
         await ensureColumn('teachers', 'section_id', 'INT NULL AFTER grade_level_id');
         await ensureColumn('sections', 'adviser_teacher_id', 'INT NULL AFTER adviser');
+        await ensureColumn('students', 'active_from', 'DATE NULL AFTER qr_code');
         await ensureColumnDefinition('schools', 'logo', 'MEDIUMTEXT');
         await ensureColumnDefinition('settings', 'setting_value', 'MEDIUMTEXT');
 

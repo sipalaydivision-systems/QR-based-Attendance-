@@ -127,14 +127,14 @@ async function findSectionByName(sectionName, schoolId, gradeLevelId) {
 
 async function findTeacherMatch(empId, firstname, lastname, middlename, schoolId) {
     if (empId) {
-        const [byEmployeeId] = await db.query('SELECT id, status FROM teachers WHERE employee_id = ?', [empId]);
+        const [byEmployeeId] = await db.query('SELECT id, status, section_id FROM teachers WHERE employee_id = ?', [empId]);
         if (byEmployeeId.length > 0) return byEmployeeId[0];
     }
 
     const incomingName = normalizePersonName(fullName(firstname, lastname, middlename));
     if (!incomingName || !schoolId) return null;
     const [teachers] = await db.query(
-        'SELECT id, firstname, lastname, middlename, status FROM teachers WHERE school_id = ? AND status != ?',
+        'SELECT id, firstname, lastname, middlename, status, section_id FROM teachers WHERE school_id = ? AND status != ?',
         [schoolId, 'deleted']
     );
     return teachers.find(teacher =>
@@ -566,6 +566,10 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
     const category = req.body.category || 'student'; // student, teacher, shs_student
     const parsedDefaultSchoolId = parseInt(req.body.school_id, 10);
     const defaultSchoolId = Number.isFinite(parsedDefaultSchoolId) ? parsedDefaultSchoolId : null;
+    const requestedActiveFrom = String(req.body.active_from || '').trim();
+    const importActiveFrom = /^\d{4}-\d{2}-\d{2}$/.test(requestedActiveFrom)
+        ? requestedActiveFrom
+        : new Date().toISOString().slice(0, 10);
     const errors = [];
     let imported = 0;
     let updated = 0;
@@ -729,6 +733,12 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
 
                     const existing = await findTeacherMatch(empId, fn, ln, mn, schoolId);
                     if (existing) {
+                        if (existing.section_id && Number(existing.section_id) !== Number(sectionId)) {
+                            await db.query(
+                                'UPDATE sections SET adviser = NULL, adviser_teacher_id = NULL WHERE id = ? AND adviser_teacher_id = ?',
+                                [existing.section_id, existing.id]
+                            );
+                        }
                         await db.query(
                             `UPDATE teachers
                              SET employee_id=?, firstname=?, lastname=?, middlename=?, contact=?, email=?,
@@ -790,8 +800,8 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                         const [existing] = await db.query('SELECT id FROM students WHERE lrn = ?', [lrn]);
                         if (existing.length > 0) {
                             await db.query(
-                                'UPDATE students SET firstname=?, lastname=?, middlename=?, school_id=?, grade_level_id=?, section_id=?, guardian_contact=?, category=?, status=? WHERE id=?',
-                                [fn, ln, mn || null, schoolId || null, gradeId || null, sectionId || null, guardianContact, category, importedStatus, existing[0].id]
+                                'UPDATE students SET firstname=?, lastname=?, middlename=?, school_id=?, grade_level_id=?, section_id=?, guardian_contact=?, category=?, active_from=?, status=? WHERE id=?',
+                                [fn, ln, mn || null, schoolId || null, gradeId || null, sectionId || null, guardianContact, category, importActiveFrom, importedStatus, existing[0].id]
                             );
                             updated++;
                             continue;
@@ -799,8 +809,8 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                     }
                     const qr_code = lrn ? 'STU-' + lrn : 'STU-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);
                     await db.query(
-                        'INSERT INTO students (lrn, firstname, lastname, middlename, school_id, grade_level_id, section_id, guardian_contact, qr_code, category, status) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-                        [lrn, fn, ln, mn || null, schoolId || null, gradeId || null, sectionId || null, guardianContact, qr_code, category, importedStatus]
+                        'INSERT INTO students (lrn, firstname, lastname, middlename, school_id, grade_level_id, section_id, guardian_contact, qr_code, category, active_from, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+                        [lrn, fn, ln, mn || null, schoolId || null, gradeId || null, sectionId || null, guardianContact, qr_code, category, importActiveFrom, importedStatus]
                     );
                     imported++;
                 }

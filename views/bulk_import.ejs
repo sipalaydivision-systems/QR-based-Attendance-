@@ -51,8 +51,9 @@
                     <div id="fileName" style="margin-top:0.5rem;font-size:0.8125rem;color:var(--gray-600);"></div>
                 </div>
                 <div class="form-group">
-                    <label>Active From</label>
+                    <label>Attendance Effective Date</label>
                     <input type="date" id="importDate" class="form-control">
+                    <small style="color:var(--gray-500);">Newly imported students are excluded from absence counting on this date to prevent false same-day absences.</small>
                 </div>
                 <button type="submit" class="btn btn-primary btn-block" id="previewBtn"><i class="fa-solid fa-magnifying-glass"></i> Preview Data</button>
             </form>
@@ -176,12 +177,14 @@ async function doPreview(e) {
     var cat = currentCategory === 'students' ? 'student' : currentCategory === 'shs_students' ? 'shs_student' : 'teacher';
     formData.append('category', cat);
     formData.append('school_id', document.getElementById('importSchool').value);
+    formData.append('active_from', document.getElementById('importDate').value);
 
     // Save for confirm step
     savedFormData = new FormData();
     savedFormData.append('file', file);
     savedFormData.append('category', cat);
     savedFormData.append('school_id', document.getElementById('importSchool').value);
+    savedFormData.append('active_from', document.getElementById('importDate').value);
 
     try {
         var res = await fetch('/admin/bulk-import-preview', { method: 'POST', body: formData });
@@ -220,7 +223,7 @@ function showPreview(data) {
         tags += '<span class="preview-tag">Section: <strong>From file</strong></span>';
     }
     tags += '<span class="preview-tag">Total Rows: <strong>' + data.total + '</strong></span>';
-    tags += '<span class="preview-tag">Active From: <strong>' + dateVal + '</strong></span>';
+    tags += '<span class="preview-tag">Attendance Effective Date: <strong>' + dateVal + '</strong></span>';
     document.getElementById('previewTags').innerHTML = tags;
 
     // Table header

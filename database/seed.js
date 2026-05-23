@@ -86,8 +86,14 @@ async function seed() {
         await db.query(
             `INSERT INTO settings (setting_key, setting_value)
              VALUES ('system_name', ?)
-             ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)`,
-            ['School Attendance QR based Systems']
+             ON DUPLICATE KEY UPDATE setting_value = setting_value`,
+            ['Edutrack']
+        );
+        await db.query(
+            `INSERT INTO settings (setting_key, setting_value)
+             VALUES ('division_name', ?)
+             ON DUPLICATE KEY UPDATE setting_value = setting_value`,
+            ['Schools Division of Sipalay City']
         );
 
         const [[sampleDeps]] = await db.query(

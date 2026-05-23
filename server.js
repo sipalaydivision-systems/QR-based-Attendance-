@@ -116,8 +116,8 @@ app.get('/app', (req, res) => {
 
 app.get('/api/app-info', (req, res) => {
     return res.json({
-        app: 'school-attendance-qr-based-systems',
-        name: 'School Attendance QR based Systems',
+        app: 'edutrack',
+        name: 'Edutrack',
         baseUrl: getPublicAppBaseUrl(req)
     });
 });
@@ -151,7 +151,7 @@ app.get('/download/mobile-app', (req, res) => {
             error: 'The APK file has not been uploaded yet.'
         });
     }
-    return res.download(apkPath, 'School-Attendance-Division.apk');
+    return res.download(apkPath, 'Edutrack-Mobile.apk');
 });
 
 // 404
@@ -174,5 +174,5 @@ app.use((err, req, res, _next) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`School Attendance QR based Systems running on port ${PORT}`);
+    console.log(`Edutrack running on port ${PORT}`);
 });

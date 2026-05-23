@@ -1,4 +1,4 @@
-# School Attendance QR based Systems
+# Edutrack
 
 A full-stack QR code attendance monitoring system built with **Node.js**, **Express**, **MySQL**, and **EJS**.
 

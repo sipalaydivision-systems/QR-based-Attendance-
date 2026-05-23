@@ -95,7 +95,7 @@ async function countStudentsWithoutTimeIn(dateStr, schoolId) {
     let query = `SELECT COUNT(*) as count
         FROM students s
         WHERE s.status = 'active'
-          AND s.created_at <= CONCAT(?, ' 23:59:59')
+          AND COALESCE(s.active_from, DATE(s.created_at)) < ?
           AND NOT EXISTS (
               SELECT 1 FROM attendance a
               WHERE a.person_type = 'student'
@@ -112,6 +112,20 @@ async function countStudentsWithoutTimeIn(dateStr, schoolId) {
     return row.count || 0;
 }
 
+async function countAttendanceEligibleStudents(dateStr, schoolId) {
+    let query = `SELECT COUNT(*) as count
+        FROM students s
+        WHERE s.status = 'active'
+          AND COALESCE(s.active_from, DATE(s.created_at)) < ?`;
+    const params = [dateStr];
+    if (schoolId) {
+        query += ' AND s.school_id = ?';
+        params.push(schoolId);
+    }
+    const [[row]] = await db.query(query, params);
+    return row.count || 0;
+}
+
 async function countSectionStudentsWithoutTimeIn(dateStr, sectionId) {
     const [[section]] = await db.query('SELECT school_id FROM sections WHERE id = ? LIMIT 1', [sectionId]);
     const schoolId = section?.school_id || null;
@@ -120,7 +134,7 @@ async function countSectionStudentsWithoutTimeIn(dateStr, sectionId) {
         FROM students s
         WHERE s.status = 'active'
           AND s.section_id = ?
-          AND s.created_at <= CONCAT(?, ' 23:59:59')
+          AND COALESCE(s.active_from, DATE(s.created_at)) < ?
           AND NOT EXISTS (
               SELECT 1 FROM attendance a
               WHERE a.person_type = 'student'
@@ -129,6 +143,45 @@ async function countSectionStudentsWithoutTimeIn(dateStr, sectionId) {
                 AND a.time_in IS NOT NULL
           )`, [sectionId, dateStr, dateStr]);
     return row.count || 0;
+}
+
+function displayPersonName(firstname, lastname, middlename) {
+    return [firstname, middlename ? middlename.charAt(0) + '.' : '', lastname]
+        .filter(Boolean)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+async function validateTeacherAssignment({ teacherId, schoolId, gradeLevelId, sectionId }) {
+    if (!sectionId) return null;
+    const [[section]] = await db.query(
+        'SELECT id, name, school_id, grade_level_id, adviser_teacher_id FROM sections WHERE id = ? LIMIT 1',
+        [sectionId]
+    );
+    if (!section) return { error: 'Selected section was not found.' };
+    if (schoolId && Number(section.school_id) !== Number(schoolId)) {
+        return { error: 'Selected section does not belong to the selected school.' };
+    }
+    if (gradeLevelId && section.grade_level_id && Number(section.grade_level_id) !== Number(gradeLevelId)) {
+        return { error: 'Selected section does not belong to the selected grade level.' };
+    }
+    return { section };
+}
+
+async function syncTeacherAdviserAssignment({ teacherId, oldSectionId, newSectionId, adviserName }) {
+    if (oldSectionId && Number(oldSectionId) !== Number(newSectionId || 0)) {
+        await db.query(
+            'UPDATE sections SET adviser = NULL, adviser_teacher_id = NULL WHERE id = ? AND adviser_teacher_id = ?',
+            [oldSectionId, teacherId]
+        );
+    }
+    if (newSectionId) {
+        await db.query(
+            'UPDATE sections SET adviser = ?, adviser_teacher_id = ? WHERE id = ?',
+            [adviserName, teacherId, newSectionId]
+        );
+    }
 }
 
 async function getPreviousSchoolDay(dateStr, schoolId) {
@@ -166,7 +219,7 @@ async function getConsecutiveAbsenceFlags({ baseDate, schoolId, days = 2, includ
     const schoolDates = await getRecentSchoolDates(cappedBaseDate, schoolId, scanLimit);
     if (schoolDates.length < threshold) return [];
 
-    let studentQuery = `SELECT s.id, s.firstname, s.lastname, s.lrn, s.school_id, s.section_id, s.created_at, sc.name as school_name,
+    let studentQuery = `SELECT s.id, s.firstname, s.lastname, s.lrn, s.school_id, s.section_id, s.created_at, s.active_from, sc.name as school_name,
             sc.contact as school_contact, gl.name as grade_name, sec.name as section_name,
             COALESCE(NULLIF(sec.adviser, ''), TRIM(CONCAT_WS(' ', at.firstname, at.middlename, at.lastname))) as adviser,
             at.contact as adviser_contact,
@@ -207,16 +260,19 @@ async function getConsecutiveAbsenceFlags({ baseDate, schoolId, days = 2, includ
         return `${r.person_type}-${r.person_id}-${d}`;
     }));
 
-    function wasCreatedAfterDate(person, dateStr) {
-        if (!person.created_at) return false;
-        const createdAt = person.created_at instanceof Date ? person.created_at.toISOString().slice(0, 10) : String(person.created_at).slice(0, 10);
-        return createdAt > dateStr;
+    function wasCreatedOnOrAfterDate(person, dateStr) {
+        const effectiveValue = person.active_from || person.created_at;
+        if (!effectiveValue) return false;
+        const effectiveDate = effectiveValue instanceof Date
+            ? effectiveValue.toISOString().slice(0, 10)
+            : String(effectiveValue).slice(0, 10);
+        return effectiveDate >= dateStr;
     }
 
     function consecutiveDaysAbsent(type, person) {
         let count = 0;
         for (const d of schoolDates) {
-            if (wasCreatedAfterDate(person, d)) break;
+            if (wasCreatedOnOrAfterDate(person, d)) break;
             const key = `${type}-${person.id}-${d}`;
             if (presentSet.has(key)) break;
             count++;
@@ -480,6 +536,7 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
         );
 
         const computedAbsent = await countStudentsWithoutTimeIn(date, schoolId);
+        const eligibleStudents = await countAttendanceEligibleStudents(date, schoolId);
 
         // Teachers present today (only active teachers)
         const [presentTeachers] = await db.query(
@@ -506,13 +563,15 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
 
         const breakdown = [];
         for (const s of schoolBreakdown) {
+            const eligible = await countAttendanceEligibleStudents(date, s.id);
             breakdown.push({
                 id: s.id,
                 name: s.name,
                 enrollment: s.enrollment,
+                attendance_eligible_students: Math.max(eligible, s.present || 0),
                 present: s.present,
                 absent: await countStudentsWithoutTimeIn(date, s.id),
-                rate: s.enrollment > 0 ? Math.min(100, Math.round((s.present / s.enrollment) * 100)) : 0,
+                rate: Math.max(eligible, s.present || 0) > 0 ? Math.min(100, Math.round((s.present / Math.max(eligible, s.present || 0)) * 100)) : 0,
                 teachers_total: s.teachers_total || 0,
                 teachers_present: s.teachers_present || 0,
                 teacher_rate: s.teachers_total > 0 ? Math.min(100, Math.round((s.teachers_present / s.teachers_total) * 100)) : 0
@@ -521,6 +580,7 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
 
         const totalActive = activeStudents[0].count;
         const totalPresent = presentStudents[0].count;
+        const attendanceDenominator = Math.max(eligibleStudents, totalPresent);
 
         // Students timed out today (only active students)
         const [timedOutStudents] = await db.query(
@@ -556,13 +616,14 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
             total_schools: schoolRows[0].count,
             total_students: allStudents[0].count,
             active_students: totalActive,
+            attendance_eligible_students: attendanceDenominator,
             total_teachers: teacherRows[0].count,
             students_present: totalPresent,
             students_absent: computedAbsent,
             students_timed_out: timedOutStudents[0].count,
             teachers_present: presentTeachers[0].count,
             teachers_absent: Math.max(0, teacherRows[0].count - presentTeachers[0].count),
-            attendance_rate: totalActive > 0 ? Math.min(100, Math.round((totalPresent / totalActive) * 100)) : 0,
+            attendance_rate: attendanceDenominator > 0 ? Math.min(100, Math.round((totalPresent / attendanceDenominator) * 100)) : 0,
             inactive_students: inactiveStudents[0].count,
             flagged_absent_2day: flaggedAbsent.length,
             is_school_day: isSchoolDay,
@@ -811,14 +872,19 @@ router.get('/teachers', requireAuth, async (req, res) => {
     try {
         let schoolId = applySchoolFilter(req);
         if (!schoolId && req.query.school_id) schoolId = parseInt(req.query.school_id, 10);
-        let query = `SELECT t.*, s.name as school_name FROM teachers t LEFT JOIN schools s ON t.school_id = s.id WHERE t.status != 'deleted'`;
+        let query = `SELECT t.*, s.name as school_name, gl.name as grade_name, sec.name as section_name
+            FROM teachers t
+            LEFT JOIN schools s ON t.school_id = s.id
+            LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
+            LEFT JOIN sections sec ON t.section_id = sec.id
+            WHERE t.status != 'deleted'`;
         const params = [];
         if (schoolId) { query += ' AND t.school_id = ?'; params.push(schoolId); }
         if (req.query.status) { query += ' AND t.status = ?'; params.push(req.query.status); }
         if (req.query.search) {
-            query += ' AND (t.firstname LIKE ? OR t.lastname LIKE ? OR t.employee_id LIKE ?)';
+            query += ' AND (t.firstname LIKE ? OR t.lastname LIKE ? OR t.employee_id LIKE ? OR t.contact LIKE ? OR t.email LIKE ? OR sec.name LIKE ? OR gl.name LIKE ? OR s.name LIKE ?)';
             const s = `%${req.query.search}%`;
-            params.push(s, s, s);
+            params.push(s, s, s, s, s, s, s, s);
         }
         query += ' ORDER BY t.lastname, t.firstname';
         const [rows] = await db.query(query, params);
@@ -831,17 +897,25 @@ router.get('/teachers', requireAuth, async (req, res) => {
 
 // POST /api/teachers
 router.post('/teachers', requireAuth, async (req, res) => {
-    const { employee_id, firstname, lastname, middlename, department, subject, school_id } = req.body;
+    const { employee_id, firstname, lastname, middlename, department, subject, contact, email, school_id, grade_level_id, section_id } = req.body;
     if (!firstname || !lastname || !school_id) {
         return res.status(400).json({ error: 'First name, last name, and school are required.' });
     }
     try {
+        const assignment = await validateTeacherAssignment({ schoolId: school_id, gradeLevelId: grade_level_id, sectionId: section_id });
+        if (assignment?.error) return res.status(400).json({ error: assignment.error });
         const qr_code = 'TCH-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);
         const [result] = await db.query(
-            `INSERT INTO teachers (employee_id, firstname, lastname, middlename, department, subject, school_id, qr_code)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [employee_id || null, firstname, lastname, middlename || null, department || null, subject || null, school_id, qr_code]
+            `INSERT INTO teachers (employee_id, firstname, lastname, middlename, department, subject, contact, email, school_id, grade_level_id, section_id, qr_code)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [employee_id || null, firstname, lastname, middlename || null, department || null, subject || null, contact || null, email || null, school_id, grade_level_id || null, section_id || null, qr_code]
         );
+        await syncTeacherAdviserAssignment({
+            teacherId: result.insertId,
+            oldSectionId: null,
+            newSectionId: section_id || null,
+            adviserName: displayPersonName(firstname, lastname, middlename)
+        });
         return res.json({ success: true, id: result.insertId, qr_code });
     } catch (err) {
         if (err.code === 'ER_DUP_ENTRY') {
@@ -854,12 +928,25 @@ router.post('/teachers', requireAuth, async (req, res) => {
 
 // PUT /api/teachers/:id
 router.put('/teachers/:id', requireAuth, async (req, res) => {
-    const { employee_id, firstname, lastname, middlename, department, subject, school_id, status } = req.body;
+    const { employee_id, firstname, lastname, middlename, department, subject, contact, email, school_id, grade_level_id, section_id, status } = req.body;
+    if (!firstname || !lastname || !school_id) {
+        return res.status(400).json({ error: 'First name, last name, and school are required.' });
+    }
     try {
+        const [[existing]] = await db.query('SELECT id, section_id FROM teachers WHERE id = ? AND status != ?', [req.params.id, 'deleted']);
+        if (!existing) return res.status(404).json({ error: 'Teacher not found.' });
+        const assignment = await validateTeacherAssignment({ teacherId: req.params.id, schoolId: school_id, gradeLevelId: grade_level_id, sectionId: section_id });
+        if (assignment?.error) return res.status(400).json({ error: assignment.error });
         await db.query(
-            `UPDATE teachers SET employee_id=?, firstname=?, lastname=?, middlename=?, department=?, subject=?, school_id=?, status=? WHERE id=?`,
-            [employee_id || null, firstname, lastname, middlename || null, department || null, subject || null, school_id, status || 'active', req.params.id]
+            `UPDATE teachers SET employee_id=?, firstname=?, lastname=?, middlename=?, department=?, subject=?, contact=?, email=?, school_id=?, grade_level_id=?, section_id=?, status=? WHERE id=?`,
+            [employee_id || null, firstname, lastname, middlename || null, department || null, subject || null, contact || null, email || null, school_id, grade_level_id || null, section_id || null, status || 'active', req.params.id]
         );
+        await syncTeacherAdviserAssignment({
+            teacherId: req.params.id,
+            oldSectionId: existing.section_id,
+            newSectionId: section_id || null,
+            adviserName: displayPersonName(firstname, lastname, middlename)
+        });
         return res.json({ success: true });
     } catch (err) {
         console.error('Update teacher error:', err);
@@ -870,7 +957,14 @@ router.put('/teachers/:id', requireAuth, async (req, res) => {
 // DELETE /api/teachers/:id
 router.delete('/teachers/:id', requireAuth, async (req, res) => {
     try {
+        const [[existing]] = await db.query('SELECT section_id FROM teachers WHERE id = ? LIMIT 1', [req.params.id]);
         await db.query('UPDATE teachers SET status = ? WHERE id = ?', ['deleted', req.params.id]);
+        if (existing?.section_id) {
+            await db.query(
+                'UPDATE sections SET adviser = NULL, adviser_teacher_id = NULL WHERE id = ? AND adviser_teacher_id = ?',
+                [existing.section_id, req.params.id]
+            );
+        }
         return res.json({ success: true });
     } catch (err) {
         console.error('Delete teacher error:', err);
@@ -1123,7 +1217,7 @@ router.get('/mobile-school-structure', requireAuth, async (req, res) => {
 });
 
 // ---- Users (admin management) ----
-router.get('/users', requireAuth, async (req, res) => {
+router.get('/users', requireRole('super_admin'), async (req, res) => {
     try {
         const [rows] = await db.query(
             `SELECT u.id, u.username, u.fullname, u.email, u.role, u.school_id, u.status, u.last_login, u.created_at, s.name as school_name
@@ -1337,14 +1431,17 @@ router.delete('/holidays/:id', requireAuth, async (req, res) => {
 
 // ---- Admin Users CRUD ----
 router.post('/users', requireRole('super_admin'), async (req, res) => {
-    const { username, fullname, email, password, role, school_id } = req.body;
+    const { username, fullname, email, password, role, school_id, status } = req.body;
     if (!username || !fullname || !password) return res.status(400).json({ error: 'Username, full name, and password are required.' });
+    const validRoles = ['super_admin', 'principal', 'superintendent', 'asst_superintendent'];
+    if (role && !validRoles.includes(role)) return res.status(400).json({ error: 'Invalid role selected.' });
+    if (role === 'principal' && !school_id) return res.status(400).json({ error: 'Principal accounts must be assigned to a school.' });
     try {
         const bcrypt = require('bcrypt');
         const hash = await bcrypt.hash(password, 10);
         await db.query(
-            'INSERT INTO users (username, password, fullname, email, role, school_id) VALUES (?, ?, ?, ?, ?, ?)',
-            [username, hash, fullname, email || null, role || 'principal', school_id || null]
+            'INSERT INTO users (username, password, fullname, email, role, school_id, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [username, hash, fullname, email || null, role || 'principal', school_id || null, status || 'active']
         );
         return res.json({ success: true });
     } catch (err) {
@@ -1354,20 +1451,31 @@ router.post('/users', requireRole('super_admin'), async (req, res) => {
 });
 
 router.put('/users/:id', requireRole('super_admin'), async (req, res) => {
-    const { username, fullname, email, password, role, school_id } = req.body;
+    const { username, fullname, email, password, role, school_id, status } = req.body;
     if (!username || !fullname) return res.status(400).json({ error: 'Username and full name are required.' });
+    const validRoles = ['super_admin', 'principal', 'superintendent', 'asst_superintendent'];
+    if (role && !validRoles.includes(role)) return res.status(400).json({ error: 'Invalid role selected.' });
+    if (role === 'principal' && !school_id) return res.status(400).json({ error: 'Principal accounts must be assigned to a school.' });
     try {
+        const requestedStatus = status && ['active', 'inactive'].includes(status) ? status : 'active';
+        if (requestedStatus === 'inactive') {
+            const [[current]] = await db.query('SELECT role FROM users WHERE id = ?', [req.params.id]);
+            if (current?.role === 'super_admin') {
+                const [[countRow]] = await db.query("SELECT COUNT(*) as count FROM users WHERE role='super_admin' AND status='active' AND id != ?", [req.params.id]);
+                if ((countRow.count || 0) < 1) return res.status(400).json({ error: 'At least one active Super Admin account is required.' });
+            }
+        }
         if (password) {
             const bcrypt = require('bcrypt');
             const hash = await bcrypt.hash(password, 10);
             await db.query(
-                'UPDATE users SET username=?, fullname=?, email=?, password=?, role=?, school_id=? WHERE id=?',
-                [username, fullname, email || null, hash, role || 'principal', school_id || null, req.params.id]
+                'UPDATE users SET username=?, fullname=?, email=?, password=?, role=?, school_id=?, status=? WHERE id=?',
+                [username, fullname, email || null, hash, role || 'principal', school_id || null, requestedStatus, req.params.id]
             );
         } else {
             await db.query(
-                'UPDATE users SET username=?, fullname=?, email=?, role=?, school_id=? WHERE id=?',
-                [username, fullname, email || null, role || 'principal', school_id || null, req.params.id]
+                'UPDATE users SET username=?, fullname=?, email=?, role=?, school_id=?, status=? WHERE id=?',
+                [username, fullname, email || null, role || 'principal', school_id || null, requestedStatus, req.params.id]
             );
         }
         return res.json({ success: true });
@@ -1379,10 +1487,16 @@ router.put('/users/:id', requireRole('super_admin'), async (req, res) => {
 
 router.delete('/users/:id', requireRole('super_admin'), async (req, res) => {
     try {
-        await db.query('DELETE FROM users WHERE id = ?', [req.params.id]);
+        const [[current]] = await db.query('SELECT role, status FROM users WHERE id = ?', [req.params.id]);
+        if (!current) return res.status(404).json({ error: 'User not found.' });
+        if (current.role === 'super_admin' && current.status === 'active') {
+            const [[countRow]] = await db.query("SELECT COUNT(*) as count FROM users WHERE role='super_admin' AND status='active' AND id != ?", [req.params.id]);
+            if ((countRow.count || 0) < 1) return res.status(400).json({ error: 'At least one active Super Admin account is required.' });
+        }
+        await db.query('UPDATE users SET status = ? WHERE id = ?', ['inactive', req.params.id]);
         return res.json({ success: true });
     } catch (err) {
-        return res.status(500).json({ error: 'Failed to delete admin.' });
+        return res.status(500).json({ error: 'Failed to deactivate user.' });
     }
 });
 
@@ -1597,14 +1711,15 @@ router.get('/reports/daily-summary', requireAuth, async (req, res) => {
 
         const schools = [];
         for (const s of rows) {
+            const eligible = Math.max(await countAttendanceEligibleStudents(date, s.id), s.present || 0);
             schools.push({
                 id: s.id,
                 name: s.name,
-                enrolled: s.enrolled,
+                enrolled: eligible,
                 present: s.present,
                 late: s.late_count,
                 absent: await countStudentsWithoutTimeIn(date, s.id),
-                rate: s.enrolled > 0 ? Math.min(100, Math.round((s.present / s.enrolled) * 100)) : 0,
+                rate: eligible > 0 ? Math.min(100, Math.round((s.present / eligible) * 100)) : 0,
                 teachers_present: s.teachers_present || 0,
                 teachers_total: s.teachers_total || 0
             });
@@ -1648,7 +1763,7 @@ router.get('/reports/absentees', requireAuth, async (req, res) => {
             LEFT JOIN sections sec ON s.section_id = sec.id
             LEFT JOIN teachers at ON sec.adviser_teacher_id = at.id
             WHERE s.status = 'active'
-              AND s.created_at <= CONCAT(?, ' 23:59:59')
+              AND COALESCE(s.active_from, DATE(s.created_at)) < ?
               AND NOT EXISTS (
                   SELECT 1 FROM attendance a
                   WHERE a.person_type = 'student'
@@ -1675,11 +1790,11 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
         const today = new Date().toISOString().slice(0, 10);
         const isFutureDate = targetDate > today;
         const schoolFilter = schoolId ? ' AND s.school_id = ?' : '';
-        const schoolParams = schoolId ? [schoolId] : [];
+        const schoolParams = schoolId ? [targetDate, schoolId] : [targetDate];
         const schoolDay = await checkSchoolDay(targetDate, schoolId);
 
         const [[totalRow]] = await db.query(
-            `SELECT COUNT(*) as cnt FROM students s WHERE s.status = 'active'` + schoolFilter,
+            `SELECT COUNT(*) as cnt FROM students s WHERE s.status = 'active' AND COALESCE(s.active_from, DATE(s.created_at)) < ?` + schoolFilter,
             schoolParams
         );
 
@@ -1735,7 +1850,7 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
             LEFT JOIN sections sec ON s.section_id = sec.id
             LEFT JOIN teachers at ON sec.adviser_teacher_id = at.id
             WHERE s.status = 'active'
-              AND s.created_at <= CONCAT(?, ' 23:59:59')
+              AND COALESCE(s.active_from, DATE(s.created_at)) < ?
               AND NOT EXISTS (
                   SELECT 1 FROM attendance a
                   WHERE a.person_type = 'student'
@@ -2149,15 +2264,6 @@ router.get('/monthly-attendance', requireAuth, async (req, res) => {
         const startDate = `${year}-${String(month).padStart(2,'0')}-01`;
         const endDate   = new Date(year, month, 0).toISOString().slice(0,10);
 
-        // Total active students
-        const schoolWhere = schoolId ? ' AND school_id = ?' : '';
-        const schoolParams = schoolId ? [schoolId] : [];
-        const [[totalRow]] = await db.query(
-            `SELECT COUNT(*) as cnt FROM students WHERE status='active'` + schoolWhere,
-            schoolParams
-        );
-        const totalStudents = totalRow.cnt;
-
         // Present counts per day
         let pQuery = `SELECT DATE(a.date) as day, COUNT(DISTINCT a.person_id) as present
                       FROM attendance a
@@ -2181,10 +2287,12 @@ router.get('/monthly-attendance', requireAuth, async (req, res) => {
             const isWeekend = (dow === 0 || dow === 6);
             const present = presMap[ds] || 0;
             const absent = isWeekend ? 0 : await countStudentsWithoutTimeIn(ds, schoolId);
+            const totalStudents = Math.max(await countAttendanceEligibleStudents(ds, schoolId), present);
             days.push({ date: ds, present, absent, total: totalStudents, isWeekend });
             cur.setDate(cur.getDate() + 1);
         }
 
+        const totalStudents = days.reduce((max, day) => Math.max(max, day.total || 0), 0);
         return res.json({ year, month, totalStudents, days });
     } catch (err) {
         console.error('Monthly attendance error:', err);

@@ -2,10 +2,12 @@
 
 <div class="page-header">
     <div class="page-header-left">
-        <h1><i class="fa-solid fa-chalkboard-user"></i> Teachers</h1>
+        <h1><i class="fa-solid fa-chalkboard-user"></i> Teachers & Advisers</h1>
+        <p style="color:var(--gray-500);margin:0;">Manage teacher records, adviser assignments, and school-section links.</p>
     </div>
     <div class="page-actions">
-        <button class="btn btn-primary" onclick="openTeacherModal()">+ Add Teacher</button>
+        <a href="/admin/bulk-import" class="btn btn-secondary"><i class="fa-solid fa-file-import"></i> Import Teachers</a>
+        <button class="btn btn-primary" onclick="openTeacherModal()"><i class="fa-solid fa-plus"></i> Add Teacher</button>
     </div>
 </div>
 
@@ -20,14 +22,23 @@
         </select>
     </div>
     <div class="filter-item">
+        <label>Status</label>
+        <select id="filterStatus">
+            <option value="">Active and Inactive</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+        </select>
+    </div>
+    <div class="filter-item">
         <label>Search</label>
-        <input type="text" id="teacherSearch" placeholder="Search by name or ID...">
+        <input type="text" id="teacherSearch" placeholder="Search name, employee ID, contact, or section">
     </div>
     <button class="btn-filter" onclick="loadTeachers()"><i class="fa-solid fa-magnifying-glass"></i> Filter</button>
 </div>
 
 <div class="results-header">
     <span class="record-count" id="teacherCount">0 teacher(s) found</span>
+    <span style="color:var(--gray-500);font-size:.875rem;">Adviser links update the assigned section automatically.</span>
 </div>
 
 <div class="card">
@@ -35,9 +46,10 @@
         <table class="data-table">
             <thead>
                 <tr>
+                    <th>Teacher</th>
                     <th>Employee ID</th>
-                    <th>Name</th>
                     <th>School</th>
+                    <th>Assignment</th>
                     <th>Contact</th>
                     <th>Status</th>
                     <th>Actions</th>
@@ -48,9 +60,8 @@
     </div>
 </div>
 
-<!-- Teacher Modal -->
 <div class="modal-overlay" id="teacherModal" style="display:none">
-    <div class="modal">
+    <div class="modal modal-lg">
         <div class="modal-header">
             <h3 id="teacherModalTitle">Add Teacher</h3>
             <button class="modal-close" onclick="closeTeacherModal()">&times;</button>
@@ -58,7 +69,8 @@
         <form id="teacherForm" onsubmit="saveTeacher(event)">
             <input type="hidden" id="teacherId">
             <div class="form-row">
-                <div class="form-group"><label>Employee ID</label><input type="text" id="teacherEmpId"></div>
+                <div class="form-group"><label>Employee ID</label><input type="text" id="teacherEmpId" placeholder="Employee or teacher ID"></div>
+                <div class="form-group"><label>Status</label><select id="teacherStatus"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
             </div>
             <div class="form-row">
                 <div class="form-group"><label>First Name *</label><input type="text" id="teacherFirstname" required></div>
@@ -66,22 +78,32 @@
                 <div class="form-group"><label>Middle Name</label><input type="text" id="teacherMiddlename"></div>
             </div>
             <div class="form-row">
-                <div class="form-group"><label>Department</label><input type="text" id="teacherDepartment"></div>
-                <div class="form-group"><label>Subject</label><input type="text" id="teacherSubject"></div>
+                <div class="form-group"><label>Contact Number</label><input type="text" id="teacherContact" placeholder="Mobile or landline"></div>
+                <div class="form-group"><label>Email Address</label><input type="email" id="teacherEmail" placeholder="name@example.com"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>Department</label><input type="text" id="teacherDepartment" placeholder="Optional"></div>
+                <div class="form-group"><label>Subject / Role</label><input type="text" id="teacherSubject" placeholder="Class Adviser, Math, etc."></div>
             </div>
             <div class="form-row">
                 <div class="form-group"><label>School *</label>
-                    <select id="teacherSchool" required>
+                    <select id="teacherSchool" required onchange="loadTeacherGrades(); loadTeacherSections();">
                         <option value="">Select School</option>
                         <% schools.forEach(s => { %>
                         <option value="<%= s.id %>"><%= s.name %></option>
                         <% }) %>
                     </select>
                 </div>
+                <div class="form-group"><label>Grade Level</label><select id="teacherGrade" onchange="loadTeacherSections()"><option value="">Select Grade</option></select></div>
+                <div class="form-group"><label>Advisory Section</label><select id="teacherSection"><option value="">No adviser assignment</option></select></div>
             </div>
+            <div class="alert alert-info" style="margin-top:.5rem;">
+                <i class="fa-solid fa-circle-info"></i> Selecting an advisory section will show this teacher as the class adviser in section details, reports, alerts, and the mobile app.
+            </div>
+            <div id="teacherMsg" style="margin-top:.75rem;"></div>
             <div class="form-actions">
                 <button type="button" class="btn btn-secondary" onclick="closeTeacherModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Save</button>
+                <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save Teacher</button>
             </div>
         </form>
     </div>
@@ -89,12 +111,31 @@
 
 <script>
 var allTeachers = [];
+var allGrades = [];
+var allSections = [];
+
+function esc(v) {
+    return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function teacherName(t) {
+    return [t.firstname, t.middlename ? t.middlename.charAt(0) + '.' : '', t.lastname].filter(Boolean).join(' ');
+}
+
+async function loadLookups() {
+    var gradeRes = await fetch('/api/grade-levels');
+    allGrades = await gradeRes.json();
+    var sectionRes = await fetch('/api/sections');
+    allSections = await sectionRes.json();
+}
 
 async function loadTeachers() {
     var school = document.getElementById('filterSchool').value;
+    var status = document.getElementById('filterStatus').value;
     var search = document.getElementById('teacherSearch').value;
     var params = new URLSearchParams();
     if (school) params.append('school_id', school);
+    if (status) params.append('status', status);
     if (search) params.append('search', search);
     var res = await fetch('/api/teachers?' + params);
     allTeachers = await res.json();
@@ -103,30 +144,55 @@ async function loadTeachers() {
 }
 
 function renderTeachers() {
-    var visible = allTeachers.filter(function(t){ return t.status !== 'deleted'; });
-    document.getElementById('teachersBody').innerHTML = visible.map(function(t) {
-        var isInactive = t.status === 'inactive';
-        var rowClass = isInactive ? ' class="row-inactive"' : '';
-        var statusBadge = isInactive ? '<span class="badge badge-inactive">Inactive</span>' : '<span class="badge badge-active">Active</span>';
-        return '<tr'+rowClass+'>' +
-            '<td>' + (t.employee_id || '-') + '</td>' +
-            '<td>' + t.lastname + ', ' + t.firstname + (t.middlename ? ' ' + t.middlename.charAt(0) + '.' : '') + '</td>' +
-            '<td><span class="school-code">' + (t.school_name || '-') + '</span></td>' +
-            '<td>' + (t.department || '-') + '</td>' +
-            '<td>' + statusBadge + '</td>' +
+    document.getElementById('teachersBody').innerHTML = allTeachers.map(function(t) {
+        var inactive = t.status === 'inactive';
+        var assignment = t.grade_name || t.section_name ? esc(t.grade_name || 'Grade not set') + (t.section_name ? ' / ' + esc(t.section_name) : '') : '<span style="color:var(--warning);"><i class="fa-solid fa-triangle-exclamation"></i> No advisory section</span>';
+        var contact = [t.contact, t.email].filter(Boolean).map(esc).join('<br>') || '-';
+        return '<tr' + (inactive ? ' class="row-inactive"' : '') + '>' +
+            '<td><strong>' + esc(teacherName(t)) + '</strong><br><small style="color:var(--gray-500);">' + esc(t.subject || t.department || 'Teacher') + '</small></td>' +
+            '<td>' + esc(t.employee_id || '-') + '</td>' +
+            '<td><span class="school-code">' + esc(t.school_name || '-') + '</span></td>' +
+            '<td>' + assignment + '</td>' +
+            '<td>' + contact + '</td>' +
+            '<td><span class="badge ' + (inactive ? 'badge-inactive' : 'badge-active') + '">' + (inactive ? 'Inactive' : 'Active') + '</span></td>' +
             '<td><div class="action-btns">' +
-                '<button class="action-btn edit" onclick="editTeacherById('+t.id+')" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>' +
-                '<button class="action-btn delete" onclick="deleteTeacher('+t.id+')" title="Delete"><i class="fa-solid fa-trash-can"></i></button>' +
-            '</div></td></tr>';
-    }).join('') || '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon"><i class="fa-solid fa-chalkboard-user" style="font-size:2.5rem;color:var(--gray-300);"></i></div><h4>No teachers found</h4></div></td></tr>';
+                '<button class="action-btn edit" onclick="editTeacherById(' + t.id + ')" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>' +
+                '<button class="action-btn delete" onclick="deleteTeacher(' + t.id + ')" title="Deactivate"><i class="fa-solid fa-user-slash"></i></button>' +
+            '</div></td>' +
+        '</tr>';
+    }).join('') || '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon"><i class="fa-solid fa-chalkboard-user" style="font-size:2.5rem;color:var(--gray-300);"></i></div><h4>No teachers found</h4><p>Use Add Teacher or Import Teachers to create adviser records.</p></div></td></tr>';
+}
+
+function loadTeacherGrades(selectedId) {
+    var schoolId = document.getElementById('teacherSchool').value;
+    var grades = allGrades.filter(function(g){ return !schoolId || String(g.school_id || '') === String(schoolId) || !g.school_id; });
+    document.getElementById('teacherGrade').innerHTML = '<option value="">Select Grade</option>' + grades.map(function(g){ return '<option value="' + g.id + '">' + esc(g.name) + '</option>'; }).join('');
+    if (selectedId) document.getElementById('teacherGrade').value = selectedId;
+}
+
+function loadTeacherSections(selectedId) {
+    var schoolId = document.getElementById('teacherSchool').value;
+    var gradeId = document.getElementById('teacherGrade').value;
+    var sections = allSections.filter(function(s){
+        var schoolOk = !schoolId || String(s.school_id || '') === String(schoolId);
+        var gradeOk = !gradeId || String(s.grade_level_id || '') === String(gradeId);
+        return schoolOk && gradeOk;
+    });
+    document.getElementById('teacherSection').innerHTML = '<option value="">No adviser assignment</option>' + sections.map(function(s){ return '<option value="' + s.id + '">' + esc((s.grade_name ? s.grade_name + ' / ' : '') + s.name) + '</option>'; }).join('');
+    if (selectedId) document.getElementById('teacherSection').value = selectedId;
 }
 
 function openTeacherModal() {
     document.getElementById('teacherModalTitle').textContent = 'Add Teacher';
     document.getElementById('teacherForm').reset();
     document.getElementById('teacherId').value = '';
+    document.getElementById('teacherStatus').value = 'active';
+    document.getElementById('teacherMsg').innerHTML = '';
+    loadTeacherGrades();
+    loadTeacherSections();
     document.getElementById('teacherModal').style.display = 'flex';
 }
+
 function closeTeacherModal() { document.getElementById('teacherModal').style.display = 'none'; }
 
 function editTeacherById(id) {
@@ -135,12 +201,18 @@ function editTeacherById(id) {
     document.getElementById('teacherModalTitle').textContent = 'Edit Teacher';
     document.getElementById('teacherId').value = t.id;
     document.getElementById('teacherEmpId').value = t.employee_id || '';
-    document.getElementById('teacherFirstname').value = t.firstname;
-    document.getElementById('teacherLastname').value = t.lastname;
+    document.getElementById('teacherFirstname').value = t.firstname || '';
+    document.getElementById('teacherLastname').value = t.lastname || '';
     document.getElementById('teacherMiddlename').value = t.middlename || '';
+    document.getElementById('teacherContact').value = t.contact || '';
+    document.getElementById('teacherEmail').value = t.email || '';
     document.getElementById('teacherDepartment').value = t.department || '';
     document.getElementById('teacherSubject').value = t.subject || '';
     document.getElementById('teacherSchool').value = t.school_id || '';
+    document.getElementById('teacherStatus').value = t.status || 'active';
+    document.getElementById('teacherMsg').innerHTML = '';
+    loadTeacherGrades(t.grade_level_id || '');
+    loadTeacherSections(t.section_id || '');
     document.getElementById('teacherModal').style.display = 'flex';
 }
 
@@ -148,39 +220,41 @@ async function saveTeacher(e) {
     e.preventDefault();
     var id = document.getElementById('teacherId').value;
     var body = {
-        employee_id: document.getElementById('teacherEmpId').value,
-        firstname: document.getElementById('teacherFirstname').value,
-        lastname: document.getElementById('teacherLastname').value,
-        middlename: document.getElementById('teacherMiddlename').value,
-        department: document.getElementById('teacherDepartment').value,
-        subject: document.getElementById('teacherSubject').value,
+        employee_id: document.getElementById('teacherEmpId').value.trim(),
+        firstname: document.getElementById('teacherFirstname').value.trim(),
+        lastname: document.getElementById('teacherLastname').value.trim(),
+        middlename: document.getElementById('teacherMiddlename').value.trim(),
+        contact: document.getElementById('teacherContact').value.trim(),
+        email: document.getElementById('teacherEmail').value.trim(),
+        department: document.getElementById('teacherDepartment').value.trim(),
+        subject: document.getElementById('teacherSubject').value.trim(),
         school_id: document.getElementById('teacherSchool').value,
-        status: 'active'
+        grade_level_id: document.getElementById('teacherGrade').value || null,
+        section_id: document.getElementById('teacherSection').value || null,
+        status: document.getElementById('teacherStatus').value
     };
     var url = id ? '/api/teachers/' + id : '/api/teachers';
     var method = id ? 'PUT' : 'POST';
     var res = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     var data = await res.json();
-    if (data.success || data.id) { closeTeacherModal(); loadTeachers(); }
-    else alert(data.error || 'Failed to save teacher');
+    if (data.success || data.id) { closeTeacherModal(); await loadLookups(); loadTeachers(); }
+    else document.getElementById('teacherMsg').innerHTML = '<div class="alert alert-danger">' + esc(data.error || 'Failed to save teacher.') + '</div>';
 }
 
 async function deleteTeacher(id) {
-    if (!confirm('Are you sure you want to deactivate this teacher?')) return;
-    await fetch('/api/teachers/' + id, { method: 'DELETE' });
+    if (!confirm('Deactivate this teacher and remove the adviser link from the assigned section?')) return;
+    var res = await fetch('/api/teachers/' + id, { method: 'DELETE' });
+    var data = await res.json().catch(function(){ return {}; });
+    if (!res.ok || data.error) alert(data.error || 'Failed to deactivate teacher.');
+    await loadLookups();
     loadTeachers();
 }
 
-loadTeachers();
-setInterval(function() { if (document.getElementById('teacherModal').style.display !== 'flex') loadTeachers(); }, 5000);
+loadLookups().then(loadTeachers);
+setInterval(function() {
+    if (document.getElementById('teacherModal').style.display !== 'flex') loadTeachers();
+}, 10000);
 </script>
 
 <div class="live-indicator"><div class="live-dot"></div> Live</div>
-<%- include('partials/footer') %>
-
-// Real-time auto-refresh every 5 seconds
-var teacherPollTimer = setInterval(function() {
-    if (document.getElementById('teacherModal').style.display !== 'flex') loadTeachers();
-}, 5000);
-</script>
 <%- include('partials/footer') %>

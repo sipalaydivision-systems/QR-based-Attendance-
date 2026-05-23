@@ -1148,6 +1148,9 @@ class DashboardPage extends StatelessWidget {
     final active = intValue(
       dashboard['active_students'] ?? dashboard['total_students'],
     );
+    final attendanceBase = intValue(
+      dashboard['attendance_eligible_students'] ?? active,
+    );
     final present = intValue(dashboard['students_present']);
     final rate = intValue(dashboard['attendance_rate']);
     final absent = intValue(dashboard['students_absent']);
@@ -1340,7 +1343,7 @@ class DashboardPage extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '$present of $active students present',
+                        '$present of $attendanceBase students present',
                         style: const TextStyle(
                           fontWeight: FontWeight.w800,
                           color: Color(0xFF27332F),
