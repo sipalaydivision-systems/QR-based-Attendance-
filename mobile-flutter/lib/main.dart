@@ -106,7 +106,9 @@ class ApiService {
     if (cookie.isNotEmpty) 'Cookie': cookie,
   };
 
-  Future<http.Response> _request(Future<http.Response> Function() runner) async {
+  Future<http.Response> _request(
+    Future<http.Response> Function() runner,
+  ) async {
     try {
       return await runner().timeout(const Duration(seconds: 18));
     } on SocketException {
@@ -180,7 +182,10 @@ class ApiService {
 
   Future<Map<String, dynamic>> map(String path) async {
     final response = await _request(
-      () => http.get(Uri.parse('${AppConfig.baseUrl}$path'), headers: authHeaders),
+      () => http.get(
+        Uri.parse('${AppConfig.baseUrl}$path'),
+        headers: authHeaders,
+      ),
     );
     if (response.statusCode == 401) throw AuthExpired();
     if (response.statusCode >= 400) {
@@ -196,7 +201,10 @@ class ApiService {
 
   Future<List<dynamic>> list(String path) async {
     final response = await _request(
-      () => http.get(Uri.parse('${AppConfig.baseUrl}$path'), headers: authHeaders),
+      () => http.get(
+        Uri.parse('${AppConfig.baseUrl}$path'),
+        headers: authHeaders,
+      ),
     );
     if (response.statusCode == 401) throw AuthExpired();
     if (response.statusCode >= 400) {
@@ -1761,7 +1769,8 @@ class WeekDayAbsenceTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final barHeight = isSchoolDay
         ? (18 + (absent / math.max(1, maxAbsent)) * 50).toDouble()
-        : 8.0;
+        : 18.0;
+    final barLabel = isSchoolDay ? '$absent' : '-';
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
@@ -1800,24 +1809,24 @@ class WeekDayAbsenceTile extends StatelessWidget {
                   duration: const Duration(milliseconds: 350),
                   width: 18,
                   height: barHeight,
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: isSchoolDay
                         ? const Color(0xFFDC2626).withValues(alpha: .88)
                         : const Color(0xFFCBD5D1),
                     borderRadius: BorderRadius.circular(8),
                   ),
+                  child: Text(
+                    barLabel,
+                    style: TextStyle(
+                      color: isSchoolDay
+                          ? Colors.white
+                          : const Color(0xFF6B7280),
+                      fontWeight: FontWeight.w900,
+                      fontSize: 10,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              isSchoolDay ? '$absent' : '-',
-              style: TextStyle(
-                color: isSchoolDay
-                    ? const Color(0xFFB91C1C)
-                    : const Color(0xFF94A3B8),
-                fontWeight: FontWeight.w900,
-                fontSize: 12,
               ),
             ),
           ],
@@ -3056,48 +3065,185 @@ class FlagTile extends StatelessWidget {
   final Map<String, dynamic> row;
 
   @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      RecordTile(
-        title: '${row['name'] ?? 'Student'}',
-        subtitle: '${row['school_name'] ?? ''}',
-        meta: absenceBody(row),
-        metaMaxLines: 8,
-        color: const Color(0xFFF97316),
-        leading: SchoolLogoAvatar(
-          {
-            'name': '${row['school_name'] ?? 'School'}',
-            'school_logo': row['school_logo'],
-            'logo': row['school_logo'],
-          },
-          size: 44,
+  Widget build(BuildContext context) => RecordTile(
+    title: '${row['name'] ?? 'Student'}',
+    subtitle: '',
+    meta: '',
+    metaMaxLines: 1,
+    color: const Color(0xFFF97316),
+    leading: Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEE2E2),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: const Icon(
+        Icons.person_rounded,
+        color: Color(0xFFDC2626),
+        size: 22,
+      ),
+    ),
+    onTap: () => _openStudentDetails(context),
+  );
+
+  Future<void> _openStudentDetails(BuildContext context) async {
+    final studentName = '${row['name'] ?? 'Student'}';
+    final lrn = '${row['lrn'] ?? '-'}';
+    final schoolName = '${row['school_name'] ?? '-'}';
+    final grade = '${row['grade_name'] ?? '-'}';
+    final section = '${row['section_name'] ?? '-'}';
+    final daysAbsent = absenceDays(row);
+    final status = '${row['attendance_status'] ?? 'Absent'}';
+    final adviserName = '${row['adviser'] ?? '-'}';
+    final adviserPhone = adviserPhoneFromRow(row) ?? '-';
+    final adviserEmail = adviserEmailFromRow(row) ?? '-';
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: .82,
+        minChildSize: .56,
+        maxChildSize: .92,
+        builder: (context, controller) => Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFFF5F7F6),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: ListView(
+            controller: controller,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 22),
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFCAD5CF),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      studentName,
+                      style: const TextStyle(
+                        fontSize: 21,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              PremiumCard(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  children: [
+                    _detailLine('Student Name', studentName),
+                    _detailLine('LRN', lrn),
+                    _detailLine(
+                      'School Logo',
+                      '',
+                      trailing: SchoolLogoAvatar({
+                        'name': schoolName,
+                        'school_logo': row['school_logo'],
+                        'logo': row['school_logo'],
+                      }, size: 32),
+                    ),
+                    _detailLine('School Name', schoolName),
+                    _detailLine('Grade Level', grade),
+                    _detailLine('Section', section),
+                    _detailLine('Number of Days Absent', daysAbsent),
+                    _detailLine('Attendance Status', status),
+                    _detailLine('Adviser Name', adviserName),
+                    _detailLine('Adviser Contact Number', adviserPhone),
+                    _detailLine('Adviser Email Address', adviserEmail),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Please click an option below if you want to contact the adviser.',
+                style: TextStyle(
+                  color: Color(0xFF42544D),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.icon(
+                    onPressed: () => contactAdviserViaCall(context, row),
+                    icon: const Icon(Icons.call_rounded, size: 18),
+                    label: const Text('Call Adviser'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => contactAdviserAlertViaSms(context, row),
+                    icon: const Icon(Icons.sms_rounded, size: 18),
+                    label: const Text('Send SMS'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => contactAdviserAlertViaEmail(context, row),
+                    icon: const Icon(Icons.email_rounded, size: 18),
+                    label: const Text('Send Email'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
-      Align(
-        alignment: Alignment.centerRight,
-        child: Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            OutlinedButton.icon(
-              onPressed: () => contactAdviserViaCall(context, row),
-              icon: const Icon(Icons.call_rounded, size: 16),
-              label: const Text('Call'),
+    );
+  }
+
+  Widget _detailLine(String label, String value, {Widget? trailing}) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          flex: 2,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF5A6A64),
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
             ),
-            OutlinedButton.icon(
-              onPressed: () => contactAdviserViaSms(context, row),
-              icon: const Icon(Icons.sms_rounded, size: 16),
-              label: const Text('SMS'),
-            ),
-            OutlinedButton.icon(
-              onPressed: () => contactAdviserViaEmail(context, row),
-              icon: const Icon(Icons.email_rounded, size: 16),
-              label: const Text('Email'),
-            ),
-          ],
+          ),
         ),
-      ),
-    ],
+        const SizedBox(width: 10),
+        Expanded(
+          flex: 3,
+          child: Align(
+            alignment: Alignment.centerRight,
+            child:
+                trailing ??
+                Text(
+                  value,
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    color: Color(0xFF101C18),
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                  ),
+                ),
+          ),
+        ),
+      ],
+    ),
   );
 }
 
@@ -3800,6 +3946,25 @@ String adviserMessage(Map<String, dynamic> row) {
   return 'Please check attendance for $student ($school, $grade - $section, LRN: $lrn). Total absent: $days.';
 }
 
+String alertEmailSubject() => 'Student Attendance Alert - 2 Days Absent';
+
+String alertEmailBody(Map<String, dynamic> row) {
+  final student = '${row['name'] ?? 'Student'}';
+  final lrn = '${row['lrn'] ?? '-'}';
+  final grade = '${row['grade_name'] ?? '-'}';
+  final section = '${row['section_name'] ?? '-'}';
+  final school = '${row['school_name'] ?? '-'}';
+  final days = absenceDays(row);
+  final status = '${row['attendance_status'] ?? 'Absent'}';
+  return 'Student Name: $student\n'
+      'LRN: $lrn\n'
+      'Grade Level: $grade\n'
+      'Section: $section\n'
+      'School Name: $school\n'
+      'Number of Days Absent: $days\n'
+      'Attendance Status: $status';
+}
+
 Future<void> _showMissingContactDialog(
   BuildContext context,
   Map<String, dynamic> row,
@@ -3834,6 +3999,7 @@ Future<void> contactAdviserViaCall(
     await launchUrl(uri);
     return;
   }
+  if (!context.mounted) return;
   await _showMissingContactDialog(context, row);
 }
 
@@ -3852,6 +4018,7 @@ Future<void> contactAdviserViaSms(
     await launchUrl(uri);
     return;
   }
+  if (!context.mounted) return;
   await _showMissingContactDialog(context, row);
 }
 
@@ -3876,6 +4043,50 @@ Future<void> contactAdviserViaEmail(
     await launchUrl(uri);
     return;
   }
+  if (!context.mounted) return;
+  await _showMissingContactDialog(context, row);
+}
+
+Future<void> contactAdviserAlertViaSms(
+  BuildContext context,
+  Map<String, dynamic> row,
+) async {
+  final phone = adviserPhoneFromRow(row);
+  if (phone == null) {
+    await _showMissingContactDialog(context, row);
+    return;
+  }
+  final uri = Uri.parse('sms:$phone');
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(uri);
+    return;
+  }
+  if (!context.mounted) return;
+  await _showMissingContactDialog(context, row);
+}
+
+Future<void> contactAdviserAlertViaEmail(
+  BuildContext context,
+  Map<String, dynamic> row,
+) async {
+  final email = adviserEmailFromRow(row);
+  if (email == null) {
+    await _showMissingContactDialog(context, row);
+    return;
+  }
+  final uri = Uri(
+    scheme: 'mailto',
+    path: email,
+    queryParameters: {
+      'subject': alertEmailSubject(),
+      'body': alertEmailBody(row),
+    },
+  );
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(uri);
+    return;
+  }
+  if (!context.mounted) return;
   await _showMissingContactDialog(context, row);
 }
 
