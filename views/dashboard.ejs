@@ -195,6 +195,22 @@
         return '<div class="progress-bar-wrap" style="min-width:80px;">' +
                '<div class="progress-bar-fill ' + color + '" style="width:' + Math.min(100, pct) + '%"></div></div>';
     }
+    function normalizeLogo(logo) {
+        var value = String(logo || '').trim();
+        if (!value) return '';
+        if (/^data:image\//i.test(value) || /^https?:\/\//i.test(value)) return value;
+        value = value.replace(/^public\//, '');
+        return value.charAt(0) === '/' ? value : '/' + value;
+    }
+    function logoBadge(logo, name, size) {
+        var safeSize = size || 32;
+        var initial = (name || 'S').charAt(0).toUpperCase();
+        var src = normalizeLogo(logo);
+        if (!src) {
+            return '<div style="width:' + safeSize + 'px;height:' + safeSize + 'px;border-radius:9px;background:var(--primary-bg);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;flex-shrink:0;">' + initial + '</div>';
+        }
+        return '<img src="' + src + '" alt="" style="width:' + safeSize + 'px;height:' + safeSize + 'px;border-radius:9px;object-fit:cover;flex-shrink:0;border:1px solid var(--border);background:#fff;">';
+    }
 
     function nonSchoolDayMessage(data) {
         var type = data.non_school_day_type || 'Non-school Day';
@@ -253,8 +269,7 @@
                     return '<tr>' +
                         '<td style="font-weight:600;color:var(--gray-800);">' +
                             '<div style="display:flex;align-items:center;gap:8px;">' +
-                            '<div style="width:32px;height:32px;border-radius:8px;background:var(--primary-bg);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;flex-shrink:0;">' +
-                            s.name.charAt(0).toUpperCase() + '</div>' +
+                            logoBadge(s.logo, s.name, 32) +
                             '<span>' + s.name + '</span></div></td>' +
                         '<td>' + s.enrollment + '</td>' +
                         '<td style="color:var(--success);font-weight:600;">' + s.present + '</td>' +
@@ -306,16 +321,29 @@
             }
             function esc(v){ return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
             function contactBtn(s) {
-                var contact = (s.adviser_contact || s.adviser_email || s.school_contact || '').trim();
+                var email = '';
+                var phone = '';
+                var adviserEmail = (s.adviser_email || '').trim();
+                var adviserContact = (s.adviser_contact || '').trim();
+                var schoolContact = (s.school_contact || '').trim();
+                if (adviserEmail && /@/.test(adviserEmail)) email = adviserEmail;
+                if (!email && adviserContact && /@/.test(adviserContact)) email = adviserContact;
+                if (!email && schoolContact && /@/.test(schoolContact)) email = schoolContact;
+                if (adviserContact && !/@/.test(adviserContact)) phone = adviserContact.replace(/[^0-9+]/g, '');
+                if (!phone && schoolContact && !/@/.test(schoolContact)) phone = schoolContact.replace(/[^0-9+]/g, '');
                 var msg = encodeURIComponent('Please check absence alert for ' + (s.lastname + ', ' + s.firstname) + ' (' + (s.grade_name || '-') + ' / ' + (s.section_name || '-') + ', LRN: ' + (s.lrn || '-') + '). Total days absent: ' + (s.absent_days || 2) + '.');
-                if (contact && /@/.test(contact)) {
-                    return '<a class="btn btn-sm btn-outline" href="mailto:' + encodeURIComponent(contact) + '?subject=' + encodeURIComponent('Absence Alert') + '&body=' + msg + '">Please contact adviser</a>';
+                var actions = [];
+                if (phone) {
+                    actions.push('<a class="btn btn-sm btn-outline" href="tel:' + encodeURIComponent(phone) + '">Call Adviser</a>');
+                    actions.push('<a class="btn btn-sm btn-outline" href="sms:' + encodeURIComponent(phone) + '?body=' + msg + '">Send SMS</a>');
                 }
-                var digits = contact.replace(/[^0-9+]/g, '');
-                if (digits) {
-                    return '<a class="btn btn-sm btn-outline" href="sms:' + encodeURIComponent(digits) + '?body=' + msg + '">Please contact adviser</a>';
+                if (email) {
+                    actions.push('<a class="btn btn-sm btn-outline" href="mailto:' + encodeURIComponent(email) + '?subject=' + encodeURIComponent('Absence Alert') + '&body=' + msg + '">Send Email</a>');
                 }
-                return '<button class="btn btn-sm btn-secondary" type="button" onclick="alert(\'No adviser contact saved. Please update school/adviser contact details first.\')">Please contact adviser</button>';
+                if (actions.length) {
+                    return '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + actions.join('') + '</div>';
+                }
+                return '<button class="btn btn-sm btn-secondary" type="button" onclick="alert(\'No adviser contact details are saved. Please update adviser or school contact information first.\')">Please contact adviser</button>';
             }
             tbody.innerHTML = data.map(function(s, i) {
                 return '<tr>' +
@@ -325,6 +353,7 @@
                         '<div class="student-avatar" style="background:#fee2e2;color:#dc2626;">' + s.firstname.charAt(0).toUpperCase() + '</div>' +
                         '<span style="font-weight:600;">' + esc(s.lastname + ', ' + s.firstname) + '</span>' +
                         '</div>' +
+                        '<div style="margin-top:4px;font-size:0.75rem;color:var(--gray-500);display:flex;align-items:center;gap:6px;">' + logoBadge(s.school_logo, s.school_name || 'School', 18) + '<span>' + esc(s.school_name || '-') + '</span></div>' +
                     '</td>' +
                     '<td>' + (s.grade_name || '—') + '</td>' +
                     '<td>' + (s.section_name || '—') + '</td>' +

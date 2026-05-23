@@ -81,24 +81,49 @@ function escapeHtml(value) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
 }
+function normalizeLogo(logo) {
+    var value = String(logo || '').trim();
+    if (!value) return '';
+    if (/^data:image\//i.test(value) || /^https?:\/\//i.test(value)) return value;
+    value = value.replace(/^public\//, '');
+    return value.charAt(0) === '/' ? value : '/' + value;
+}
+function schoolLogo(flag, size) {
+    var safeSize = size || 28;
+    var school = flag.school_name || 'School';
+    var initial = school.charAt(0).toUpperCase();
+    var src = normalizeLogo(flag.school_logo);
+    if (!src) {
+        return '<span style="width:' + safeSize + 'px;height:' + safeSize + 'px;border-radius:8px;background:var(--primary-bg);color:var(--primary);display:inline-flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;flex-shrink:0;">' + escapeHtml(initial) + '</span>';
+    }
+    return '<img src="' + escapeHtml(src) + '" alt="" style="width:' + safeSize + 'px;height:' + safeSize + 'px;border-radius:8px;object-fit:cover;border:1px solid var(--border);background:#fff;flex-shrink:0;">';
+}
 function buildAdviserAction(flag) {
     var adviser = flag.adviser || 'Assigned adviser';
-    var contact = (flag.adviser_contact || flag.adviser_email || flag.school_contact || '').trim();
+    var adviserEmail = (flag.adviser_email || '').trim();
+    var adviserContact = (flag.adviser_contact || '').trim();
+    var schoolContact = (flag.school_contact || '').trim();
+    var email = '';
+    var phone = '';
+    if (adviserEmail && /@/.test(adviserEmail)) email = adviserEmail;
+    if (!email && adviserContact && /@/.test(adviserContact)) email = adviserContact;
+    if (!email && schoolContact && /@/.test(schoolContact)) email = schoolContact;
+    if (adviserContact && !/@/.test(adviserContact)) phone = adviserContact.replace(/[^0-9+]/g, '');
+    if (!phone && schoolContact && !/@/.test(schoolContact)) phone = schoolContact.replace(/[^0-9+]/g, '');
     var student = flag.name || ((flag.lastname || '') + ', ' + (flag.firstname || '')).trim() || 'Student';
     var gradeSection = (flag.grade_name || '-') + ' / ' + (flag.section_name || '-');
     var body = 'Please check absence alert for ' + student + ' (' + gradeSection + ', LRN: ' + (flag.lrn || '-') + '). Total days absent: ' + (flag.absent_days || 2) + '.';
     var encodedBody = encodeURIComponent(body);
     var encodedTitle = encodeURIComponent('Absence Alert - ' + student);
-
-    if (contact && /@/.test(contact)) {
-        return '<a class="btn btn-sm btn-outline" href="mailto:' + encodeURIComponent(contact) + '?subject=' + encodedTitle + '&body=' + encodedBody + '">Please contact adviser</a>';
+    var actions = [];
+    if (phone) {
+        actions.push('<a class="btn btn-sm btn-outline" href="tel:' + encodeURIComponent(phone) + '">Call Adviser</a>');
+        actions.push('<a class="btn btn-sm btn-outline" href="sms:' + encodeURIComponent(phone) + '?body=' + encodedBody + '">Send SMS</a>');
     }
-    if (contact) {
-        var digits = contact.replace(/[^0-9+]/g, '');
-        if (digits) {
-            return '<a class="btn btn-sm btn-outline" href="sms:' + encodeURIComponent(digits) + '?body=' + encodedBody + '">Please contact adviser</a>';
-        }
+    if (email) {
+        actions.push('<a class="btn btn-sm btn-outline" href="mailto:' + encodeURIComponent(email) + '?subject=' + encodedTitle + '&body=' + encodedBody + '">Send Email</a>');
     }
+    if (actions.length) return '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + actions.join('') + '</div>';
     return '<button class="btn btn-sm btn-secondary" type="button" onclick="alert(\'No adviser contact saved for ' + escapeHtml(adviser) + '. Please update the school/adviser contact details first.\')">Please contact adviser</button>';
 }
 async function loadNotifications() {
@@ -112,8 +137,8 @@ async function loadNotifications() {
 
         if (studentFlags.length > 0) {
             document.getElementById('absStudents').innerHTML = studentFlags.map(function(f){
-                return '<tr><td><strong>' + escapeHtml(f.name || f.person_name || '-')
-                    +'</strong><div style="font-size:0.72rem;color:var(--gray-500);margin-top:2px;">'+ escapeHtml(f.school_name || '-') +'</div></td>'
+                return '<tr><td><div style="display:flex;align-items:center;gap:8px;"><span>' + schoolLogo(f, 28) + '</span><div><strong>' + escapeHtml(f.name || f.person_name || '-')
+                    +'</strong><div style="font-size:0.72rem;color:var(--gray-500);margin-top:2px;">'+ escapeHtml(f.school_name || '-') +'</div></div></div></td>'
                     +'<td>' + escapeHtml(f.grade_name || '-') + '</td>'
                     +'<td>' + escapeHtml(f.section_name || '-') + '</td>'
                     +'<td><span class="lrn-badge">' + escapeHtml(f.lrn || '-') + '</span></td>'
@@ -126,8 +151,8 @@ async function loadNotifications() {
         }
         if (teacherFlags.length > 0) {
             document.getElementById('absTeachers').innerHTML = teacherFlags.map(function(f){
-                return '<tr><td><strong>'+(f.name || f.person_name || '-')
-                    +'</strong></td><td>'+(f.employee_id||'-')
+                return '<tr><td><div style="display:flex;align-items:center;gap:8px;"><span>' + schoolLogo(f, 24) + '</span><strong>'+(f.name || f.person_name || '-')
+                    +'</strong></div></td><td>'+(f.employee_id||'-')
                     +'</td><td><span class="school-code">'+(f.school_name||'-')+'</span></td></tr>';
             }).join('');
         } else {

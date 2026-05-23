@@ -99,6 +99,28 @@ if (user && user.role === 'superintendent') {
     font-weight: 800;
     white-space: nowrap;
 }
+.teacher-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+.teacher-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid rgba(146, 64, 14, 0.24);
+    background: rgba(255,255,255,0.72);
+    color: #713f12;
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-decoration: none;
+}
+.teacher-action-btn:hover {
+    background: #fff;
+}
 .section-alert {
     display: none;
     align-items: flex-start;
@@ -165,6 +187,13 @@ if (user && user.role === 'superintendent') {
         margin-left: auto;
         padding: 6px 9px;
     }
+    .teacher-actions {
+        gap: 6px;
+    }
+    .teacher-action-btn {
+        padding: 5px 9px;
+        font-size: 0.72rem;
+    }
 }
 </style>
 
@@ -196,6 +225,11 @@ if (user && user.role === 'superintendent') {
     <div class="teacher-info">
         <div class="teacher-name"><i class="fa fa-star" style="color:#fbbf24;margin-right:6px"></i><span id="tcName">-</span></div>
         <div class="teacher-detail" id="tcDetail">Class Adviser</div>
+        <div class="teacher-actions" id="tcActions" style="display:none">
+            <a class="teacher-action-btn" id="tcCallBtn" href="#" target="_self"><i class="fa fa-phone"></i> Call</a>
+            <a class="teacher-action-btn" id="tcSmsBtn" href="#" target="_self"><i class="fa fa-comment-dots"></i> SMS</a>
+            <a class="teacher-action-btn" id="tcEmailBtn" href="#" target="_self"><i class="fa fa-envelope"></i> Email</a>
+        </div>
     </div>
     <span class="teacher-badge"><i class="fa fa-certificate"></i> Class Adviser</span>
 </div>
@@ -290,6 +324,8 @@ var gradeId = <%= typeof gradeId !== 'undefined' ? gradeId : 0 %>;
 var allStudents = [];
 var attendanceMap = {};
 var currentAdviser = 'No adviser assigned';
+var currentAdviserPhone = '';
+var currentAdviserEmail = '';
 var currentIsSchoolDay = true;
 var currentDateIsFuture = false;
 var appSuffix = window.location.search.indexOf('app=1') !== -1 ? '?app=1' : '';
@@ -315,6 +351,46 @@ function formatTime12(timeStr) {
     var ampm = h >= 12 ? 'PM' : 'AM';
     h = h % 12 || 12;
     return h + ':' + m + ' ' + ampm;
+}
+function validEmail(value) {
+    return /@/.test(String(value || '').trim());
+}
+function normalizePhone(value) {
+    var clean = String(value || '').trim();
+    if (!clean || /@/.test(clean)) return '';
+    return clean.replace(/[^0-9+]/g, '');
+}
+function adviserMessage() {
+    return 'Please check attendance updates for section ' + (document.getElementById('secName').textContent || '-') + '.';
+}
+function refreshAdviserActions() {
+    var wrap = document.getElementById('tcActions');
+    var callBtn = document.getElementById('tcCallBtn');
+    var smsBtn = document.getElementById('tcSmsBtn');
+    var emailBtn = document.getElementById('tcEmailBtn');
+    if (!wrap || !callBtn || !smsBtn || !emailBtn) return;
+    var hasPhone = !!currentAdviserPhone;
+    var hasEmail = !!currentAdviserEmail;
+    if (!hasPhone && !hasEmail) {
+        wrap.style.display = 'none';
+        return;
+    }
+    wrap.style.display = 'flex';
+    if (hasPhone) {
+        callBtn.style.display = '';
+        smsBtn.style.display = '';
+        callBtn.href = 'tel:' + encodeURIComponent(currentAdviserPhone);
+        smsBtn.href = 'sms:' + encodeURIComponent(currentAdviserPhone) + '?body=' + encodeURIComponent(adviserMessage());
+    } else {
+        callBtn.style.display = 'none';
+        smsBtn.style.display = 'none';
+    }
+    if (hasEmail) {
+        emailBtn.style.display = '';
+        emailBtn.href = 'mailto:' + encodeURIComponent(currentAdviserEmail) + '?subject=' + encodeURIComponent('Attendance Update') + '&body=' + encodeURIComponent(adviserMessage());
+    } else {
+        emailBtn.style.display = 'none';
+    }
 }
 
 async function loadData() {
@@ -374,10 +450,17 @@ async function loadData() {
             document.getElementById('tcAvatar').textContent = parts[0] ? parts[0][0].toUpperCase() : '?';
             document.getElementById('tcName').textContent = sec.adviser;
             currentAdviser = sec.adviser;
+            var adviserContact = String(sec.adviser_contact || '').trim();
+            var adviserEmail = String(sec.adviser_email || '').trim();
+            currentAdviserEmail = validEmail(adviserEmail) ? adviserEmail : (validEmail(adviserContact) ? adviserContact : '');
+            currentAdviserPhone = normalizePhone(adviserContact);
+            refreshAdviserActions();
         } else {
             document.getElementById('teacherCard').style.display = 'none';
             document.getElementById('noAdviserCard').style.display = '';
             currentAdviser = 'No adviser assigned';
+            currentAdviserPhone = '';
+            currentAdviserEmail = '';
         }
 
         // KPI

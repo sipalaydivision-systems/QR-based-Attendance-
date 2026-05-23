@@ -220,7 +220,7 @@ async function getConsecutiveAbsenceFlags({ baseDate, schoolId, days = 2, includ
     if (schoolDates.length < threshold) return [];
 
     let studentQuery = `SELECT s.id, s.firstname, s.lastname, s.lrn, s.school_id, s.section_id, s.created_at, s.active_from, sc.name as school_name,
-            sc.contact as school_contact, gl.name as grade_name, sec.name as section_name,
+            sc.logo as school_logo, sc.contact as school_contact, gl.name as grade_name, sec.name as section_name,
             COALESCE(NULLIF(sec.adviser, ''), TRIM(CONCAT_WS(' ', at.firstname, at.middlename, at.lastname))) as adviser,
             at.contact as adviser_contact,
             at.email as adviser_email
@@ -233,7 +233,7 @@ async function getConsecutiveAbsenceFlags({ baseDate, schoolId, days = 2, includ
     const studentParams = [];
     if (schoolId) { studentQuery += ' AND s.school_id = ?'; studentParams.push(schoolId); }
 
-    let teacherQuery = `SELECT t.id, t.firstname, t.lastname, t.employee_id, t.school_id, t.created_at, sc.name as school_name, sc.contact as school_contact
+    let teacherQuery = `SELECT t.id, t.firstname, t.lastname, t.employee_id, t.school_id, t.created_at, sc.name as school_name, sc.logo as school_logo, sc.contact as school_contact
         FROM teachers t
         LEFT JOIN schools sc ON t.school_id = sc.id
         WHERE t.status = 'active'`;

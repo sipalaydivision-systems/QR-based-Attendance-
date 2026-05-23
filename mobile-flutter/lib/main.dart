@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -12,6 +13,9 @@ import 'package:url_launcher/url_launcher.dart';
 class AppConfig {
   static const appName = 'Edutrack';
   static const subtitle = 'Schools Division of Sipalay City';
+  static const monitoringLabel = 'Attendance Monitoring App';
+  static const noInternetMessage =
+      "Can't connect to server due to no internet connection.";
   static const logoAsset = 'assets/images/app_logo.png';
   static const baseUrl = 'https://school-attendance-qrbased.up.railway.app';
 }
@@ -102,18 +106,57 @@ class ApiService {
     if (cookie.isNotEmpty) 'Cookie': cookie,
   };
 
+  Future<http.Response> _request(Future<http.Response> Function() runner) async {
+    try {
+      return await runner().timeout(const Duration(seconds: 18));
+    } on SocketException {
+      throw Exception(AppConfig.noInternetMessage);
+    } on TimeoutException {
+      throw Exception(AppConfig.noInternetMessage);
+    } on http.ClientException catch (e) {
+      final lower = e.message.toLowerCase();
+      if (lower.contains('socketexception') ||
+          lower.contains('timed out') ||
+          lower.contains('connection') ||
+          lower.contains('failed host lookup')) {
+        throw Exception(AppConfig.noInternetMessage);
+      }
+      throw Exception('Unable to connect to server right now.');
+    }
+  }
+
+  String _errorFromBody(String body, {required String fallback}) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map) {
+        final msg = '${decoded['message'] ?? decoded['error'] ?? ''}'.trim();
+        if (msg.isNotEmpty) return msg;
+      }
+    } catch (_) {}
+    final raw = body.trim();
+    if (raw.isEmpty || raw.length > 260) return fallback;
+    return raw;
+  }
+
   Future<void> login(String username, String password) async {
-    final response = await http.post(
-      Uri.parse('${AppConfig.baseUrl}/app-login'),
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: {'username': username, 'password': password},
+    final response = await _request(
+      () => http.post(
+        Uri.parse('${AppConfig.baseUrl}/app-login'),
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: {'username': username, 'password': password},
+      ),
     );
     final data = jsonDecode(response.body) as Map;
     if (response.statusCode >= 400 || data['success'] != true) {
-      throw Exception(data['message'] ?? 'Username or password is incorrect.');
+      throw Exception(
+        _errorFromBody(
+          response.body,
+          fallback: 'Username or password is incorrect.',
+        ),
+      );
     }
     final sessionCookie = (response.headers['set-cookie'] ?? '')
         .split(';')
@@ -136,22 +179,34 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> map(String path) async {
-    final response = await http.get(
-      Uri.parse('${AppConfig.baseUrl}$path'),
-      headers: authHeaders,
+    final response = await _request(
+      () => http.get(Uri.parse('${AppConfig.baseUrl}$path'), headers: authHeaders),
     );
     if (response.statusCode == 401) throw AuthExpired();
-    if (response.statusCode >= 400) throw Exception(response.body);
+    if (response.statusCode >= 400) {
+      throw Exception(
+        _errorFromBody(
+          response.body,
+          fallback: 'Failed to load live data from the server.',
+        ),
+      );
+    }
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
   Future<List<dynamic>> list(String path) async {
-    final response = await http.get(
-      Uri.parse('${AppConfig.baseUrl}$path'),
-      headers: authHeaders,
+    final response = await _request(
+      () => http.get(Uri.parse('${AppConfig.baseUrl}$path'), headers: authHeaders),
     );
     if (response.statusCode == 401) throw AuthExpired();
-    if (response.statusCode >= 400) throw Exception(response.body);
+    if (response.statusCode >= 400) {
+      throw Exception(
+        _errorFromBody(
+          response.body,
+          fallback: 'Failed to load live data from the server.',
+        ),
+      );
+    }
     final decoded = jsonDecode(response.body);
     return decoded is List ? decoded : [];
   }
@@ -262,7 +317,7 @@ class _SplashGateState extends State<SplashGate>
                           border: Border.all(color: const Color(0xFFDCE7E1)),
                         ),
                         child: const Text(
-                          'Attendance Monitoring System',
+                          AppConfig.monitoringLabel,
                           style: TextStyle(
                             color: Color(0xFF0F6E52),
                             fontWeight: FontWeight.w800,
@@ -605,7 +660,10 @@ class _LoginScreenState extends State<LoginScreen>
     } catch (e) {
       setState(() {
         loading = false;
-        error = e.toString().replaceFirst('Exception: ', '');
+        error = readableError(
+          e,
+          fallback: 'Unable to sign in. Please check your account details.',
+        );
       });
     }
   }
@@ -782,7 +840,7 @@ class _LoginScreenState extends State<LoginScreen>
                       const SizedBox(height: 18),
                       const Center(
                         child: Text(
-                          'Attendance Monitoring System\nv2.1.4',
+                          '${AppConfig.monitoringLabel}\nv2.1.4',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Color(0xFF77847E),
@@ -911,7 +969,10 @@ class _HomeShellState extends State<HomeShell>
       if (mounted) {
         setState(() {
           loading = false;
-          error = e.toString();
+          error = readableError(
+            e,
+            fallback: 'Failed to sync dashboard data from the server.',
+          );
         });
       }
     }
@@ -1174,7 +1235,24 @@ class DashboardPage extends StatelessWidget {
     if (loading && dashboard.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (error != null && dashboard.isEmpty) return Center(child: Text(error!));
+    if (error != null && dashboard.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Text(
+            readableError(
+              error!,
+              fallback: 'Failed to load dashboard data from the server.',
+            ),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xFFB91C1C),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      );
+    }
     final active = intValue(
       dashboard['active_students'] ?? dashboard['total_students'],
     );
@@ -1593,7 +1671,10 @@ class _WeeklyAbsenceAnalyticsState extends State<WeeklyAbsenceAnalytics> {
       if (!mounted) return;
       setState(() {
         loading = false;
-        error = e.toString();
+        error = readableError(
+          e,
+          fallback: 'Failed to load weekly absence analytics.',
+        );
       });
     }
   }
@@ -1634,27 +1715,25 @@ class _WeeklyAbsenceAnalyticsState extends State<WeeklyAbsenceAnalytics> {
           ),
         ),
         const SizedBox(height: 10),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              for (final day in week)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: WeekDayAbsenceTile(
-                    label: '${day['label']}',
-                    dayNumber: '${day['day']}',
-                    absent: intValue(day['absent']),
-                    isSchoolDay: day['isSchoolDay'] == true,
-                    maxAbsent: maxAbsent,
-                    onTap: () => widget.onDayTap(
-                      '${day['date']}',
-                      day['isSchoolDay'] == true,
-                    ),
+        Row(
+          children: [
+            for (var i = 0; i < week.length; i++) ...[
+              Expanded(
+                child: WeekDayAbsenceTile(
+                  label: '${week[i]['label']}',
+                  dayNumber: '${week[i]['day']}',
+                  absent: intValue(week[i]['absent']),
+                  isSchoolDay: week[i]['isSchoolDay'] == true,
+                  maxAbsent: maxAbsent,
+                  onTap: () => widget.onDayTap(
+                    '${week[i]['date']}',
+                    week[i]['isSchoolDay'] == true,
                   ),
                 ),
+              ),
+              if (i < week.length - 1) const SizedBox(width: 8),
             ],
-          ),
+          ],
         ),
       ],
     );
@@ -1687,7 +1766,7 @@ class WeekDayAbsenceTile extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
       child: Container(
-        width: 62,
+        width: double.infinity,
         padding: const EdgeInsets.fromLTRB(8, 8, 8, 9),
         decoration: BoxDecoration(
           color: const Color(0xFFF8FBF9),
@@ -1885,7 +1964,10 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
       if (!mounted) return;
       setState(() {
         loading = false;
-        error = e.toString();
+        error = readableError(
+          e,
+          fallback: 'Failed to load attendance details.',
+        );
       });
     }
   }
@@ -2215,7 +2297,10 @@ class _AbsentStudentsSheetState extends State<AbsentStudentsSheet> {
       if (!mounted) return;
       setState(() {
         loading = false;
-        error = e.toString();
+        error = readableError(
+          e,
+          fallback: 'Failed to load absent student details.',
+        );
       });
     }
   }
@@ -2465,6 +2550,24 @@ class ReportsPage extends StatelessWidget {
   Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
     future: api.map('/api/reports/daily-summary?date=${date()}'),
     builder: (context, snapshot) {
+      if (snapshot.hasError) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Text(
+              readableError(
+                snapshot.error!,
+                fallback: 'Failed to load report data.',
+              ),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFFB91C1C),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        );
+      }
       if (!snapshot.hasData) {
         return const Center(child: CircularProgressIndicator());
       }
@@ -2618,6 +2721,24 @@ class _SchoolsPageState extends State<SchoolsPage> {
   Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
     future: future,
     builder: (_, snapshot) {
+      if (snapshot.hasError) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Text(
+              readableError(
+                snapshot.error!,
+                fallback: 'Failed to load school details.',
+              ),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFFB91C1C),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        );
+      }
       if (!snapshot.hasData) {
         return const Center(child: CircularProgressIndicator());
       }
@@ -2791,6 +2912,55 @@ class _SchoolsPageState extends State<SchoolsPage> {
             'Adviser',
             adviserText(section!).replaceFirst('Adviser: ', ''),
           ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => contactAdviserViaCall(context, {
+                    'adviser': section!['adviser'],
+                    'adviser_contact': section!['adviser_contact'],
+                    'adviser_email': section!['adviser_email'],
+                    'school_name': school!['name'],
+                    'school_contact': school!['contact'],
+                    'grade_name': grade!['name'],
+                    'section_name': section!['name'],
+                  }),
+                  icon: const Icon(Icons.call_rounded, size: 16),
+                  label: const Text('Call Adviser'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => contactAdviserViaSms(context, {
+                    'adviser': section!['adviser'],
+                    'adviser_contact': section!['adviser_contact'],
+                    'adviser_email': section!['adviser_email'],
+                    'school_name': school!['name'],
+                    'school_contact': school!['contact'],
+                    'grade_name': grade!['name'],
+                    'section_name': section!['name'],
+                  }),
+                  icon: const Icon(Icons.sms_rounded, size: 16),
+                  label: const Text('Send SMS'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => contactAdviserViaEmail(context, {
+                    'adviser': section!['adviser'],
+                    'adviser_contact': section!['adviser_contact'],
+                    'adviser_email': section!['adviser_email'],
+                    'school_name': school!['name'],
+                    'school_contact': school!['contact'],
+                    'grade_name': grade!['name'],
+                    'section_name': section!['name'],
+                  }),
+                  icon: const Icon(Icons.email_rounded, size: 16),
+                  label: const Text('Send Email'),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 10),
           for (final student in students)
             RecordTile(
@@ -2894,41 +3064,37 @@ class FlagTile extends StatelessWidget {
         meta: absenceBody(row),
         metaMaxLines: 8,
         color: const Color(0xFFF97316),
+        leading: SchoolLogoAvatar(
+          {
+            'name': '${row['school_name'] ?? 'School'}',
+            'school_logo': row['school_logo'],
+            'logo': row['school_logo'],
+          },
+          size: 44,
+        ),
       ),
       Align(
         alignment: Alignment.centerRight,
-        child: TextButton.icon(
-          onPressed: () async {
-            final phone =
-                '${row['adviser_contact'] ?? row['school_contact'] ?? ''}'
-                    .trim();
-            if (phone.isNotEmpty) {
-              final uri = Uri.parse('tel:$phone');
-              if (await canLaunchUrl(uri)) {
-                await launchUrl(uri);
-                return;
-              }
-            }
-            if (context.mounted) {
-              showDialog(
-                context: context,
-                builder: (_) => AlertDialog(
-                  title: const Text('Please contact adviser'),
-                  content: Text(
-                    'Student: ${row['name'] ?? 'Student'}\nGrade: ${row['grade_name'] ?? '-'}\nSection: ${row['section_name'] ?? '-'}\nLRN: ${row['lrn'] ?? '-'}\nDays absent: ${absenceDays(row)}\nAdviser: ${row['adviser'] ?? '-'}',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Close'),
-                    ),
-                  ],
-                ),
-              );
-            }
-          },
-          icon: const Icon(Icons.phone_forwarded),
-          label: const Text('Please contact adviser'),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              onPressed: () => contactAdviserViaCall(context, row),
+              icon: const Icon(Icons.call_rounded, size: 16),
+              label: const Text('Call'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => contactAdviserViaSms(context, row),
+              icon: const Icon(Icons.sms_rounded, size: 16),
+              label: const Text('SMS'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => contactAdviserViaEmail(context, row),
+              icon: const Icon(Icons.email_rounded, size: 16),
+              label: const Text('Email'),
+            ),
+          ],
         ),
       ),
     ],
@@ -2954,6 +3120,24 @@ class FutureList extends StatelessWidget {
   Widget build(BuildContext context) => FutureBuilder<List<dynamic>>(
     future: future,
     builder: (_, snapshot) {
+      if (snapshot.hasError) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Text(
+              readableError(
+                snapshot.error!,
+                fallback: 'Failed to load records from the server.',
+              ),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFFB91C1C),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        );
+      }
       if (!snapshot.hasData) {
         return const Center(child: CircularProgressIndicator());
       }
@@ -3551,6 +3735,148 @@ class AppLogo extends StatelessWidget {
     ),
     child: Image.asset(AppConfig.logoAsset, fit: BoxFit.contain),
   );
+}
+
+String readableError(
+  Object error, {
+  String fallback = 'Something went wrong. Please try again.',
+}) {
+  final text = '$error'.replaceFirst('Exception: ', '').trim();
+  if (text.isEmpty) return fallback;
+  final lower = text.toLowerCase();
+  if (lower.contains('socketexception') ||
+      lower.contains('clientexception') ||
+      lower.contains('failed host lookup') ||
+      lower.contains('connection timed out') ||
+      lower.contains('connection refused') ||
+      lower.contains('network is unreachable') ||
+      lower.contains('connection error')) {
+    return AppConfig.noInternetMessage;
+  }
+  if (lower.startsWith('<!doctype') || lower.startsWith('<html')) {
+    return fallback;
+  }
+  return text;
+}
+
+String? adviserEmailFromRow(Map<String, dynamic> row) {
+  for (final key in ['adviser_email', 'email', 'adviser_contact']) {
+    final value = '${row[key] ?? ''}'.trim();
+    if (value.contains('@')) return value;
+  }
+  final schoolContact = '${row['school_contact'] ?? ''}'.trim();
+  if (schoolContact.contains('@')) return schoolContact;
+  return null;
+}
+
+String? adviserPhoneFromRow(Map<String, dynamic> row) {
+  for (final key in ['adviser_contact', 'contact', 'school_contact']) {
+    final value = '${row[key] ?? ''}'.trim();
+    if (value.isEmpty || value.contains('@')) continue;
+    final digits = value.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (digits.isNotEmpty) return digits;
+  }
+  return null;
+}
+
+String adviserContactSummary(Map<String, dynamic> row) {
+  final student = '${row['name'] ?? 'Student'}';
+  final school = '${row['school_name'] ?? '-'}';
+  final grade = '${row['grade_name'] ?? '-'}';
+  final section = '${row['section_name'] ?? '-'}';
+  final lrn = '${row['lrn'] ?? '-'}';
+  final days = absenceDays(row);
+  final adviser = '${row['adviser'] ?? 'No adviser assigned'}';
+  return 'Student: $student\nSchool: $school\nGrade: $grade\nSection: $section\nLRN: $lrn\nDays absent: $days\nAdviser: $adviser';
+}
+
+String adviserMessage(Map<String, dynamic> row) {
+  final student = '${row['name'] ?? 'Student'}';
+  final school = '${row['school_name'] ?? '-'}';
+  final grade = '${row['grade_name'] ?? '-'}';
+  final section = '${row['section_name'] ?? '-'}';
+  final lrn = '${row['lrn'] ?? '-'}';
+  final days = absenceDays(row);
+  return 'Please check attendance for $student ($school, $grade - $section, LRN: $lrn). Total absent: $days.';
+}
+
+Future<void> _showMissingContactDialog(
+  BuildContext context,
+  Map<String, dynamic> row,
+) async {
+  if (!context.mounted) return;
+  await showDialog(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text('Please contact adviser'),
+      content: Text(adviserContactSummary(row)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
+      ],
+    ),
+  );
+}
+
+Future<void> contactAdviserViaCall(
+  BuildContext context,
+  Map<String, dynamic> row,
+) async {
+  final phone = adviserPhoneFromRow(row);
+  if (phone == null) {
+    await _showMissingContactDialog(context, row);
+    return;
+  }
+  final uri = Uri(scheme: 'tel', path: phone);
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(uri);
+    return;
+  }
+  await _showMissingContactDialog(context, row);
+}
+
+Future<void> contactAdviserViaSms(
+  BuildContext context,
+  Map<String, dynamic> row,
+) async {
+  final phone = adviserPhoneFromRow(row);
+  if (phone == null) {
+    await _showMissingContactDialog(context, row);
+    return;
+  }
+  final body = Uri.encodeComponent(adviserMessage(row));
+  final uri = Uri.parse('sms:$phone?body=$body');
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(uri);
+    return;
+  }
+  await _showMissingContactDialog(context, row);
+}
+
+Future<void> contactAdviserViaEmail(
+  BuildContext context,
+  Map<String, dynamic> row,
+) async {
+  final email = adviserEmailFromRow(row);
+  if (email == null) {
+    await _showMissingContactDialog(context, row);
+    return;
+  }
+  final uri = Uri(
+    scheme: 'mailto',
+    path: email,
+    queryParameters: {
+      'subject': 'Attendance Alert - ${row['name'] ?? 'Student'}',
+      'body': adviserMessage(row),
+    },
+  );
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(uri);
+    return;
+  }
+  await _showMissingContactDialog(context, row);
 }
 
 Future<void> notifyAbsenceFlags(List flags, SharedPreferences prefs) async {
