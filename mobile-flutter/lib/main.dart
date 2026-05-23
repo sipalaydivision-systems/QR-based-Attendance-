@@ -1768,15 +1768,15 @@ class WeekDayAbsenceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final barHeight = isSchoolDay
-        ? (18 + (absent / math.max(1, maxAbsent)) * 50).toDouble()
-        : 18.0;
+        ? (24 + (absent / math.max(1, maxAbsent)) * 30).toDouble()
+        : 24.0;
     final barLabel = isSchoolDay ? '$absent' : '-';
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(8, 8, 8, 9),
+        padding: const EdgeInsets.fromLTRB(8, 9, 8, 10),
         decoration: BoxDecoration(
           color: const Color(0xFFF8FBF9),
           borderRadius: BorderRadius.circular(14),
@@ -1800,14 +1800,14 @@ class WeekDayAbsenceTile extends StatelessWidget {
                 fontWeight: FontWeight.w900,
               ),
             ),
-            const SizedBox(height: 5),
+            const SizedBox(height: 6),
             SizedBox(
-              height: 56,
+              height: 58,
               child: Align(
                 alignment: Alignment.bottomCenter,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 350),
-                  width: 18,
+                  width: 22,
                   height: barHeight,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
@@ -1816,14 +1816,17 @@ class WeekDayAbsenceTile extends StatelessWidget {
                         : const Color(0xFFCBD5D1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(
-                    barLabel,
-                    style: TextStyle(
-                      color: isSchoolDay
-                          ? Colors.white
-                          : const Color(0xFF6B7280),
-                      fontWeight: FontWeight.w900,
-                      fontSize: 10,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      barLabel,
+                      style: TextStyle(
+                        color: isSchoolDay
+                            ? Colors.white
+                            : const Color(0xFF6B7280),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 10.5,
+                      ),
                     ),
                   ),
                 ),
@@ -3065,27 +3068,20 @@ class FlagTile extends StatelessWidget {
   final Map<String, dynamic> row;
 
   @override
-  Widget build(BuildContext context) => RecordTile(
-    title: '${row['name'] ?? 'Student'}',
-    subtitle: '',
-    meta: '',
-    metaMaxLines: 1,
-    color: const Color(0xFFF97316),
-    leading: Container(
-      width: 42,
-      height: 42,
-      decoration: BoxDecoration(
-        color: const Color(0xFFFEE2E2),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: const Icon(
-        Icons.person_rounded,
-        color: Color(0xFFDC2626),
-        size: 22,
-      ),
-    ),
-    onTap: () => _openStudentDetails(context),
-  );
+  Widget build(BuildContext context) {
+    final schoolName = '${row['school_name'] ?? '-'}';
+    final grade = '${row['grade_name'] ?? '-'}';
+    final section = '${row['section_name'] ?? '-'}';
+    return RecordTile(
+      title: '${row['name'] ?? 'Student'}',
+      subtitle: '$schoolName • $grade • $section',
+      meta: '',
+      metaMaxLines: 1,
+      color: const Color(0xFFF97316),
+      leading: const SizedBox.shrink(),
+      onTap: () => _openStudentDetails(context),
+    );
+  }
 
   Future<void> _openStudentDetails(BuildContext context) async {
     final studentName = '${row['name'] ?? 'Student'}';
@@ -3152,15 +3148,10 @@ class FlagTile extends StatelessWidget {
                     _detailLine('Student Name', studentName),
                     _detailLine('LRN', lrn),
                     _detailLine(
-                      'School Logo',
-                      '',
-                      trailing: SchoolLogoAvatar({
-                        'name': schoolName,
-                        'school_logo': row['school_logo'],
-                        'logo': row['school_logo'],
-                      }, size: 32),
+                      'School Name',
+                      schoolName,
+                      trailing: _schoolNameWithLogo(schoolName),
                     ),
-                    _detailLine('School Name', schoolName),
                     _detailLine('Grade Level', grade),
                     _detailLine('Section', section),
                     _detailLine('Number of Days Absent', daysAbsent),
@@ -3207,6 +3198,32 @@ class FlagTile extends StatelessWidget {
       ),
     );
   }
+
+  Widget _schoolNameWithLogo(String schoolName) => SizedBox(
+    width: 190,
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        SchoolLogoAvatar({
+          'name': schoolName,
+          'school_logo': row['school_logo'],
+          'logo': row['school_logo'],
+        }, size: 28),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            schoolName,
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              color: Color(0xFF101C18),
+              fontWeight: FontWeight.w800,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _detailLine(String label, String value, {Widget? trailing}) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 6),
@@ -3906,17 +3923,15 @@ String readableError(
 }
 
 String? adviserEmailFromRow(Map<String, dynamic> row) {
-  for (final key in ['adviser_email', 'email', 'adviser_contact']) {
+  for (final key in ['adviser_email', 'adviser_contact']) {
     final value = '${row[key] ?? ''}'.trim();
     if (value.contains('@')) return value;
   }
-  final schoolContact = '${row['school_contact'] ?? ''}'.trim();
-  if (schoolContact.contains('@')) return schoolContact;
   return null;
 }
 
 String? adviserPhoneFromRow(Map<String, dynamic> row) {
-  for (final key in ['adviser_contact', 'contact', 'school_contact']) {
+  for (final key in ['adviser_contact']) {
     final value = '${row[key] ?? ''}'.trim();
     if (value.isEmpty || value.contains('@')) continue;
     final digits = value.replaceAll(RegExp(r'[^0-9+]'), '');
@@ -3956,13 +3971,15 @@ String alertEmailBody(Map<String, dynamic> row) {
   final school = '${row['school_name'] ?? '-'}';
   final days = absenceDays(row);
   final status = '${row['attendance_status'] ?? 'Absent'}';
+  final adviserName = '${row['adviser'] ?? '-'}';
   return 'Student Name: $student\n'
       'LRN: $lrn\n'
       'Grade Level: $grade\n'
       'Section: $section\n'
       'School Name: $school\n'
       'Number of Days Absent: $days\n'
-      'Attendance Status: $status';
+      'Attendance Status: $status\n'
+      'Adviser Name: $adviserName';
 }
 
 Future<void> _showMissingContactDialog(
