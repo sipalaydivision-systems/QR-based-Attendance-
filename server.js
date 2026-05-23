@@ -94,6 +94,20 @@ function getPublicAppBaseUrl(req) {
     return `${req.protocol}://${host}`.replace(/\/+$/, '');
 }
 
+async function ensureRuntimeSchema() {
+    const [columns] = await db.query(
+        `SELECT COLUMN_NAME
+         FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'students'
+           AND COLUMN_NAME = 'active_from'`
+    );
+    if (columns.length === 0) {
+        await db.query('ALTER TABLE students ADD COLUMN active_from DATE NULL AFTER qr_code');
+        console.log('Added missing students.active_from column.');
+    }
+}
+
 // Root redirect
 app.get('/', (req, res) => {
     if (req.session.user) {
@@ -173,6 +187,12 @@ app.use((err, req, res, _next) => {
     });
 });
 
-app.listen(PORT, () => {
-    console.log(`Edutrack running on port ${PORT}`);
-});
+ensureRuntimeSchema()
+    .catch((err) => {
+        console.error('Runtime schema check failed:', err);
+    })
+    .finally(() => {
+        app.listen(PORT, () => {
+            console.log(`Edutrack running on port ${PORT}`);
+        });
+    });
