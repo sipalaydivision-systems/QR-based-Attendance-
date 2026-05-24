@@ -58,6 +58,10 @@ Future<void> main() async {
       startupNotificationPayload,
       actionId: startupNotificationActionId,
     );
+    if (pendingAlertIntent != null &&
+        await launchContactActionFromIntent(pendingAlertIntent!)) {
+      pendingAlertIntent = {...pendingAlertIntent!, 'action': 'handled'};
+    }
   }
   runApp(const EdutrackApp());
 }
@@ -3111,11 +3115,11 @@ class _AlertsPageState extends State<AlertsPage> {
     }
 
     if (row != null && mounted) {
-      await FlagTile.openStudentDetailsModal(
-        context,
-        row,
-        openContactActions: action == 'contact',
-      );
+      if (action == 'contact') {
+        await contactAdviserViaCall(context, row);
+      } else if (action == 'view') {
+        await FlagTile.openStudentDetailsModal(context, row);
+      }
     }
     widget.onIntentConsumed?.call();
   }
@@ -4416,12 +4420,32 @@ Future<void> notifyAbsenceFlags(List flags, SharedPreferences prefs) async {
   await prefs.setString('last_absence_key', key);
 }
 
+Future<bool> launchContactActionFromIntent(Map<String, dynamic> intent) async {
+  if ('${intent['action']}' != 'contact') return false;
+  final rowData = intent['row'];
+  if (rowData is! Map) return false;
+  final row = Map<String, dynamic>.from(rowData);
+  final phone = adviserPhoneFromRow(row);
+  if (phone == null || phone.trim().isEmpty) return false;
+  return launchUrl(
+    Uri(scheme: 'tel', path: phone),
+    mode: LaunchMode.externalApplication,
+  );
+}
+
 Future<void> openNotificationDestination(
   String? payload, {
   String? actionId,
 }) async {
-  final intent = notificationIntentFromPayload(payload, actionId: actionId);
-  if (intent == null) return;
+  final parsedIntent = notificationIntentFromPayload(
+    payload,
+    actionId: actionId,
+  );
+  if (parsedIntent == null) return;
+  var intent = Map<String, dynamic>.from(parsedIntent);
+  if (await launchContactActionFromIntent(intent)) {
+    intent = {...intent, 'action': 'handled'};
+  }
   pendingAlertIntent = intent;
   final prefs = await SharedPreferences.getInstance();
   final api = ApiService(prefs);
