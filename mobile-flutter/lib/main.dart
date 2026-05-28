@@ -4253,10 +4253,19 @@ String? adviserPhoneFromRow(Map<String, dynamic> row) {
   return null;
 }
 
-String alertEmailSubject() => 'Student Attendance Alert - 2 Days Absent';
+int absenceDayCount(Map<String, dynamic> row) {
+  final days = intValue(row['absent_days']);
+  return days <= 0 ? 2 : days;
+}
 
-Uri adviserEmailUri(String email) => Uri.parse(
-  'mailto:$email?subject=${Uri.encodeComponent(alertEmailSubject())}',
+String alertEmailSubject(Map<String, dynamic> row) {
+  final count = absenceDayCount(row);
+  final unit = count == 1 ? 'Day' : 'Days';
+  return 'Student Attendance Alert - $count $unit Absent';
+}
+
+Uri adviserEmailUri(String email, Map<String, dynamic> row) => Uri.parse(
+  'mailto:$email?subject=${Uri.encodeComponent(alertEmailSubject(row))}',
 );
 
 Future<void> _showContactError(BuildContext context, String message) async {
@@ -4327,7 +4336,7 @@ Future<void> contactAdviserViaEmail(
   }
   await _launchContactUri(
     context,
-    adviserEmailUri(email),
+    adviserEmailUri(email, row),
     onFailure: 'Unable to open the email app.',
   );
 }
@@ -4359,7 +4368,7 @@ Future<void> contactAdviserAlertViaEmail(
   }
   await _launchContactUri(
     context,
-    adviserEmailUri(email),
+    adviserEmailUri(email, row),
     onFailure: 'Unable to open the email app.',
   );
 }
@@ -4536,8 +4545,7 @@ String? notificationIntentKey(Map<String, dynamic>? intent) {
 }
 
 String absenceDays(Map<String, dynamic> row) {
-  final days = intValue(row['absent_days']);
-  final count = days <= 0 ? 2 : days;
+  final count = absenceDayCount(row);
   return count == 1 ? '1 day' : '$count days';
 }
 
