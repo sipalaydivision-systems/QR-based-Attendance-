@@ -4264,8 +4264,30 @@ String alertEmailSubject(Map<String, dynamic> row) {
   return 'Student Attendance Alert - $count $unit Absent';
 }
 
+String alertEmailBody(Map<String, dynamic> row) {
+  final adviser = '${row['adviser'] ?? 'Adviser'}'.trim();
+  final student = '${row['name'] ?? 'Student'}'.trim();
+  final school = '${row['school_name'] ?? '-'}'.trim();
+  final grade = '${row['grade_name'] ?? '-'}'.trim();
+  final section = '${row['section_name'] ?? '-'}'.trim();
+  final days = absenceDays(row);
+  final adviserName = adviser.isEmpty || adviser == '-' ? 'Adviser' : adviser;
+  final studentName = student.isEmpty || student == '-' ? 'Student' : student;
+
+  return 'Good day, $adviserName.\n\n'
+      'This is to inform you that the following student has been flagged for attendance monitoring due to consecutive absences.\n\n'
+      'Student Name: $studentName\n'
+      'School: $school\n'
+      'Grade Level: $grade\n'
+      'Section: $section\n'
+      'Number of Days Absent: $days\n\n'
+      "Please review and monitor the student's attendance accordingly.\n\n"
+      'Thank you.';
+}
+
 Uri adviserEmailUri(String email, Map<String, dynamic> row) => Uri.parse(
-  'mailto:$email?subject=${Uri.encodeComponent(alertEmailSubject(row))}',
+  'mailto:$email?subject=${Uri.encodeComponent(alertEmailSubject(row))}'
+  '&body=${Uri.encodeComponent(alertEmailBody(row))}',
 );
 
 Future<void> _showContactError(BuildContext context, String message) async {
