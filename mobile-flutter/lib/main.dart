@@ -3466,29 +3466,34 @@ class FlagTile extends StatelessWidget {
   static Widget _schoolNameWithLogo(
     String schoolName,
     Map<String, dynamic> row,
-  ) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      SchoolLogoAvatar({
-        'name': schoolName,
-        'school_logo': row['school_logo'],
-        'logo': row['school_logo'],
-      }, size: 28),
-      const SizedBox(width: 8),
-      Flexible(
-        child: Text(
-          schoolName,
-          textAlign: TextAlign.right,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Color(0xFF101C18),
-            fontWeight: FontWeight.w800,
-            fontSize: 13,
+  ) => SizedBox(
+    width: double.infinity,
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SchoolLogoAvatar({
+          'name': schoolName,
+          'school_logo': row['school_logo'],
+          'logo': row['school_logo'],
+        }, size: 24),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            schoolName,
+            textAlign: TextAlign.right,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFF101C18),
+              fontWeight: FontWeight.w800,
+              fontSize: 13,
+              height: 1.15,
+            ),
           ),
         ),
-      ),
-    ],
+      ],
+    ),
   );
 
   static Widget _contactActionButton({
@@ -3536,7 +3541,7 @@ class FlagTile extends StatelessWidget {
       Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(
               flex: 2,
@@ -4248,36 +4253,11 @@ String? adviserPhoneFromRow(Map<String, dynamic> row) {
   return null;
 }
 
-String adviserMessage(Map<String, dynamic> row) {
-  final student = '${row['name'] ?? 'Student'}';
-  final school = '${row['school_name'] ?? '-'}';
-  final grade = '${row['grade_name'] ?? '-'}';
-  final section = '${row['section_name'] ?? '-'}';
-  final lrn = '${row['lrn'] ?? '-'}';
-  final days = absenceDays(row);
-  return 'Please check attendance for $student ($school, $grade - $section, LRN: $lrn). Total absent: $days.';
-}
-
 String alertEmailSubject() => 'Student Attendance Alert - 2 Days Absent';
 
-String alertEmailBody(Map<String, dynamic> row) {
-  final student = '${row['name'] ?? 'Student'}';
-  final lrn = '${row['lrn'] ?? '-'}';
-  final grade = '${row['grade_name'] ?? '-'}';
-  final section = '${row['section_name'] ?? '-'}';
-  final school = '${row['school_name'] ?? '-'}';
-  final days = absenceDays(row);
-  final status = '${row['attendance_status'] ?? 'Absent'}';
-  final adviserName = '${row['adviser'] ?? '-'}';
-  return 'Student Name: $student\n'
-      'LRN: $lrn\n'
-      'Grade Level: $grade\n'
-      'Section: $section\n'
-      'School Name: $school\n'
-      'Number of Days Absent: $days\n'
-      'Attendance Status: $status\n'
-      'Adviser Name: $adviserName';
-}
+Uri adviserEmailUri(String email) => Uri.parse(
+  'mailto:$email?subject=${Uri.encodeComponent(alertEmailSubject())}',
+);
 
 Future<void> _showContactError(BuildContext context, String message) async {
   if (!context.mounted) return;
@@ -4347,14 +4327,7 @@ Future<void> contactAdviserViaEmail(
   }
   await _launchContactUri(
     context,
-    Uri(
-      scheme: 'mailto',
-      path: email,
-      queryParameters: {
-        'subject': 'Attendance Alert - ${row['name'] ?? 'Student'}',
-        'body': adviserMessage(row),
-      },
-    ),
+    adviserEmailUri(email),
     onFailure: 'Unable to open the email app.',
   );
 }
@@ -4386,14 +4359,7 @@ Future<void> contactAdviserAlertViaEmail(
   }
   await _launchContactUri(
     context,
-    Uri(
-      scheme: 'mailto',
-      path: email,
-      queryParameters: {
-        'subject': alertEmailSubject(),
-        'body': alertEmailBody(row),
-      },
-    ),
+    adviserEmailUri(email),
     onFailure: 'Unable to open the email app.',
   );
 }
