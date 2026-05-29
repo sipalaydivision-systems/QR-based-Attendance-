@@ -1393,6 +1393,28 @@
             font-weight: 900;
         }
 
+        .sds-skeleton {
+            display: block;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #d4dee8 0%, #edf3f8 50%, #d4dee8 100%);
+            background-size: 190% 100%;
+            animation: sdsSkeleton 1.8s ease-in-out infinite;
+        }
+
+        .sds-skeleton.dark {
+            background: linear-gradient(90deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.46) 50%, rgba(255,255,255,0.22) 100%);
+            background-size: 190% 100%;
+        }
+
+        .sds-skeleton.tight {
+            margin-top: 3px;
+        }
+
+        @keyframes sdsSkeleton {
+            0% { background-position: 180% 0; }
+            100% { background-position: -180% 0; }
+        }
+
         @media (max-width: 1180px) {
             .cards { grid-template-columns: repeat(2, 1fr); }
             .desktop-showcase { grid-template-columns: 1fr; }
@@ -1598,7 +1620,7 @@
             <div class="desktop-copy">
                 <span class="desktop-kicker">Desktop Dashboard</span>
                 <h3>Open the Edutrack dashboard on Mac and Windows.</h3>
-                <p>The desktop launcher shows the same Edutrack dashboard used by the web system, including live attendance totals, absence alerts, monthly analytics, school rankings, and user access for Juan Dela Cruz.</p>
+                <p>The desktop launcher shows the same Edutrack dashboard used by the web system, including live attendance totals, absence alerts, monthly analytics, school rankings, and user access controls.</p>
                 <div class="desktop-actions">
                     <a class="desktop-download" href="/download/windows-app" download><%- platformIconHtml('windows', 'Windows logo') %> Download Windows App</a>
                     <a class="desktop-download secondary" href="/download/mac-app" download><%- platformIconHtml('mac', 'Mac logo') %> Download Mac App</a>
@@ -1626,26 +1648,26 @@
                                 <div class="sds-menu-label">Communication</div>
                                 <div class="sds-nav-item">Notifications</div>
                                 <div class="sds-side-user">
-                                    <b>Juan Dela Cruz</b>
-                                    <span>Superintendent</span>
+                                    <span class="sds-skeleton dark" style="width:72px;height:7px;"></span>
+                                    <span class="sds-skeleton dark tight" style="width:46px;height:5px;"></span>
                                 </div>
                             </aside>
                             <section class="sds-main">
                                 <div class="sds-topbar">
                                     <strong>Dashboard</strong>
                                     <div class="sds-profile">
-                                        <span class="sds-avatar">J</span>
+                                        <span class="sds-avatar"></span>
                                         <div>
-                                            <b>Juan Dela Cruz</b>
-                                            <span>Superintendent</span>
+                                            <span class="sds-skeleton" style="width:66px;height:6px;"></span>
+                                            <span class="sds-skeleton tight" style="width:40px;height:5px;"></span>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="sds-content">
                                     <div class="sds-banner">
                                         <div>
-                                            <h4>Good afternoon, Juan Dela Cruz</h4>
-                                            <span>Friday, May 29, 2026</span>
+                                            <h4><span class="sds-skeleton" style="width:108px;height:9px;"></span></h4>
+                                            <span class="sds-skeleton" style="width:70px;height:5px;"></span>
                                         </div>
                                         <div class="sds-rate">0%<small>Today's rate</small></div>
                                     </div>
@@ -1661,14 +1683,14 @@
                                         <div class="sds-panel">
                                             <h5>2-Day Absentees</h5>
                                             <div class="sds-alert-row">
-                                                <span class="sds-initials">WH</span>
-                                                <div><b>Wesley Hans Platil</b><span>Banag Elementary School</span></div>
-                                                <span class="sds-alert-days">15 days</span>
+                                                <span class="sds-initials"></span>
+                                                <div><span class="sds-skeleton" style="width:68px;height:6px;"></span><span class="sds-skeleton tight" style="width:54px;height:5px;"></span></div>
+                                                <span class="sds-skeleton" style="width:20px;height:5px;"></span>
                                             </div>
                                             <div class="sds-alert-row">
-                                                <span class="sds-initials">JA</span>
-                                                <div><b>Josel Ann M. Vallespin</b><span>Banag Elementary School</span></div>
-                                                <span class="sds-alert-days">5 days</span>
+                                                <span class="sds-initials"></span>
+                                                <div><span class="sds-skeleton" style="width:62px;height:6px;"></span><span class="sds-skeleton tight" style="width:51px;height:5px;"></span></div>
+                                                <span class="sds-skeleton" style="width:18px;height:5px;"></span>
                                             </div>
                                         </div>
                                         <div class="sds-panel">
@@ -1681,9 +1703,9 @@
                                         </div>
                                         <div class="sds-panel">
                                             <h5>Schools by Rate</h5>
-                                            <div class="sds-school-row"><span class="sds-rank">1</span><div><b>Agripino Elementary School</b><span>0 present of 0</span></div><span class="sds-percent">0%</span></div>
-                                            <div class="sds-school-row"><span class="sds-rank">2</span><div><b>Banag Elementary School</b><span>0 present of 1</span></div><span class="sds-percent">0%</span></div>
-                                            <div class="sds-school-row"><span class="sds-rank">3</span><div><b>Barangay V Elementary School</b><span>0 present of 0</span></div><span class="sds-percent">0%</span></div>
+                                            <div class="sds-school-row"><span class="sds-rank">1</span><div><span class="sds-skeleton" style="width:70px;height:6px;"></span><span class="sds-skeleton tight" style="width:44px;height:5px;"></span></div><span class="sds-percent">0%</span></div>
+                                            <div class="sds-school-row"><span class="sds-rank">2</span><div><span class="sds-skeleton" style="width:62px;height:6px;"></span><span class="sds-skeleton tight" style="width:40px;height:5px;"></span></div><span class="sds-percent">0%</span></div>
+                                            <div class="sds-school-row"><span class="sds-rank">3</span><div><span class="sds-skeleton" style="width:66px;height:6px;"></span><span class="sds-skeleton tight" style="width:42px;height:5px;"></span></div><span class="sds-percent">0%</span></div>
                                         </div>
                                     </div>
                                 </div>
