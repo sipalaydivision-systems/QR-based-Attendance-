@@ -249,7 +249,7 @@ app.get('/download/ios-app', (req, res) => {
     return res.download(iosPath, 'Edutrack-iOS.ipa');
 });
 
-app.get('/download/desktop-app', (req, res) => {
+function sendWindowsDesktopLauncher(req, res) {
     const appBaseUrl = getPublicAppBaseUrl(req);
     const launcher = `@echo off\r\n`
         + `set "APP_URL=${appBaseUrl}/app"\r\n`
@@ -268,6 +268,27 @@ app.get('/download/desktop-app', (req, res) => {
 
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename="Edutrack-Desktop-App.cmd"');
+    return res.send(launcher);
+}
+
+app.get('/download/desktop-app', sendWindowsDesktopLauncher);
+
+app.get('/download/windows-app', sendWindowsDesktopLauncher);
+
+app.get('/download/mac-app', (req, res) => {
+    const appBaseUrl = getPublicAppBaseUrl(req);
+    const launcher = `#!/bin/bash\n`
+        + `APP_URL="${appBaseUrl}/app"\n`
+        + `if [ -d "/Applications/Google Chrome.app" ]; then\n`
+        + `  open -na "Google Chrome" --args --app="$APP_URL"\n`
+        + `elif [ -d "/Applications/Microsoft Edge.app" ]; then\n`
+        + `  open -na "Microsoft Edge" --args --app="$APP_URL"\n`
+        + `else\n`
+        + `  open "$APP_URL"\n`
+        + `fi\n`;
+
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="Edutrack-Mac-App.command"');
     return res.send(launcher);
 });
 

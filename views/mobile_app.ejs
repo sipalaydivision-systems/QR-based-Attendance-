@@ -683,6 +683,75 @@
             transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
         }
 
+        .platform-icon {
+            position: relative;
+            width: 20px;
+            height: 20px;
+            display: inline-block;
+            flex: 0 0 auto;
+            color: currentColor;
+        }
+
+        .android-logo::before {
+            content: "";
+            position: absolute;
+            left: 3px;
+            top: 6px;
+            width: 14px;
+            height: 11px;
+            border-radius: 4px 4px 3px 3px;
+            background: currentColor;
+            box-shadow: -4px 4px 0 -2px currentColor, 4px 4px 0 -2px currentColor;
+        }
+
+        .android-logo::after {
+            content: "";
+            position: absolute;
+            left: 5px;
+            top: 2px;
+            width: 10px;
+            height: 6px;
+            border-radius: 8px 8px 0 0;
+            background: currentColor;
+            box-shadow: -2px -2px 0 -1px currentColor, 2px -2px 0 -1px currentColor;
+            transform: rotate(0deg);
+        }
+
+        .apple-logo::before {
+            content: "";
+            position: absolute;
+            left: 5px;
+            top: 5px;
+            width: 12px;
+            height: 14px;
+            border-radius: 50% 44% 55% 46%;
+            background: currentColor;
+            transform: rotate(-8deg);
+        }
+
+        .apple-logo::after {
+            content: "";
+            position: absolute;
+            left: 11px;
+            top: 1px;
+            width: 7px;
+            height: 5px;
+            border-radius: 8px 0 8px 0;
+            background: currentColor;
+            transform: rotate(-28deg);
+        }
+
+        .windows-logo::before {
+            content: "";
+            position: absolute;
+            inset: 3px;
+            background:
+                linear-gradient(currentColor 0 0) left top / 7px 6px no-repeat,
+                linear-gradient(currentColor 0 0) right top / 7px 6px no-repeat,
+                linear-gradient(currentColor 0 0) left bottom / 7px 6px no-repeat,
+                linear-gradient(currentColor 0 0) right bottom / 7px 6px no-repeat;
+        }
+
         .store-button.secondary {
             background: #ffffff;
             color: var(--green-deep);
@@ -791,7 +860,7 @@
 
         .cards {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 18px;
         }
 
@@ -823,6 +892,16 @@
             content: "";
             position: absolute;
             background: var(--green-deep);
+        }
+
+        .app-card .platform-card-icon::before,
+        .app-card .platform-card-icon::after {
+            display: none;
+        }
+
+        .platform-card-icon .platform-icon {
+            width: 24px;
+            height: 24px;
         }
 
         .mobile-icon::before {
@@ -897,6 +976,467 @@
             font-weight: 800;
         }
 
+        .desktop-showcase {
+            margin-top: 42px;
+            padding: clamp(18px, 3vw, 34px);
+            display: grid;
+            grid-template-columns: 0.78fr 1.22fr;
+            gap: clamp(24px, 4vw, 44px);
+            align-items: center;
+            border: 1px solid var(--line);
+            border-radius: 28px;
+            background:
+                radial-gradient(circle at 12% 15%, rgba(6, 153, 107, 0.12), transparent 260px),
+                linear-gradient(135deg, #ffffff 0%, #f4fbf8 100%);
+            box-shadow: 0 28px 70px rgba(16, 35, 28, 0.12);
+        }
+
+        .desktop-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 30px;
+            padding: 0 12px;
+            border-radius: 999px;
+            color: var(--green-deep);
+            background: var(--green-soft);
+            font-size: 12px;
+            font-weight: 900;
+        }
+
+        .desktop-copy h3 {
+            margin: 16px 0 10px;
+            font-size: clamp(28px, 3vw, 42px);
+            line-height: 1.04;
+            letter-spacing: -0.025em;
+        }
+
+        .desktop-copy p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 15px;
+            line-height: 1.7;
+        }
+
+        .desktop-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 22px;
+        }
+
+        .desktop-download {
+            min-height: 48px;
+            padding: 0 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            border-radius: 999px;
+            color: #ffffff;
+            background: var(--green-dark);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 900;
+            box-shadow: 0 16px 32px rgba(6, 79, 61, 0.2);
+        }
+
+        .desktop-download.secondary {
+            color: var(--green-deep);
+            background: #ffffff;
+            border: 1px solid var(--line);
+        }
+
+        .macbook {
+            position: relative;
+            max-width: 690px;
+            margin-left: auto;
+        }
+
+        .mac-lid {
+            position: relative;
+            overflow: hidden;
+            padding: 12px;
+            border-radius: 24px 24px 16px 16px;
+            background: linear-gradient(145deg, #e8edf0 0%, #ffffff 44%, #c8d0d4 100%);
+            box-shadow:
+                0 28px 60px rgba(16, 35, 28, 0.2),
+                inset 0 0 0 1px rgba(255,255,255,0.85);
+        }
+
+        .mac-camera {
+            position: absolute;
+            top: 7px;
+            left: 50%;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #19251f;
+            transform: translateX(-50%);
+            z-index: 2;
+        }
+
+        .mac-screen {
+            overflow: hidden;
+            min-height: 382px;
+            border-radius: 15px;
+            border: 2px solid #111b17;
+            background: #edf3f7;
+        }
+
+        .mac-base {
+            width: 104%;
+            height: 20px;
+            margin: 0 auto;
+            border-radius: 0 0 32px 32px;
+            background: linear-gradient(180deg, #d9e0e3 0%, #aeb8bd 100%);
+            transform: translateX(-2%);
+            box-shadow: 0 16px 32px rgba(16, 35, 28, 0.16);
+        }
+
+        .mac-base::before {
+            content: "";
+            display: block;
+            width: 92px;
+            height: 7px;
+            margin: 0 auto;
+            border-radius: 0 0 999px 999px;
+            background: rgba(81, 91, 96, 0.32);
+        }
+
+        .sds-ui {
+            height: 382px;
+            display: grid;
+            grid-template-columns: 112px 1fr;
+            font-size: 7px;
+            color: #0c1f18;
+            background: #eef3f7;
+        }
+
+        .sds-sidebar {
+            display: flex;
+            flex-direction: column;
+            padding: 12px 9px;
+            background: #0d382f;
+            color: #ffffff;
+        }
+
+        .sds-side-brand {
+            display: flex;
+            gap: 7px;
+            align-items: center;
+            padding-bottom: 14px;
+            border-bottom: 1px solid rgba(255,255,255,0.12);
+        }
+
+        .sds-side-brand img {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: #ffffff;
+            padding: 1px;
+        }
+
+        .sds-side-brand strong {
+            display: block;
+            font-size: 7px;
+            line-height: 1.15;
+        }
+
+        .sds-side-brand span {
+            display: block;
+            color: rgba(255,255,255,0.72);
+            font-size: 5px;
+            margin-top: 2px;
+        }
+
+        .sds-menu-label {
+            margin: 14px 0 6px;
+            color: rgba(255,255,255,0.45);
+            font-size: 5px;
+            font-weight: 900;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .sds-nav-item {
+            padding: 8px 9px;
+            border-radius: 7px;
+            color: rgba(255,255,255,0.75);
+            font-weight: 700;
+        }
+
+        .sds-nav-item.active {
+            color: #12d99a;
+            background: #203f60;
+        }
+
+        .sds-side-user {
+            margin-top: auto;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .sds-side-user b {
+            display: block;
+            font-size: 7px;
+        }
+
+        .sds-side-user span {
+            color: rgba(255,255,255,0.65);
+            font-size: 6px;
+        }
+
+        .sds-main {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sds-topbar {
+            height: 34px;
+            padding: 0 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #ffffff;
+            border-bottom: 1px solid #d8e2ea;
+            box-shadow: 0 8px 18px rgba(17, 31, 43, 0.08);
+        }
+
+        .sds-topbar strong {
+            font-size: 10px;
+        }
+
+        .sds-profile {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            padding: 4px 8px;
+            border: 1px solid #d8e2ea;
+            border-radius: 9px;
+            background: #f8fbfd;
+        }
+
+        .sds-avatar {
+            width: 18px;
+            height: 18px;
+            display: grid;
+            place-items: center;
+            border-radius: 50%;
+            color: #ffffff;
+            background: var(--green);
+            font-weight: 900;
+        }
+
+        .sds-profile b {
+            display: block;
+            font-size: 7px;
+        }
+
+        .sds-profile span {
+            display: block;
+            color: #64748b;
+            font-size: 5px;
+        }
+
+        .sds-content {
+            padding: 12px;
+        }
+
+        .sds-banner {
+            min-height: 50px;
+            padding: 13px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-radius: 12px;
+            color: #ffffff;
+            background: linear-gradient(135deg, #20c75c, #07994b);
+            box-shadow: 0 14px 24px rgba(4, 153, 75, 0.2);
+        }
+
+        .sds-banner h4 {
+            margin: 0 0 4px;
+            font-size: 12px;
+            line-height: 1;
+        }
+
+        .sds-banner span {
+            display: block;
+            font-size: 7px;
+        }
+
+        .sds-rate {
+            text-align: right;
+            font-weight: 900;
+            font-size: 18px;
+        }
+
+        .sds-rate small {
+            display: block;
+            font-size: 5px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .sds-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin: 10px 0;
+        }
+
+        .sds-stat {
+            min-height: 38px;
+            padding: 8px 9px;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            border: 1px solid #dbe4ec;
+            border-radius: 9px;
+            background: #ffffff;
+            box-shadow: 0 7px 16px rgba(17, 31, 43, 0.08);
+        }
+
+        .sds-stat i {
+            width: 20px;
+            height: 20px;
+            border-radius: 6px;
+            background: #e8fbf1;
+        }
+
+        .sds-stat b {
+            font-size: 13px;
+        }
+
+        .sds-stat span {
+            color: #456179;
+            font-size: 6px;
+            text-transform: uppercase;
+        }
+
+        .sds-bottom {
+            display: grid;
+            grid-template-columns: 0.78fr 1.22fr 0.9fr;
+            gap: 8px;
+        }
+
+        .sds-panel {
+            min-height: 142px;
+            padding: 9px;
+            overflow: hidden;
+            border: 1px solid #dbe4ec;
+            border-radius: 10px;
+            background: #ffffff;
+        }
+
+        .sds-panel h5 {
+            margin: 0 0 8px;
+            font-size: 8px;
+        }
+
+        .sds-alert-row {
+            display: grid;
+            grid-template-columns: 22px 1fr auto;
+            gap: 7px;
+            align-items: center;
+            margin-bottom: 6px;
+            padding: 7px;
+            border: 1px solid #ffe08a;
+            border-radius: 8px;
+            background: #fffbea;
+        }
+
+        .sds-initials {
+            width: 22px;
+            height: 22px;
+            display: grid;
+            place-items: center;
+            border-radius: 50%;
+            color: #ef3f57;
+            background: #ffe0e6;
+            font-weight: 900;
+        }
+
+        .sds-alert-row b,
+        .sds-school-row b {
+            display: block;
+            font-size: 7px;
+        }
+
+        .sds-alert-row span,
+        .sds-school-row span {
+            display: block;
+            color: #5c748b;
+            font-size: 5px;
+        }
+
+        .sds-alert-days {
+            color: #ee2020;
+            font-size: 6px;
+            font-weight: 900;
+        }
+
+        .sds-calendar {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+        }
+
+        .sds-date {
+            min-height: 31px;
+            display: grid;
+            place-items: center;
+            border-radius: 5px;
+            color: #8fa0ae;
+            background: #f0f4f8;
+            font-size: 6px;
+            font-weight: 800;
+        }
+
+        .sds-date.absent {
+            color: #e01919;
+            background: #ffe1e1;
+            border: 1px solid #ffc7c7;
+        }
+
+        .sds-date.absent small {
+            display: block;
+            font-size: 4px;
+        }
+
+        .sds-school-row {
+            display: grid;
+            grid-template-columns: 20px 1fr auto;
+            gap: 8px;
+            align-items: center;
+            padding: 6px 0;
+            border-bottom: 1px solid #edf1f5;
+        }
+
+        .sds-rank {
+            width: 18px;
+            height: 18px;
+            display: grid;
+            place-items: center;
+            border-radius: 50%;
+            background: #fff1bf;
+            color: #e38d00;
+            font-weight: 900;
+        }
+
+        .sds-percent {
+            color: #ff1111;
+            font-weight: 900;
+        }
+
+        @media (max-width: 1180px) {
+            .cards { grid-template-columns: repeat(2, 1fr); }
+            .desktop-showcase { grid-template-columns: 1fr; }
+            .macbook { margin: 0 auto; }
+        }
+
         @media (max-width: 940px) {
             .hero-grid {
                 grid-template-columns: 1fr;
@@ -915,6 +1455,8 @@
             .lead, h1 { margin-left: auto; margin-right: auto; }
             .download-row { justify-content: center; }
             .cards { grid-template-columns: 1fr; }
+            .desktop-copy { text-align: center; }
+            .desktop-actions { justify-content: center; }
         }
 
         @media (max-width: 560px) {
@@ -929,11 +1471,24 @@
             .phone-shell { width: min(292px, 100%); }
             .phone-screen { height: 548px; }
             .content { margin-top: 46px; }
+            .desktop-showcase { padding: 16px; border-radius: 22px; }
+            .desktop-download { width: 100%; }
+            .mac-lid { padding: 8px; border-radius: 18px 18px 12px 12px; }
+            .mac-screen { height: 248px; min-height: 0; }
+            .sds-ui {
+                width: 620px;
+                height: 382px;
+                transform: scale(0.61);
+                transform-origin: top left;
+            }
+            .mac-base { height: 16px; }
         }
 
         @media (max-width: 390px) {
             .phone-shell { width: min(278px, 100%); }
             .phone-screen { height: 530px; }
+            .mac-screen { height: 224px; }
+            .sds-ui { transform: scale(0.55); }
         }
     </style>
 </head>
@@ -1033,9 +1588,11 @@
                     </p>
                     <div class="download-row">
                         <a class="store-button <%= apkAvailable ? '' : 'disabled' %>" href="/download/mobile-app" download>
+                            <span class="platform-icon android-logo" aria-hidden="true"></span>
                             Download Android App
                         </a>
                         <a class="store-button ios-coming" href="/download/ios-app" download title="Download the Edutrack iOS app package when available.">
+                            <span class="platform-icon apple-logo" aria-hidden="true"></span>
                             Download iOS App
                         </a>
                     </div>
@@ -1056,29 +1613,135 @@
     <main id="apps" class="content">
         <div class="section-title">
             <h2>Choose Your Edutrack App</h2>
-            <p>Use the same account and same Railway-hosted database whether you open Edutrack on mobile, desktop, or the browser.</p>
+            <p>Use the same secure Edutrack account on Android, iOS, Windows, Mac, or a browser with synchronized attendance data from the Railway-hosted system.</p>
         </div>
         <div class="cards">
             <article class="app-card">
-                <div class="icon mobile-icon"></div>
-                <h3>Mobile App</h3>
-                <p>Install the latest mobile app package for dashboards, alerts, school lists, reports, and native adviser contact actions.</p>
-                <a class="card-link <%= apkAvailable ? '' : 'disabled' %>" href="/download/mobile-app" download>Download mobile app</a>
+                <div class="icon platform-card-icon"><span class="platform-icon android-logo" aria-hidden="true"></span></div>
+                <h3>Android App</h3>
+                <p>Install the Android mobile app for dashboards, absence alerts, reports, school data, and adviser contact actions.</p>
+                <a class="card-link <%= apkAvailable ? '' : 'disabled' %>" href="/download/mobile-app" download>Download Android app</a>
             </article>
             <article class="app-card">
-                <div class="icon desktop-icon"></div>
-                <h3>Desktop App</h3>
-                <p>Download the Windows launcher to open Edutrack as a focused desktop window using the same secure web system.</p>
-                <a class="card-link" href="/download/desktop-app" download>Download desktop app</a>
-                <div class="desktop-note">Works best with Microsoft Edge or Google Chrome.</div>
+                <div class="icon platform-card-icon"><span class="platform-icon apple-logo" aria-hidden="true"></span></div>
+                <h3>iOS App</h3>
+                <p>Access Edutrack on supported iOS devices with the same synchronized school attendance data.</p>
+                <a class="card-link" href="/download/ios-app" download>Download iOS app</a>
             </article>
             <article class="app-card">
-                <div class="icon browser-icon"></div>
-                <h3>Browser Install</h3>
-                <p>Supported desktop browsers can install Edutrack as a standalone app with the same account and live database.</p>
-                <button class="card-link" type="button" data-install-desktop style="border:0;background:transparent;padding:0;cursor:pointer;">Install from browser</button>
+                <div class="icon platform-card-icon"><span class="platform-icon windows-logo" aria-hidden="true"></span></div>
+                <h3>Windows App</h3>
+                <p>Download the Windows launcher to open Edutrack as a focused desktop app using Microsoft Edge or Chrome.</p>
+                <a class="card-link" href="/download/windows-app" download>Download Windows app</a>
+            </article>
+            <article class="app-card">
+                <div class="icon platform-card-icon"><span class="platform-icon apple-logo" aria-hidden="true"></span></div>
+                <h3>Mac App</h3>
+                <p>Download the Mac launcher to open Edutrack in a desktop app window using Chrome, Edge, or Safari fallback.</p>
+                <a class="card-link" href="/download/mac-app" download>Download Mac app</a>
             </article>
         </div>
+
+        <section class="desktop-showcase" aria-label="Edutrack desktop dashboard preview">
+            <div class="desktop-copy">
+                <span class="desktop-kicker"><span class="platform-icon apple-logo" aria-hidden="true"></span> Desktop Dashboard</span>
+                <h3>Open the SDS dashboard on Mac and Windows.</h3>
+                <p>The desktop launcher shows the same Edutrack dashboard used by the web system, including live attendance totals, absence alerts, monthly analytics, school rankings, and user access for Juan Dela Cruz.</p>
+                <div class="desktop-actions">
+                    <a class="desktop-download" href="/download/windows-app" download><span class="platform-icon windows-logo" aria-hidden="true"></span> Download Windows App</a>
+                    <a class="desktop-download secondary" href="/download/mac-app" download><span class="platform-icon apple-logo" aria-hidden="true"></span> Download Mac App</a>
+                </div>
+            </div>
+
+            <div class="macbook" aria-label="MacBook preview of the Edutrack SDS dashboard">
+                <div class="mac-lid">
+                    <span class="mac-camera"></span>
+                    <div class="mac-screen">
+                        <div class="sds-ui">
+                            <aside class="sds-sidebar">
+                                <div class="sds-side-brand">
+                                    <img src="/uploads/logos/system-logo.png" alt="">
+                                    <div>
+                                        <strong>School Attendance QR System</strong>
+                                        <span>Schools Division of Sipalay City</span>
+                                    </div>
+                                </div>
+                                <div class="sds-menu-label">Overview</div>
+                                <div class="sds-nav-item active">Dashboard</div>
+                                <div class="sds-menu-label">Attendance</div>
+                                <div class="sds-nav-item">Attendance</div>
+                                <div class="sds-nav-item">Reports</div>
+                                <div class="sds-menu-label">Communication</div>
+                                <div class="sds-nav-item">Notifications</div>
+                                <div class="sds-side-user">
+                                    <b>Juan Dela Cruz</b>
+                                    <span>Superintendent</span>
+                                </div>
+                            </aside>
+                            <section class="sds-main">
+                                <div class="sds-topbar">
+                                    <strong>Dashboard</strong>
+                                    <div class="sds-profile">
+                                        <span class="sds-avatar">J</span>
+                                        <div>
+                                            <b>Juan Dela Cruz</b>
+                                            <span>Superintendent</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="sds-content">
+                                    <div class="sds-banner">
+                                        <div>
+                                            <h4>Good afternoon, Juan Dela Cruz</h4>
+                                            <span>Friday, May 29, 2026</span>
+                                        </div>
+                                        <div class="sds-rate">0%<small>Today's rate</small></div>
+                                    </div>
+                                    <div class="sds-stats">
+                                        <div class="sds-stat"><i></i><div><b>48</b> <span>Total Schools</span></div></div>
+                                        <div class="sds-stat"><i></i><div><b>1</b> <span>Total Students</span></div></div>
+                                        <div class="sds-stat"><i></i><div><b>0</b> <span>Present Today</span></div></div>
+                                        <div class="sds-stat"><i></i><div><b>1</b> <span>Absent Today</span></div></div>
+                                        <div class="sds-stat"><i></i><div><b>1</b> <span>2-Day Absentees</span></div></div>
+                                        <div class="sds-stat"><i></i><div><b>1</b> <span>Total Teachers</span></div></div>
+                                    </div>
+                                    <div class="sds-bottom">
+                                        <div class="sds-panel">
+                                            <h5>2-Day Absentees</h5>
+                                            <div class="sds-alert-row">
+                                                <span class="sds-initials">WH</span>
+                                                <div><b>Wesley Hans Platil</b><span>Banag Elementary School</span></div>
+                                                <span class="sds-alert-days">15 days</span>
+                                            </div>
+                                            <div class="sds-alert-row">
+                                                <span class="sds-initials">JA</span>
+                                                <div><b>Josel Ann M. Vallespin</b><span>Banag Elementary School</span></div>
+                                                <span class="sds-alert-days">5 days</span>
+                                            </div>
+                                        </div>
+                                        <div class="sds-panel">
+                                            <h5>Monthly Absences</h5>
+                                            <div class="sds-calendar">
+                                                <span class="sds-date">1</span><span class="sds-date">2</span><span class="sds-date">3</span><span class="sds-date">4</span><span class="sds-date">5</span><span class="sds-date">6</span><span class="sds-date">7</span>
+                                                <span class="sds-date">8</span><span class="sds-date">9</span><span class="sds-date">10</span><span class="sds-date absent">11<small>1 abs</small></span><span class="sds-date absent">12<small>1 abs</small></span><span class="sds-date absent">13<small>1 abs</small></span><span class="sds-date absent">14<small>1 abs</small></span>
+                                                <span class="sds-date absent">15<small>1 abs</small></span><span class="sds-date">16</span><span class="sds-date">17</span><span class="sds-date absent">18<small>1 abs</small></span><span class="sds-date absent">19<small>1 abs</small></span><span class="sds-date absent">20<small>1 abs</small></span><span class="sds-date absent">21<small>1 abs</small></span>
+                                            </div>
+                                        </div>
+                                        <div class="sds-panel">
+                                            <h5>Schools by Rate</h5>
+                                            <div class="sds-school-row"><span class="sds-rank">1</span><div><b>Agripino Elementary School</b><span>0 present of 0</span></div><span class="sds-percent">0%</span></div>
+                                            <div class="sds-school-row"><span class="sds-rank">2</span><div><b>Banag Elementary School</b><span>0 present of 1</span></div><span class="sds-percent">0%</span></div>
+                                            <div class="sds-school-row"><span class="sds-rank">3</span><div><b>Barangay V Elementary School</b><span>0 present of 0</span></div><span class="sds-percent">0%</span></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+                </div>
+                <div class="mac-base"></div>
+            </div>
+        </section>
     </main>
 
     <script>
