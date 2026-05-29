@@ -1350,22 +1350,35 @@
             min-height: 31px;
             display: grid;
             place-items: center;
+            position: relative;
+            overflow: hidden;
             border-radius: 5px;
-            color: #8fa0ae;
+            color: transparent;
             background: #f0f4f8;
             font-size: 6px;
             font-weight: 800;
         }
 
+        .sds-date::after {
+            content: "";
+            width: 10px;
+            height: 4px;
+            border-radius: 999px;
+            background: #c2ced8;
+        }
+
         .sds-date.absent {
-            color: #e01919;
+            color: transparent;
             background: #ffe1e1;
             border: 1px solid #ffc7c7;
         }
 
+        .sds-date.absent::after {
+            background: #f09f9f;
+        }
+
         .sds-date.absent small {
-            display: block;
-            font-size: 4px;
+            display: none;
         }
 
         .sds-school-row {
@@ -1391,6 +1404,10 @@
         .sds-percent {
             color: #ff1111;
             font-weight: 900;
+            min-width: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: flex-end;
         }
 
         .sds-skeleton {
@@ -1703,9 +1720,9 @@
                                         </div>
                                         <div class="sds-panel">
                                             <h5>Schools by Rate</h5>
-                                            <div class="sds-school-row"><span class="sds-rank">1</span><div><span class="sds-skeleton" style="width:70px;height:6px;"></span><span class="sds-skeleton tight" style="width:44px;height:5px;"></span></div><span class="sds-percent">0%</span></div>
-                                            <div class="sds-school-row"><span class="sds-rank">2</span><div><span class="sds-skeleton" style="width:62px;height:6px;"></span><span class="sds-skeleton tight" style="width:40px;height:5px;"></span></div><span class="sds-percent">0%</span></div>
-                                            <div class="sds-school-row"><span class="sds-rank">3</span><div><span class="sds-skeleton" style="width:66px;height:6px;"></span><span class="sds-skeleton tight" style="width:42px;height:5px;"></span></div><span class="sds-percent">0%</span></div>
+                                            <div class="sds-school-row"><span class="sds-rank"></span><div><span class="sds-skeleton" style="width:70px;height:6px;"></span><span class="sds-skeleton tight" style="width:44px;height:5px;"></span></div><span class="sds-percent"><span class="sds-skeleton" style="width:18px;height:5px;"></span></span></div>
+                                            <div class="sds-school-row"><span class="sds-rank"></span><div><span class="sds-skeleton" style="width:62px;height:6px;"></span><span class="sds-skeleton tight" style="width:40px;height:5px;"></span></div><span class="sds-percent"><span class="sds-skeleton" style="width:18px;height:5px;"></span></span></div>
+                                            <div class="sds-school-row"><span class="sds-rank"></span><div><span class="sds-skeleton" style="width:66px;height:6px;"></span><span class="sds-skeleton tight" style="width:42px;height:5px;"></span></div><span class="sds-percent"><span class="sds-skeleton" style="width:18px;height:5px;"></span></span></div>
                                         </div>
                                     </div>
                                 </div>
