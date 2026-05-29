@@ -155,7 +155,8 @@ async function getDownloadPageStats() {
         totalSchools: 0,
         totalStudents: 0,
         totalTeachers: 0,
-        presentToday: 0
+        presentToday: 0,
+        absentToday: 0
     };
 
     try {
@@ -177,7 +178,8 @@ async function getDownloadPageStats() {
             totalSchools: schoolRows[0]?.count || 0,
             totalStudents: studentRows[0]?.count || 0,
             totalTeachers: teacherRows[0]?.count || 0,
-            presentToday: presentRows[0]?.count || 0
+            presentToday: presentRows[0]?.count || 0,
+            absentToday: Math.max(0, (studentRows[0]?.count || 0) - (presentRows[0]?.count || 0))
         };
     } catch (err) {
         console.error('Download page stats failed:', err);
@@ -211,7 +213,8 @@ app.get('/download/mobile-app', (req, res) => {
                 totalSchools: 0,
                 totalStudents: 0,
                 totalTeachers: 0,
-                presentToday: 0
+                presentToday: 0,
+                absentToday: 0
             },
             appBaseUrl,
             error: 'The APK file has not been uploaded yet.'
