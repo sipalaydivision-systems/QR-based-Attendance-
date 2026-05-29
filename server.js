@@ -144,12 +144,56 @@ app.get('/api/mobile-health', (req, res) => {
     });
 });
 
-app.get('/mobile-app', (req, res) => {
+function manilaDateString() {
+    return new Date(Date.now() + (8 * 60 * 60 * 1000)).toISOString().slice(0, 10);
+}
+
+async function getDownloadPageStats() {
+    const today = manilaDateString();
+    const fallback = {
+        today,
+        totalSchools: 0,
+        totalStudents: 0,
+        totalTeachers: 0,
+        presentToday: 0
+    };
+
+    try {
+        const [[schoolRows], [studentRows], [teacherRows], [presentRows]] = await Promise.all([
+            db.query("SELECT COUNT(*) as count FROM schools WHERE status = 'active'"),
+            db.query("SELECT COUNT(*) as count FROM students WHERE status = 'active'"),
+            db.query("SELECT COUNT(*) as count FROM teachers WHERE status = 'active'"),
+            db.query(`SELECT COUNT(DISTINCT a.person_id) as count
+                FROM attendance a
+                INNER JOIN students s ON a.person_id = s.id
+                WHERE a.person_type = 'student'
+                    AND s.status = 'active'
+                    AND a.date = ?
+                    AND a.time_in IS NOT NULL`, [today])
+        ]);
+
+        return {
+            today,
+            totalSchools: schoolRows[0]?.count || 0,
+            totalStudents: studentRows[0]?.count || 0,
+            totalTeachers: teacherRows[0]?.count || 0,
+            presentToday: presentRows[0]?.count || 0
+        };
+    } catch (err) {
+        console.error('Download page stats failed:', err);
+        return fallback;
+    }
+}
+
+app.get('/mobile-app', async (req, res) => {
     const apkPath = path.join(__dirname, 'public', 'downloads', 'school-attendance-division.apk');
     const appBaseUrl = getPublicAppBaseUrl(req);
+    const stats = await getDownloadPageStats();
     res.render('mobile_app', {
-        title: 'Download Mobile App',
+        title: 'Download Edutrack Apps',
         apkAvailable: fs.existsSync(apkPath),
+        desktopAvailable: true,
+        stats,
         appBaseUrl
     });
 });
@@ -159,13 +203,43 @@ app.get('/download/mobile-app', (req, res) => {
     if (!fs.existsSync(apkPath)) {
         const appBaseUrl = getPublicAppBaseUrl(req);
         return res.status(404).render('mobile_app', {
-            title: 'Download Mobile App',
+            title: 'Download Edutrack Apps',
             apkAvailable: false,
+            desktopAvailable: true,
+            stats: {
+                today: manilaDateString(),
+                totalSchools: 0,
+                totalStudents: 0,
+                totalTeachers: 0,
+                presentToday: 0
+            },
             appBaseUrl,
             error: 'The APK file has not been uploaded yet.'
         });
     }
     return res.download(apkPath, 'Edutrack-Mobile.apk');
+});
+
+app.get('/download/desktop-app', (req, res) => {
+    const appBaseUrl = getPublicAppBaseUrl(req);
+    const launcher = `@echo off\r\n`
+        + `set "APP_URL=${appBaseUrl}/app"\r\n`
+        + `set "APP_NAME=Edutrack"\r\n`
+        + `where msedge >nul 2>nul\r\n`
+        + `if %ERRORLEVEL%==0 (\r\n`
+        + `  start "" msedge --app="%APP_URL%"\r\n`
+        + `  exit /b\r\n`
+        + `)\r\n`
+        + `where chrome >nul 2>nul\r\n`
+        + `if %ERRORLEVEL%==0 (\r\n`
+        + `  start "" chrome --app="%APP_URL%"\r\n`
+        + `  exit /b\r\n`
+        + `)\r\n`
+        + `start "" "%APP_URL%"\r\n`;
+
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="Edutrack-Desktop-App.cmd"');
+    return res.send(launcher);
 });
 
 // 404

@@ -3,210 +3,579 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%= title || 'Download Mobile App' %></title>
+    <title><%= title || 'Download Edutrack Apps' %></title>
     <link rel="icon" type="image/png" href="/uploads/logos/system-logo.png">
+    <link rel="manifest" href="/manifest.webmanifest">
     <style>
         :root {
-            --ink: #0f172a;
-            --muted: #64748b;
-            --primary: #4f46e5;
-            --primary-dark: #4338ca;
-            --line: #dbe3ef;
+            --ink: #101828;
+            --muted: #667085;
+            --blue: #1f7af2;
+            --blue-deep: #155fca;
+            --green: #0a9f6e;
+            --line: #d9e3ef;
             --surface: #ffffff;
-            --soft: #f8fafc;
-            --success: #16a34a;
-            --danger: #b91c1c;
+            --soft: #f5f8fc;
+            --shadow: 0 28px 70px rgba(16, 24, 40, 0.16);
         }
+
         * { box-sizing: border-box; }
+
         body {
             margin: 0;
             min-height: 100vh;
-            font-family: Arial, Helvetica, sans-serif;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
             color: var(--ink);
-            background: linear-gradient(180deg, #eef4fb 0%, #ffffff 100%);
-            display: grid;
-            place-items: center;
-            padding: 24px;
+            background: #ffffff;
         }
-        .page {
-            width: min(960px, 100%);
-            display: grid;
-            grid-template-columns: 1fr 0.78fr;
-            gap: 28px;
+
+        .hero {
+            position: relative;
+            overflow: hidden;
+            min-height: 590px;
+            color: #ffffff;
+            background: linear-gradient(135deg, #1e73ee 0%, #2188ff 52%, #0d64d9 100%);
+        }
+
+        .hero::before {
+            content: "";
+            position: absolute;
+            inset: auto -14vw -28vw 20vw;
+            height: 54vw;
+            min-height: 390px;
+            background: #ffffff;
+            border-radius: 50% 50% 0 0;
+            transform: rotate(-10deg);
+            box-shadow: inset 0 18px 34px rgba(10, 74, 157, 0.12);
+        }
+
+        .hero::after {
+            content: "";
+            position: absolute;
+            right: -90px;
+            top: -105px;
+            width: 310px;
+            height: 310px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.13);
+            box-shadow: inset 0 -18px 32px rgba(12, 76, 170, 0.16);
+        }
+
+        .wrap {
+            position: relative;
+            z-index: 2;
+            width: min(1120px, calc(100% - 40px));
+            margin: 0 auto;
+        }
+
+        .nav {
+            height: 92px;
+            display: flex;
             align-items: center;
+            justify-content: space-between;
+            gap: 24px;
         }
-        .hero, .phone {
-            background: var(--surface);
-            border: 1px solid var(--line);
-            border-radius: 18px;
-            box-shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
-        }
-        .hero { padding: 34px; }
+
         .brand {
             display: flex;
             align-items: center;
-            gap: 14px;
-            margin-bottom: 30px;
+            gap: 12px;
+            min-width: 0;
         }
+
         .brand img {
-            width: 64px;
-            height: 64px;
+            width: 42px;
+            height: 42px;
             object-fit: contain;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.94);
+            padding: 3px;
         }
-        .brand strong { display: block; font-size: 18px; }
-        .brand span { color: var(--muted); font-size: 13px; }
+
+        .brand strong {
+            display: block;
+            font-size: 17px;
+            line-height: 1.1;
+            letter-spacing: 0;
+        }
+
+        .brand span {
+            display: block;
+            margin-top: 3px;
+            color: rgba(255, 255, 255, 0.78);
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .nav-links a {
+            color: rgba(255, 255, 255, 0.82);
+            text-decoration: none;
+        }
+
+        .nav-action {
+            min-height: 44px;
+            padding: 0 24px;
+            border-radius: 999px;
+            border: 0;
+            background: #ffffff;
+            color: var(--blue-deep);
+            font-weight: 800;
+            box-shadow: 0 12px 26px rgba(15, 90, 190, 0.24);
+            cursor: pointer;
+        }
+
+        .hero-grid {
+            display: grid;
+            grid-template-columns: 0.72fr 1fr;
+            gap: 74px;
+            align-items: center;
+            padding: 34px 0 120px;
+        }
+
+        .phone-shell {
+            width: min(290px, 88vw);
+            margin: 0 auto;
+            padding: 12px;
+            border-radius: 34px;
+            background: #ffffff;
+            box-shadow: var(--shadow);
+        }
+
+        .phone-screen {
+            overflow: hidden;
+            border: 1px solid #e8eef6;
+            border-radius: 25px;
+            background: #f8fbff;
+            min-height: 475px;
+        }
+
+        .phone-top {
+            padding: 18px;
+            background: linear-gradient(180deg, #0a9f6e, #0b8b65);
+            color: #ffffff;
+        }
+
+        .phone-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .phone-brand img {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #fff;
+            padding: 2px;
+        }
+
+        .phone-title {
+            font-size: 15px;
+            font-weight: 900;
+            line-height: 1.1;
+        }
+
+        .phone-subtitle {
+            margin-top: 2px;
+            font-size: 11px;
+            opacity: 0.86;
+        }
+
+        .phone-card {
+            margin: 14px;
+            padding: 14px;
+            border: 1px solid #dce7f1;
+            border-radius: 14px;
+            background: #ffffff;
+        }
+
+        .ring {
+            width: 128px;
+            height: 128px;
+            margin: 10px auto 16px;
+            display: grid;
+            place-items: center;
+            border-radius: 50%;
+            background: conic-gradient(#0a9f6e 0 66%, #dcefe8 66% 100%);
+        }
+
+        .ring span {
+            width: 92px;
+            height: 92px;
+            display: grid;
+            place-items: center;
+            border-radius: 50%;
+            background: #ffffff;
+            color: #101828;
+            font-size: 27px;
+            font-weight: 900;
+        }
+
+        .mini-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 9px;
+        }
+
+        .mini-stat {
+            padding: 10px;
+            border-radius: 12px;
+            background: #f4f8fb;
+        }
+
+        .mini-stat b {
+            display: block;
+            color: #101828;
+            font-size: 21px;
+        }
+
+        .mini-stat span {
+            color: #667085;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .hero-copy {
+            max-width: 560px;
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 34px;
+            padding: 0 14px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.14);
+            color: rgba(255, 255, 255, 0.92);
+            font-size: 13px;
+            font-weight: 800;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #2df5a3;
+            box-shadow: 0 0 0 6px rgba(45, 245, 163, 0.16);
+        }
+
         h1 {
-            margin: 0;
-            font-size: clamp(32px, 5vw, 52px);
+            margin: 22px 0 16px;
+            max-width: 700px;
+            font-size: clamp(36px, 5vw, 64px);
             line-height: 1.02;
             letter-spacing: 0;
         }
+
         .lead {
-            color: var(--muted);
+            max-width: 560px;
+            margin: 0 0 28px;
+            color: rgba(255, 255, 255, 0.84);
             font-size: 17px;
-            line-height: 1.6;
-            margin: 18px 0 26px;
+            line-height: 1.72;
         }
-        .download {
+
+        .download-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .store-button {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-height: 54px;
-            padding: 0 24px;
-            border-radius: 12px;
-            background: var(--primary);
-            color: #fff;
+            gap: 10px;
+            min-height: 52px;
+            padding: 0 20px;
+            border-radius: 999px;
+            background: #101828;
+            color: #ffffff;
+            border: 0;
             text-decoration: none;
-            font-weight: 700;
-            box-shadow: 0 12px 28px rgba(79, 70, 229, 0.3);
+            font-size: 14px;
+            font-weight: 900;
+            box-shadow: 0 14px 30px rgba(16, 24, 40, 0.22);
+            cursor: pointer;
         }
-        .download:hover { background: var(--primary-dark); }
-        .connect {
-            background: #16a34a;
-            box-shadow: 0 12px 28px rgba(22, 163, 74, 0.25);
-            margin-left: 10px;
+
+        .store-button.secondary {
+            background: #ffffff;
+            color: var(--blue-deep);
         }
-        .connect:hover { background: #15803d; }
-        .download.disabled {
-            background: #94a3b8;
-            box-shadow: none;
+
+        .store-button.disabled {
             pointer-events: none;
+            background: #8090a6;
+            color: #eef2f6;
         }
+
+        .store-icon {
+            width: 28px;
+            height: 28px;
+            display: grid;
+            place-items: center;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.13);
+            font-size: 15px;
+        }
+
+        .store-button.secondary .store-icon {
+            background: #edf5ff;
+        }
+
         .status {
             margin-top: 18px;
-            color: <%= apkAvailable ? "var(--success)" : "var(--danger)" %>;
-            font-weight: 700;
-            font-size: 14px;
+            color: <%= apkAvailable ? "#d9fff0" : "#ffe0e0" %>;
+            font-size: 13px;
+            font-weight: 800;
         }
-        .features {
+
+        .content {
+            position: relative;
+            z-index: 3;
+            width: min(1120px, calc(100% - 40px));
+            margin: -58px auto 70px;
+        }
+
+        .section-title {
+            text-align: center;
+            max-width: 640px;
+            margin: 0 auto 28px;
+        }
+
+        .section-title h2 {
+            margin: 0 0 9px;
+            font-size: clamp(26px, 3vw, 36px);
+            letter-spacing: 0;
+        }
+
+        .section-title p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        .cards {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 10px;
-            margin-top: 28px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 18px;
         }
-        .feature {
-            border: 1px solid var(--line);
-            border-radius: 12px;
-            padding: 14px;
-            color: var(--muted);
-            font-size: 14px;
-            background: var(--soft);
-        }
-        .phone {
+
+        .app-card {
+            min-height: 238px;
             padding: 24px;
-            min-height: 520px;
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-        }
-        .phone-top {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        .phone-top img { width: 48px; height: 48px; object-fit: contain; }
-        .screen-card {
             border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #ffffff;
+            box-shadow: 0 16px 40px rgba(16, 24, 40, 0.08);
+        }
+
+        .app-card .icon {
+            width: 48px;
+            height: 48px;
+            display: grid;
+            place-items: center;
+            margin-bottom: 20px;
             border-radius: 14px;
-            padding: 18px;
-            background: var(--soft);
+            background: #eef6ff;
+            color: var(--blue);
+            font-weight: 900;
+            font-size: 20px;
         }
-        .metric {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid var(--line);
-            padding: 13px 0;
-            font-size: 14px;
+
+        .app-card h3 {
+            margin: 0 0 8px;
+            font-size: 19px;
+        }
+
+        .app-card p {
+            margin: 0 0 18px;
             color: var(--muted);
+            line-height: 1.55;
+            font-size: 14px;
         }
-        .metric:last-child { border-bottom: 0; }
-        .metric strong { color: var(--ink); font-size: 22px; }
-        .alert {
-            background: #fef2f2;
-            border: 1px solid #fecaca;
-            color: #991b1b;
-            border-radius: 12px;
-            padding: 14px;
-            font-weight: 700;
+
+        .card-link {
+            color: var(--blue-deep);
+            font-weight: 900;
+            text-decoration: none;
         }
-        @media (max-width: 780px) {
-            .page { grid-template-columns: 1fr; }
-            .hero { padding: 26px; }
-            .features { grid-template-columns: 1fr; }
+
+        .desktop-note {
+            margin-top: 10px;
+            color: #0a7f5d;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        @media (max-width: 920px) {
+            .nav-links { display: none; }
+            .hero-grid {
+                grid-template-columns: 1fr;
+                gap: 36px;
+                padding-top: 12px;
+                text-align: center;
+            }
+            .hero-copy {
+                margin: 0 auto;
+                order: -1;
+            }
+            .lead, h1 { margin-left: auto; margin-right: auto; }
+            .download-row { justify-content: center; }
+            .cards { grid-template-columns: 1fr; }
+            .content { margin-top: -34px; }
+        }
+
+        @media (max-width: 560px) {
+            .wrap, .content { width: min(100% - 26px, 1120px); }
+            .hero { min-height: auto; }
+            .nav { height: 74px; }
+            .brand span { white-space: normal; }
+            .hero-grid { padding-bottom: 86px; }
+            .store-button { width: 100%; }
+            .phone-shell { width: min(270px, 100%); }
         }
     </style>
 </head>
 <body>
-    <main class="page">
-        <section class="hero">
-            <div class="brand">
-                <img src="/uploads/logos/system-logo.png" alt="System Logo">
-                <div>
-                    <strong>Edutrack</strong>
-                    <span>Schools Division of Sipalay City</span>
+    <section class="hero">
+        <div class="wrap">
+            <nav class="nav">
+                <a class="brand" href="/app" aria-label="Open Edutrack">
+                    <img src="/uploads/logos/system-logo.png" alt="Edutrack Logo">
+                    <span>
+                        <strong>Edutrack</strong>
+                        <span>Schools Division of Sipalay City</span>
+                    </span>
+                </a>
+                <div class="nav-links" aria-label="Page sections">
+                    <a href="/app">Dashboard</a>
+                    <a href="#apps">Apps</a>
+                    <a href="/login">Sign in</a>
+                </div>
+                <button class="nav-action" type="button" data-install-desktop>Install Desktop</button>
+            </nav>
+
+            <div class="hero-grid">
+                <div class="phone-shell" aria-label="Mobile app preview">
+                    <div class="phone-screen">
+                        <div class="phone-top">
+                            <div class="phone-brand">
+                                <img src="/uploads/logos/system-logo.png" alt="">
+                                <div>
+                                    <div class="phone-title">Division Dashboard</div>
+                                    <div class="phone-subtitle">Live Attendance App</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="phone-card">
+                            <div class="ring"><span><%= stats && stats.totalStudents ? Math.min(100, Math.round((stats.presentToday || 0) / Math.max(stats.totalStudents || 1, 1) * 100)) : 0 %>%</span></div>
+                            <div class="mini-grid">
+                                <div class="mini-stat"><b><%= stats ? stats.totalSchools : 0 %></b><span>Schools</span></div>
+                                <div class="mini-stat"><b><%= stats ? stats.totalStudents : 0 %></b><span>Students</span></div>
+                                <div class="mini-stat"><b><%= stats ? stats.presentToday : 0 %></b><span>Present</span></div>
+                                <div class="mini-stat"><b><%= stats ? stats.totalTeachers : 0 %></b><span>Teachers</span></div>
+                            </div>
+                        </div>
+                        <div class="phone-card">
+                            <strong>2-Day Absence Alerts</strong>
+                            <p style="margin:8px 0 0;color:#667085;font-size:12px;line-height:1.45;">Notifications, adviser contact actions, and live records are connected to the web system.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="hero-copy">
+                    <div class="eyebrow"><span class="dot"></span>Live server apps for Edutrack</div>
+                    <h1>The attendance system in your pocket and on your desktop.</h1>
+                    <p class="lead">Install the Android app or desktop launcher for the same QR attendance records, dashboards, alerts, adviser contact tools, and Railway server connection used by the web system.</p>
+                    <div class="download-row">
+                        <a class="store-button <%= apkAvailable ? '' : 'disabled' %>" href="/download/mobile-app" download>
+                            <span class="store-icon">A</span>
+                            Download Android APK
+                        </a>
+                        <a class="store-button secondary" href="/download/desktop-app" download>
+                            <span class="store-icon">D</span>
+                            Download Desktop App
+                        </a>
+                    </div>
+                    <div class="status">
+                        <% if (typeof error !== 'undefined' && error) { %>
+                            <%= error %>
+                        <% } else if (apkAvailable) { %>
+                            Android APK and desktop launcher are ready for this attendance system.
+                        <% } else { %>
+                            Desktop launcher is ready. Build the APK and place it in public/downloads/school-attendance-division.apk.
+                        <% } %>
+                    </div>
                 </div>
             </div>
-            <h1>SDS / ASDS Mobile Dashboard</h1>
-            <p class="lead">Install the Android APK for this QR attendance system. It uses this same web dashboard, login, and MySQL database.</p>
-            <a class="download <%= apkAvailable ? '' : 'disabled' %>" href="/download/mobile-app" download>Download APK</a>
-            <div class="status">
-                <% if (typeof error !== 'undefined' && error) { %>
-                    <%= error %>
-                <% } else if (apkAvailable) { %>
-                APK is ready for this attendance system.
-                <% } else { %>
-                    APK source is ready. Build the APK and place it in public/downloads/school-attendance-division.apk.
-                <% } %>
-            </div>
-            <p class="lead" style="font-size:14px;margin-top:14px;margin-bottom:0;">
-                Install the APK from this page, open it, and sign in with the same web account.
-            </p>
-            <div class="features">
-                <div class="feature">Same web account login</div>
-                <div class="feature">Dashboard totals from MySQL</div>
-                <div class="feature">2-day absence alerts</div>
-                <div class="feature">Android phone notifications</div>
-                <div class="feature">This QR attendance system</div>
-                <div class="feature">Use the same web accounts</div>
-            </div>
-        </section>
-        <aside class="phone">
-            <div class="phone-top">
-                <img src="/uploads/logos/system-logo.png" alt="">
-                <div>
-                    <strong>Division Dashboard</strong><br>
-                    <span style="color:var(--muted);font-size:13px;">Native Android App</span>
-                </div>
-            </div>
-            <div class="screen-card">
-                <div class="metric"><span>Total Schools</span><strong>48</strong></div>
-                <div class="metric"><span>Present Today</span><strong>0</strong></div>
-                <div class="metric"><span>Absent Today</span><strong>0</strong></div>
-                <div class="metric"><span>Teachers Present</span><strong>0</strong></div>
-            </div>
-            <div class="alert">2-Day Absence Alert will notify your phone.</div>
-        </aside>
+        </div>
+    </section>
+
+    <main id="apps" class="content">
+        <div class="section-title">
+            <h2>Choose Your Edutrack App</h2>
+            <p>Use the same account and same Railway-hosted database whether you open Edutrack on Android, desktop, or the browser.</p>
+        </div>
+        <div class="cards">
+            <article class="app-card">
+                <div class="icon">A</div>
+                <h3>Android Mobile App</h3>
+                <p>Install the latest APK for mobile dashboards, alerts, school lists, reports, and native adviser contact actions.</p>
+                <a class="card-link <%= apkAvailable ? '' : 'disabled' %>" href="/download/mobile-app" download>Download APK</a>
+            </article>
+            <article class="app-card">
+                <div class="icon">D</div>
+                <h3>Desktop App</h3>
+                <p>Download the Windows launcher to open Edutrack as a focused desktop window using the same secure web system.</p>
+                <a class="card-link" href="/download/desktop-app" download>Download Windows Launcher</a>
+                <div class="desktop-note">Works best with Microsoft Edge or Google Chrome.</div>
+            </article>
+            <article class="app-card">
+                <div class="icon">P</div>
+                <h3>Install From Browser</h3>
+                <p>Supported desktop browsers can install Edutrack as a standalone app from this page.</p>
+                <button class="card-link" type="button" data-install-desktop style="border:0;background:transparent;padding:0;cursor:pointer;">Install Desktop App</button>
+            </article>
+        </div>
     </main>
+
+    <script>
+        let deferredInstallPrompt = null;
+        const installButtons = document.querySelectorAll('[data-install-desktop]');
+
+        window.addEventListener('beforeinstallprompt', (event) => {
+            event.preventDefault();
+            deferredInstallPrompt = event;
+            installButtons.forEach((button) => {
+                button.disabled = false;
+                button.removeAttribute('aria-disabled');
+            });
+        });
+
+        installButtons.forEach((button) => {
+            button.addEventListener('click', async () => {
+                if (!deferredInstallPrompt) {
+                    window.location.href = '/download/desktop-app';
+                    return;
+                }
+                deferredInstallPrompt.prompt();
+                await deferredInstallPrompt.userChoice;
+                deferredInstallPrompt = null;
+            });
+        });
+    </script>
 </body>
 </html>
