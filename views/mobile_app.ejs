@@ -1567,23 +1567,23 @@
                     <h1>Access Attendance Monitoring Anytime, Anywhere</h1>
                     <p class="lead">
                         <span>Stay connected with real-time attendance records, student monitoring, absence alerts, reports, school information, and adviser communication tools through the Edutrack platform.</span>
-                        <span>Access the same synchronized data across the web platform, Android devices, and iOS devices through a secure cloud-based system.</span>
+                        <span>Access the same synchronized data across the web platform, Android devices, and IOS devices through a secure cloud-based system.</span>
                     </p>
                     <div class="download-row">
                         <a class="store-button <%= apkAvailable ? '' : 'disabled' %>" href="/download/mobile-app" download>
                             <%- platformIconHtml('android', 'Android logo') %>
                             Download Android App
                         </a>
-                        <a class="store-button ios-coming" href="/download/ios-app" download title="Download the Edutrack iOS app package when available.">
+                        <a class="store-button ios-coming" href="/download/ios-app" download title="Download the Edutrack IOS app package when available.">
                             <%- platformIconHtml('ios', 'iOS logo') %>
-                            Download iOS App
+                            Download IOS App
                         </a>
                     </div>
                     <div class="status">
                         <% if (typeof error !== 'undefined' && error) { %>
                             <%= error %>
                         <% } else if (apkAvailable) { %>
-                            Android and iOS applications are available for secure and real-time attendance monitoring.
+                            Android and IOS applications are available for secure and real-time attendance monitoring.
                         <% } else { %>
                             Android app package is being prepared for secure and real-time attendance monitoring.
                         <% } %>
@@ -1596,7 +1596,7 @@
     <main id="apps" class="content">
         <section class="desktop-showcase" aria-label="Edutrack desktop dashboard preview">
             <div class="desktop-copy">
-                <span class="desktop-kicker"><%- platformIconHtml('mac', 'Mac logo') %> Desktop Dashboard</span>
+                <span class="desktop-kicker">Desktop Dashboard</span>
                 <h3>Open the Edutrack dashboard on Mac and Windows.</h3>
                 <p>The desktop launcher shows the same Edutrack dashboard used by the web system, including live attendance totals, absence alerts, monthly analytics, school rankings, and user access for Juan Dela Cruz.</p>
                 <div class="desktop-actions">
