@@ -45,13 +45,13 @@
         .hero::before {
             content: "";
             position: absolute;
-            left: -10vw;
-            right: -10vw;
-            bottom: -34px;
-            height: 278px;
+            left: -12vw;
+            right: -12vw;
+            bottom: -152px;
+            height: 320px;
             background: #ffffff;
             border-radius: 50% 50% 0 0;
-            transform: rotate(-3deg);
+            transform: rotate(-2.6deg);
             box-shadow: inset 0 18px 34px rgba(6, 114, 82, 0.08);
             z-index: 0;
         }
@@ -105,7 +105,7 @@
             grid-template-columns: 0.82fr 1fr;
             gap: clamp(34px, 6vw, 84px);
             align-items: center;
-            padding: 8px 0 92px;
+            padding: 12px 0 148px;
         }
 
         .phone-shell {
@@ -586,7 +586,8 @@
         }
 
         .hero-copy {
-            max-width: 620px;
+            max-width: 650px;
+            padding-top: 18px;
         }
 
         .eyebrow {
@@ -603,19 +604,19 @@
         }
 
         h1 {
-            margin: 22px 0 16px;
+            margin: 20px 0 14px;
             max-width: 680px;
-            font-size: clamp(38px, 5vw, 64px);
-            line-height: 1.04;
+            font-size: clamp(38px, 4.4vw, 60px);
+            line-height: 1.05;
             letter-spacing: 0;
         }
 
         .lead {
-            max-width: 575px;
-            margin: 0 0 28px;
-            color: rgba(255, 255, 255, 0.9);
-            font-size: 17px;
-            line-height: 1.7;
+            max-width: 620px;
+            margin: 0 0 24px;
+            color: rgba(255, 255, 255, 0.93);
+            font-size: 16px;
+            line-height: 1.62;
         }
 
         .download-row {
@@ -659,6 +660,7 @@
             color: <%= apkAvailable ? "#dbfff0" : "#ffe1e1" %>;
             font-size: 13px;
             font-weight: 800;
+            text-shadow: 0 1px 16px rgba(3, 88, 63, 0.42);
         }
 
         .content {
@@ -799,13 +801,14 @@
                 grid-template-columns: 1fr;
                 gap: 28px;
                 padding-top: 10px;
-                padding-bottom: 94px;
+                padding-bottom: 122px;
                 text-align: center;
             }
 
             .hero-copy {
                 margin: 0 auto;
                 order: -1;
+                padding-top: 0;
             }
 
             .lead, h1 { margin-left: auto; margin-right: auto; }
@@ -817,7 +820,8 @@
             .wrap, .content { width: min(100% - 26px, 1120px); }
             .brand-bar { min-height: 68px; }
             .brand span { white-space: normal; }
-            .hero-grid { padding-top: 2px; padding-bottom: 72px; }
+            .hero::before { bottom: -112px; height: 250px; }
+            .hero-grid { padding-top: 2px; padding-bottom: 96px; }
             .store-button { width: 100%; }
             .phone-shell { width: min(274px, 100%); }
             .phone-screen { height: 488px; }
@@ -869,7 +873,7 @@
                         <div class="phone-body">
                             <div class="greeting-card">
                                 <small>Good morning</small>
-                                <strong>Wesley Hans Platil</strong>
+                                <strong>Juan Dela Cruz</strong>
                                 <small>Friday, May 29, 2026</small>
                                 <div class="stat-row">
                                     <div class="compact-stat"><i class="compact-icon present"></i><b><%= totalStudents %></b><span>Students</span></div>
