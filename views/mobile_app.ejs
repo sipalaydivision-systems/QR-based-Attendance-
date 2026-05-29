@@ -36,6 +36,8 @@
         .hero {
             position: relative;
             overflow: hidden;
+            min-height: 100vh;
+            min-height: 100svh;
             color: #ffffff;
             background:
                 radial-gradient(circle at 86% 10%, rgba(255,255,255,0.16) 0 130px, transparent 132px),
@@ -47,11 +49,11 @@
             position: absolute;
             left: -12vw;
             right: -12vw;
-            bottom: -152px;
+            bottom: -150px;
             height: 320px;
             background: #ffffff;
             border-radius: 50% 50% 0 0;
-            transform: rotate(-2.6deg);
+            transform: rotate(2.8deg);
             box-shadow: inset 0 18px 34px rgba(6, 114, 82, 0.08);
             z-index: 0;
         }
@@ -114,10 +116,13 @@
             margin: 0 auto;
             padding: 8px;
             border-radius: 39px;
-            background: linear-gradient(145deg, #eff5f2 0%, #ffffff 52%, #d7e4de 100%);
+            background:
+                linear-gradient(145deg, #ff9d1f 0%, #f47b12 42%, #c04700 72%, #7a2100 100%);
             box-shadow:
                 0 34px 86px rgba(4, 55, 42, 0.24),
-                inset 0 0 0 1px rgba(255,255,255,0.9);
+                0 18px 56px rgba(174, 73, 0, 0.34),
+                inset 0 0 0 2px rgba(255, 184, 78, 0.88),
+                inset 0 0 0 5px rgba(29, 15, 8, 0.88);
         }
 
         .phone-shell::before {
@@ -142,14 +147,15 @@
             width: 4px;
             height: 52px;
             border-radius: 999px;
-            background: #c8d7d1;
+            background: #b13a00;
+            box-shadow: inset 1px 0 0 rgba(255, 173, 69, 0.55);
         }
 
         .phone-screen {
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            border: 1px solid #dce8e3;
+            border: 2px solid #17110c;
             border-radius: 31px;
             background:
                 radial-gradient(circle at 50% 14%, rgba(8, 133, 95, 0.08), transparent 130px),
