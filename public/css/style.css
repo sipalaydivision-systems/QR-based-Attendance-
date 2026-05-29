@@ -1406,7 +1406,7 @@ body.login-page.mobile-web-app .mobile-app-download-link {
     display: flex; align-items: center; justify-content: center;
     background: var(--gray-50);
 }
-.logo-preview img { width: 100%; height: 100%; object-fit: cover; }
+.logo-preview img { width: 100%; height: 100%; object-fit: contain; padding: 6px; background: #fff; }
 .logo-preview i   { font-size: 1.75rem; color: var(--gray-300); }
 
 .holiday-form {

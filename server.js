@@ -52,7 +52,7 @@ app.use(async (req, res, next) => {
     res.locals.baseUrl = process.env.BASE_URL || `http://localhost:${PORT}`;
     try {
         const [rows] = await db.query(
-            "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('system_name','division_name','system_logo')"
+            "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('system_name','division_name','system_logo','platform_android_logo','platform_ios_logo','platform_windows_logo','platform_mac_logo')"
         );
         const settings = {};
         rows.forEach(r => { settings[r.setting_key] = r.setting_value; });

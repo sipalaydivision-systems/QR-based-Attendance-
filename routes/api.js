@@ -1353,6 +1353,45 @@ router.delete('/settings/logo', requireAuth, async (req, res) => {
     }
 });
 
+const platformLogoKeys = {
+    android: 'platform_android_logo',
+    ios: 'platform_ios_logo',
+    windows: 'platform_windows_logo',
+    mac: 'platform_mac_logo'
+};
+
+// ---- Landing Page Platform Logo Uploads ----
+router.post('/settings/platform-logo/:platform', requireAuth, (req, res) => {
+    const settingKey = platformLogoKeys[String(req.params.platform || '').toLowerCase()];
+    if (!settingKey) return res.status(400).json({ error: 'Unsupported platform logo.' });
+
+    logoUpload.single('logo')(req, res, async function(err) {
+        if (err) return res.status(400).json({ error: err.message });
+        if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+        try {
+            const logoPath = uploadedFileToDataUrl(req.file);
+            await db.query(
+                'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
+                [settingKey, logoPath, logoPath]
+            );
+            return res.json({ success: true, logo: logoPath });
+        } catch (e) {
+            return res.status(500).json({ error: 'Failed to save platform logo.' });
+        }
+    });
+});
+
+router.delete('/settings/platform-logo/:platform', requireAuth, async (req, res) => {
+    const settingKey = platformLogoKeys[String(req.params.platform || '').toLowerCase()];
+    if (!settingKey) return res.status(400).json({ error: 'Unsupported platform logo.' });
+    try {
+        await db.query('DELETE FROM settings WHERE setting_key = ?', [settingKey]);
+        return res.json({ success: true });
+    } catch (e) {
+        return res.status(500).json({ error: 'Failed to remove platform logo.' });
+    }
+});
+
 // ---- Status Counts (inactive / deleted) ----
 router.get('/status-counts', requireAuth, async (req, res) => {
     try {

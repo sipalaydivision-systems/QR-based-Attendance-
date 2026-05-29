@@ -683,73 +683,24 @@
             transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
         }
 
-        .platform-icon {
-            position: relative;
-            width: 20px;
-            height: 20px;
-            display: inline-block;
+        .platform-logo-img {
+            width: 22px;
+            height: 22px;
+            display: block;
             flex: 0 0 auto;
-            color: currentColor;
+            object-fit: contain;
         }
 
-        .android-logo::before {
-            content: "";
-            position: absolute;
-            left: 3px;
-            top: 6px;
-            width: 14px;
-            height: 11px;
-            border-radius: 4px 4px 3px 3px;
-            background: currentColor;
-            box-shadow: -4px 4px 0 -2px currentColor, 4px 4px 0 -2px currentColor;
+        .platform-card-icon .platform-logo-img {
+            width: 30px;
+            height: 30px;
         }
 
-        .android-logo::after {
-            content: "";
-            position: absolute;
-            left: 5px;
-            top: 2px;
-            width: 10px;
-            height: 6px;
-            border-radius: 8px 8px 0 0;
-            background: currentColor;
-            box-shadow: -2px -2px 0 -1px currentColor, 2px -2px 0 -1px currentColor;
-            transform: rotate(0deg);
-        }
-
-        .apple-logo::before {
-            content: "";
-            position: absolute;
-            left: 5px;
-            top: 5px;
-            width: 12px;
-            height: 14px;
-            border-radius: 50% 44% 55% 46%;
-            background: currentColor;
-            transform: rotate(-8deg);
-        }
-
-        .apple-logo::after {
-            content: "";
-            position: absolute;
-            left: 11px;
-            top: 1px;
-            width: 7px;
-            height: 5px;
-            border-radius: 8px 0 8px 0;
-            background: currentColor;
-            transform: rotate(-28deg);
-        }
-
-        .windows-logo::before {
-            content: "";
-            position: absolute;
-            inset: 3px;
-            background:
-                linear-gradient(currentColor 0 0) left top / 7px 6px no-repeat,
-                linear-gradient(currentColor 0 0) right top / 7px 6px no-repeat,
-                linear-gradient(currentColor 0 0) left bottom / 7px 6px no-repeat,
-                linear-gradient(currentColor 0 0) right bottom / 7px 6px no-repeat;
+        .platform-placeholder {
+            color: var(--green-deep);
+            font-size: 11px;
+            font-weight: 900;
+            text-transform: uppercase;
         }
 
         .store-button.secondary {
@@ -897,11 +848,6 @@
         .app-card .platform-card-icon::before,
         .app-card .platform-card-icon::after {
             display: none;
-        }
-
-        .platform-card-icon .platform-icon {
-            width: 24px;
-            height: 24px;
         }
 
         .mobile-icon::before {
@@ -1497,6 +1443,13 @@
     <% const totalStudents = safeStats.totalStudents || 0; %>
     <% const presentToday = safeStats.presentToday || 0; %>
     <% const attendanceRate = totalStudents ? Math.min(100, Math.round((presentToday / Math.max(totalStudents, 1)) * 100)) : 0; %>
+    <% const landingSettings = (typeof settings !== 'undefined' && settings) ? settings : {}; %>
+    <% const platformLogos = {
+        android: landingSettings.platform_android_logo || '',
+        ios: landingSettings.platform_ios_logo || '',
+        windows: landingSettings.platform_windows_logo || '',
+        mac: landingSettings.platform_mac_logo || landingSettings.platform_ios_logo || ''
+    }; %>
 
     <section class="hero">
         <div class="wrap">
@@ -1588,11 +1541,11 @@
                     </p>
                     <div class="download-row">
                         <a class="store-button <%= apkAvailable ? '' : 'disabled' %>" href="/download/mobile-app" download>
-                            <span class="platform-icon android-logo" aria-hidden="true"></span>
+                            <% if (platformLogos.android) { %><img class="platform-logo-img" src="<%= platformLogos.android %>" alt="" aria-hidden="true"><% } %>
                             Download Android App
                         </a>
                         <a class="store-button ios-coming" href="/download/ios-app" download title="Download the Edutrack iOS app package when available.">
-                            <span class="platform-icon apple-logo" aria-hidden="true"></span>
+                            <% if (platformLogos.ios) { %><img class="platform-logo-img" src="<%= platformLogos.ios %>" alt="" aria-hidden="true"><% } %>
                             Download iOS App
                         </a>
                     </div>
@@ -1613,29 +1566,37 @@
     <main id="apps" class="content">
         <div class="section-title">
             <h2>Choose Your Edutrack App</h2>
-            <p>Use the same secure Edutrack account on Android, iOS, Windows, Mac, or a browser with synchronized attendance data from the Railway-hosted system.</p>
+            <p>Use the same secure Edutrack account on Android, iOS, Windows, or Mac with synchronized attendance data from the Railway-hosted system.</p>
         </div>
         <div class="cards">
             <article class="app-card">
-                <div class="icon platform-card-icon"><span class="platform-icon android-logo" aria-hidden="true"></span></div>
+                <div class="icon platform-card-icon">
+                    <% if (platformLogos.android) { %><img class="platform-logo-img" src="<%= platformLogos.android %>" alt="Android logo"><% } else { %><span class="platform-placeholder">Android</span><% } %>
+                </div>
                 <h3>Android App</h3>
                 <p>Install the Android mobile app for dashboards, absence alerts, reports, school data, and adviser contact actions.</p>
                 <a class="card-link <%= apkAvailable ? '' : 'disabled' %>" href="/download/mobile-app" download>Download Android app</a>
             </article>
             <article class="app-card">
-                <div class="icon platform-card-icon"><span class="platform-icon apple-logo" aria-hidden="true"></span></div>
+                <div class="icon platform-card-icon">
+                    <% if (platformLogos.ios) { %><img class="platform-logo-img" src="<%= platformLogos.ios %>" alt="iOS logo"><% } else { %><span class="platform-placeholder">iOS</span><% } %>
+                </div>
                 <h3>iOS App</h3>
                 <p>Access Edutrack on supported iOS devices with the same synchronized school attendance data.</p>
                 <a class="card-link" href="/download/ios-app" download>Download iOS app</a>
             </article>
             <article class="app-card">
-                <div class="icon platform-card-icon"><span class="platform-icon windows-logo" aria-hidden="true"></span></div>
+                <div class="icon platform-card-icon">
+                    <% if (platformLogos.windows) { %><img class="platform-logo-img" src="<%= platformLogos.windows %>" alt="Windows logo"><% } else { %><span class="platform-placeholder">Win</span><% } %>
+                </div>
                 <h3>Windows App</h3>
                 <p>Download the Windows launcher to open Edutrack as a focused desktop app using Microsoft Edge or Chrome.</p>
                 <a class="card-link" href="/download/windows-app" download>Download Windows app</a>
             </article>
             <article class="app-card">
-                <div class="icon platform-card-icon"><span class="platform-icon apple-logo" aria-hidden="true"></span></div>
+                <div class="icon platform-card-icon">
+                    <% if (platformLogos.mac) { %><img class="platform-logo-img" src="<%= platformLogos.mac %>" alt="Mac logo"><% } else { %><span class="platform-placeholder">Mac</span><% } %>
+                </div>
                 <h3>Mac App</h3>
                 <p>Download the Mac launcher to open Edutrack in a desktop app window using Chrome, Edge, or Safari fallback.</p>
                 <a class="card-link" href="/download/mac-app" download>Download Mac app</a>
@@ -1644,16 +1605,16 @@
 
         <section class="desktop-showcase" aria-label="Edutrack desktop dashboard preview">
             <div class="desktop-copy">
-                <span class="desktop-kicker"><span class="platform-icon apple-logo" aria-hidden="true"></span> Desktop Dashboard</span>
-                <h3>Open the SDS dashboard on Mac and Windows.</h3>
+                <span class="desktop-kicker"><% if (platformLogos.mac) { %><img class="platform-logo-img" src="<%= platformLogos.mac %>" alt="" aria-hidden="true"><% } %> Desktop Dashboard</span>
+                <h3>Open the Edutrack dashboard on Mac and Windows.</h3>
                 <p>The desktop launcher shows the same Edutrack dashboard used by the web system, including live attendance totals, absence alerts, monthly analytics, school rankings, and user access for Juan Dela Cruz.</p>
                 <div class="desktop-actions">
-                    <a class="desktop-download" href="/download/windows-app" download><span class="platform-icon windows-logo" aria-hidden="true"></span> Download Windows App</a>
-                    <a class="desktop-download secondary" href="/download/mac-app" download><span class="platform-icon apple-logo" aria-hidden="true"></span> Download Mac App</a>
+                    <a class="desktop-download" href="/download/windows-app" download><% if (platformLogos.windows) { %><img class="platform-logo-img" src="<%= platformLogos.windows %>" alt="" aria-hidden="true"><% } %> Download Windows App</a>
+                    <a class="desktop-download secondary" href="/download/mac-app" download><% if (platformLogos.mac) { %><img class="platform-logo-img" src="<%= platformLogos.mac %>" alt="" aria-hidden="true"><% } %> Download Mac App</a>
                 </div>
             </div>
 
-            <div class="macbook" aria-label="MacBook preview of the Edutrack SDS dashboard">
+            <div class="macbook" aria-label="MacBook preview of the Edutrack dashboard">
                 <div class="mac-lid">
                     <span class="mac-camera"></span>
                     <div class="mac-screen">
