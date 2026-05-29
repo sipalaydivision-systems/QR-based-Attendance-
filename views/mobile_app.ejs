@@ -755,7 +755,7 @@
             position: relative;
             z-index: 3;
             width: min(1120px, calc(100% - 40px));
-            margin: 72px auto 74px;
+            margin: 52px auto 74px;
         }
 
         @keyframes fadeUp {
@@ -939,7 +939,7 @@
         }
 
         .desktop-showcase {
-            margin-top: 42px;
+            margin-top: 0;
             padding: clamp(18px, 3vw, 34px);
             display: grid;
             grid-template-columns: 0.78fr 1.22fr;
@@ -1069,7 +1069,7 @@
         .sds-ui {
             height: 382px;
             display: grid;
-            grid-template-columns: 112px 1fr;
+            grid-template-columns: 120px 1fr;
             font-size: 7px;
             color: #0c1f18;
             background: #eef3f7;
@@ -1101,7 +1101,7 @@
 
         .sds-side-brand strong {
             display: block;
-            font-size: 7px;
+            font-size: 9px;
             line-height: 1.15;
         }
 
@@ -1594,45 +1594,6 @@
     </section>
 
     <main id="apps" class="content">
-        <div class="section-title">
-            <h2>Choose Your Edutrack App</h2>
-            <p>Use the same secure Edutrack account on Android, iOS, Windows, or Mac with synchronized attendance data from the Railway-hosted system.</p>
-        </div>
-        <div class="cards">
-            <article class="app-card">
-                <div class="icon platform-card-icon">
-                    <%- platformIconHtml('android', 'Android logo') %>
-                </div>
-                <h3>Android App</h3>
-                <p>Install the Android mobile app for dashboards, absence alerts, reports, school data, and adviser contact actions.</p>
-                <a class="card-link <%= apkAvailable ? '' : 'disabled' %>" href="/download/mobile-app" download>Download Android app</a>
-            </article>
-            <article class="app-card">
-                <div class="icon platform-card-icon">
-                    <%- platformIconHtml('ios', 'iOS logo') %>
-                </div>
-                <h3>iOS App</h3>
-                <p>Access Edutrack on supported iOS devices with the same synchronized school attendance data.</p>
-                <a class="card-link" href="/download/ios-app" download>Download iOS app</a>
-            </article>
-            <article class="app-card">
-                <div class="icon platform-card-icon">
-                    <%- platformIconHtml('windows', 'Windows logo') %>
-                </div>
-                <h3>Windows App</h3>
-                <p>Download the Windows launcher to open Edutrack as a focused desktop app using Microsoft Edge or Chrome.</p>
-                <a class="card-link" href="/download/windows-app" download>Download Windows app</a>
-            </article>
-            <article class="app-card">
-                <div class="icon platform-card-icon">
-                    <%- platformIconHtml('mac', 'Mac logo') %>
-                </div>
-                <h3>Mac App</h3>
-                <p>Download the Mac launcher to open Edutrack in a desktop app window using Chrome, Edge, or Safari fallback.</p>
-                <a class="card-link" href="/download/mac-app" download>Download Mac app</a>
-            </article>
-        </div>
-
         <section class="desktop-showcase" aria-label="Edutrack desktop dashboard preview">
             <div class="desktop-copy">
                 <span class="desktop-kicker"><%- platformIconHtml('mac', 'Mac logo') %> Desktop Dashboard</span>
@@ -1653,7 +1614,7 @@
                                 <div class="sds-side-brand">
                                     <img src="/uploads/logos/system-logo.png" alt="">
                                     <div>
-                                        <strong>School Attendance QR System</strong>
+                                        <strong>Edutrack</strong>
                                         <span>Schools Division of Sipalay City</span>
                                     </div>
                                 </div>
