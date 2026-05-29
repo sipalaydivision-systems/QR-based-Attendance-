@@ -105,15 +105,15 @@
 
         .hero-grid {
             display: grid;
-            grid-template-columns: 0.92fr 1fr;
-            gap: clamp(44px, 6vw, 92px);
+            grid-template-columns: 0.78fr 1fr;
+            gap: clamp(42px, 6vw, 86px);
             align-items: center;
-            padding: 16px 0 154px;
+            padding: 14px 0 150px;
         }
 
         .phone-shell {
             position: relative;
-            width: min(318px, 92vw);
+            width: min(286px, 92vw);
             margin: 0 auto;
             padding: 8px;
             border-radius: 39px;
@@ -124,7 +124,6 @@
                 0 18px 56px rgba(174, 73, 0, 0.34),
                 inset 0 0 0 2px rgba(255, 184, 78, 0.88),
                 inset 0 0 0 5px rgba(29, 15, 8, 0.88);
-            animation: floatMockup 6s ease-in-out infinite;
         }
 
         .phone-shell::before {
@@ -162,7 +161,7 @@
             background:
                 radial-gradient(circle at 50% 14%, rgba(8, 133, 95, 0.08), transparent 130px),
                 #f4faf7;
-            height: 586px;
+            height: 552px;
         }
 
         .phone-header {
@@ -594,8 +593,8 @@
         }
 
         .hero-copy {
-            max-width: 650px;
-            padding-top: 18px;
+            max-width: 700px;
+            padding-top: 0;
         }
 
         .eyebrow {
@@ -615,15 +614,16 @@
 
         h1 {
             margin: 20px 0 14px;
-            max-width: 680px;
-            font-size: clamp(40px, 4.6vw, 64px);
-            line-height: 1.02;
-            letter-spacing: 0;
+            max-width: 720px;
+            font-size: clamp(38px, 3.8vw, 56px);
+            line-height: 1.08;
+            letter-spacing: -0.02em;
+            text-wrap: balance;
             animation: fadeUp 0.75s ease 0.1s both;
         }
 
         .lead {
-            max-width: 650px;
+            max-width: 680px;
             margin: 0 0 24px;
             color: rgba(255, 255, 255, 0.93);
             font-size: 16px;
@@ -689,8 +689,10 @@
 
         .status {
             margin-top: 18px;
+            max-width: 620px;
             color: <%= apkAvailable ? "#dbfff0" : "#ffe1e1" %>;
             font-size: 13px;
+            line-height: 1.4;
             font-weight: 800;
             text-shadow: 0 1px 16px rgba(3, 88, 63, 0.42);
             animation: fadeUp 0.75s ease 0.4s both;
@@ -711,17 +713,6 @@
             to {
                 opacity: 1;
                 transform: translateY(0);
-            }
-        }
-
-        @keyframes floatMockup {
-            0%, 100% {
-                transform: translateY(0);
-                filter: drop-shadow(0 0 0 rgba(95, 255, 194, 0));
-            }
-            50% {
-                transform: translateY(-12px);
-                filter: drop-shadow(0 20px 36px rgba(95, 255, 194, 0.2));
             }
         }
 
@@ -898,14 +889,14 @@
             h1 { font-size: clamp(34px, 11vw, 46px); }
             .lead { font-size: 15px; line-height: 1.55; }
             .store-button { width: 100%; }
-            .phone-shell { width: min(292px, 100%); }
-            .phone-screen { height: 548px; }
+            .phone-shell { width: min(274px, 100%); }
+            .phone-screen { height: 532px; }
             .content { margin-top: 46px; }
         }
 
         @media (max-width: 390px) {
-            .phone-shell { width: min(278px, 100%); }
-            .phone-screen { height: 530px; }
+            .phone-shell { width: min(264px, 100%); }
+            .phone-screen { height: 516px; }
         }
     </style>
 </head>
