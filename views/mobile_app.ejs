@@ -109,26 +109,57 @@
         }
 
         .phone-shell {
-            width: min(332px, 92vw);
+            position: relative;
+            width: min(354px, 92vw);
             margin: 0 auto;
-            padding: 12px;
-            border-radius: 36px;
-            background: #ffffff;
-            box-shadow: var(--shadow);
+            padding: 10px;
+            border-radius: 46px;
+            background: linear-gradient(145deg, #eff5f2 0%, #ffffff 52%, #d7e4de 100%);
+            box-shadow:
+                0 34px 86px rgba(4, 55, 42, 0.24),
+                inset 0 0 0 1px rgba(255,255,255,0.9);
+        }
+
+        .phone-shell::before {
+            content: "";
+            position: absolute;
+            z-index: 5;
+            top: 18px;
+            left: 50%;
+            width: 108px;
+            height: 27px;
+            border-radius: 999px;
+            background: #0c1512;
+            transform: translateX(-50%);
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+        }
+
+        .phone-shell::after {
+            content: "";
+            position: absolute;
+            right: -3px;
+            top: 142px;
+            width: 4px;
+            height: 70px;
+            border-radius: 999px;
+            background: #c8d7d1;
         }
 
         .phone-screen {
             overflow: hidden;
             border: 1px solid #dce8e3;
-            border-radius: 28px;
-            background: #f7fbf9;
-            min-height: 560px;
+            border-radius: 38px;
+            background:
+                radial-gradient(circle at 50% 14%, rgba(8, 133, 95, 0.08), transparent 130px),
+                #f4faf7;
+            min-height: 650px;
         }
 
         .phone-header {
-            padding: 18px 18px 16px;
-            background: linear-gradient(180deg, #09a874 0%, #078a62 100%);
-            color: #ffffff;
+            padding: 54px 16px 14px;
+            background: rgba(255,255,255,0.96);
+            color: var(--ink);
+            border-bottom: 1px solid #e2ece7;
         }
 
         .phone-brand {
@@ -143,6 +174,7 @@
             border-radius: 50%;
             background: #ffffff;
             padding: 2px;
+            box-shadow: 0 6px 14px rgba(6, 114, 82, 0.14);
         }
 
         .phone-title {
@@ -154,7 +186,7 @@
         .phone-subtitle {
             margin-top: 2px;
             font-size: 11px;
-            opacity: 0.88;
+            color: var(--muted);
         }
 
         .phone-chip-row {
@@ -170,8 +202,9 @@
             min-height: 28px;
             padding: 0 10px;
             border-radius: 999px;
-            background: rgba(255,255,255,0.16);
-            color: #ffffff;
+            background: #f4faf7;
+            border: 1px solid #dcebe4;
+            color: var(--green-dark);
             font-size: 11px;
             font-weight: 800;
         }
@@ -185,22 +218,21 @@
         }
 
         .phone-body {
-            padding: 14px;
+            padding: 18px 14px 14px;
         }
 
         .greeting-card,
-        .summary-card,
-        .alert-card,
+        .analytics-card,
         .weekly-card {
             border: 1px solid var(--line);
-            border-radius: 16px;
+            border-radius: 24px;
             background: rgba(255,255,255,0.96);
-            box-shadow: 0 8px 22px rgba(16, 35, 28, 0.06);
+            box-shadow: 0 10px 24px rgba(16, 35, 28, 0.08);
         }
 
         .greeting-card {
-            padding: 14px;
-            margin-bottom: 12px;
+            padding: 18px;
+            margin-bottom: 14px;
         }
 
         .greeting-card small {
@@ -212,19 +244,106 @@
 
         .greeting-card strong {
             display: block;
-            font-size: 17px;
+            font-size: 24px;
             line-height: 1.2;
+            color: #121c18;
+            margin-bottom: 5px;
         }
 
-        .summary-card {
-            padding: 16px;
-            margin-bottom: 12px;
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 15px;
+        }
+
+        .compact-stat {
+            min-height: 76px;
+            padding: 11px;
+            border: 1px solid #dcebe4;
+            border-radius: 12px;
+            background: #f6faf8;
+        }
+
+        .compact-icon {
+            width: 20px;
+            height: 20px;
+            display: block;
+            margin-bottom: 6px;
+            border-radius: 7px;
+            background: #e3f8ef;
+            position: relative;
+        }
+
+        .compact-icon.present::before {
+            content: "";
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            left: 6px;
+            top: 4px;
+            border-radius: 50%;
+            background: var(--green);
+        }
+
+        .compact-icon.present::after {
+            content: "";
+            position: absolute;
+            width: 13px;
+            height: 6px;
+            left: 4px;
+            bottom: 4px;
+            border-radius: 8px 8px 3px 3px;
+            background: var(--green);
+        }
+
+        .compact-icon.absent {
+            background: #fff0f0;
+        }
+
+        .compact-icon.absent::before,
+        .compact-icon.absent::after {
+            content: "";
+            position: absolute;
+            width: 12px;
+            height: 3px;
+            left: 4px;
+            top: 9px;
+            border-radius: 999px;
+            background: var(--danger);
+        }
+
+        .compact-icon.absent::before { transform: rotate(45deg); }
+        .compact-icon.absent::after { transform: rotate(-45deg); }
+
+        .compact-stat b {
+            display: block;
+            color: #071a14;
+            font-size: 20px;
+            line-height: 1;
+        }
+
+        .compact-stat span {
+            color: #53665f;
+            display: block;
+            font-size: 11px;
+            font-weight: 800;
+            margin-top: 3px;
+        }
+
+        .analytics-card {
+            display: grid;
+            grid-template-columns: 0.86fr 1fr;
+            gap: 16px;
+            align-items: center;
+            padding: 20px 18px;
+            margin-bottom: 14px;
         }
 
         .ring {
-            width: 122px;
-            height: 122px;
-            margin: 0 auto 15px;
+            width: 116px;
+            height: 116px;
+            margin: 0 auto;
             display: grid;
             place-items: center;
             border-radius: 50%;
@@ -243,91 +362,81 @@
             font-weight: 900;
         }
 
-        .mini-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 9px;
-        }
-
-        .mini-stat {
-            min-height: 68px;
-            padding: 11px;
-            border-radius: 12px;
-            background: #f1f6f4;
-        }
-
-        .mini-stat b {
+        .analytics-copy strong {
             display: block;
-            color: #071a14;
+            color: #101b16;
             font-size: 22px;
-            line-height: 1.05;
+            line-height: 1.1;
+            margin-bottom: 10px;
         }
 
-        .mini-stat span {
-            color: #53665f;
-            font-size: 10px;
-            font-weight: 900;
-            text-transform: uppercase;
-        }
-
-        .alert-card {
-            padding: 13px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 12px;
-        }
-
-        .alert-icon {
-            width: 34px;
-            height: 34px;
-            display: grid;
-            place-items: center;
-            border-radius: 12px;
-            background: #fff0f0;
-            color: var(--danger);
-            font-weight: 900;
-        }
-
-        .alert-card strong {
+        .analytics-copy span {
             display: block;
+            color: #34463f;
             font-size: 13px;
+            font-weight: 800;
+            line-height: 1.35;
         }
 
-        .alert-card span {
+        .rate-line {
+            margin-top: 12px;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+            align-items: center;
+            color: #2d3e37;
+            font-size: 12px;
+            font-weight: 900;
+        }
+
+        .rate-track {
+            grid-column: 1 / -1;
+            height: 8px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: #dcebe4;
+        }
+
+        .rate-track i {
             display: block;
-            margin-top: 2px;
-            color: var(--muted);
-            font-size: 11px;
-            line-height: 1.3;
+            width: var(--rate);
+            height: 100%;
+            border-radius: inherit;
+            background: var(--green);
         }
 
         .weekly-card {
-            padding: 13px;
+            padding: 17px;
         }
 
         .weekly-title {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            display: block;
             margin-bottom: 10px;
-            font-size: 12px;
+            font-size: 20px;
             font-weight: 900;
+        }
+
+        .weekly-title small {
+            display: block;
+            margin-top: 3px;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.3;
         }
 
         .bars {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 7px;
+            gap: 6px;
             align-items: end;
         }
 
         .day {
-            min-height: 88px;
+            min-height: 76px;
             display: grid;
             justify-items: center;
             align-items: end;
-            padding: 7px 4px;
+            padding: 6px 3px;
             border-radius: 12px;
             background: #f7faf8;
             color: #53665f;
@@ -356,7 +465,7 @@
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 2px;
-            padding: 8px 12px 13px;
+            padding: 9px 12px 15px;
             border-top: 1px solid #e2ece7;
             background: rgba(255,255,255,0.94);
         }
@@ -373,11 +482,102 @@
             width: 26px;
             height: 23px;
             margin: 0 auto 3px;
-            display: grid;
-            place-items: center;
             border-radius: 10px;
             background: #edf7f3;
             color: #087a59;
+            position: relative;
+        }
+
+        .phone-nav b::before,
+        .phone-nav b::after {
+            content: "";
+            position: absolute;
+            background: #087a59;
+        }
+
+        .phone-nav .home::before {
+            width: 13px;
+            height: 10px;
+            left: 6px;
+            bottom: 5px;
+            border-radius: 2px;
+        }
+
+        .phone-nav .home::after {
+            width: 12px;
+            height: 12px;
+            left: 7px;
+            top: 4px;
+            transform: rotate(45deg);
+            border-radius: 2px;
+        }
+
+        .phone-nav .attendance::before {
+            width: 13px;
+            height: 15px;
+            left: 7px;
+            top: 4px;
+            border-radius: 2px;
+            background: transparent;
+            border: 2px solid #087a59;
+        }
+
+        .phone-nav .attendance::after {
+            width: 9px;
+            height: 2px;
+            left: 9px;
+            top: 11px;
+            box-shadow: 0 5px 0 #087a59;
+        }
+
+        .phone-nav .schools::before {
+            width: 15px;
+            height: 9px;
+            left: 6px;
+            top: 6px;
+            transform: skewY(-24deg);
+        }
+
+        .phone-nav .schools::after {
+            width: 13px;
+            height: 5px;
+            left: 7px;
+            bottom: 5px;
+            border-radius: 0 0 5px 5px;
+        }
+
+        .phone-nav .report::before {
+            width: 14px;
+            height: 14px;
+            left: 6px;
+            top: 5px;
+            border-radius: 2px;
+            background: transparent;
+            border: 2px solid #087a59;
+        }
+
+        .phone-nav .report::after {
+            width: 2px;
+            height: 8px;
+            left: 10px;
+            bottom: 6px;
+            box-shadow: 4px -3px 0 #087a59, 8px 1px 0 #087a59;
+        }
+
+        .phone-nav .alerts::before {
+            width: 12px;
+            height: 13px;
+            left: 7px;
+            top: 5px;
+            border-radius: 8px 8px 4px 4px;
+        }
+
+        .phone-nav .alerts::after {
+            width: 6px;
+            height: 2px;
+            left: 10px;
+            bottom: 4px;
+            border-radius: 999px;
         }
 
         .hero-copy {
@@ -426,7 +626,7 @@
             justify-content: center;
             gap: 10px;
             min-height: 54px;
-            padding: 0 22px;
+            padding: 0 28px;
             border-radius: 999px;
             background: #0f1f19;
             color: #ffffff;
@@ -447,20 +647,6 @@
             pointer-events: none;
             background: #80968e;
             color: #eef7f3;
-        }
-
-        .store-icon {
-            width: 28px;
-            height: 28px;
-            display: grid;
-            place-items: center;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.13);
-            font-size: 15px;
-        }
-
-        .store-button.secondary .store-icon {
-            background: var(--green-soft);
         }
 
         .status {
@@ -521,6 +707,61 @@
             color: var(--green-deep);
             font-weight: 900;
             font-size: 20px;
+            position: relative;
+        }
+
+        .app-card .icon::before,
+        .app-card .icon::after {
+            content: "";
+            position: absolute;
+            background: var(--green-deep);
+        }
+
+        .mobile-icon::before {
+            width: 18px;
+            height: 27px;
+            border-radius: 5px;
+            background: transparent;
+            border: 3px solid var(--green-deep);
+        }
+
+        .mobile-icon::after {
+            width: 6px;
+            height: 2px;
+            bottom: 12px;
+            border-radius: 999px;
+        }
+
+        .desktop-icon::before {
+            width: 27px;
+            height: 18px;
+            top: 12px;
+            border-radius: 4px;
+            background: transparent;
+            border: 3px solid var(--green-deep);
+        }
+
+        .desktop-icon::after {
+            width: 22px;
+            height: 3px;
+            bottom: 12px;
+            border-radius: 999px;
+        }
+
+        .browser-icon::before {
+            width: 28px;
+            height: 22px;
+            top: 13px;
+            border-radius: 5px;
+            background: transparent;
+            border: 3px solid var(--green-deep);
+        }
+
+        .browser-icon::after {
+            width: 22px;
+            height: 3px;
+            top: 20px;
+            border-radius: 999px;
         }
 
         .app-card h3 {
@@ -604,45 +845,47 @@
                             <div class="phone-brand">
                                 <img src="/uploads/logos/system-logo.png" alt="">
                                 <div>
-                                    <div class="phone-title">Edutrack Dashboard</div>
+                                    <div class="phone-title">Edutrack</div>
                                     <div class="phone-subtitle">Schools Division of Sipalay City</div>
                                 </div>
                             </div>
                             <div class="phone-chip-row">
                                 <span class="phone-chip"><i class="live-dot"></i>LIVE</span>
+                                <span class="phone-chip">Fri, May 29</span>
                                 <span class="phone-chip"><%= safeStats.today || '' %></span>
                             </div>
                         </div>
 
                         <div class="phone-body">
                             <div class="greeting-card">
-                                <small>Good day</small>
-                                <strong>Division Monitoring</strong>
-                                <small>Live attendance and absence alerts</small>
-                            </div>
-
-                            <div class="summary-card">
-                                <div class="ring" style="--rate:<%= attendanceRate %>%"><span><%= attendanceRate %>%</span></div>
-                                <div class="mini-grid">
-                                    <div class="mini-stat"><b><%= safeStats.totalSchools || 0 %></b><span>Schools</span></div>
-                                    <div class="mini-stat"><b><%= totalStudents %></b><span>Students</span></div>
-                                    <div class="mini-stat"><b><%= presentToday %></b><span>Present</span></div>
-                                    <div class="mini-stat"><b><%= safeStats.absentToday || 0 %></b><span>Absent</span></div>
+                                <small>Good morning</small>
+                                <strong>Wesley Hans Platil</strong>
+                                <small>Friday, May 29, 2026</small>
+                                <div class="stat-row">
+                                    <div class="compact-stat"><i class="compact-icon present"></i><b><%= totalStudents %></b><span>Students</span></div>
+                                    <div class="compact-stat"><i class="compact-icon present"></i><b><%= presentToday %></b><span>Present</span></div>
+                                    <div class="compact-stat"><i class="compact-icon absent"></i><b><%= safeStats.absentToday || 0 %></b><span>Absent</span></div>
                                 </div>
                             </div>
 
-                            <div class="alert-card">
-                                <div class="alert-icon">!</div>
-                                <div>
-                                    <strong>2-Day Absence Alerts</strong>
-                                    <span>Tap a flagged student to contact the adviser.</span>
+                            <div class="analytics-card">
+                                <div class="ring" style="--rate:<%= attendanceRate %>%"><span><%= attendanceRate %>%</span></div>
+                                <div class="analytics-copy">
+                                    <strong>Today Analytics</strong>
+                                    <span><%= presentToday %> of <%= totalStudents %> students present</span>
+                                    <div class="rate-line">
+                                        <span>Live rate</span>
+                                        <span><%= attendanceRate %>%</span>
+                                        <div class="rate-track" style="--rate:<%= attendanceRate %>%"><i></i></div>
+                                    </div>
+                                    <span style="margin-top:10px;color:#7a8b84;"><%= safeStats.absentToday || 0 %> student absent</span>
                                 </div>
                             </div>
 
                             <div class="weekly-card">
                                 <div class="weekly-title">
-                                    <span>Weekly Absence Analytics</span>
-                                    <span>Mon-Fri</span>
+                                    Weekly Absence Analytics
+                                    <small>Absent students per day (Mon-Fri)</small>
                                 </div>
                                 <div class="bars">
                                     <span class="day">Mon<i>1</i></span>
@@ -655,11 +898,11 @@
                         </div>
 
                         <div class="phone-nav">
-                            <span><b>H</b>Home</span>
-                            <span><b>A</b>Attend</span>
-                            <span><b>S</b>Schools</span>
-                            <span><b>R</b>Report</span>
-                            <span><b>!</b>Alerts</span>
+                            <span><b class="home"></b>Home</span>
+                            <span><b class="attendance"></b>Attendance</span>
+                            <span><b class="schools"></b>Schools</span>
+                            <span><b class="report"></b>Report</span>
+                            <span><b class="alerts"></b>Alerts</span>
                         </div>
                     </div>
                 </div>
@@ -670,11 +913,9 @@
                     <p class="lead">Download the Edutrack app for mobile or desktop access to the same QR attendance records, live dashboards, absence alerts, reports, school data, and adviser contact tools connected to the Railway server.</p>
                     <div class="download-row">
                         <a class="store-button <%= apkAvailable ? '' : 'disabled' %>" href="/download/mobile-app" download>
-                            <span class="store-icon">A</span>
                             Download iOS and Android App
                         </a>
                         <a class="store-button secondary" href="/download/desktop-app" download>
-                            <span class="store-icon">D</span>
                             Download Desktop App
                         </a>
                     </div>
@@ -699,20 +940,20 @@
         </div>
         <div class="cards">
             <article class="app-card">
-                <div class="icon">A</div>
+                <div class="icon mobile-icon"></div>
                 <h3>Mobile App</h3>
                 <p>Install the latest mobile app package for dashboards, alerts, school lists, reports, and native adviser contact actions.</p>
                 <a class="card-link <%= apkAvailable ? '' : 'disabled' %>" href="/download/mobile-app" download>Download mobile app</a>
             </article>
             <article class="app-card">
-                <div class="icon">D</div>
+                <div class="icon desktop-icon"></div>
                 <h3>Desktop App</h3>
                 <p>Download the Windows launcher to open Edutrack as a focused desktop window using the same secure web system.</p>
                 <a class="card-link" href="/download/desktop-app" download>Download desktop app</a>
                 <div class="desktop-note">Works best with Microsoft Edge or Google Chrome.</div>
             </article>
             <article class="app-card">
-                <div class="icon">P</div>
+                <div class="icon browser-icon"></div>
                 <h3>Browser Install</h3>
                 <p>Supported desktop browsers can install Edutrack as a standalone app with the same account and live database.</p>
                 <button class="card-link" type="button" data-install-desktop style="border:0;background:transparent;padding:0;cursor:pointer;">Install from browser</button>
