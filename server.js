@@ -189,11 +189,13 @@ async function getDownloadPageStats() {
 
 app.get('/mobile-app', async (req, res) => {
     const apkPath = path.join(__dirname, 'public', 'downloads', 'school-attendance-division.apk');
+    const iosPath = path.join(__dirname, 'public', 'downloads', 'edutrack-ios.ipa');
     const appBaseUrl = getPublicAppBaseUrl(req);
     const stats = await getDownloadPageStats();
     res.render('mobile_app', {
         title: 'Download Edutrack Apps',
         apkAvailable: fs.existsSync(apkPath),
+        iosAvailable: fs.existsSync(iosPath),
         desktopAvailable: true,
         stats,
         appBaseUrl
@@ -221,6 +223,30 @@ app.get('/download/mobile-app', (req, res) => {
         });
     }
     return res.download(apkPath, 'Edutrack-Mobile.apk');
+});
+
+app.get('/download/ios-app', (req, res) => {
+    const iosPath = path.join(__dirname, 'public', 'downloads', 'edutrack-ios.ipa');
+    if (!fs.existsSync(iosPath)) {
+        const appBaseUrl = getPublicAppBaseUrl(req);
+        return res.status(404).render('mobile_app', {
+            title: 'Download Edutrack Apps',
+            apkAvailable: fs.existsSync(path.join(__dirname, 'public', 'downloads', 'school-attendance-division.apk')),
+            iosAvailable: false,
+            desktopAvailable: true,
+            stats: {
+                today: manilaDateString(),
+                totalSchools: 0,
+                totalStudents: 0,
+                totalTeachers: 0,
+                presentToday: 0,
+                absentToday: 0
+            },
+            appBaseUrl,
+            error: 'The iOS app package has not been uploaded yet.'
+        });
+    }
+    return res.download(iosPath, 'Edutrack-iOS.ipa');
 });
 
 app.get('/download/desktop-app', (req, res) => {

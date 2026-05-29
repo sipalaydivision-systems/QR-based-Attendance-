@@ -40,8 +40,9 @@
             min-height: 100svh;
             color: #ffffff;
             background:
-                radial-gradient(circle at 86% 10%, rgba(255,255,255,0.16) 0 130px, transparent 132px),
-                linear-gradient(135deg, #08ad78 0%, #07875f 56%, #056447 100%);
+                radial-gradient(circle at 88% 8%, rgba(255,255,255,0.18) 0 126px, transparent 128px),
+                radial-gradient(circle at 24% 42%, rgba(77, 255, 186, 0.16), transparent 310px),
+                linear-gradient(135deg, #08ad78 0%, #078a62 52%, #045c42 100%);
         }
 
         .hero::before {
@@ -49,11 +50,11 @@
             position: absolute;
             left: -12vw;
             right: -12vw;
-            bottom: -150px;
-            height: 320px;
+            bottom: -176px;
+            height: 332px;
             background: #ffffff;
             border-radius: 50% 50% 0 0;
-            transform: rotate(2.8deg);
+            transform: rotate(3.2deg);
             box-shadow: inset 0 18px 34px rgba(6, 114, 82, 0.08);
             z-index: 0;
         }
@@ -104,25 +105,26 @@
 
         .hero-grid {
             display: grid;
-            grid-template-columns: 0.82fr 1fr;
-            gap: clamp(34px, 6vw, 84px);
+            grid-template-columns: 0.92fr 1fr;
+            gap: clamp(44px, 6vw, 92px);
             align-items: center;
-            padding: 12px 0 148px;
+            padding: 16px 0 154px;
         }
 
         .phone-shell {
             position: relative;
-            width: min(286px, 92vw);
+            width: min(318px, 92vw);
             margin: 0 auto;
             padding: 8px;
             border-radius: 39px;
             background:
                 linear-gradient(145deg, #ff9d1f 0%, #f47b12 42%, #c04700 72%, #7a2100 100%);
             box-shadow:
-                0 34px 86px rgba(4, 55, 42, 0.24),
+                0 38px 96px rgba(4, 55, 42, 0.28),
                 0 18px 56px rgba(174, 73, 0, 0.34),
                 inset 0 0 0 2px rgba(255, 184, 78, 0.88),
                 inset 0 0 0 5px rgba(29, 15, 8, 0.88);
+            animation: floatMockup 6s ease-in-out infinite;
         }
 
         .phone-shell::before {
@@ -160,7 +162,7 @@
             background:
                 radial-gradient(circle at 50% 14%, rgba(8, 133, 95, 0.08), transparent 130px),
                 #f4faf7;
-            height: 552px;
+            height: 586px;
         }
 
         .phone-header {
@@ -607,22 +609,34 @@
             color: #ffffff;
             font-size: 13px;
             font-weight: 800;
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15);
+            animation: fadeUp 0.7s ease both, softPulse 2.8s ease-in-out infinite 0.8s;
         }
 
         h1 {
             margin: 20px 0 14px;
             max-width: 680px;
-            font-size: clamp(38px, 4.4vw, 60px);
-            line-height: 1.05;
+            font-size: clamp(40px, 4.6vw, 64px);
+            line-height: 1.02;
             letter-spacing: 0;
+            animation: fadeUp 0.75s ease 0.1s both;
         }
 
         .lead {
-            max-width: 620px;
+            max-width: 650px;
             margin: 0 0 24px;
             color: rgba(255, 255, 255, 0.93);
             font-size: 16px;
             line-height: 1.62;
+            animation: fadeUp 0.75s ease 0.2s both;
+        }
+
+        .lead span {
+            display: block;
+        }
+
+        .lead span + span {
+            margin-top: 10px;
         }
 
         .download-row {
@@ -630,6 +644,7 @@
             flex-wrap: wrap;
             gap: 12px;
             align-items: center;
+            animation: fadeUp 0.75s ease 0.3s both;
         }
 
         .store-button {
@@ -648,10 +663,21 @@
             font-weight: 900;
             box-shadow: 0 16px 34px rgba(6, 79, 61, 0.26);
             cursor: pointer;
+            transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
         }
 
         .store-button.secondary {
             background: #ffffff;
+            color: var(--green-deep);
+        }
+
+        .store-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 42px rgba(6, 79, 61, 0.3);
+        }
+
+        .store-button.ios-coming {
+            background: rgba(255,255,255,0.96);
             color: var(--green-deep);
         }
 
@@ -667,13 +693,54 @@
             font-size: 13px;
             font-weight: 800;
             text-shadow: 0 1px 16px rgba(3, 88, 63, 0.42);
+            animation: fadeUp 0.75s ease 0.4s both;
         }
 
         .content {
             position: relative;
             z-index: 3;
             width: min(1120px, calc(100% - 40px));
-            margin: 46px auto 74px;
+            margin: 72px auto 74px;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(18px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes floatMockup {
+            0%, 100% {
+                transform: translateY(0);
+                filter: drop-shadow(0 0 0 rgba(95, 255, 194, 0));
+            }
+            50% {
+                transform: translateY(-12px);
+                filter: drop-shadow(0 20px 36px rgba(95, 255, 194, 0.2));
+            }
+        }
+
+        @keyframes softPulse {
+            0%, 100% {
+                box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15), 0 0 0 rgba(94, 255, 195, 0);
+            }
+            50% {
+                box-shadow: inset 0 0 0 1px rgba(255,255,255,0.24), 0 0 26px rgba(94, 255, 195, 0.2);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.001ms !important;
+                animation-iteration-count: 1 !important;
+                scroll-behavior: auto !important;
+                transition-duration: 0.001ms !important;
+            }
         }
 
         .section-title {
@@ -805,9 +872,9 @@
         @media (max-width: 940px) {
             .hero-grid {
                 grid-template-columns: 1fr;
-                gap: 28px;
+                gap: 30px;
                 padding-top: 10px;
-                padding-bottom: 122px;
+                padding-bottom: 140px;
                 text-align: center;
             }
 
@@ -826,17 +893,19 @@
             .wrap, .content { width: min(100% - 26px, 1120px); }
             .brand-bar { min-height: 68px; }
             .brand span { white-space: normal; }
-            .hero::before { bottom: -112px; height: 250px; }
-            .hero-grid { padding-top: 2px; padding-bottom: 96px; }
+            .hero::before { bottom: -132px; height: 264px; }
+            .hero-grid { padding-top: 2px; padding-bottom: 112px; }
+            h1 { font-size: clamp(34px, 11vw, 46px); }
+            .lead { font-size: 15px; line-height: 1.55; }
             .store-button { width: 100%; }
-            .phone-shell { width: min(274px, 100%); }
-            .phone-screen { height: 532px; }
-            .content { margin-top: 30px; }
+            .phone-shell { width: min(292px, 100%); }
+            .phone-screen { height: 548px; }
+            .content { margin-top: 46px; }
         }
 
         @media (max-width: 390px) {
-            .phone-shell { width: min(264px, 100%); }
-            .phone-screen { height: 516px; }
+            .phone-shell { width: min(278px, 100%); }
+            .phone-screen { height: 530px; }
         }
     </style>
 </head>
@@ -928,24 +997,27 @@
                 </div>
 
                 <div class="hero-copy">
-                    <div class="eyebrow"><span class="live-dot"></span>Live Edutrack apps</div>
-                    <h1>The attendance system in your pocket and on your desktop.</h1>
-                    <p class="lead">Download the Edutrack app for mobile or desktop access to the same QR attendance records, live dashboards, absence alerts, reports, school data, and adviser contact tools connected to the Railway server.</p>
+                    <div class="eyebrow"><span class="live-dot"></span>Live Edutrack Platform</div>
+                    <h1>Access Attendance Monitoring Anytime, Anywhere</h1>
+                    <p class="lead">
+                        <span>Stay connected with real-time attendance records, student monitoring, absence alerts, reports, school information, and adviser communication tools through the Edutrack platform.</span>
+                        <span>Access the same synchronized data across the web platform, Android devices, and iOS devices through a secure cloud-based system.</span>
+                    </p>
                     <div class="download-row">
                         <a class="store-button <%= apkAvailable ? '' : 'disabled' %>" href="/download/mobile-app" download>
-                            Download iOS and Android App
+                            Download Android App
                         </a>
-                        <a class="store-button secondary" href="/download/desktop-app" download>
-                            Download Desktop App
+                        <a class="store-button ios-coming" href="/download/ios-app" download title="Download the Edutrack iOS app package when available.">
+                            Download iOS App
                         </a>
                     </div>
                     <div class="status">
                         <% if (typeof error !== 'undefined' && error) { %>
                             <%= error %>
                         <% } else if (apkAvailable) { %>
-                            Mobile and desktop downloads are ready for this attendance system.
+                            Android and iOS applications are available for secure and real-time attendance monitoring.
                         <% } else { %>
-                            Desktop launcher is ready. Build the APK and place it in public/downloads/school-attendance-division.apk.
+                            Android app package is being prepared for secure and real-time attendance monitoring.
                         <% } %>
                     </div>
                 </div>
