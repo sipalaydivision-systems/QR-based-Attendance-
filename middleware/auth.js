@@ -1,9 +1,22 @@
 // Authentication middleware
+function wantsJson(req) {
+    const originalUrl = req.originalUrl || '';
+    const baseUrl = req.baseUrl || '';
+    const accept = req.get ? (req.get('accept') || '') : '';
+    return Boolean(
+        req.xhr ||
+        originalUrl.startsWith('/api/') ||
+        baseUrl === '/api' ||
+        baseUrl.startsWith('/api/') ||
+        accept.includes('application/json')
+    );
+}
+
 function requireAuth(req, res, next) {
     if (req.session && req.session.user) {
         return next();
     }
-    if (req.xhr || req.path.startsWith('/api/')) {
+    if (wantsJson(req)) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
     return res.redirect('/login');
@@ -13,13 +26,13 @@ function requireAuth(req, res, next) {
 function requireRole(...roles) {
     return (req, res, next) => {
         if (!req.session || !req.session.user) {
-            if (req.xhr || req.path.startsWith('/api/')) {
+            if (wantsJson(req)) {
                 return res.status(401).json({ error: 'Not authenticated' });
             }
             return res.redirect('/login');
         }
         if (!roles.includes(req.session.user.role)) {
-            if (req.xhr || req.path.startsWith('/api/')) {
+            if (wantsJson(req)) {
                 return res.status(403).json({ error: 'Access denied' });
             }
             return res.status(403).render('error', {
