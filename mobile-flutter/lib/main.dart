@@ -154,6 +154,52 @@ class ApiService {
     return raw;
   }
 
+  bool _looksLikeHtml(http.Response response) {
+    final contentType = '${response.headers['content-type'] ?? ''}'
+        .toLowerCase();
+    final body = response.body.trimLeft().toLowerCase();
+    return contentType.contains('text/html') ||
+        body.startsWith('<!doctype html') ||
+        body.startsWith('<html');
+  }
+
+  Map<String, dynamic> _decodeJsonMap(
+    http.Response response, {
+    required String fallback,
+  }) {
+    if (_looksLikeHtml(response)) {
+      throw AuthExpired();
+    }
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      throw Exception(fallback);
+    } catch (_) {
+      throw Exception(
+        _errorFromBody(response.body, fallback: fallback),
+      );
+    }
+  }
+
+  List<dynamic> _decodeJsonList(
+    http.Response response, {
+    required String fallback,
+  }) {
+    if (_looksLikeHtml(response)) {
+      throw AuthExpired();
+    }
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is List) return decoded;
+      return [];
+    } catch (_) {
+      throw Exception(
+        _errorFromBody(response.body, fallback: fallback),
+      );
+    }
+  }
+
   Future<void> login(String username, String password) async {
     final response = await _request(
       () => http.post(
@@ -165,7 +211,10 @@ class ApiService {
         body: {'username': username, 'password': password},
       ),
     );
-    final data = jsonDecode(response.body) as Map;
+    final data = _decodeJsonMap(
+      response,
+      fallback: 'Unable to sign in right now. Please try again.',
+    );
     if (response.statusCode >= 400 || data['success'] != true) {
       throw Exception(
         _errorFromBody(
@@ -210,7 +259,10 @@ class ApiService {
         ),
       );
     }
-    return jsonDecode(response.body) as Map<String, dynamic>;
+    return _decodeJsonMap(
+      response,
+      fallback: 'Server returned an invalid response format.',
+    );
   }
 
   Future<List<dynamic>> list(String path) async {
@@ -229,8 +281,10 @@ class ApiService {
         ),
       );
     }
-    final decoded = jsonDecode(response.body);
-    return decoded is List ? decoded : [];
+    return _decodeJsonList(
+      response,
+      fallback: 'Server returned an invalid response format.',
+    );
   }
 }
 
