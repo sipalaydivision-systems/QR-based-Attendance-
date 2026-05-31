@@ -155,8 +155,7 @@ class ApiService {
   }
 
   bool _looksLikeHtml(http.Response response) {
-    final contentType = '${response.headers['content-type'] ?? ''}'
-        .toLowerCase();
+    final contentType = (response.headers['content-type'] ?? '').toLowerCase();
     final body = response.body.trimLeft().toLowerCase();
     return contentType.contains('text/html') ||
         body.startsWith('<!doctype html') ||
