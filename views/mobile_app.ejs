@@ -1009,6 +1009,159 @@
             border: 1px solid var(--line);
         }
 
+        .scanner-showcase {
+            margin-top: 28px;
+            padding: clamp(18px, 3vw, 34px);
+            display: grid;
+            grid-template-columns: 1.05fr 0.95fr;
+            gap: clamp(22px, 4vw, 42px);
+            align-items: center;
+            border: 1px solid var(--line);
+            border-radius: 28px;
+            background:
+                radial-gradient(circle at 86% 20%, rgba(10, 173, 121, 0.13), transparent 230px),
+                linear-gradient(135deg, #ffffff 0%, #f5fbf8 100%);
+            box-shadow: 0 24px 60px rgba(16, 35, 28, 0.1);
+        }
+
+        .scanner-preview {
+            min-height: 310px;
+            padding: 16px;
+            border-radius: 26px;
+            background:
+                linear-gradient(rgba(15, 110, 82, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(15, 110, 82, 0.05) 1px, transparent 1px),
+                #ffffff;
+            background-size: 28px 28px;
+            border: 1px solid var(--line);
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.8);
+        }
+
+        .scanner-window {
+            height: 100%;
+            min-height: 278px;
+            display: grid;
+            place-items: center;
+            border-radius: 22px;
+            background: linear-gradient(145deg, #0d382f, #0f8f68);
+            color: #ffffff;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .scanner-window::before {
+            content: "";
+            position: absolute;
+            inset: 20px;
+            border: 2px solid rgba(255,255,255,0.18);
+            border-radius: 22px;
+        }
+
+        .scanner-window::after {
+            content: "";
+            position: absolute;
+            left: 18%;
+            right: 18%;
+            top: 50%;
+            height: 3px;
+            border-radius: 999px;
+            background: linear-gradient(90deg, transparent, #9ff8d2, transparent);
+            box-shadow: 0 0 24px rgba(159, 248, 210, 0.9);
+        }
+
+        .scanner-reticle {
+            width: 176px;
+            height: 176px;
+            position: relative;
+            border-radius: 24px;
+        }
+
+        .scanner-reticle span {
+            position: absolute;
+            width: 42px;
+            height: 42px;
+            border-color: rgba(255,255,255,0.95);
+            border-style: solid;
+        }
+
+        .scanner-reticle .tl { top: 0; left: 0; border-width: 5px 0 0 5px; border-radius: 18px 0 0 0; }
+        .scanner-reticle .tr { top: 0; right: 0; border-width: 5px 5px 0 0; border-radius: 0 18px 0 0; }
+        .scanner-reticle .bl { bottom: 0; left: 0; border-width: 0 0 5px 5px; border-radius: 0 0 0 18px; }
+        .scanner-reticle .br { bottom: 0; right: 0; border-width: 0 5px 5px 0; border-radius: 0 0 18px 0; }
+
+        .scanner-badge {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.16);
+            font-size: 12px;
+            font-weight: 900;
+            backdrop-filter: blur(14px);
+        }
+
+        .scanner-badge i {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #22c55e;
+            box-shadow: 0 0 0 6px rgba(34,197,94,0.18);
+        }
+
+        .scanner-note {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            right: 16px;
+            color: rgba(255,255,255,0.82);
+            text-align: center;
+            font-size: 13px;
+            font-weight: 800;
+        }
+
+        .scanner-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 22px;
+        }
+
+        .scanner-actions .desktop-download {
+            min-width: 190px;
+        }
+
+        .scanner-list {
+            margin: 18px 0 0;
+            padding: 0;
+            list-style: none;
+            display: grid;
+            gap: 10px;
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .scanner-list li {
+            display: flex;
+            gap: 9px;
+            align-items: flex-start;
+        }
+
+        .scanner-list li::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            margin-top: 7px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 0 5px rgba(10, 173, 121, 0.12);
+            flex: 0 0 auto;
+        }
+
         .macbook {
             position: relative;
             max-width: 690px;
@@ -1431,7 +1584,8 @@
 
         @media (max-width: 1180px) {
             .cards { grid-template-columns: repeat(2, 1fr); }
-            .desktop-showcase { grid-template-columns: 1fr; }
+            .desktop-showcase,
+            .scanner-showcase { grid-template-columns: 1fr; }
             .macbook { margin: 0 auto; }
         }
 
@@ -1470,7 +1624,11 @@
             .phone-screen { height: 548px; }
             .content { margin-top: 46px; }
             .desktop-showcase { padding: 16px; border-radius: 22px; }
-            .desktop-download { width: 100%; }
+            .desktop-download,
+            .scanner-actions .desktop-download { width: 100%; }
+            .scanner-showcase { padding: 16px; border-radius: 22px; }
+            .scanner-preview { min-height: 250px; }
+            .scanner-window { min-height: 226px; }
             .mac-lid { padding: 8px; border-radius: 18px 18px 12px 12px; }
             .mac-screen { height: 248px; min-height: 0; }
             .sds-ui {
@@ -1726,6 +1884,37 @@
                     </div>
                 </div>
                 <div class="mac-base"></div>
+            </div>
+        </section>
+
+        <section class="scanner-showcase" aria-label="Edutrack scanner desktop app download">
+            <div class="scanner-preview" aria-label="QR scanner desktop app preview">
+                <div class="scanner-window">
+                    <div class="scanner-badge"><i></i> LIVE QR Scanner</div>
+                    <div class="scanner-reticle" aria-hidden="true">
+                        <span class="tl"></span>
+                        <span class="tr"></span>
+                        <span class="bl"></span>
+                        <span class="br"></span>
+                    </div>
+                    <div class="scanner-note">Open the camera scanner directly for daily QR attendance.</div>
+                </div>
+            </div>
+
+            <div class="desktop-copy">
+                <span class="desktop-kicker">Scanner Desktop App</span>
+                <h3>Open the QR scanner as a dedicated desktop app.</h3>
+                <p>Use this launcher for guard stations, attendance kiosks, and school entrances. It opens the Edutrack QR scanner directly in app mode, so staff do not need to navigate through the browser dashboard.</p>
+                <ul class="scanner-list">
+                    <li>Starts directly on the QR Scanner page.</li>
+                    <li>Uses the same secure Railway-hosted Edutrack system.</li>
+                    <li>Windows autostart option creates a Desktop launcher and Startup entry.</li>
+                </ul>
+                <div class="scanner-actions">
+                    <a class="desktop-download" href="/download/scanner-windows-app" download><%- platformIconHtml('windows', 'Windows logo') %> Download Scanner App</a>
+                    <a class="desktop-download secondary" href="/download/scanner-autostart-app" download><%- platformIconHtml('windows', 'Windows logo') %> Install Scanner Autostart</a>
+                    <a class="desktop-download secondary" href="/download/scanner-mac-app" download><%- platformIconHtml('mac', 'Mac logo') %> Download Mac Scanner</a>
+                </div>
             </div>
         </section>
     </main>

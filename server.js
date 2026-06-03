@@ -271,9 +271,73 @@ function sendWindowsDesktopLauncher(req, res) {
     return res.send(launcher);
 }
 
+function sendWindowsScannerLauncher(req, res) {
+    const appBaseUrl = getPublicAppBaseUrl(req);
+    const launcher = `@echo off\r\n`
+        + `set "APP_URL=${appBaseUrl}/admin/scanner"\r\n`
+        + `where msedge >nul 2>nul\r\n`
+        + `if %ERRORLEVEL%==0 (\r\n`
+        + `  start "" msedge --app="%APP_URL%" --start-fullscreen\r\n`
+        + `  exit /b\r\n`
+        + `)\r\n`
+        + `where chrome >nul 2>nul\r\n`
+        + `if %ERRORLEVEL%==0 (\r\n`
+        + `  start "" chrome --app="%APP_URL%" --start-fullscreen\r\n`
+        + `  exit /b\r\n`
+        + `)\r\n`
+        + `start "" "%APP_URL%"\r\n`;
+
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="Edutrack-Scanner-App.cmd"');
+    return res.send(launcher);
+}
+
+function sendWindowsScannerAutostart(req, res) {
+    const appBaseUrl = getPublicAppBaseUrl(req);
+    const launcher = `@echo off\r\n`
+        + `set "APP_URL=${appBaseUrl}/admin/scanner"\r\n`
+        + `set "APP_FILE=Edutrack Scanner App.cmd"\r\n`
+        + `set "DESKTOP_LAUNCHER=%USERPROFILE%\\Desktop\\%APP_FILE%"\r\n`
+        + `set "STARTUP_LAUNCHER=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\%APP_FILE%"\r\n`
+        + `call :writeLauncher "%DESKTOP_LAUNCHER%"\r\n`
+        + `call :writeLauncher "%STARTUP_LAUNCHER%"\r\n`
+        + `echo Edutrack Scanner App has been added to your Desktop and Windows Startup.\r\n`
+        + `echo It will open automatically when this Windows account signs in.\r\n`
+        + `start "" "%DESKTOP_LAUNCHER%"\r\n`
+        + `pause\r\n`
+        + `exit /b\r\n`
+        + `:writeLauncher\r\n`
+        + `> "%~1" echo @echo off\r\n`
+        + `>> "%~1" echo set "APP_URL=%APP_URL%"\r\n`
+        + `>> "%~1" echo where msedge ^>nul 2^>nul\r\n`
+        + `>> "%~1" echo if %%ERRORLEVEL%%==0 ^(\r\n`
+        + `>> "%~1" echo   start "" msedge --app="%%APP_URL%%" --start-fullscreen\r\n`
+        + `>> "%~1" echo   exit /b\r\n`
+        + `>> "%~1" echo ^)\r\n`
+        + `>> "%~1" echo where chrome ^>nul 2^>nul\r\n`
+        + `>> "%~1" echo if %%ERRORLEVEL%%==0 ^(\r\n`
+        + `>> "%~1" echo   start "" chrome --app="%%APP_URL%%" --start-fullscreen\r\n`
+        + `>> "%~1" echo   exit /b\r\n`
+        + `>> "%~1" echo ^)\r\n`
+        + `>> "%~1" echo start "" "%%APP_URL%%"\r\n`
+        + `exit /b\r\n`;
+
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="Edutrack-Scanner-Autostart.cmd"');
+    return res.send(launcher);
+}
+
 app.get('/download/desktop-app', sendWindowsDesktopLauncher);
 
 app.get('/download/windows-app', sendWindowsDesktopLauncher);
+
+app.get('/download/scanner-windows-app', sendWindowsScannerLauncher);
+
+app.get('/download/scanner-app', sendWindowsScannerLauncher);
+
+app.get('/download/scanner-autostart-app', sendWindowsScannerAutostart);
+
+app.get('/download/scanner-autostart', sendWindowsScannerAutostart);
 
 app.get('/download/mac-app', (req, res) => {
     const appBaseUrl = getPublicAppBaseUrl(req);
@@ -289,6 +353,23 @@ app.get('/download/mac-app', (req, res) => {
 
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename="Edutrack-Mac-App.command"');
+    return res.send(launcher);
+});
+
+app.get('/download/scanner-mac-app', (req, res) => {
+    const appBaseUrl = getPublicAppBaseUrl(req);
+    const launcher = `#!/bin/bash\n`
+        + `APP_URL="${appBaseUrl}/admin/scanner"\n`
+        + `if [ -d "/Applications/Google Chrome.app" ]; then\n`
+        + `  open -na "Google Chrome" --args --app="$APP_URL" --start-fullscreen\n`
+        + `elif [ -d "/Applications/Microsoft Edge.app" ]; then\n`
+        + `  open -na "Microsoft Edge" --args --app="$APP_URL" --start-fullscreen\n`
+        + `else\n`
+        + `  open "$APP_URL"\n`
+        + `fi\n`;
+
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="Edutrack-Scanner-Mac-App.command"');
     return res.send(launcher);
 });
 
