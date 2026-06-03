@@ -294,36 +294,65 @@ function sendWindowsScannerLauncher(req, res) {
 
 function sendWindowsScannerAutostart(req, res) {
     const appBaseUrl = getPublicAppBaseUrl(req);
-    const launcher = `@echo off\r\n`
-        + `set "APP_URL=${appBaseUrl}/admin/scanner"\r\n`
-        + `set "APP_FILE=Edutrack Scanner App.cmd"\r\n`
-        + `set "DESKTOP_LAUNCHER=%USERPROFILE%\\Desktop\\%APP_FILE%"\r\n`
-        + `set "STARTUP_LAUNCHER=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\%APP_FILE%"\r\n`
-        + `call :writeLauncher "%DESKTOP_LAUNCHER%"\r\n`
-        + `call :writeLauncher "%STARTUP_LAUNCHER%"\r\n`
-        + `echo Edutrack Scanner App has been added to your Desktop and Windows Startup.\r\n`
-        + `echo It will open automatically when this Windows account signs in.\r\n`
-        + `start "" "%DESKTOP_LAUNCHER%"\r\n`
-        + `pause\r\n`
-        + `exit /b\r\n`
-        + `:writeLauncher\r\n`
-        + `> "%~1" echo @echo off\r\n`
-        + `>> "%~1" echo set "APP_URL=%APP_URL%"\r\n`
-        + `>> "%~1" echo where msedge ^>nul 2^>nul\r\n`
-        + `>> "%~1" echo if %%ERRORLEVEL%%==0 ^(\r\n`
-        + `>> "%~1" echo   start "" msedge --app="%%APP_URL%%" --start-fullscreen\r\n`
-        + `>> "%~1" echo   exit /b\r\n`
-        + `>> "%~1" echo ^)\r\n`
-        + `>> "%~1" echo where chrome ^>nul 2^>nul\r\n`
-        + `>> "%~1" echo if %%ERRORLEVEL%%==0 ^(\r\n`
-        + `>> "%~1" echo   start "" chrome --app="%%APP_URL%%" --start-fullscreen\r\n`
-        + `>> "%~1" echo   exit /b\r\n`
-        + `>> "%~1" echo ^)\r\n`
-        + `>> "%~1" echo start "" "%%APP_URL%%"\r\n`
-        + `exit /b\r\n`;
+    const launcher = [
+        '@echo off',
+        'setlocal',
+        `set "APP_URL=${appBaseUrl}/admin/scanner"`,
+        'set "APP_DIR=%LOCALAPPDATA%\\Edutrack"',
+        'set "APP_FILE=Edutrack-Scanner-App.cmd"',
+        'set "APP_LAUNCHER=%APP_DIR%\\%APP_FILE%"',
+        'set "STARTUP_DIR=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"',
+        'set "STARTUP_LINK=%STARTUP_DIR%\\Edutrack Scanner App.lnk"',
+        'set "DESKTOP_DIR=%USERPROFILE%\\Desktop"',
+        'if not exist "%DESKTOP_DIR%" if defined OneDrive set "DESKTOP_DIR=%OneDrive%\\Desktop"',
+        'if not exist "%DESKTOP_DIR%" set "DESKTOP_DIR=%USERPROFILE%"',
+        'set "DESKTOP_LINK=%DESKTOP_DIR%\\Edutrack Scanner App.lnk"',
+        'if not exist "%APP_DIR%" mkdir "%APP_DIR%"',
+        'if not exist "%STARTUP_DIR%" mkdir "%STARTUP_DIR%"',
+        'del "%DESKTOP_DIR%\\Edutrack Scanner App.cmd" >nul 2>nul',
+        'del "%STARTUP_DIR%\\Edutrack Scanner App.cmd" >nul 2>nul',
+        'call :writeLauncher "%APP_LAUNCHER%"',
+        'call :createShortcut "%DESKTOP_LINK%" "%APP_LAUNCHER%"',
+        'call :createShortcut "%STARTUP_LINK%" "%APP_LAUNCHER%"',
+        'echo.',
+        'echo Edutrack Scanner Autostart has been installed.',
+        'echo Desktop shortcut: %DESKTOP_LINK%',
+        'echo Startup shortcut: %STARTUP_LINK%',
+        'echo.',
+        'echo The scanner will open automatically when this Windows account signs in or restarts.',
+        'echo If Windows asks for permission, choose Yes or Run.',
+        'echo.',
+        'choice /C YN /N /M "Open scanner now? [Y/N] "',
+        'if errorlevel 2 goto done',
+        'start "" "%APP_LAUNCHER%"',
+        ':done',
+        'echo.',
+        'echo Setup complete. You can close this window.',
+        'pause',
+        'exit /b',
+        '',
+        ':writeLauncher',
+        '> "%~1" echo @echo off',
+        '>> "%~1" echo set "APP_URL=%APP_URL%"',
+        '>> "%~1" echo set "EDGE_X86=%%ProgramFiles(x86)%%\\Microsoft\\Edge\\Application\\msedge.exe"',
+        '>> "%~1" echo set "EDGE_X64=%%ProgramFiles%%\\Microsoft\\Edge\\Application\\msedge.exe"',
+        '>> "%~1" echo set "CHROME_X64=%%ProgramFiles%%\\Google\\Chrome\\Application\\chrome.exe"',
+        '>> "%~1" echo set "CHROME_X86=%%ProgramFiles(x86)%%\\Google\\Chrome\\Application\\chrome.exe"',
+        '>> "%~1" echo if exist "%%EDGE_X86%%" ^(start "" "%%EDGE_X86%%" --app="%%APP_URL%%" --start-fullscreen ^& exit /b^)',
+        '>> "%~1" echo if exist "%%EDGE_X64%%" ^(start "" "%%EDGE_X64%%" --app="%%APP_URL%%" --start-fullscreen ^& exit /b^)',
+        '>> "%~1" echo if exist "%%CHROME_X64%%" ^(start "" "%%CHROME_X64%%" --app="%%APP_URL%%" --start-fullscreen ^& exit /b^)',
+        '>> "%~1" echo if exist "%%CHROME_X86%%" ^(start "" "%%CHROME_X86%%" --app="%%APP_URL%%" --start-fullscreen ^& exit /b^)',
+        '>> "%~1" echo start "" "%%APP_URL%%"',
+        'exit /b',
+        '',
+        ':createShortcut',
+        'powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws=New-Object -ComObject WScript.Shell; $s=$ws.CreateShortcut(\'%~1\'); $s.TargetPath=\'%~2\'; $s.WorkingDirectory=\'%APP_DIR%\'; $s.Save()" >nul 2>nul',
+        'if not exist "%~1" copy /Y "%~2" "%~dp1Edutrack Scanner App.cmd" >nul 2>nul',
+        'exit /b'
+    ].join('\r\n') + '\r\n';
 
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', 'attachment; filename="Edutrack-Scanner-Autostart.cmd"');
+    res.setHeader('Content-Disposition', 'attachment; filename="Edutrack-Scanner-Autostart-Installer.cmd"');
     return res.send(launcher);
 }
 
