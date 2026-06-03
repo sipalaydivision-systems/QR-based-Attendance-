@@ -82,12 +82,13 @@ class EdutrackApp extends StatelessWidget {
         navigationBarTheme: NavigationBarThemeData(
           backgroundColor: Colors.transparent,
           indicatorColor: const Color(0xFFEAF7F1),
-          labelTextStyle: WidgetStateProperty.resolveWith(
-            (states) => TextStyle(
-              fontSize: 11,
-              fontWeight: states.contains(WidgetState.selected)
-                  ? FontWeight.w900
-                  : FontWeight.w700,
+                labelTextStyle: WidgetStateProperty.resolveWith(
+                  (states) => TextStyle(
+                    fontSize: 9.5,
+                    height: 1.08,
+                    fontWeight: states.contains(WidgetState.selected)
+                        ? FontWeight.w900
+                        : FontWeight.w700,
               color: states.contains(WidgetState.selected)
                   ? const Color(0xFF0F6E52)
                   : const Color(0xFF6D7772),
@@ -1255,7 +1256,8 @@ class _HomeShellState extends State<HomeShell>
             child: SafeArea(
               top: false,
               child: NavigationBar(
-                height: 70,
+                height: 76,
+                labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
                 backgroundColor: Colors.transparent,
                 selectedIndex: selectedTab,
                 onDestinationSelected: (value) => setState(() => tab = value),
@@ -1340,29 +1342,64 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
     }
   }
 
-  Future<void> toggleUser(Map user) async {
-    final id = '${user['id'] ?? ''}'.trim();
-    if (id.isEmpty || saving) return;
-    final status = '${user['status'] ?? 'active'}'.trim().toLowerCase();
-    final nextStatus = status == 'active' ? 'inactive' : 'active';
+  Future<void> updateUser(String id, Map<String, dynamic> body) async {
+    if (id.trim().isEmpty || saving) return;
     setState(() => saving = true);
     try {
-      await widget.api.putJson('/api/users/$id', {
-        'username': '${user['username'] ?? ''}',
-        'fullname': '${user['fullname'] ?? ''}',
-        'email': '${user['email'] ?? ''}',
-        'role': '${user['role'] ?? 'principal'}',
-        'school_id': user['school_id'],
-        'status': nextStatus,
-      });
+      await widget.api.putJson('/api/users/$id', body);
       await load(silent: true);
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Account updated.')));
+    } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Account ${nextStatus == 'active' ? 'activated' : 'deactivated'}.',
+            readableError(e, fallback: 'Unable to update this account.'),
           ),
         ),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> deleteUser(Map user) async {
+    final id = '${user['id'] ?? ''}'.trim();
+    if (id.isEmpty || saving) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete account'),
+        content: Text(
+          'Delete ${user['fullname'] ?? user['username'] ?? 'this account'}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFB91C1C),
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() => saving = true);
+    try {
+      await widget.api.deleteJson('/api/users/$id');
+      await load(silent: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Account deleted.')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -1483,6 +1520,21 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
     );
   }
 
+  void openEditUserSheet(Map<String, dynamic> user) {
+    final schools = (dashboard['schools'] as List?) ?? const [];
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AdminAccountFormSheet(
+        schools: schools,
+        saving: saving,
+        initialUser: user,
+        onSubmit: (body) => updateUser('${user['id'] ?? ''}', body),
+      ),
+    );
+  }
+
   void openHolidaySheet() {
     final schools = (dashboard['schools'] as List?) ?? const [];
     showModalBottomSheet(
@@ -1569,28 +1621,6 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
           ),
           const SizedBox(height: 14),
           PremiumCard(
-            title: 'Account Management',
-            subtitle: 'Create and manage administrator accounts.',
-            child: Column(
-              children: [
-                AdminActionButton(
-                  icon: Icons.person_add_rounded,
-                  label: 'Create Admin Account',
-                  onTap: saving ? null : openCreateUserSheet,
-                ),
-                const SizedBox(height: 12),
-                for (final item in users.take(10))
-                  UserControlTile(
-                    user: Map<String, dynamic>.from(item as Map),
-                    busy: saving,
-                    onToggle: toggleUser,
-                  ),
-                if (users.isEmpty) const EmptyText('No user accounts found.'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          PremiumCard(
             title: 'Holiday Management',
             subtitle:
                 'Add or remove holidays excluded from attendance calculations.',
@@ -1611,6 +1641,44 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
                   ),
                 if (holidays.isEmpty)
                   const EmptyText('No holidays configured.'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          PremiumCard(
+            title: 'Account Management',
+            subtitle: 'Add, edit, and delete administrator accounts.',
+            child: Column(
+              children: [
+                AdminActionButton(
+                  icon: Icons.person_add_rounded,
+                  label: 'Add Admin Account',
+                  onTap: saving ? null : openCreateUserSheet,
+                ),
+                const SizedBox(height: 12),
+                for (final item in users
+                    .where(
+                      (row) =>
+                          '${(row as Map)['status'] ?? 'active'}'
+                              .toLowerCase() ==
+                          'active',
+                    )
+                    .take(10))
+                  UserControlTile(
+                    user: Map<String, dynamic>.from(item as Map),
+                    busy: saving,
+                    onEdit: openEditUserSheet,
+                    onDelete: deleteUser,
+                  ),
+                if (users
+                    .where(
+                      (row) =>
+                          '${(row as Map)['status'] ?? 'active'}'
+                              .toLowerCase() ==
+                          'active',
+                    )
+                    .isEmpty)
+                  const EmptyText('No active user accounts found.'),
               ],
             ),
           ),
@@ -2182,10 +2250,12 @@ class AdminAccountFormSheet extends StatefulWidget {
     required this.schools,
     required this.saving,
     required this.onSubmit,
+    this.initialUser,
   });
   final List schools;
   final bool saving;
   final Future<void> Function(Map<String, dynamic> body) onSubmit;
+  final Map<String, dynamic>? initialUser;
 
   @override
   State<AdminAccountFormSheet> createState() => _AdminAccountFormSheetState();
@@ -2199,6 +2269,21 @@ class _AdminAccountFormSheetState extends State<AdminAccountFormSheet> {
   String role = 'principal';
   int? schoolId;
   bool submitting = false;
+  bool get editing => widget.initialUser != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final user = widget.initialUser;
+    if (user != null) {
+      username.text = '${user['username'] ?? ''}';
+      fullname.text = '${user['fullname'] ?? ''}';
+      email.text = '${user['email'] ?? ''}';
+      role = '${user['role'] ?? 'principal'}';
+      final cleanSchoolId = intValue(user['school_id']);
+      schoolId = cleanSchoolId > 0 ? cleanSchoolId : null;
+    }
+  }
 
   @override
   void dispose() {
@@ -2214,8 +2299,12 @@ class _AdminAccountFormSheetState extends State<AdminAccountFormSheet> {
     final cleanUsername = username.text.trim();
     final cleanName = fullname.text.trim();
     final cleanPassword = password.text.trim();
-    if (cleanUsername.isEmpty || cleanName.isEmpty || cleanPassword.isEmpty) {
-      showLocalMessage('Username, full name, and password are required.');
+    if (cleanUsername.isEmpty || cleanName.isEmpty) {
+      showLocalMessage('Username and full name are required.');
+      return;
+    }
+    if (!editing && cleanPassword.isEmpty) {
+      showLocalMessage('Password is required for a new account.');
       return;
     }
     if (role == 'principal' && schoolId == null) {
@@ -2225,15 +2314,18 @@ class _AdminAccountFormSheetState extends State<AdminAccountFormSheet> {
       return;
     }
     setState(() => submitting = true);
-    await widget.onSubmit({
+    final body = <String, dynamic>{
       'username': cleanUsername,
       'fullname': cleanName,
       'email': email.text.trim(),
-      'password': cleanPassword,
       'role': role,
       'school_id': role == 'principal' ? schoolId : null,
       'status': 'active',
-    });
+    };
+    if (cleanPassword.isNotEmpty) {
+      body['password'] = cleanPassword;
+    }
+    await widget.onSubmit(body);
     if (mounted) setState(() => submitting = false);
   }
 
@@ -2247,8 +2339,10 @@ class _AdminAccountFormSheetState extends State<AdminAccountFormSheet> {
   Widget build(BuildContext context) {
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
     return AdminFormShell(
-      title: 'Create Admin Account',
-      subtitle: 'Add a role-based login account for the Edutrack system.',
+      title: editing ? 'Edit Admin Account' : 'Add Admin Account',
+      subtitle: editing
+          ? 'Update account details, role, school assignment, or password.'
+          : 'Add a role-based login account for the Edutrack system.',
       bottomInset: bottom,
       child: Column(
         children: [
@@ -2270,7 +2364,7 @@ class _AdminAccountFormSheetState extends State<AdminAccountFormSheet> {
           ),
           AdminTextInput(
             controller: password,
-            label: 'Temporary Password',
+            label: editing ? 'New Password (optional)' : 'Temporary Password',
             icon: Icons.lock_rounded,
             obscure: true,
           ),
@@ -2333,7 +2427,7 @@ class _AdminAccountFormSheetState extends State<AdminAccountFormSheet> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.person_add_alt_1_rounded),
-            label: const Text('Create Account'),
+            label: Text(editing ? 'Save Changes' : 'Create Account'),
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFF0F6E52),
               foregroundColor: Colors.white,
@@ -2416,7 +2510,7 @@ class _HolidayFormSheetState extends State<HolidayFormSheet> {
     return AdminFormShell(
       title: 'Add Holiday',
       subtitle:
-          'Exclude a national, local, or school holiday from attendance calculations.',
+          'Manage holidays and non-school days excluded from attendance calculations.',
       bottomInset: bottom,
       child: Column(
         children: [
@@ -2447,9 +2541,9 @@ class _HolidayFormSheetState extends State<HolidayFormSheet> {
               Icons.flag_rounded,
             ),
             items: const [
-              DropdownMenuItem(value: 1, child: Text('National Holiday')),
-              DropdownMenuItem(value: 0, child: Text('Local Holiday')),
-              DropdownMenuItem(value: 2, child: Text('School Holiday')),
+              DropdownMenuItem(value: 1, child: Text('Regular Holiday')),
+              DropdownMenuItem(value: 0, child: Text('Special Non-Working')),
+              DropdownMenuItem(value: 2, child: Text('Class Suspension')),
             ],
             onChanged: (value) => setState(() {
               holidayType = value ?? 1;
@@ -2619,11 +2713,13 @@ class UserControlTile extends StatelessWidget {
     super.key,
     required this.user,
     required this.busy,
-    required this.onToggle,
+    required this.onEdit,
+    required this.onDelete,
   });
   final Map<String, dynamic> user;
   final bool busy;
-  final Future<void> Function(Map user) onToggle;
+  final void Function(Map<String, dynamic> user) onEdit;
+  final Future<void> Function(Map user) onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -2685,15 +2781,30 @@ class UserControlTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          TextButton(
-            onPressed: busy ? null : () => onToggle(user),
-            style: TextButton.styleFrom(
-              foregroundColor: active
-                  ? const Color(0xFFB91C1C)
-                  : const Color(0xFF0F6E52),
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-            ),
-            child: Text(active ? 'Deactivate' : 'Activate'),
+          Wrap(
+            spacing: 4,
+            children: [
+              IconButton(
+                tooltip: 'Edit',
+                onPressed: busy ? null : () => onEdit(user),
+                style: IconButton.styleFrom(
+                  backgroundColor: const Color(0xFFEAF7F1),
+                  foregroundColor: const Color(0xFF0F6E52),
+                  fixedSize: const Size(38, 38),
+                ),
+                icon: const Icon(Icons.edit_rounded, size: 18),
+              ),
+              IconButton(
+                tooltip: 'Delete',
+                onPressed: busy ? null : () => onDelete(user),
+                style: IconButton.styleFrom(
+                  backgroundColor: const Color(0xFFFEE2E2),
+                  foregroundColor: const Color(0xFFB91C1C),
+                  fixedSize: const Size(38, 38),
+                ),
+                icon: const Icon(Icons.delete_rounded, size: 18),
+              ),
+            ],
           ),
         ],
       ),
