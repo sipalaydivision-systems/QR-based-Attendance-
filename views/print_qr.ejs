@@ -1,4 +1,7 @@
 <%- include('partials/header') %>
+<% const qrFilters = typeof filters !== 'undefined' ? filters : { type: type || 'student', school_id: '', grade_level_id: '', section_id: '', layout: '4' }; %>
+<% const printQrWidth = qrFilters.layout === '5' ? '36mm' : qrFilters.layout === '3' ? '58mm' : '45mm'; %>
+<% const printQrGap = qrFilters.layout === '5' ? '2.5mm' : '4mm'; %>
 
 <div class="page-header">
     <div class="page-header-left">
@@ -13,8 +16,8 @@
     <div class="filter-item">
         <label>Type</label>
         <select id="qrType">
-            <option value="student">Students</option>
-            <option value="teacher">Teachers</option>
+            <option value="student" <%= qrFilters.type === 'student' ? 'selected' : '' %>>Students</option>
+            <option value="teacher" <%= qrFilters.type === 'teacher' ? 'selected' : '' %>>Teachers</option>
         </select>
     </div>
     <div class="filter-item">
@@ -38,15 +41,21 @@
     <div class="filter-item">
         <label>Layout</label>
         <select id="qrLayout">
-            <option value="3">3 per row</option>
-            <option value="4" selected>4 per row</option>
-            <option value="5">5 per row</option>
+            <option value="3" <%= qrFilters.layout === '3' ? 'selected' : '' %>>3 per row</option>
+            <option value="4" <%= qrFilters.layout === '4' ? 'selected' : '' %>>4 per row</option>
+            <option value="5" <%= qrFilters.layout === '5' ? 'selected' : '' %>>5 per row</option>
         </select>
     </div>
-    <button class="btn-filter" onclick="reloadQR()"><i class="fa-solid fa-magnifying-glass"></i> Generate</button>
+    <button class="btn-filter" type="button" onclick="reloadQR()" title="Refresh QR list">
+        <i class="fa-solid fa-rotate"></i> Refresh
+    </button>
+    <div class="auto-filter-status" aria-live="polite">
+        <i class="fa-solid fa-bolt"></i>
+        Auto updates when filters change
+    </div>
 </div>
 
-<div class="qr-grid" id="qrGrid">
+<div class="qr-grid" id="qrGrid" style="--qr-columns: <%= qrFilters.layout %>;">
     <% if (typeof people !== 'undefined' && people.length) { %>
         <% people.forEach(function(p) { %>
             <div class="qr-card">
@@ -65,14 +74,32 @@
         <div class="empty-state" style="grid-column:1/-1;">
             <div class="empty-icon"><i class="fa-solid fa-qrcode" style="font-size:2.5rem;color:var(--gray-300);"></i></div>
             <h4>No QR codes to display</h4>
-            <p>Select filters above and click Generate.</p>
+            <p>Choose a type, school, grade, or section above to show matching QR codes automatically.</p>
         </div>
     <% } %>
 </div>
 
 <style>
+.filter-bar {
+    align-items: end;
+}
+.auto-filter-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    padding: 0 12px;
+    color: #047857;
+    font-size: 0.82rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.auto-filter-status i {
+    color: #f59e0b;
+}
 .qr-grid {
     align-items: start;
+    grid-template-columns: repeat(var(--qr-columns, 4), minmax(0, 1fr));
 }
 .qr-card {
     display: flex;
@@ -102,12 +129,12 @@
     .page-header { margin-bottom: 4mm !important; }
     .qr-grid {
         display: grid;
-        grid-template-columns: repeat(4, 48mm) !important;
+        grid-template-columns: repeat(<%= qrFilters.layout %>, <%= printQrWidth %>) !important;
         justify-content: start;
-        gap: 4mm !important;
+        gap: <%= printQrGap %> !important;
     }
     .qr-card {
-        width: 48mm;
+        width: <%= printQrWidth %>;
         min-height: 72mm;
         break-inside: avoid;
         page-break-inside: avoid;
@@ -151,40 +178,142 @@
         border-top: 0.2mm solid #e2e8f0 !important;
     }
 }
+@media (max-width: 900px) {
+    .qr-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}
+@media (max-width: 560px) {
+    .qr-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
 </style>
 
 <script>
+var initialQrFilters = <%- JSON.stringify(qrFilters).replace(/</g, '\\u003c') %>;
+var dropdownsReady = false;
+var reloadTimer = null;
+var allQrGrades = [];
+var allQrSections = [];
+
+function setSelectValue(id, value) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.value = value == null ? '' : String(value);
+}
+
+function appendOption(select, value, label) {
+    var opt = document.createElement('option');
+    opt.value = value == null ? '' : String(value);
+    opt.textContent = label || '';
+    select.appendChild(opt);
+}
+
+function currentSchoolId() {
+    return String(document.getElementById('qrSchool').value || '');
+}
+
+function currentGradeId() {
+    return String(document.getElementById('qrGrade').value || '');
+}
+
+function renderGradeOptions(grades, selectedValue) {
+    var gradeSel = document.getElementById('qrGrade');
+    var schoolId = currentSchoolId();
+    gradeSel.innerHTML = '';
+    appendOption(gradeSel, '', 'All Grades');
+    grades.filter(function(g) {
+        return !schoolId || !g.school_id || String(g.school_id) === schoolId;
+    }).forEach(function(g) {
+        appendOption(gradeSel, g.id, g.name);
+    });
+    setSelectValue('qrGrade', selectedValue || '');
+}
+
+function renderSectionOptions(sections, selectedValue) {
+    var secSel = document.getElementById('qrSection');
+    var schoolId = currentSchoolId();
+    var gradeId = currentGradeId();
+    secSel.innerHTML = '';
+    appendOption(secSel, '', 'All Sections');
+    sections.filter(function(s) {
+        var matchesSchool = !schoolId || String(s.school_id || '') === schoolId;
+        var matchesGrade = !gradeId || String(s.grade_level_id || '') === gradeId;
+        return matchesSchool && matchesGrade;
+    }).forEach(function(s) {
+        var label = s.name;
+        if (!gradeId && s.grade_name) label += ' - ' + s.grade_name;
+        appendOption(secSel, s.id, label);
+    });
+    setSelectValue('qrSection', selectedValue || '');
+}
+
 async function loadDropdowns() {
-    var [schools, sections] = await Promise.all([
+    var [schools, grades, sections] = await Promise.all([
         fetch('/api/schools').then(function(r){return r.json();}),
+        fetch('/api/grade-levels').then(function(r){return r.json();}),
         fetch('/api/sections').then(function(r){return r.json();})
     ]);
     var sSel = document.getElementById('qrSchool');
     schools.forEach(function(s) {
-        var opt = document.createElement('option');
-        opt.value = s.id; opt.textContent = s.name;
-        sSel.appendChild(opt);
+        appendOption(sSel, s.id, s.name);
     });
-    var secSel = document.getElementById('qrSection');
-    sections.forEach(function(s) {
-        var opt = document.createElement('option');
-        opt.value = s.id; opt.textContent = s.name;
-        secSel.appendChild(opt);
-    });
+    allQrGrades = grades;
+    allQrSections = sections;
+    setSelectValue('qrSchool', initialQrFilters.school_id);
+    renderGradeOptions(allQrGrades, initialQrFilters.grade_level_id);
+    renderSectionOptions(allQrSections, initialQrFilters.section_id);
+    setSelectValue('qrType', initialQrFilters.type);
+    setSelectValue('qrLayout', initialQrFilters.layout || '4');
+    bindAutoReload();
+    dropdownsReady = true;
 }
 loadDropdowns();
 
 function reloadQR() {
     var type = document.getElementById('qrType').value;
     var school = document.getElementById('qrSchool').value;
-    var params = ['type=' + type];
-    if (school) params.push('school_id=' + school);
-    window.location.href = '/admin/print-qr?' + params.join('&');
+    var grade = document.getElementById('qrGrade').value;
+    var section = document.getElementById('qrSection').value;
+    var layout = document.getElementById('qrLayout').value || '4';
+    var params = new URLSearchParams();
+    params.set('type', type || 'student');
+    if (school) params.set('school_id', school);
+    if (grade) params.set('grade_level_id', grade);
+    if (section) params.set('section_id', section);
+    if (layout) params.set('layout', layout);
+    window.location.href = '/admin/print-qr?' + params.toString();
 }
 
-document.getElementById('qrLayout').addEventListener('change', function() {
-    var cols = this.value;
-    document.getElementById('qrGrid').style.gridTemplateColumns = 'repeat(' + cols + ', 1fr)';
-});
+function applyLayout(cols) {
+    document.getElementById('qrGrid').style.setProperty('--qr-columns', cols);
+}
+
+function scheduleReload() {
+    if (!dropdownsReady) return;
+    var layout = document.getElementById('qrLayout').value || '4';
+    applyLayout(layout);
+    clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(reloadQR, 250);
+}
+
+function handleFilterChange(event) {
+    if (event.target.id === 'qrSchool') {
+        renderGradeOptions(allQrGrades, '');
+        renderSectionOptions(allQrSections, '');
+    }
+    if (event.target.id === 'qrGrade') {
+        renderSectionOptions(allQrSections, '');
+    }
+    scheduleReload();
+}
+
+function bindAutoReload() {
+    ['qrType', 'qrSchool', 'qrGrade', 'qrSection', 'qrLayout'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('change', handleFilterChange);
+    });
+}
 </script>
 <%- include('partials/footer') %>
