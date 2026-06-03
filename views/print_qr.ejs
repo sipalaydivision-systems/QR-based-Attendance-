@@ -56,6 +56,7 @@
 <div class="qr-grid" id="qrGrid" style="--qr-columns: <%= qrFilters.layout %>;">
     <% if (typeof people !== 'undefined' && people.length) { %>
         <% people.forEach(function(p) { %>
+            <% const gradeSectionText = [p.grade_name, p.section_name].filter(Boolean).join(' - '); %>
             <div class="qr-card">
                 <div class="qr-card-header"><%= p.school_name || 'School Attendance System' %></div>
                 <div class="qr-card-body">
@@ -63,7 +64,7 @@
                     <div class="qr-name"><%= p.lastname %>, <%= p.firstname %></div>
                     <% if (p.lrn) { %><div class="qr-detail">LRN: <%= p.lrn %></div><% } %>
                     <% if (p.employee_id) { %><div class="qr-detail">ID: <%= p.employee_id %></div><% } %>
-                    <% if (p.grade_name) { %><div class="qr-detail"><%= p.grade_name %><% if (p.section_name) { %> - <%= p.section_name %><% } %></div><% } %>
+                    <div class="qr-detail qr-grade-section"><% if (gradeSectionText) { %><%= gradeSectionText %><% } else { %>&nbsp;<% } %></div>
                 </div>
                 <div class="qr-code-text"><%= p.qr_code %></div>
             </div>
@@ -100,7 +101,7 @@
     grid-template-columns: repeat(var(--qr-columns, 4), 180px);
     justify-content: start;
     gap: 16px;
-    min-height: 288px;
+    min-height: 322px;
     transition: none !important;
 }
 .qr-card {
@@ -108,11 +109,11 @@
     flex-direction: column;
     justify-content: space-between;
     width: 180px !important;
-    height: 278px !important;
+    height: 312px !important;
     min-width: 180px !important;
     max-width: 180px !important;
-    min-height: 278px !important;
-    max-height: 278px !important;
+    min-height: 312px !important;
+    max-height: 312px !important;
     transition: none !important;
     transform: none !important;
     contain: layout paint;
@@ -141,13 +142,13 @@
 }
 .qr-image {
     object-fit: contain;
-    width: 126px !important;
-    height: 126px !important;
-    min-width: 126px !important;
-    min-height: 126px !important;
-    max-width: 126px !important;
-    max-height: 126px !important;
-    flex: 0 0 126px;
+    width: 120px !important;
+    height: 120px !important;
+    min-width: 120px !important;
+    min-height: 120px !important;
+    max-width: 120px !important;
+    max-height: 120px !important;
+    flex: 0 0 120px;
 }
 .qr-name {
     width: 100%;
@@ -165,6 +166,10 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+.qr-grade-section {
+    color: var(--gray-700);
+    font-weight: 600;
 }
 .qr-code-text {
     display: flex;
@@ -191,11 +196,11 @@
     }
     .qr-card {
         width: 36mm !important;
-        height: 62mm !important;
+        height: 72mm !important;
         min-width: 36mm !important;
         max-width: 36mm !important;
-        min-height: 62mm !important;
-        max-height: 62mm !important;
+        min-height: 72mm !important;
+        max-height: 72mm !important;
         break-inside: avoid;
         page-break-inside: avoid;
         box-shadow: none;
@@ -224,13 +229,13 @@
         overflow: hidden !important;
     }
     .qr-image {
-        width: 22mm !important;
-        height: 22mm !important;
-        min-width: 22mm !important;
-        min-height: 22mm !important;
-        max-width: 22mm !important;
-        max-height: 22mm !important;
-        flex-basis: 22mm !important;
+        width: 21mm !important;
+        height: 21mm !important;
+        min-width: 21mm !important;
+        min-height: 21mm !important;
+        max-width: 21mm !important;
+        max-height: 21mm !important;
+        flex-basis: 21mm !important;
     }
     .qr-name {
         font-size: 8.5pt !important;
