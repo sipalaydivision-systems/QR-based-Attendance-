@@ -21,12 +21,15 @@ import android.os.Looper;
 import android.util.Base64;
 import android.view.Gravity;
 import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.GridLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -768,6 +771,12 @@ public class DashboardActivity extends Activity {
         if (animate) Ui.reveal(grid, 60);
 
         LinearLayout modules = sectionCard("Control Modules", "Super Admin-only access areas.");
+        Button createAccount = compactButton("Create Admin Account", Ui.GREEN_DARK);
+        createAccount.setOnClickListener(v -> showCreateAdminAccountDialog());
+        modules.addView(createAccount, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 44), 0, 0, 0, Ui.dp(this, 8)));
+        Button addHoliday = compactButton("Add Holiday", Ui.AMBER);
+        addHoliday.setOnClickListener(v -> showHolidayDialog());
+        modules.addView(addHoliday, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 44), 0, 0, 0, Ui.dp(this, 12)));
         modules.addView(recordRow("User Management", "Accounts, roles, activation, and passwords", "Tap an account below to activate or deactivate.", Ui.GREEN_DARK));
         modules.addView(recordRow("School Management", "Schools, grades, sections, logos, and advisers", "Synced with the web-based system.", Ui.GREEN_DARK));
         modules.addView(recordRow("Holiday and Attendance Rules", "Holidays, non-school days, grace periods, and alerts", "Applied to reports, dashboard, and notifications.", Ui.AMBER));
@@ -811,6 +820,9 @@ public class DashboardActivity extends Activity {
             if (user != null && "active".equalsIgnoreCase(user.optString("status", "active"))) active++;
         }
         LinearLayout card = sectionCard("Account Controls", active + " active of " + users.length() + " account(s)");
+        Button create = compactButton("Create Admin Account", Ui.GREEN_DARK);
+        create.setOnClickListener(v -> showCreateAdminAccountDialog());
+        card.addView(create, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 44), 0, 0, 0, Ui.dp(this, 10)));
         if (users.length() == 0) {
             card.addView(emptyText("No user accounts found."));
         } else {
@@ -837,18 +849,23 @@ public class DashboardActivity extends Activity {
 
     private LinearLayout adminHolidayCard(JSONArray holidays) {
         LinearLayout card = sectionCard("Holiday Schedule", "Dates excluded from attendance calculations.");
+        Button add = compactButton("Add Holiday", Ui.AMBER);
+        add.setOnClickListener(v -> showHolidayDialog());
+        card.addView(add, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 44), 0, 0, 0, Ui.dp(this, 10)));
         if (holidays.length() == 0) {
             card.addView(emptyText("No holidays configured."));
         } else {
             for (int i = 0; i < Math.min(holidays.length(), 8); i++) {
                 JSONObject row = holidays.optJSONObject(i);
                 if (row == null) continue;
-                card.addView(recordRow(
+                LinearLayout holidayRow = recordRow(
                         row.optString("name", "Holiday"),
                         row.optString("holiday_date", ""),
                         firstNonEmpty(row.optString("school_name", ""), "All schools"),
                         Ui.AMBER
-                ));
+                );
+                holidayRow.setOnClickListener(v -> confirmDeleteHoliday(row));
+                card.addView(holidayRow);
             }
         }
         return card;
@@ -906,6 +923,248 @@ public class DashboardActivity extends Activity {
                 runOnUiThread(() -> Toast.makeText(this, "Unable to update account: " + e.getMessage(), Toast.LENGTH_LONG).show());
             }
         }).start();
+    }
+
+    private void showCreateAdminAccountDialog() {
+        LinearLayout form = dialogForm();
+        EditText username = dialogInput("Username");
+        EditText fullname = dialogInput("Full name");
+        EditText email = dialogInput("Email address (optional)");
+        EditText password = dialogInput("Temporary password");
+        password.setInputType(0x00000081);
+
+        String[] roleLabels = {"School Administrator", "Super Administrator", "SDS View Only", "ASDS View Only"};
+        String[] roleCodes = {"principal", "super_admin", "superintendent", "asst_superintendent"};
+        Spinner role = dialogSpinner(roleLabels);
+
+        JSONArray schools = dashboard.optJSONArray("schools");
+        ArrayList<String> schoolNames = new ArrayList<>();
+        ArrayList<Integer> schoolIds = new ArrayList<>();
+        if (schools != null) {
+            for (int i = 0; i < schools.length(); i++) {
+                JSONObject school = schools.optJSONObject(i);
+                if (school == null) continue;
+                schoolNames.add(school.optString("name", "School"));
+                schoolIds.add(school.optInt("id", -1));
+            }
+        }
+        if (schoolNames.isEmpty()) {
+            schoolNames.add("No schools available");
+            schoolIds.add(-1);
+        }
+        Spinner school = dialogSpinner(schoolNames.toArray(new String[0]));
+
+        form.addView(username);
+        form.addView(fullname);
+        form.addView(email);
+        form.addView(password);
+        form.addView(labeledView("Role", role));
+        form.addView(labeledView("Assigned school for School Administrator", school));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Create Admin Account")
+                .setMessage("Create a role-based mobile and web login account.")
+                .setView(form)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Create", null)
+                .create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String u = username.getText().toString().trim();
+            String n = fullname.getText().toString().trim();
+            String p = password.getText().toString().trim();
+            if (u.isEmpty() || n.isEmpty() || p.isEmpty()) {
+                Toast.makeText(this, "Username, full name, and password are required.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            int roleIndex = role.getSelectedItemPosition();
+            String selectedRole = roleCodes[Math.max(0, roleIndex)];
+            int selectedSchoolId = schoolIds.get(Math.max(0, school.getSelectedItemPosition()));
+            if ("principal".equals(selectedRole) && selectedSchoolId < 1) {
+                Toast.makeText(this, "School Administrator accounts must be assigned to a school.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            try {
+                JSONObject body = new JSONObject();
+                body.put("username", u);
+                body.put("fullname", n);
+                body.put("email", email.getText().toString().trim());
+                body.put("password", p);
+                body.put("role", selectedRole);
+                body.put("school_id", "principal".equals(selectedRole) ? selectedSchoolId : JSONObject.NULL);
+                body.put("status", "active");
+                dialog.dismiss();
+                createAdminAccount(body);
+            } catch (Exception e) {
+                Toast.makeText(this, "Unable to prepare account data.", Toast.LENGTH_LONG).show();
+            }
+        }));
+        dialog.show();
+    }
+
+    private void createAdminAccount(JSONObject body) {
+        new Thread(() -> {
+            try {
+                ApiClient.postJson(this, "/api/users", body);
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Admin account created.", Toast.LENGTH_SHORT).show();
+                    if ("admin".equals(currentTab)) renderCurrentTab(false);
+                });
+            } catch (SecurityException e) {
+                runOnUiThread(this::goToLogin);
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(this, "Unable to create account: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        }).start();
+    }
+
+    private void showHolidayDialog() {
+        LinearLayout form = dialogForm();
+        EditText name = dialogInput("Holiday name");
+        EditText holidayDate = dialogInput("Holiday date (YYYY-MM-DD)");
+        holidayDate.setText(selectedDate == null || selectedDate.isEmpty() ? today() : selectedDate);
+        String[] typeLabels = {"National Holiday", "Local Holiday", "School Holiday"};
+        int[] typeCodes = {1, 0, 2};
+        Spinner type = dialogSpinner(typeLabels);
+
+        JSONArray schools = dashboard.optJSONArray("schools");
+        ArrayList<String> schoolNames = new ArrayList<>();
+        ArrayList<Integer> schoolIds = new ArrayList<>();
+        if (schools != null) {
+            for (int i = 0; i < schools.length(); i++) {
+                JSONObject school = schools.optJSONObject(i);
+                if (school == null) continue;
+                schoolNames.add(school.optString("name", "School"));
+                schoolIds.add(school.optInt("id", -1));
+            }
+        }
+        if (schoolNames.isEmpty()) {
+            schoolNames.add("No schools available");
+            schoolIds.add(-1);
+        }
+        Spinner school = dialogSpinner(schoolNames.toArray(new String[0]));
+
+        form.addView(name);
+        form.addView(holidayDate);
+        form.addView(labeledView("Holiday type", type));
+        form.addView(labeledView("School for School Holiday", school));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Add Holiday")
+                .setMessage("Holiday dates are excluded from attendance calculations.")
+                .setView(form)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Save", null)
+                .create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String cleanName = name.getText().toString().trim();
+            String cleanDate = holidayDate.getText().toString().trim();
+            if (cleanName.isEmpty() || cleanDate.isEmpty()) {
+                Toast.makeText(this, "Holiday name and date are required.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            if (!cleanDate.matches("\\d{4}-\\d{2}-\\d{2}")) {
+                Toast.makeText(this, "Use date format YYYY-MM-DD.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            int typeIndex = Math.max(0, type.getSelectedItemPosition());
+            int selectedType = typeCodes[typeIndex];
+            int selectedSchoolId = schoolIds.get(Math.max(0, school.getSelectedItemPosition()));
+            if (selectedType == 2 && selectedSchoolId < 1) {
+                Toast.makeText(this, "School Holiday must be assigned to a school.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            try {
+                JSONObject body = new JSONObject();
+                body.put("name", cleanName);
+                body.put("holiday_date", cleanDate);
+                body.put("is_national", selectedType);
+                body.put("school_id", selectedType == 2 ? selectedSchoolId : JSONObject.NULL);
+                dialog.dismiss();
+                createHoliday(body);
+            } catch (Exception e) {
+                Toast.makeText(this, "Unable to prepare holiday data.", Toast.LENGTH_LONG).show();
+            }
+        }));
+        dialog.show();
+    }
+
+    private void createHoliday(JSONObject body) {
+        new Thread(() -> {
+            try {
+                ApiClient.postJson(this, "/api/holidays", body);
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Holiday saved.", Toast.LENGTH_SHORT).show();
+                    if ("admin".equals(currentTab)) renderCurrentTab(false);
+                });
+            } catch (SecurityException e) {
+                runOnUiThread(this::goToLogin);
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(this, "Unable to save holiday: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        }).start();
+    }
+
+    private void confirmDeleteHoliday(JSONObject holiday) {
+        new AlertDialog.Builder(this)
+                .setTitle("Remove holiday")
+                .setMessage("Remove " + holiday.optString("name", "this holiday") + "?")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Remove", (dialog, which) -> deleteHoliday(holiday))
+                .show();
+    }
+
+    private void deleteHoliday(JSONObject holiday) {
+        int id = holiday.optInt("id", -1);
+        if (id < 1) return;
+        new Thread(() -> {
+            try {
+                ApiClient.deleteJson(this, "/api/holidays/" + id);
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Holiday removed.", Toast.LENGTH_SHORT).show();
+                    if ("admin".equals(currentTab)) renderCurrentTab(false);
+                });
+            } catch (SecurityException e) {
+                runOnUiThread(this::goToLogin);
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(this, "Unable to remove holiday: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        }).start();
+    }
+
+    private LinearLayout dialogForm() {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        int pad = Ui.dp(this, 4);
+        form.setPadding(pad, Ui.dp(this, 6), pad, 0);
+        return form;
+    }
+
+    private EditText dialogInput(String hint) {
+        EditText input = new EditText(this);
+        input.setHint(hint);
+        input.setSingleLine(true);
+        input.setTextSize(14);
+        input.setPadding(Ui.dp(this, 10), 0, Ui.dp(this, 10), 0);
+        input.setLayoutParams(Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 50), 0, 0, 0, Ui.dp(this, 8)));
+        return input;
+    }
+
+    private Spinner dialogSpinner(String[] values) {
+        Spinner spinner = new Spinner(this);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, values);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(adapter);
+        return spinner;
+    }
+
+    private LinearLayout labeledView(String label, View child) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        TextView text = Ui.text(this, label, 12, Color.rgb(82, 96, 92), Typeface.BOLD);
+        box.addView(text);
+        box.addView(child, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 48)));
+        box.setLayoutParams(Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 8)));
+        return box;
     }
 
     private void renderAlerts(boolean animate) {

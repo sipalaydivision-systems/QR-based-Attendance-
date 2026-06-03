@@ -316,6 +316,57 @@ class ApiService {
       fallback: 'Server returned an invalid response format.',
     );
   }
+
+  Future<Map<String, dynamic>> postJson(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final response = await _request(
+      () => http.post(
+        Uri.parse('${AppConfig.baseUrl}$path'),
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(body),
+      ),
+    );
+    if (response.statusCode == 401) throw AuthExpired();
+    if (response.statusCode >= 400) {
+      throw Exception(
+        _errorFromBody(
+          response.body,
+          fallback: 'Failed to create the selected record.',
+        ),
+      );
+    }
+    return _decodeJsonMap(
+      response,
+      fallback: 'Server returned an invalid response format.',
+    );
+  }
+
+  Future<Map<String, dynamic>> deleteJson(String path) async {
+    final response = await _request(
+      () => http.delete(
+        Uri.parse('${AppConfig.baseUrl}$path'),
+        headers: authHeaders,
+      ),
+    );
+    if (response.statusCode == 401) throw AuthExpired();
+    if (response.statusCode >= 400) {
+      throw Exception(
+        _errorFromBody(
+          response.body,
+          fallback: 'Failed to remove the selected record.',
+        ),
+      );
+    }
+    return _decodeJsonMap(
+      response,
+      fallback: 'Server returned an invalid response format.',
+    );
+  }
 }
 
 class AuthExpired implements Exception {}
@@ -1337,6 +1388,127 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
     }
   }
 
+  Future<void> createUser(Map<String, dynamic> body) async {
+    if (saving) return;
+    setState(() => saving = true);
+    try {
+      await widget.api.postJson('/api/users', body);
+      await load(silent: true);
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Admin account created.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            readableError(e, fallback: 'Unable to create admin account.'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> createHoliday(Map<String, dynamic> body) async {
+    if (saving) return;
+    setState(() => saving = true);
+    try {
+      await widget.api.postJson('/api/holidays', body);
+      await load(silent: true);
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Holiday saved.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            readableError(e, fallback: 'Unable to save holiday.'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> deleteHoliday(Map holiday) async {
+    final id = '${holiday['id'] ?? ''}'.trim();
+    if (id.isEmpty || saving) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Remove holiday'),
+        content: Text('Remove ${holiday['name'] ?? 'this holiday'}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() => saving = true);
+    try {
+      await widget.api.deleteJson('/api/holidays/$id');
+      await load(silent: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Holiday removed.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            readableError(e, fallback: 'Unable to remove holiday.'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  void openCreateUserSheet() {
+    final schools = (dashboard['schools'] as List?) ?? const [];
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AdminAccountFormSheet(
+        schools: schools,
+        saving: saving,
+        onSubmit: createUser,
+      ),
+    );
+  }
+
+  void openHolidaySheet() {
+    final schools = (dashboard['schools'] as List?) ?? const [];
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => HolidayFormSheet(
+        schools: schools,
+        saving: saving,
+        onSubmit: createHoliday,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (loading && dashboard.isEmpty) {
@@ -1471,7 +1643,32 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
             title: 'Control Modules',
             subtitle: 'Role-based administrative areas available to Super Admin.',
             child: Column(
-              children: const [
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: AdminActionButton(
+                        icon: Icons.person_add_alt_1_rounded,
+                        label: 'Create Admin Account',
+                        onTap: saving ? null : openCreateUserSheet,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: AdminActionButton(
+                        icon: Icons.event_available_rounded,
+                        label: 'Add Holiday',
+                        onTap: saving ? null : openHolidaySheet,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const AdminModuleTile(
+                  icon: Icons.manage_accounts_rounded,
+                  title: 'Admin Account Creation',
+                  subtitle: 'Create Super Admin, School Admin, SDS, or ASDS accounts.',
+                ),
                 AdminModuleTile(
                   icon: Icons.manage_accounts_rounded,
                   title: 'User Management',
@@ -1506,6 +1703,12 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
             subtitle: '${users.length} account(s) synced from the server.',
             child: Column(
               children: [
+                AdminActionButton(
+                  icon: Icons.person_add_rounded,
+                  label: 'Create Admin Account',
+                  onTap: saving ? null : openCreateUserSheet,
+                ),
+                const SizedBox(height: 12),
                 for (final item in users.take(10))
                   UserControlTile(
                     user: Map<String, dynamic>.from(item as Map),
@@ -1519,11 +1722,22 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
           const SizedBox(height: 14),
           PremiumCard(
             title: 'Holiday Schedule',
-            subtitle: 'Upcoming holidays excluded from attendance calculations.',
+            subtitle: 'Add or remove holidays excluded from attendance calculations.',
             child: Column(
               children: [
+                AdminActionButton(
+                  icon: Icons.add_circle_rounded,
+                  label: 'Add Holiday',
+                  onTap: saving ? null : openHolidaySheet,
+                ),
+                const SizedBox(height: 12),
                 for (final item in holidays.take(8))
-                  HolidayRow(Map<String, dynamic>.from(item as Map)),
+                  HolidayRow(
+                    Map<String, dynamic>.from(item as Map),
+                    onDelete: saving
+                        ? null
+                        : () => deleteHoliday(Map<String, dynamic>.from(item as Map)),
+                  ),
                 if (holidays.isEmpty) const EmptyText('No holidays configured.'),
               ],
             ),
@@ -1605,6 +1819,421 @@ class AdminModuleTile extends StatelessWidget {
     ),
   );
 }
+
+class AdminActionButton extends StatelessWidget {
+  const AdminActionButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => FilledButton.icon(
+    onPressed: onTap,
+    icon: Icon(icon, size: 18),
+    label: Text(
+      label,
+      textAlign: TextAlign.center,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+    ),
+    style: FilledButton.styleFrom(
+      backgroundColor: const Color(0xFF0F6E52),
+      foregroundColor: Colors.white,
+      minimumSize: const Size.fromHeight(48),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      textStyle: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w900,
+      ),
+    ),
+  );
+}
+
+class AdminAccountFormSheet extends StatefulWidget {
+  const AdminAccountFormSheet({
+    super.key,
+    required this.schools,
+    required this.saving,
+    required this.onSubmit,
+  });
+  final List schools;
+  final bool saving;
+  final Future<void> Function(Map<String, dynamic> body) onSubmit;
+
+  @override
+  State<AdminAccountFormSheet> createState() => _AdminAccountFormSheetState();
+}
+
+class _AdminAccountFormSheetState extends State<AdminAccountFormSheet> {
+  final username = TextEditingController();
+  final fullname = TextEditingController();
+  final email = TextEditingController();
+  final password = TextEditingController();
+  String role = 'principal';
+  int? schoolId;
+  bool submitting = false;
+
+  @override
+  void dispose() {
+    username.dispose();
+    fullname.dispose();
+    email.dispose();
+    password.dispose();
+    super.dispose();
+  }
+
+  Future<void> submit() async {
+    if (submitting) return;
+    final cleanUsername = username.text.trim();
+    final cleanName = fullname.text.trim();
+    final cleanPassword = password.text.trim();
+    if (cleanUsername.isEmpty || cleanName.isEmpty || cleanPassword.isEmpty) {
+      showLocalMessage('Username, full name, and password are required.');
+      return;
+    }
+    if (role == 'principal' && schoolId == null) {
+      showLocalMessage('School Administrator accounts must be assigned to a school.');
+      return;
+    }
+    setState(() => submitting = true);
+    await widget.onSubmit({
+      'username': cleanUsername,
+      'fullname': cleanName,
+      'email': email.text.trim(),
+      'password': cleanPassword,
+      'role': role,
+      'school_id': role == 'principal' ? schoolId : null,
+      'status': 'active',
+    });
+    if (mounted) setState(() => submitting = false);
+  }
+
+  void showLocalMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    return AdminFormShell(
+      title: 'Create Admin Account',
+      subtitle: 'Add a role-based login account for the Edutrack system.',
+      bottomInset: bottom,
+      child: Column(
+        children: [
+          AdminTextInput(controller: username, label: 'Username', icon: Icons.person_rounded),
+          AdminTextInput(controller: fullname, label: 'Full Name', icon: Icons.badge_rounded),
+          AdminTextInput(controller: email, label: 'Email Address', icon: Icons.email_rounded, keyboardType: TextInputType.emailAddress),
+          AdminTextInput(controller: password, label: 'Temporary Password', icon: Icons.lock_rounded, obscure: true),
+          DropdownButtonFormField<String>(
+            value: role,
+            decoration: adminInputDecoration('Role', Icons.admin_panel_settings_rounded),
+            items: const [
+              DropdownMenuItem(value: 'principal', child: Text('School Administrator')),
+              DropdownMenuItem(value: 'super_admin', child: Text('Super Administrator')),
+              DropdownMenuItem(value: 'superintendent', child: Text('SDS View Only')),
+              DropdownMenuItem(value: 'asst_superintendent', child: Text('ASDS View Only')),
+            ],
+            onChanged: (value) => setState(() {
+              role = value ?? 'principal';
+              if (role != 'principal') schoolId = null;
+            }),
+          ),
+          const SizedBox(height: 12),
+          if (role == 'principal')
+            DropdownButtonFormField<int>(
+              value: schoolId,
+              decoration: adminInputDecoration('Assigned School', Icons.account_balance_rounded),
+              items: [
+                for (final item in widget.schools)
+                  DropdownMenuItem<int>(
+                    value: intValue((item as Map)['id']),
+                    child: Text(
+                      '${item['name'] ?? 'School'}',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+              onChanged: (value) => setState(() => schoolId = value),
+            ),
+          if (role == 'principal') const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: submitting || widget.saving ? null : submit,
+            icon: submitting || widget.saving
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.person_add_alt_1_rounded),
+            label: const Text('Create Account'),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF0F6E52),
+              foregroundColor: Colors.white,
+              minimumSize: const Size.fromHeight(50),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class HolidayFormSheet extends StatefulWidget {
+  const HolidayFormSheet({
+    super.key,
+    required this.schools,
+    required this.saving,
+    required this.onSubmit,
+  });
+  final List schools;
+  final bool saving;
+  final Future<void> Function(Map<String, dynamic> body) onSubmit;
+
+  @override
+  State<HolidayFormSheet> createState() => _HolidayFormSheetState();
+}
+
+class _HolidayFormSheetState extends State<HolidayFormSheet> {
+  final name = TextEditingController();
+  String holidayDate = date();
+  int holidayType = 1;
+  int? schoolId;
+  bool submitting = false;
+
+  @override
+  void dispose() {
+    name.dispose();
+    super.dispose();
+  }
+
+  Future<void> pickDate() async {
+    final current = DateTime.tryParse(holidayDate) ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+    );
+    if (picked == null) return;
+    setState(() {
+      holidayDate =
+          '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+    });
+  }
+
+  Future<void> submit() async {
+    if (submitting) return;
+    if (name.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Holiday name is required.')),
+      );
+      return;
+    }
+    setState(() => submitting = true);
+    await widget.onSubmit({
+      'name': name.text.trim(),
+      'holiday_date': holidayDate,
+      'is_national': holidayType,
+      'school_id': holidayType == 2 ? schoolId : null,
+    });
+    if (mounted) setState(() => submitting = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    return AdminFormShell(
+      title: 'Add Holiday',
+      subtitle: 'Exclude a national, local, or school holiday from attendance calculations.',
+      bottomInset: bottom,
+      child: Column(
+        children: [
+          AdminTextInput(controller: name, label: 'Holiday Name', icon: Icons.event_rounded),
+          InkWell(
+            onTap: pickDate,
+            borderRadius: BorderRadius.circular(16),
+            child: InputDecorator(
+              decoration: adminInputDecoration('Holiday Date', Icons.calendar_month_rounded),
+              child: Text(
+                '$holidayDate - ${readableDate(holidayDate)}',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<int>(
+            value: holidayType,
+            decoration: adminInputDecoration('Holiday Type', Icons.flag_rounded),
+            items: const [
+              DropdownMenuItem(value: 1, child: Text('National Holiday')),
+              DropdownMenuItem(value: 0, child: Text('Local Holiday')),
+              DropdownMenuItem(value: 2, child: Text('School Holiday')),
+            ],
+            onChanged: (value) => setState(() {
+              holidayType = value ?? 1;
+              if (holidayType != 2) schoolId = null;
+            }),
+          ),
+          const SizedBox(height: 12),
+          if (holidayType == 2)
+            DropdownButtonFormField<int>(
+              value: schoolId,
+              decoration: adminInputDecoration('School', Icons.account_balance_rounded),
+              items: [
+                for (final item in widget.schools)
+                  DropdownMenuItem<int>(
+                    value: intValue((item as Map)['id']),
+                    child: Text(
+                      '${item['name'] ?? 'School'}',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+              onChanged: (value) => setState(() => schoolId = value),
+            ),
+          if (holidayType == 2) const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: submitting || widget.saving ? null : submit,
+            icon: submitting || widget.saving
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.add_circle_rounded),
+            label: const Text('Save Holiday'),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF0F6E52),
+              foregroundColor: Colors.white,
+              minimumSize: const Size.fromHeight(50),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class AdminFormShell extends StatelessWidget {
+  const AdminFormShell({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.child,
+    required this.bottomInset,
+  });
+  final String title;
+  final String subtitle;
+  final Widget child;
+  final double bottomInset;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.only(bottom: bottomInset),
+    child: Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFFF5F7F6),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFCAD5CF),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Color(0xFF0F211B),
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -.35,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  color: Color(0xFF64726B),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 16),
+              child,
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class AdminTextInput extends StatelessWidget {
+  const AdminTextInput({
+    super.key,
+    required this.controller,
+    required this.label,
+    required this.icon,
+    this.obscure = false,
+    this.keyboardType,
+  });
+  final TextEditingController controller;
+  final String label;
+  final IconData icon;
+  final bool obscure;
+  final TextInputType? keyboardType;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: TextField(
+      controller: controller,
+      obscureText: obscure,
+      keyboardType: keyboardType,
+      decoration: adminInputDecoration(label, icon),
+    ),
+  );
+}
+
+InputDecoration adminInputDecoration(String label, IconData icon) =>
+    InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, color: const Color(0xFF0F6E52)),
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Color(0xFFDCE6E1)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Color(0xFF0F6E52), width: 1.5),
+      ),
+    );
 
 class UserControlTile extends StatelessWidget {
   const UserControlTile({
@@ -1690,8 +2319,9 @@ class UserControlTile extends StatelessWidget {
 }
 
 class HolidayRow extends StatelessWidget {
-  const HolidayRow(this.row, {super.key});
+  const HolidayRow(this.row, {super.key, this.onDelete});
   final Map<String, dynamic> row;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1725,6 +2355,13 @@ class HolidayRow extends StatelessWidget {
             ],
           ),
         ),
+        if (onDelete != null)
+          IconButton(
+            onPressed: onDelete,
+            icon: const Icon(Icons.delete_outline_rounded),
+            color: const Color(0xFFB91C1C),
+            tooltip: 'Remove holiday',
+          ),
       ],
     ),
   );

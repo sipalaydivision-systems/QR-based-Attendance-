@@ -80,6 +80,31 @@ final class ApiClient {
         return parseJson(response, "Server returned an invalid update response.");
     }
 
+    static JSONObject postJson(Context context, String path, JSONObject body) throws Exception {
+        HttpURLConnection conn = open(context, path, "POST");
+        String cookie = SessionStore.getCookie(context);
+        if (!cookie.isEmpty()) conn.setRequestProperty("Cookie", cookie);
+        conn.setRequestProperty("Content-Type", "application/json");
+        conn.setDoOutput(true);
+        try (OutputStream os = conn.getOutputStream()) {
+            os.write(body.toString().getBytes("UTF-8"));
+        }
+        String response = read(conn);
+        if (conn.getResponseCode() == 401) throw new SecurityException("Session expired.");
+        if (conn.getResponseCode() >= 400) throw new IllegalStateException(response);
+        return parseJson(response, "Server returned an invalid create response.");
+    }
+
+    static JSONObject deleteJson(Context context, String path) throws Exception {
+        HttpURLConnection conn = open(context, path, "DELETE");
+        String cookie = SessionStore.getCookie(context);
+        if (!cookie.isEmpty()) conn.setRequestProperty("Cookie", cookie);
+        String response = read(conn);
+        if (conn.getResponseCode() == 401) throw new SecurityException("Session expired.");
+        if (conn.getResponseCode() >= 400) throw new IllegalStateException(response);
+        return parseJson(response, "Server returned an invalid delete response.");
+    }
+
     static byte[] getBytes(Context context, String pathOrUrl) throws Exception {
         URL url = pathOrUrl.startsWith("http://") || pathOrUrl.startsWith("https://")
                 ? new URL(pathOrUrl)
