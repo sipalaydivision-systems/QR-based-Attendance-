@@ -44,13 +44,6 @@
             <option value="5" <%= qrFilters.layout === '5' ? 'selected' : '' %>>5 per row</option>
         </select>
     </div>
-    <button class="btn-filter" type="button" onclick="reloadQR()" title="Refresh QR list">
-        <i class="fa-solid fa-rotate"></i> Refresh
-    </button>
-    <div class="auto-filter-status" aria-live="polite">
-        <i class="fa-solid fa-bolt"></i>
-        Auto updates when filters change
-    </div>
 </div>
 
 <div class="qr-grid" id="qrGrid" style="--qr-columns: <%= qrFilters.layout %>;">
@@ -81,20 +74,6 @@
 <style>
 .filter-bar {
     align-items: end;
-}
-.auto-filter-status {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    min-height: 36px;
-    padding: 0 12px;
-    color: #047857;
-    font-size: 0.82rem;
-    font-weight: 700;
-    white-space: nowrap;
-}
-.auto-filter-status i {
-    color: #f59e0b;
 }
 .qr-grid {
     align-items: start;
@@ -189,7 +168,7 @@
     .page-header { margin-bottom: 4mm !important; }
     .qr-grid {
         display: grid;
-        grid-template-columns: repeat(<%= qrFilters.layout %>, 36mm) !important;
+        grid-template-columns: repeat(var(--qr-columns, 4), 36mm) !important;
         justify-content: start;
         gap: 2.5mm !important;
         min-height: auto !important;
@@ -276,6 +255,7 @@ var dropdownsReady = false;
 var reloadTimer = null;
 var allQrGrades = [];
 var allQrSections = [];
+var activeQrRequest = null;
 
 function setSelectValue(id, value) {
     var el = document.getElementById(id);
@@ -351,7 +331,7 @@ async function loadDropdowns() {
 }
 loadDropdowns();
 
-function reloadQR() {
+function buildQrParams() {
     var type = document.getElementById('qrType').value;
     var school = document.getElementById('qrSchool').value;
     var grade = document.getElementById('qrGrade').value;
@@ -363,19 +343,116 @@ function reloadQR() {
     if (grade) params.set('grade_level_id', grade);
     if (section) params.set('section_id', section);
     if (layout) params.set('layout', layout);
-    window.location.href = '/admin/print-qr?' + params.toString();
+    return params;
+}
+
+function syncQrUrl(params) {
+    var nextUrl = '/admin/print-qr?' + params.toString();
+    if (window.location.pathname + window.location.search !== nextUrl) {
+        window.history.replaceState(null, '', nextUrl);
+    }
+}
+
+function safeText(value) {
+    return value == null ? '' : String(value);
+}
+
+function makeDiv(className, value) {
+    var el = document.createElement('div');
+    if (className) el.className = className;
+    el.textContent = safeText(value);
+    return el;
+}
+
+function makeQrCard(person) {
+    var card = makeDiv('qr-card');
+    var header = makeDiv('qr-card-header', person.school_name || 'Edutrack');
+    var body = makeDiv('qr-card-body');
+    var img = document.createElement('img');
+    img.src = person.qrDataUrl || '';
+    img.alt = 'QR';
+    img.className = 'qr-image';
+    body.appendChild(img);
+    body.appendChild(makeDiv('qr-name', [person.lastname, person.firstname].filter(Boolean).join(', ')));
+    if (person.lrn) body.appendChild(makeDiv('qr-detail', 'LRN: ' + person.lrn));
+    if (person.employee_id) body.appendChild(makeDiv('qr-detail', 'ID: ' + person.employee_id));
+    var gradeSectionText = [person.grade_name, person.section_name].filter(Boolean).join(' - ');
+    var gradeSection = makeDiv('qr-detail qr-grade-section', gradeSectionText || '\u00a0');
+    body.appendChild(gradeSection);
+    card.appendChild(header);
+    card.appendChild(body);
+    card.appendChild(makeDiv('qr-code-text', person.qr_code || ''));
+    return card;
+}
+
+function renderEmptyQr(message) {
+    var empty = makeDiv('empty-state');
+    empty.style.gridColumn = '1/-1';
+    var iconWrap = makeDiv('empty-icon');
+    var icon = document.createElement('i');
+    icon.className = 'fa-solid fa-qrcode';
+    icon.style.fontSize = '2.5rem';
+    icon.style.color = 'var(--gray-300)';
+    iconWrap.appendChild(icon);
+    var title = document.createElement('h4');
+    title.textContent = 'No QR codes to display';
+    var text = document.createElement('p');
+    text.textContent = message || 'Choose a type, school, grade, or section above to show matching QR codes automatically.';
+    empty.appendChild(iconWrap);
+    empty.appendChild(title);
+    empty.appendChild(text);
+    return empty;
+}
+
+function renderQrCards(people) {
+    var grid = document.getElementById('qrGrid');
+    grid.replaceChildren();
+    if (!people || !people.length) {
+        grid.appendChild(renderEmptyQr());
+        return;
+    }
+    people.forEach(function(person) {
+        grid.appendChild(makeQrCard(person));
+    });
+}
+
+async function fetchQrCards() {
+    if (!dropdownsReady) return;
+    var params = buildQrParams();
+    syncQrUrl(params);
+
+    if (activeQrRequest) activeQrRequest.abort();
+    activeQrRequest = new AbortController();
+
+    try {
+        var response = await fetch('/admin/print-qr/data?' + params.toString(), {
+            headers: { 'Accept': 'application/json' },
+            cache: 'no-store',
+            signal: activeQrRequest.signal
+        });
+        var contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) throw new Error('Your session has expired. Please sign in again.');
+        if (!response.ok) throw new Error('Failed to load QR codes.');
+        var payload = await response.json();
+        if (!payload.success) throw new Error(payload.error || 'Failed to load QR codes.');
+        renderQrCards(payload.people || []);
+    } catch (err) {
+        if (err.name === 'AbortError') return;
+        var grid = document.getElementById('qrGrid');
+        grid.replaceChildren(renderEmptyQr(err.message || 'Unable to load QR codes. Please check the selected filters and try again.'));
+    }
 }
 
 function applyLayout(cols) {
     document.getElementById('qrGrid').style.setProperty('--qr-columns', cols);
 }
 
-function scheduleReload() {
+function scheduleFetch() {
     if (!dropdownsReady) return;
     var layout = document.getElementById('qrLayout').value || '4';
     applyLayout(layout);
     clearTimeout(reloadTimer);
-    reloadTimer = setTimeout(reloadQR, 250);
+    reloadTimer = setTimeout(fetchQrCards, 180);
 }
 
 function handleFilterChange(event) {
@@ -386,7 +463,12 @@ function handleFilterChange(event) {
     if (event.target.id === 'qrGrade') {
         renderSectionOptions(allQrSections, '');
     }
-    scheduleReload();
+    if (event.target.id === 'qrLayout') {
+        applyLayout(event.target.value || '4');
+        syncQrUrl(buildQrParams());
+        return;
+    }
+    scheduleFetch();
 }
 
 function bindAutoReload() {

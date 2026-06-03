@@ -1005,62 +1005,91 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
 });
 
 // ---- Print QR Codes ----
-router.get('/print-qr', async (req, res) => {
-    const schoolId = req.query.school_id;
-    const gradeLevelId = req.query.grade_level_id;
-    const sectionId = req.query.section_id;
-    const layout = ['3', '4', '5'].includes(String(req.query.layout || '')) ? String(req.query.layout) : '4';
-    const type = req.query.type === 'teacher' ? 'teacher' : 'student';
+function getPrintQrFilters(query) {
+    const schoolId = query.school_id;
+    const gradeLevelId = query.grade_level_id;
+    const sectionId = query.section_id;
+    const layout = ['3', '4', '5'].includes(String(query.layout || '')) ? String(query.layout) : '4';
+    const type = query.type === 'teacher' ? 'teacher' : 'student';
+
+    return {
+        type,
+        schoolId,
+        gradeLevelId,
+        sectionId,
+        layout,
+        studentId: query.student_id ? parseInt(query.student_id, 10) : null,
+        teacherId: query.teacher_id ? parseInt(query.teacher_id, 10) : null,
+        viewFilters: {
+            type,
+            school_id: schoolId || '',
+            grade_level_id: gradeLevelId || '',
+            section_id: sectionId || '',
+            layout
+        }
+    };
+}
+
+async function getPrintQrPeople(filters) {
     let people = [];
 
-    try {
-        if (type === 'teacher') {
-            let query = `SELECT t.id, t.firstname, t.lastname, t.employee_id, t.qr_code,
+    if (filters.type === 'teacher') {
+        let query = `SELECT t.id, t.firstname, t.lastname, t.employee_id, t.qr_code,
                     sc.name AS school_name, gl.name AS grade_name, sec.name AS section_name
                 FROM teachers t
                 LEFT JOIN schools sc ON t.school_id = sc.id
                 LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
                 LEFT JOIN sections sec ON t.section_id = sec.id
                 WHERE t.status != 'deleted'`;
-            const params = [];
-            if (req.query.teacher_id) { query += ' AND t.id = ?'; params.push(parseInt(req.query.teacher_id, 10)); }
-            if (schoolId) { query += ' AND t.school_id = ?'; params.push(schoolId); }
-            if (gradeLevelId) { query += ' AND t.grade_level_id = ?'; params.push(gradeLevelId); }
-            if (sectionId) { query += ' AND t.section_id = ?'; params.push(sectionId); }
-            query += ' ORDER BY t.lastname, t.firstname';
-            [people] = await db.query(query, params);
-        } else {
-            let query = "SELECT s.id, s.firstname, s.lastname, s.lrn, s.qr_code, sc.name AS school_name, gl.name AS grade_name, sec.name AS section_name FROM students s LEFT JOIN schools sc ON s.school_id = sc.id LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id LEFT JOIN sections sec ON s.section_id = sec.id WHERE s.status != 'deleted'";
-            const params = [];
-            if (req.query.student_id) { query += ' AND s.id = ?'; params.push(parseInt(req.query.student_id, 10)); }
-            if (schoolId) { query += ' AND s.school_id = ?'; params.push(schoolId); }
-            if (gradeLevelId) { query += ' AND s.grade_level_id = ?'; params.push(gradeLevelId); }
-            if (sectionId) { query += ' AND s.section_id = ?'; params.push(sectionId); }
-            query += ' ORDER BY s.lastname, s.firstname';
-            [people] = await db.query(query, params);
-        }
+        const params = [];
+        if (filters.teacherId) { query += ' AND t.id = ?'; params.push(filters.teacherId); }
+        if (filters.schoolId) { query += ' AND t.school_id = ?'; params.push(filters.schoolId); }
+        if (filters.gradeLevelId) { query += ' AND t.grade_level_id = ?'; params.push(filters.gradeLevelId); }
+        if (filters.sectionId) { query += ' AND t.section_id = ?'; params.push(filters.sectionId); }
+        query += ' ORDER BY t.lastname, t.firstname';
+        [people] = await db.query(query, params);
+    } else {
+        let query = "SELECT s.id, s.firstname, s.lastname, s.lrn, s.qr_code, sc.name AS school_name, gl.name AS grade_name, sec.name AS section_name FROM students s LEFT JOIN schools sc ON s.school_id = sc.id LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id LEFT JOIN sections sec ON s.section_id = sec.id WHERE s.status != 'deleted'";
+        const params = [];
+        if (filters.studentId) { query += ' AND s.id = ?'; params.push(filters.studentId); }
+        if (filters.schoolId) { query += ' AND s.school_id = ?'; params.push(filters.schoolId); }
+        if (filters.gradeLevelId) { query += ' AND s.grade_level_id = ?'; params.push(filters.gradeLevelId); }
+        if (filters.sectionId) { query += ' AND s.section_id = ?'; params.push(filters.sectionId); }
+        query += ' ORDER BY s.lastname, s.firstname';
+        [people] = await db.query(query, params);
+    }
 
-        // Generate QR code data URLs
-        const qrPromises = people.map(async (p) => {
-            const qrDataUrl = await QRCode.toDataURL(p.qr_code, { width: 200, margin: 1 });
-            return { ...p, qrDataUrl };
-        });
-        const peopleWithQR = await Promise.all(qrPromises);
+    const qrPromises = people.map(async (p) => {
+        const qrDataUrl = await QRCode.toDataURL(p.qr_code, { width: 200, margin: 1 });
+        return { ...p, qrDataUrl };
+    });
+    return Promise.all(qrPromises);
+}
+
+router.get('/print-qr/data', async (req, res) => {
+    try {
+        const filters = getPrintQrFilters(req.query);
+        const people = await getPrintQrPeople(filters);
+        return res.json({ success: true, people, filters: filters.viewFilters });
+    } catch (err) {
+        console.error('Print QR data error:', err);
+        return res.status(500).json({ success: false, error: 'Failed to load QR codes.' });
+    }
+});
+
+router.get('/print-qr', async (req, res) => {
+    try {
+        const filters = getPrintQrFilters(req.query);
+        const peopleWithQR = await getPrintQrPeople(filters);
 
         const [schools] = await db.query("SELECT * FROM schools WHERE status = 'active' ORDER BY name");
         res.render('print_qr', {
             title: 'Print QR Codes',
             page: 'print_qr',
             people: peopleWithQR,
-            type,
+            type: filters.type,
             schools,
-            filters: {
-                type,
-                school_id: schoolId || '',
-                grade_level_id: gradeLevelId || '',
-                section_id: sectionId || '',
-                layout
-            }
+            filters: filters.viewFilters
         });
     } catch (err) {
         console.error('Print QR error:', err);
