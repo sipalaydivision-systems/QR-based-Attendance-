@@ -5,6 +5,13 @@ const multer = require('multer');
 const router = express.Router();
 const db = require('../config/database');
 const { requireAuth, requireRole, applySchoolFilter } = require('../middleware/auth');
+const { getScannerKioskTokenFromRequest, isValidScannerKioskToken } = require('../utils/scannerKiosk');
+
+function requireAuthOrScannerKiosk(req, res, next) {
+    if (req.session && req.session.user) return next();
+    if (isValidScannerKioskToken(getScannerKioskTokenFromRequest(req))) return next();
+    return res.status(401).json({ error: 'Not authenticated' });
+}
 
 // Logo upload config. Logos are stored as data URLs so Railway redeploys do not wipe uploaded files.
 const logoUpload = multer({
@@ -308,7 +315,7 @@ async function getConsecutiveAbsenceFlags({ baseDate, schoolId, days = 2, includ
 }
 
 // GET /api/is-school-day
-router.get('/is-school-day', requireAuth, async (req, res) => {
+router.get('/is-school-day', requireAuthOrScannerKiosk, async (req, res) => {
     try {
         const date = req.query.date || new Date().toISOString().slice(0, 10);
         const schoolId = req.query.school_id ? parseInt(req.query.school_id, 10) : null;
@@ -323,7 +330,7 @@ router.get('/is-school-day', requireAuth, async (req, res) => {
 // =============================================
 // POST /api/scan-attendance
 // =============================================
-router.post('/scan-attendance', requireAuth, async (req, res) => {
+router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
     const { qr_code } = req.body;
     if (!qr_code) {
         return res.status(400).json({ success: false, error: 'No QR code provided.' });
@@ -2045,7 +2052,7 @@ router.get('/inactive-students', requireAuth, async (req, res) => {
 });
 
 // ---- Check if today is a school day ----
-router.get('/is-school-day', requireAuth, async (req, res) => {
+router.get('/is-school-day', requireAuthOrScannerKiosk, async (req, res) => {
     const date = req.query.date || new Date().toISOString().slice(0, 10);
     try {
         const [rows] = await db.query('SELECT * FROM school_days WHERE date = ?', [date]);

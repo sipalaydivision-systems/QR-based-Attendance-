@@ -7,8 +7,19 @@ const { Readable } = require('stream');
 const router = express.Router();
 const db = require('../config/database');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { getScannerKioskToken } = require('../utils/scannerKiosk');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+// Scanner kiosk is intentionally available without a dashboard login for guard stations and autostart desktops.
+router.get('/scanner', async (req, res) => {
+    res.render('scanner', {
+        title: 'QR Scanner',
+        page: 'scanner',
+        kioskMode: true,
+        scannerKioskToken: getScannerKioskToken()
+    });
+});
 
 // All admin routes require authentication
 router.use(requireAuth);
@@ -460,11 +471,6 @@ router.post('/register-user', requireRole('super_admin'), async (req, res) => {
 // ---- Settings ----
 router.get('/settings', requireRole('super_admin'), async (req, res) => {
     res.render('settings', { title: 'Settings', page: 'settings' });
-});
-
-// ---- Scanner ----
-router.get('/scanner', async (req, res) => {
-    res.render('scanner', { title: 'QR Scanner', page: 'scanner' });
 });
 
 // ---- User Logs ----

@@ -324,6 +324,16 @@
     </div>
 
     <script>
+    var SCANNER_KIOSK_TOKEN = <%- JSON.stringify(typeof scannerKioskToken !== 'undefined' ? scannerKioskToken : '') %>;
+
+    function scannerFetchOptions(options) {
+        var finalOptions = options || {};
+        var headers = Object.assign({}, finalOptions.headers || {});
+        if (SCANNER_KIOSK_TOKEN) {
+            headers['X-Scanner-Kiosk-Token'] = SCANNER_KIOSK_TOKEN;
+        }
+        return Object.assign({}, finalOptions, { headers: headers });
+    }
     /* ── Clock ── */
     function updateClock() {
         var now = new Date();
@@ -346,7 +356,7 @@
 
         try {
             var today = new Date().toISOString().slice(0, 10);
-            var res = await fetch('/api/is-school-day?date=' + today);
+            var res = await fetch('/api/is-school-day?date=' + today, scannerFetchOptions());
             if (!res.ok) return;
             var data = await res.json();
             var isSchoolDay = data.isSchoolDay !== undefined ? data.isSchoolDay : data.is_school_day;
@@ -413,12 +423,12 @@
         var controller = new AbortController();
         var timeoutId = setTimeout(function() { controller.abort(); }, REQUEST_TIMEOUT);
 
-        fetch('/api/scan-attendance', {
+        fetch('/api/scan-attendance', scannerFetchOptions({
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ qr_code: qrCode }),
             signal: controller.signal
-        })
+        }))
         .then(function(r) { clearTimeout(timeoutId); return r.json(); })
         .then(function(data) {
             showResult(data);

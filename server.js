@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const db = require('./config/database');
 const MySQLSessionStore = require('./config/mysqlSessionStore');
+const { getScannerKioskToken } = require('./utils/scannerKiosk');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -126,6 +127,15 @@ app.get('/app', (req, res) => {
         return res.redirect(getDashboardUrl(req.session.user.role));
     }
     return res.redirect('/login');
+});
+
+app.get('/scanner', (req, res) => {
+    return res.render('scanner', {
+        title: 'QR Scanner',
+        page: 'scanner',
+        kioskMode: true,
+        scannerKioskToken: getScannerKioskToken()
+    });
 });
 
 app.get('/api/app-info', (req, res) => {
@@ -274,7 +284,7 @@ function sendWindowsDesktopLauncher(req, res) {
 function sendWindowsScannerLauncher(req, res) {
     const appBaseUrl = getPublicAppBaseUrl(req);
     const launcher = `@echo off\r\n`
-        + `set "APP_URL=${appBaseUrl}/admin/scanner"\r\n`
+        + `set "APP_URL=${appBaseUrl}/scanner"\r\n`
         + `where msedge >nul 2>nul\r\n`
         + `if %ERRORLEVEL%==0 (\r\n`
         + `  start "" msedge --app="%APP_URL%" --start-fullscreen\r\n`
@@ -297,7 +307,7 @@ function sendWindowsScannerAutostart(req, res) {
     const launcher = [
         '@echo off',
         'setlocal',
-        `set "APP_URL=${appBaseUrl}/admin/scanner"`,
+        `set "APP_URL=${appBaseUrl}/scanner"`,
         'set "APP_DIR=%LOCALAPPDATA%\\Edutrack"',
         'set "APP_FILE=Edutrack-Scanner-App.cmd"',
         'set "APP_LAUNCHER=%APP_DIR%\\%APP_FILE%"',
@@ -388,7 +398,7 @@ app.get('/download/mac-app', (req, res) => {
 app.get('/download/scanner-mac-app', (req, res) => {
     const appBaseUrl = getPublicAppBaseUrl(req);
     const launcher = `#!/bin/bash\n`
-        + `APP_URL="${appBaseUrl}/admin/scanner"\n`
+        + `APP_URL="${appBaseUrl}/scanner"\n`
         + `if [ -d "/Applications/Google Chrome.app" ]; then\n`
         + `  open -na "Google Chrome" --args --app="$APP_URL" --start-fullscreen\n`
         + `elif [ -d "/Applications/Microsoft Edge.app" ]; then\n`
