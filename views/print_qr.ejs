@@ -1,7 +1,5 @@
 <%- include('partials/header') %>
 <% const qrFilters = typeof filters !== 'undefined' ? filters : { type: type || 'student', school_id: '', grade_level_id: '', section_id: '', layout: '4' }; %>
-<% const printQrWidth = qrFilters.layout === '5' ? '36mm' : qrFilters.layout === '3' ? '58mm' : '45mm'; %>
-<% const printQrGap = qrFilters.layout === '5' ? '2.5mm' : '4mm'; %>
 
 <div class="page-header">
     <div class="page-header-left">
@@ -99,28 +97,85 @@
 }
 .qr-grid {
     align-items: start;
-    grid-template-columns: repeat(var(--qr-columns, 4), minmax(0, 1fr));
+    grid-template-columns: repeat(var(--qr-columns, 4), 180px);
+    justify-content: start;
+    gap: 16px;
+    min-height: 288px;
+    transition: none !important;
 }
 .qr-card {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    width: 180px !important;
+    height: 278px !important;
+    min-width: 180px !important;
+    max-width: 180px !important;
+    min-height: 278px !important;
+    max-height: 278px !important;
+    transition: none !important;
+    transform: none !important;
+    contain: layout paint;
+}
+.qr-card .qr-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 54px;
+    min-height: 54px;
+    max-height: 54px;
+    padding: 8px 10px !important;
+    overflow: hidden;
+    text-align: center;
+    line-height: 1.25;
 }
 .qr-card-body {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: flex-start;
+    flex: 1 1 auto;
     gap: 4px;
+    padding: 12px 10px !important;
+    overflow: hidden;
 }
 .qr-image {
     object-fit: contain;
+    width: 126px !important;
+    height: 126px !important;
+    min-width: 126px !important;
+    min-height: 126px !important;
+    max-width: 126px !important;
+    max-height: 126px !important;
+    flex: 0 0 126px;
 }
 .qr-name {
+    width: 100%;
+    min-height: 36px;
+    max-height: 36px;
     line-height: 1.3;
     text-align: center;
+    overflow: hidden;
 }
 .qr-detail {
+    width: 100%;
+    min-height: 16px;
+    max-height: 16px;
     text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.qr-code-text {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 28px;
+    min-height: 28px;
+    max-height: 28px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 @media print {
     .no-print, .sidebar, .topbar, .menu-btn, .live-indicator { display: none !important; }
@@ -129,13 +184,18 @@
     .page-header { margin-bottom: 4mm !important; }
     .qr-grid {
         display: grid;
-        grid-template-columns: repeat(<%= qrFilters.layout %>, <%= printQrWidth %>) !important;
+        grid-template-columns: repeat(<%= qrFilters.layout %>, 36mm) !important;
         justify-content: start;
-        gap: <%= printQrGap %> !important;
+        gap: 2.5mm !important;
+        min-height: auto !important;
     }
     .qr-card {
-        width: <%= printQrWidth %>;
-        min-height: 72mm;
+        width: 36mm !important;
+        height: 62mm !important;
+        min-width: 36mm !important;
+        max-width: 36mm !important;
+        min-height: 62mm !important;
+        max-height: 62mm !important;
         break-inside: avoid;
         page-break-inside: avoid;
         box-shadow: none;
@@ -148,39 +208,54 @@
         color: #ffffff !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
-        font-size: 8.5pt !important;
+        font-size: 7.2pt !important;
         font-weight: 700 !important;
         letter-spacing: 0.2px;
         line-height: 1.35;
         text-align: center;
-        padding: 3.5mm 2.5mm !important;
-        min-height: 14mm;
+        padding: 2.8mm 2mm !important;
+        height: 12mm !important;
+        min-height: 12mm !important;
+        max-height: 12mm !important;
     }
     .qr-card .qr-card-body {
-        padding: 3.2mm 2.8mm !important;
+        padding: 2.4mm 2mm !important;
         gap: 1.2mm !important;
+        overflow: hidden !important;
     }
     .qr-image {
-        width: 26mm !important;
-        height: 26mm !important;
+        width: 22mm !important;
+        height: 22mm !important;
+        min-width: 22mm !important;
+        min-height: 22mm !important;
+        max-width: 22mm !important;
+        max-height: 22mm !important;
+        flex-basis: 22mm !important;
     }
     .qr-name {
-        font-size: 10pt !important;
+        font-size: 8.5pt !important;
         font-weight: 700 !important;
+        min-height: 9mm !important;
+        max-height: 9mm !important;
     }
     .qr-detail {
-        font-size: 8.2pt !important;
+        font-size: 7.1pt !important;
         line-height: 1.25 !important;
+        min-height: 3.6mm !important;
+        max-height: 3.6mm !important;
     }
     .qr-code-text {
-        font-size: 7.2pt !important;
-        padding: 2.2mm !important;
+        font-size: 6.8pt !important;
+        height: 6.5mm !important;
+        min-height: 6.5mm !important;
+        max-height: 6.5mm !important;
+        padding: 1.5mm !important;
         border-top: 0.2mm solid #e2e8f0 !important;
     }
 }
 @media (max-width: 900px) {
     .qr-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        grid-template-columns: repeat(2, 180px) !important;
     }
 }
 @media (max-width: 560px) {
