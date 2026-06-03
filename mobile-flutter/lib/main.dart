@@ -113,6 +113,8 @@ class ApiService {
 
   String get cookie => prefs.getString('cookie') ?? '';
   String get fullname => prefs.getString('fullname') ?? 'Division User';
+  String get role => prefs.getString('role') ?? 'division';
+  bool get isSuperAdmin => role == 'super_admin';
   bool get isLoggedIn => cookie.isNotEmpty;
 
   Map<String, String> get authHeaders => {
@@ -281,6 +283,35 @@ class ApiService {
       );
     }
     return _decodeJsonList(
+      response,
+      fallback: 'Server returned an invalid response format.',
+    );
+  }
+
+  Future<Map<String, dynamic>> putJson(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final response = await _request(
+      () => http.put(
+        Uri.parse('${AppConfig.baseUrl}$path'),
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(body),
+      ),
+    );
+    if (response.statusCode == 401) throw AuthExpired();
+    if (response.statusCode >= 400) {
+      throw Exception(
+        _errorFromBody(
+          response.body,
+          fallback: 'Failed to update the selected record.',
+        ),
+      );
+    }
+    return _decodeJsonMap(
       response,
       fallback: 'Server returned an invalid response format.',
     );
@@ -1011,7 +1042,7 @@ class _HomeShellState extends State<HomeShell>
   @override
   void initState() {
     super.initState();
-    tab = widget.initialTab.clamp(0, 4);
+    tab = widget.initialTab.clamp(0, widget.api.isSuperAdmin ? 5 : 4).toInt();
     alertIntent = widget.initialAlertIntent;
     backgroundController = AnimationController(
       vsync: this,
@@ -1070,7 +1101,7 @@ class _HomeShellState extends State<HomeShell>
 
   @override
   Widget build(BuildContext context) {
-    final pages = [
+    final pages = <Widget>[
       DashboardPage(
         api: widget.api,
         dashboard: dashboard,
@@ -1078,7 +1109,7 @@ class _HomeShellState extends State<HomeShell>
         loading: loading,
         error: error,
         onRefresh: load,
-        onOpenTab: (value) => setState(() => tab = value.clamp(0, 4)),
+        onOpenTab: (value) => setState(() => tab = value.clamp(0, 4).toInt()),
       ),
       AttendancePage(api: widget.api),
       SchoolsPage(api: widget.api),
@@ -1092,6 +1123,38 @@ class _HomeShellState extends State<HomeShell>
         }),
       ),
     ];
+    final destinations = <NavigationDestination>[
+      const NavigationDestination(
+        icon: Icon(Icons.dashboard_customize_rounded),
+        label: 'Home',
+      ),
+      const NavigationDestination(
+        icon: Icon(Icons.fact_check_rounded),
+        label: 'Attendance',
+      ),
+      const NavigationDestination(
+        icon: Icon(Icons.account_balance_rounded),
+        label: 'Schools',
+      ),
+      const NavigationDestination(
+        icon: Icon(Icons.insert_chart_rounded),
+        label: 'Report',
+      ),
+      const NavigationDestination(
+        icon: Icon(Icons.notifications_active_rounded),
+        label: 'Alerts',
+      ),
+    ];
+    if (widget.api.isSuperAdmin) {
+      pages.add(SuperAdminControlPage(api: widget.api));
+      destinations.add(
+        const NavigationDestination(
+          icon: Icon(Icons.admin_panel_settings_rounded),
+          label: 'Control',
+        ),
+      );
+    }
+    final selectedTab = tab.clamp(0, pages.length - 1).toInt();
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7F6),
       body: AnimatedBuilder(
@@ -1123,7 +1186,7 @@ class _HomeShellState extends State<HomeShell>
             Expanded(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 250),
-                child: pages[tab],
+                child: pages[selectedTab],
               ),
             ),
           ],
@@ -1153,34 +1216,564 @@ class _HomeShellState extends State<HomeShell>
               child: NavigationBar(
                 height: 70,
                 backgroundColor: Colors.transparent,
-                selectedIndex: tab,
+                selectedIndex: selectedTab,
                 onDestinationSelected: (value) => setState(() => tab = value),
-                destinations: const [
-                  NavigationDestination(
-                    icon: Icon(Icons.dashboard_customize_rounded),
-                    label: 'Home',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.fact_check_rounded),
-                    label: 'Attendance',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.account_balance_rounded),
-                    label: 'Schools',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.insert_chart_rounded),
-                    label: 'Report',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.notifications_active_rounded),
-                    label: 'Alerts',
-                  ),
-                ],
+                destinations: destinations,
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class SuperAdminControlPage extends StatefulWidget {
+  const SuperAdminControlPage({super.key, required this.api});
+  final ApiService api;
+
+  @override
+  State<SuperAdminControlPage> createState() => _SuperAdminControlPageState();
+}
+
+class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
+  Map<String, dynamic> dashboard = {};
+  List<dynamic> users = [];
+  List<dynamic> holidays = [];
+  List<dynamic> logs = [];
+  bool loading = true;
+  bool saving = false;
+  String? error;
+  Timer? timer;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+    timer = Timer.periodic(const Duration(seconds: 12), (_) => load(silent: true));
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> load({bool silent = false}) async {
+    if (!silent && mounted) {
+      setState(() => loading = true);
+    }
+    try {
+      final results = await Future.wait([
+        widget.api.map('/api/dashboard-data?date=${date()}'),
+        widget.api.list('/api/users'),
+        widget.api.list('/api/holidays'),
+        widget.api.list('/api/user-logs'),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        dashboard = results[0] as Map<String, dynamic>;
+        users = results[1] as List<dynamic>;
+        holidays = results[2] as List<dynamic>;
+        logs = results[3] as List<dynamic>;
+        loading = false;
+        error = null;
+      });
+    } on AuthExpired {
+      await widget.api.logout();
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => LoginScreen(api: widget.api)),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        loading = false;
+        error = readableError(
+          e,
+          fallback: 'Failed to load Super Admin controls.',
+        );
+      });
+    }
+  }
+
+  Future<void> toggleUser(Map user) async {
+    final id = '${user['id'] ?? ''}'.trim();
+    if (id.isEmpty || saving) return;
+    final status = '${user['status'] ?? 'active'}'.trim().toLowerCase();
+    final nextStatus = status == 'active' ? 'inactive' : 'active';
+    setState(() => saving = true);
+    try {
+      await widget.api.putJson('/api/users/$id', {
+        'username': '${user['username'] ?? ''}',
+        'fullname': '${user['fullname'] ?? ''}',
+        'email': '${user['email'] ?? ''}',
+        'role': '${user['role'] ?? 'principal'}',
+        'school_id': user['school_id'],
+        'status': nextStatus,
+      });
+      await load(silent: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Account ${nextStatus == 'active' ? 'activated' : 'deactivated'}.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            readableError(e, fallback: 'Unable to update this account.'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading && dashboard.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (error != null && dashboard.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Text(
+            error!,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xFFB91C1C),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      );
+    }
+
+    final activeUsers = users.where((item) {
+      final row = Map<String, dynamic>.from(item as Map);
+      return '${row['status'] ?? ''}'.toLowerCase() == 'active';
+    }).length;
+    final inactiveUsers = users.length - activeUsers;
+    final totalSchools = intValue(dashboard['total_schools']);
+    final totalStudents = intValue(dashboard['total_students']);
+    final totalTeachers = intValue(dashboard['total_teachers']);
+    final absentees = intValue(dashboard['two_day_absentees']);
+
+    return RefreshIndicator(
+      onRefresh: () => load(silent: false),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+        children: [
+          PremiumCard(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F6E52),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Icon(
+                    Icons.admin_panel_settings_rounded,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Super Admin Control',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -.5,
+                        ),
+                      ),
+                      Text(
+                        'Full mobile access for system control.',
+                        style: TextStyle(
+                          color: Color(0xFF667872),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const LiveDot(color: Color(0xFFFF3B30)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          GridView.count(
+            physics: const NeverScrollableScrollPhysics(),
+            shrinkWrap: true,
+            crossAxisCount: 2,
+            childAspectRatio: 1.44,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            children: [
+              Metric(
+                Icons.apartment_rounded,
+                'Schools',
+                '$totalSchools',
+                'managed',
+              ),
+              Metric(
+                Icons.groups_rounded,
+                'Students',
+                '$totalStudents',
+                'records',
+              ),
+              Metric(
+                Icons.school_rounded,
+                'Teachers',
+                '$totalTeachers',
+                'advisers',
+              ),
+              Metric(
+                Icons.warning_amber_rounded,
+                '2-Day Alerts',
+                '$absentees',
+                'active',
+                color: const Color(0xFFE78300),
+              ),
+              Metric(
+                Icons.verified_user_rounded,
+                'Active Users',
+                '$activeUsers',
+                'enabled',
+              ),
+              Metric(
+                Icons.block_rounded,
+                'Inactive',
+                '$inactiveUsers',
+                'accounts',
+                color: const Color(0xFFDC2626),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          PremiumCard(
+            title: 'Control Modules',
+            subtitle: 'Role-based administrative areas available to Super Admin.',
+            child: Column(
+              children: const [
+                AdminModuleTile(
+                  icon: Icons.manage_accounts_rounded,
+                  title: 'User Management',
+                  subtitle: 'Manage accounts, roles, activation, and access.',
+                ),
+                AdminModuleTile(
+                  icon: Icons.account_balance_rounded,
+                  title: 'School Management',
+                  subtitle: 'Schools, grade levels, sections, logos, and advisers.',
+                ),
+                AdminModuleTile(
+                  icon: Icons.event_available_rounded,
+                  title: 'Holiday Management',
+                  subtitle: 'Attendance exclusions for holidays and non-school days.',
+                ),
+                AdminModuleTile(
+                  icon: Icons.notifications_active_rounded,
+                  title: 'Notifications',
+                  subtitle: 'Announcements, push alerts, and absence notifications.',
+                ),
+                AdminModuleTile(
+                  icon: Icons.analytics_rounded,
+                  title: 'Reports and Audit Logs',
+                  subtitle: 'Reports, analytics, exports, and activity history.',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          PremiumCard(
+            title: 'Account Controls',
+            subtitle: '${users.length} account(s) synced from the server.',
+            child: Column(
+              children: [
+                for (final item in users.take(10))
+                  UserControlTile(
+                    user: Map<String, dynamic>.from(item as Map),
+                    busy: saving,
+                    onToggle: toggleUser,
+                  ),
+                if (users.isEmpty) const EmptyText('No user accounts found.'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          PremiumCard(
+            title: 'Holiday Schedule',
+            subtitle: 'Upcoming holidays excluded from attendance calculations.',
+            child: Column(
+              children: [
+                for (final item in holidays.take(8))
+                  HolidayRow(Map<String, dynamic>.from(item as Map)),
+                if (holidays.isEmpty) const EmptyText('No holidays configured.'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          PremiumCard(
+            title: 'Recent Activities',
+            subtitle: 'Latest login and system activity records.',
+            child: Column(
+              children: [
+                for (final item in logs.take(8))
+                  ActivityRow(Map<String, dynamic>.from(item as Map)),
+                if (logs.isEmpty) const EmptyText('No recent activity found.'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class AdminModuleTile extends StatelessWidget {
+  const AdminModuleTile({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(bottom: 10),
+    padding: const EdgeInsets.all(13),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF8FBF9),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: const Color(0xFFE2ECE6)),
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: const Color(0xFFE5F7EF),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(icon, color: const Color(0xFF0F6E52), size: 22),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Color(0xFF0F211B),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  color: Color(0xFF64726B),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class UserControlTile extends StatelessWidget {
+  const UserControlTile({
+    super.key,
+    required this.user,
+    required this.busy,
+    required this.onToggle,
+  });
+  final Map<String, dynamic> user;
+  final bool busy;
+  final Future<void> Function(Map user) onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = '${user['status'] ?? 'active'}'.toLowerCase();
+    final active = status == 'active';
+    final role = roleLabel('${user['role'] ?? ''}');
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: active ? const Color(0xFFF8FBF9) : const Color(0xFFFFF7F7),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: active ? const Color(0xFFE2ECE6) : const Color(0xFFF6C8C8),
+        ),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 21,
+            backgroundColor:
+                active ? const Color(0xFFE5F7EF) : const Color(0xFFFEE2E2),
+            child: Text(
+              initials('${user['fullname'] ?? user['username'] ?? 'U'}'),
+              style: TextStyle(
+                color: active ? const Color(0xFF0F6E52) : const Color(0xFFB91C1C),
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${user['fullname'] ?? user['username'] ?? 'User'}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF0F211B),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  '$role - ${active ? 'Active' : 'Inactive'}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF64726B),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: busy ? null : () => onToggle(user),
+            style: TextButton.styleFrom(
+              foregroundColor:
+                  active ? const Color(0xFFB91C1C) : const Color(0xFF0F6E52),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+            ),
+            child: Text(active ? 'Deactivate' : 'Activate'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class HolidayRow extends StatelessWidget {
+  const HolidayRow(this.row, {super.key});
+  final Map<String, dynamic> row;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(bottom: 10),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFFFBEB),
+      borderRadius: BorderRadius.circular(17),
+      border: Border.all(color: const Color(0xFFF7D57A)),
+    ),
+    child: Row(
+      children: [
+        const Icon(Icons.event_busy_rounded, color: Color(0xFFE78300)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${row['name'] ?? 'Holiday'}',
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+              Text(
+                readableDate('${row['holiday_date'] ?? ''}'),
+                style: const TextStyle(
+                  color: Color(0xFF736044),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class ActivityRow extends StatelessWidget {
+  const ActivityRow(this.row, {super.key});
+  final Map<String, dynamic> row;
+
+  @override
+  Widget build(BuildContext context) {
+    final actor = '${row['fullname'] ?? row['username'] ?? 'System user'}';
+    final action = '${row['action'] ?? row['activity'] ?? row['description'] ?? 'Activity recorded'}';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FBF9),
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(color: const Color(0xFFE2ECE6)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.history_rounded, color: Color(0xFF0F6E52)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  actor,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                Text(
+                  action,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF64726B),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2960,7 +3553,7 @@ class _SchoolsPageState extends State<SchoolsPage> {
           ),
           const SizedBox(height: 10),
           BackLine(
-            'Back to schools',
+            'Back',
             () => setState(() {
               school = null;
               grade = null;
@@ -3006,7 +3599,7 @@ class _SchoolsPageState extends State<SchoolsPage> {
           ),
           const SizedBox(height: 10),
           BackLine(
-            'Back to ${school!['name']}',
+            'Back',
             () => setState(() {
               grade = null;
               section = null;
@@ -3053,7 +3646,7 @@ class _SchoolsPageState extends State<SchoolsPage> {
           ),
           const SizedBox(height: 8),
           BackLine(
-            'Back to ${grade!['name']}',
+            'Back',
             () => setState(() => section = null),
           ),
           InfoPill(
@@ -4671,6 +5264,23 @@ String initials(String text) {
   if (parts.isEmpty) return 'S';
   if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
   return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+}
+
+String roleLabel(String role) {
+  switch (role) {
+    case 'super_admin':
+      return 'Super Administrator';
+    case 'superintendent':
+      return 'SDS';
+    case 'asst_superintendent':
+      return 'ASDS';
+    case 'principal':
+      return 'School Administrator';
+    default:
+      return role.trim().isEmpty
+          ? 'User'
+          : role.replaceAll('_', ' ').toUpperCase();
+  }
 }
 
 int intValue(dynamic value) => int.tryParse('$value') ?? 0;

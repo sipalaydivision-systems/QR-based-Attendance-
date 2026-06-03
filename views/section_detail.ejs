@@ -208,7 +208,7 @@ if (user && user.role === 'superintendent') {
     <span class="breadcrumb-active" id="bcSection"><i class="fa fa-door-open"></i> Section</span>
 </nav>
 
-<a href="#" class="back-btn" id="backBtn"><i class="fa fa-arrow-left"></i> Back to Grade</a>
+<a href="#" class="back-btn" id="backBtn"><i class="fa fa-arrow-left"></i> Back</a>
 
 <!-- Section Detail Header -->
 <div class="section-detail-header">
@@ -433,7 +433,7 @@ async function loadData() {
             gradeId = sec.grade_level_id;
             document.getElementById('bcGrade').innerHTML = '<i class="fa fa-layer-group"></i> ' + gradeName;
             document.getElementById('bcGrade').href = '/admin/school/' + schoolId + '/grade/' + gradeId + appSuffix;
-            document.getElementById('backBtn').innerHTML = '<i class="fa fa-arrow-left"></i> Back to ' + gradeName;
+            document.getElementById('backBtn').innerHTML = '<i class="fa fa-arrow-left"></i> Back';
             document.getElementById('backBtn').href = '/admin/school/' + schoolId + '/grade/' + gradeId + appSuffix;
         }
         document.getElementById('bcSection').innerHTML = '<i class="fa fa-door-open"></i> ' + (sec ? sec.name : 'Section');

@@ -80,7 +80,7 @@ public class DashboardActivity extends Activity {
         Ui.setBars(getWindow(), Ui.GREEN_DARK, false, Color.WHITE);
         selectedDate = today();
         String requestedTab = getIntent() == null ? "" : getIntent().getStringExtra("tab");
-        if ("alerts".equals(requestedTab) || "schools".equals(requestedTab) || "reports".equals(requestedTab) || "attendance".equals(requestedTab)) {
+        if ("alerts".equals(requestedTab) || "schools".equals(requestedTab) || "reports".equals(requestedTab) || "attendance".equals(requestedTab) || (isSuperAdmin() && "admin".equals(requestedTab))) {
             currentTab = requestedTab;
         }
         AbsenceWorker.schedule(this);
@@ -169,6 +169,9 @@ public class DashboardActivity extends Activity {
         addNav(nav, "schools", "Schools", R.drawable.ic_nav_school);
         addNav(nav, "reports", "Report", R.drawable.ic_nav_report);
         addNav(nav, "alerts", "Alerts", R.drawable.ic_nav_alert);
+        if (isSuperAdmin()) {
+            addNav(nav, "admin", "Control", R.drawable.ic_nav_report);
+        }
         updateNav();
         return nav;
     }
@@ -281,6 +284,8 @@ public class DashboardActivity extends Activity {
             renderReports(animate);
         } else if ("alerts".equals(currentTab)) {
             renderAlerts(animate);
+        } else if ("admin".equals(currentTab) && isSuperAdmin()) {
+            renderAdminControl(animate);
         } else {
             renderDashboard(animate);
         }
@@ -535,7 +540,7 @@ public class DashboardActivity extends Activity {
 
         LinearLayout card = sectionCard(school.optString("name", "School"), school.optInt("student_count") + " students - " + school.optInt("teacher_count") + " teachers");
         card.addView(schoolHeaderRow(school), Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 10)));
-        Button back = compactButton("Back to schools", Ui.GREEN_DARK);
+        Button back = compactButton("Back", Ui.GREEN_DARK);
         back.setOnClickListener(v -> {
             selectedSchoolId = -1;
             selectedGradeId = -1;
@@ -578,7 +583,7 @@ public class DashboardActivity extends Activity {
         JSONArray sections = grade.optJSONArray("sections");
         LinearLayout card = sectionCard(grade.optString("name", "Grade Level"), school.optString("name", "School"));
         card.addView(schoolHeaderRow(school), Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 10)));
-        Button back = compactButton("Back to " + school.optString("name", "School"), Ui.GREEN_DARK);
+        Button back = compactButton("Back", Ui.GREEN_DARK);
         back.setOnClickListener(v -> {
             selectedGradeId = -1;
             selectedSectionId = -1;
@@ -620,7 +625,7 @@ public class DashboardActivity extends Activity {
         }
         LinearLayout card = sectionCard(section.optString("name", "Section"), grade.optString("name", "Grade Level") + " - " + school.optString("name", "School"));
         card.addView(schoolHeaderRow(school), Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 10)));
-        Button back = compactButton("Back to " + grade.optString("name", "Grade Level"), Ui.GREEN_DARK);
+        Button back = compactButton("Back", Ui.GREEN_DARK);
         back.setOnClickListener(v -> {
             selectedSectionId = -1;
             renderCurrentTab(true);
@@ -749,6 +754,158 @@ public class DashboardActivity extends Activity {
             addLiveFooter();
             if (animate) Ui.reveal(card, 180);
         }, animate);
+    }
+
+    private void renderAdminControl(boolean animate) {
+        content.addView(sectionHeader("Super Admin Control", "System controls for administrator accounts."));
+
+        GridLayout grid = metricGrid();
+        addMetric(grid, "Schools", dashboard.optInt("total_schools"), "managed", Ui.GREEN_SOFT, Ui.GREEN_DARK);
+        addMetric(grid, "Students", dashboard.optInt("total_students"), "records", Ui.GREEN_SOFT, Ui.GREEN_DARK);
+        addMetric(grid, "Teachers", dashboard.optInt("total_teachers"), "advisers", Ui.GREEN_SOFT, Ui.GREEN_DARK);
+        addMetric(grid, "2-Day", dashboard.optInt("two_day_absentees", absenceFlags.length()), "alerts", Color.rgb(255, 248, 231), Ui.AMBER);
+        content.addView(grid, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 8)));
+        if (animate) Ui.reveal(grid, 60);
+
+        LinearLayout modules = sectionCard("Control Modules", "Super Admin-only access areas.");
+        modules.addView(recordRow("User Management", "Accounts, roles, activation, and passwords", "Tap an account below to activate or deactivate.", Ui.GREEN_DARK));
+        modules.addView(recordRow("School Management", "Schools, grades, sections, logos, and advisers", "Synced with the web-based system.", Ui.GREEN_DARK));
+        modules.addView(recordRow("Holiday and Attendance Rules", "Holidays, non-school days, grace periods, and alerts", "Applied to reports, dashboard, and notifications.", Ui.AMBER));
+        modules.addView(recordRow("Reports and Audit Logs", "Reports, analytics, exports, and activity history", "Live secure data from the Railway server.", Ui.GREEN_DARK));
+        content.addView(modules, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 10)));
+        if (animate) Ui.reveal(modules, 100);
+
+        LinearLayout loading = inlineLoading("Loading Super Admin controls...");
+        content.addView(loading, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 2), 0, 0));
+        String tabAtRequest = currentTab;
+        new Thread(() -> {
+            try {
+                JSONArray users = new JSONArray(ApiClient.getRaw(this, "/api/users"));
+                JSONArray holidays = new JSONArray(ApiClient.getRaw(this, "/api/holidays"));
+                JSONArray logs = new JSONArray(ApiClient.getRaw(this, "/api/user-logs"));
+                runOnUiThread(() -> {
+                    if (!tabAtRequest.equals(currentTab)) return;
+                    content.removeView(loading);
+                    content.addView(adminUsersCard(users), Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 10)));
+                    content.addView(adminHolidayCard(holidays), Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 10)));
+                    content.addView(adminActivityCard(logs), Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 10)));
+                    addLiveFooter();
+                });
+            } catch (SecurityException e) {
+                runOnUiThread(this::goToLogin);
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    if (!tabAtRequest.equals(currentTab)) return;
+                    content.removeView(loading);
+                    renderInlineError("Unable to load Super Admin controls", e.getMessage());
+                    addLiveFooter();
+                });
+            }
+        }).start();
+    }
+
+    private LinearLayout adminUsersCard(JSONArray users) {
+        int active = 0;
+        for (int i = 0; i < users.length(); i++) {
+            JSONObject user = users.optJSONObject(i);
+            if (user != null && "active".equalsIgnoreCase(user.optString("status", "active"))) active++;
+        }
+        LinearLayout card = sectionCard("Account Controls", active + " active of " + users.length() + " account(s)");
+        if (users.length() == 0) {
+            card.addView(emptyText("No user accounts found."));
+        } else {
+            for (int i = 0; i < Math.min(users.length(), 12); i++) {
+                JSONObject user = users.optJSONObject(i);
+                if (user == null) continue;
+                card.addView(adminUserRow(user));
+            }
+        }
+        return card;
+    }
+
+    private LinearLayout adminUserRow(JSONObject user) {
+        boolean active = "active".equalsIgnoreCase(user.optString("status", "active"));
+        LinearLayout row = recordRow(
+                user.optString("fullname", user.optString("username", "User")),
+                roleDisplay(user.optString("role", "principal")) + " - " + (active ? "Active" : "Inactive"),
+                firstNonEmpty(user.optString("school_name", ""), user.optString("email", "")),
+                active ? Ui.GREEN_DARK : Ui.RED
+        );
+        row.setOnClickListener(v -> confirmToggleUser(user));
+        return row;
+    }
+
+    private LinearLayout adminHolidayCard(JSONArray holidays) {
+        LinearLayout card = sectionCard("Holiday Schedule", "Dates excluded from attendance calculations.");
+        if (holidays.length() == 0) {
+            card.addView(emptyText("No holidays configured."));
+        } else {
+            for (int i = 0; i < Math.min(holidays.length(), 8); i++) {
+                JSONObject row = holidays.optJSONObject(i);
+                if (row == null) continue;
+                card.addView(recordRow(
+                        row.optString("name", "Holiday"),
+                        row.optString("holiday_date", ""),
+                        firstNonEmpty(row.optString("school_name", ""), "All schools"),
+                        Ui.AMBER
+                ));
+            }
+        }
+        return card;
+    }
+
+    private LinearLayout adminActivityCard(JSONArray logs) {
+        LinearLayout card = sectionCard("Recent Activities", "Latest account and system activity.");
+        if (logs.length() == 0) {
+            card.addView(emptyText("No recent activity found."));
+        } else {
+            for (int i = 0; i < Math.min(logs.length(), 8); i++) {
+                JSONObject row = logs.optJSONObject(i);
+                if (row == null) continue;
+                card.addView(recordRow(
+                        row.optString("fullname", row.optString("username", "System user")),
+                        row.optString("action", row.optString("activity", "Activity recorded")),
+                        row.optString("created_at", ""),
+                        Ui.GREEN_DARK
+                ));
+            }
+        }
+        return card;
+    }
+
+    private void confirmToggleUser(JSONObject user) {
+        boolean active = "active".equalsIgnoreCase(user.optString("status", "active"));
+        String action = active ? "Deactivate" : "Activate";
+        new AlertDialog.Builder(this)
+                .setTitle(action + " account")
+                .setMessage(action + " " + user.optString("fullname", user.optString("username", "this account")) + "?")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton(action, (dialog, which) -> toggleUserStatus(user, active ? "inactive" : "active"))
+                .show();
+    }
+
+    private void toggleUserStatus(JSONObject user, String status) {
+        new Thread(() -> {
+            try {
+                JSONObject body = new JSONObject();
+                body.put("username", user.optString("username", ""));
+                body.put("fullname", user.optString("fullname", ""));
+                body.put("email", user.optString("email", ""));
+                body.put("role", user.optString("role", "principal"));
+                if (user.isNull("school_id")) body.put("school_id", JSONObject.NULL);
+                else body.put("school_id", user.opt("school_id"));
+                body.put("status", status);
+                ApiClient.putJson(this, "/api/users/" + user.optInt("id"), body);
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Account " + ("active".equals(status) ? "activated" : "deactivated") + ".", Toast.LENGTH_SHORT).show();
+                    if ("admin".equals(currentTab)) renderCurrentTab(false);
+                });
+            } catch (SecurityException e) {
+                runOnUiThread(this::goToLogin);
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(this, "Unable to update account: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        }).start();
     }
 
     private void renderAlerts(boolean animate) {
@@ -1356,6 +1513,18 @@ public class DashboardActivity extends Activity {
         if ("asst_superintendent".equals(role)) return "Assistant superintendent";
         if ("principal".equals(role)) return "School";
         return "Division";
+    }
+
+    private boolean isSuperAdmin() {
+        return "super_admin".equals(SessionStore.prefs(this).getString("role", "division"));
+    }
+
+    private String roleDisplay(String role) {
+        if ("super_admin".equals(role)) return "Super Administrator";
+        if ("superintendent".equals(role)) return "SDS";
+        if ("asst_superintendent".equals(role)) return "ASDS";
+        if ("principal".equals(role)) return "School Administrator";
+        return role == null || role.trim().isEmpty() ? "User" : role.replace("_", " ");
     }
 
     private void notifyAbsenceFlags(JSONArray flags) {

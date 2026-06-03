@@ -20,7 +20,7 @@ if (user && user.role === 'superintendent') {
     <span class="breadcrumb-active" id="bcGrade"><i class="fa fa-layer-group"></i> Loading...</span>
 </nav>
 
-<a href="/admin/school/<%= schoolId %>" class="back-btn" id="backBtn"><i class="fa fa-arrow-left"></i> Back to School</a>
+<a href="/admin/school/<%= schoolId %>" class="back-btn" id="backBtn"><i class="fa fa-arrow-left"></i> Back</a>
 
 <div class="view-title">
     <h1><i class="fa fa-door-open" style="color:var(--primary)"></i> <span id="gdName">Loading...</span></h1>
@@ -63,7 +63,7 @@ async function loadAll() {
         if (schoolData) {
             document.getElementById('bcSchool').innerHTML = '<i class="fa fa-school"></i> ' + schoolData.name;
             document.getElementById('gdSchoolName').textContent = schoolData.name;
-            document.getElementById('backBtn').innerHTML = '<i class="fa fa-arrow-left"></i> Back to ' + schoolData.name;
+            document.getElementById('backBtn').innerHTML = '<i class="fa fa-arrow-left"></i> Back';
         }
         if (gradeData) {
             document.getElementById('bcGrade').innerHTML = '<i class="fa fa-layer-group"></i> ' + gradeData.name;
