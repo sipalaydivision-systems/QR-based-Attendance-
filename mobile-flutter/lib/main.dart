@@ -1279,11 +1279,8 @@ class SuperAdminControlPage extends StatefulWidget {
 
 class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
   Map<String, dynamic> dashboard = {};
-  Map<String, dynamic> settings = {};
-  Map<String, dynamic> statusCounts = {};
   List<dynamic> users = [];
   List<dynamic> holidays = [];
-  List<dynamic> logs = [];
   bool loading = true;
   bool saving = false;
   String? error;
@@ -1312,20 +1309,14 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
     try {
       final results = await Future.wait([
         widget.api.map('/api/dashboard-data?date=${date()}'),
-        widget.api.map('/api/settings'),
-        widget.api.map('/api/status-counts'),
         widget.api.list('/api/users'),
         widget.api.list('/api/holidays'),
-        widget.api.list('/api/user-logs'),
       ]);
       if (!mounted) return;
       setState(() {
         dashboard = results[0] as Map<String, dynamic>;
-        settings = results[1] as Map<String, dynamic>;
-        statusCounts = results[2] as Map<String, dynamic>;
-        users = results[3] as List<dynamic>;
-        holidays = results[4] as List<dynamic>;
-        logs = results[5] as List<dynamic>;
+        users = results[1] as List<dynamic>;
+        holidays = results[2] as List<dynamic>;
         loading = false;
         error = null;
       });
@@ -1435,128 +1426,6 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
     }
   }
 
-  Future<void> saveSettings(Map<String, dynamic> body) async {
-    if (saving) return;
-    setState(() => saving = true);
-    try {
-      await widget.api.putJson('/api/settings', body);
-      await load(silent: true);
-      if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Settings saved successfully.')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(readableError(e, fallback: 'Unable to save settings.')),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => saving = false);
-    }
-  }
-
-  Future<void> bulkActivate() async {
-    if (saving) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Activate inactive records?'),
-        content: const Text(
-          'This will activate all inactive students and teachers without waiting for their first QR scan.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Activate'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    setState(() => saving = true);
-    try {
-      final result = await widget.api.postJson('/api/bulk-activate', {});
-      await load(silent: true);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Activated ${result['students'] ?? 0} students and ${result['teachers'] ?? 0} teachers.',
-          ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            readableError(e, fallback: 'Unable to activate inactive records.'),
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => saving = false);
-    }
-  }
-
-  Future<void> bulkPurgeDeleted() async {
-    if (saving) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Permanently remove deleted records?'),
-        content: const Text(
-          'This permanently deletes removed students and teachers. This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFB91C1C),
-            ),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    setState(() => saving = true);
-    try {
-      final result = await widget.api.postJson('/api/bulk-purge-deleted', {});
-      await load(silent: true);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Removed ${result['students'] ?? 0} students and ${result['teachers'] ?? 0} teachers.',
-          ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            readableError(e, fallback: 'Unable to remove deleted records.'),
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => saving = false);
-    }
-  }
-
   Future<void> deleteHoliday(Map holiday) async {
     final id = '${holiday['id'] ?? ''}'.trim();
     if (id.isEmpty || saving) return;
@@ -1628,29 +1497,6 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
     );
   }
 
-  void openSettingsSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => MobileSettingsFormSheet(
-        settings: settings,
-        saving: saving,
-        onSubmit: saveSettings,
-      ),
-    );
-  }
-
-  Future<void> openWebSettings() async {
-    final uri = Uri.parse('${AppConfig.baseUrl}/admin/settings');
-    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!opened && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to open web Settings.')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     if (loading && dashboard.isEmpty) {
@@ -1671,32 +1517,6 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
         ),
       );
     }
-
-    final activeUsers = users.where((item) {
-      final row = Map<String, dynamic>.from(item as Map);
-      return '${row['status'] ?? ''}'.toLowerCase() == 'active';
-    }).length;
-    final inactiveUsers = users.length - activeUsers;
-    final totalSchools = intValue(dashboard['total_schools']);
-    final totalStudents = intValue(dashboard['total_students']);
-    final totalTeachers = intValue(dashboard['total_teachers']);
-    final absentees = intValue(dashboard['two_day_absentees']);
-    final inactiveStudents = intValue(statusCounts['inactive_students']);
-    final inactiveTeachers = intValue(statusCounts['inactive_teachers']);
-    final deletedStudents = intValue(statusCounts['deleted_students']);
-    final deletedTeachers = intValue(statusCounts['deleted_teachers']);
-    final systemName = settingValue(settings, 'system_name', AppConfig.appName);
-    final divisionName = settingValue(
-      settings,
-      'division_name',
-      AppConfig.subtitle,
-    );
-    final smsEnabled = settingEnabled(settings, 'sms_enabled', fallback: true);
-    final autoActivate = settingEnabled(
-      settings,
-      'auto_activate_on_scan',
-      fallback: true,
-    );
 
     return RefreshIndicator(
       onRefresh: () => load(silent: false),
@@ -1734,7 +1554,7 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
                         ),
                       ),
                       Text(
-                        'Full mobile access for system control.',
+                        'Account Management and Holiday Management only.',
                         style: TextStyle(
                           color: Color(0xFF667872),
                           fontWeight: FontWeight.w700,
@@ -1748,316 +1568,9 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
             ),
           ),
           const SizedBox(height: 14),
-          GridView.count(
-            physics: const NeverScrollableScrollPhysics(),
-            shrinkWrap: true,
-            crossAxisCount: 2,
-            childAspectRatio: 1.44,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            children: [
-              Metric(
-                Icons.apartment_rounded,
-                'Schools',
-                '$totalSchools',
-                'managed',
-              ),
-              Metric(
-                Icons.groups_rounded,
-                'Students',
-                '$totalStudents',
-                'records',
-              ),
-              Metric(
-                Icons.school_rounded,
-                'Teachers',
-                '$totalTeachers',
-                'advisers',
-              ),
-              Metric(
-                Icons.warning_amber_rounded,
-                '2-Day Alerts',
-                '$absentees',
-                'active',
-                color: const Color(0xFFE78300),
-              ),
-              Metric(
-                Icons.verified_user_rounded,
-                'Active Users',
-                '$activeUsers',
-                'enabled',
-              ),
-              Metric(
-                Icons.block_rounded,
-                'Inactive',
-                '$inactiveUsers',
-                'accounts',
-                color: const Color(0xFFDC2626),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
           PremiumCard(
-            title: 'System Settings',
-            subtitle: 'Same editable settings used by the web Settings page.',
-            child: Column(
-              children: [
-                SettingInfoTile(
-                  icon: Icons.badge_rounded,
-                  label: 'System Name',
-                  value: systemName,
-                ),
-                SettingInfoTile(
-                  icon: Icons.apartment_rounded,
-                  label: 'Division Name',
-                  value: divisionName,
-                ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: AdminActionButton(
-                        icon: Icons.tune_rounded,
-                        label: 'Edit Settings',
-                        onTap: saving ? null : openSettingsSheet,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: AdminActionButton(
-                        icon: Icons.image_rounded,
-                        label: 'Logo Uploads',
-                        onTap: saving ? null : openWebSettings,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          PremiumCard(
-            title: 'Attendance Configuration',
-            subtitle: 'Time windows, late rules, SMS, and activation policy.',
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: SettingMiniCard(
-                        label: 'AM Time In End',
-                        value: settingTime(
-                          settings,
-                          'am_time_in_end',
-                          fallback: '08:00',
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: SettingMiniCard(
-                        label: 'PM Time Out End',
-                        value: settingTime(
-                          settings,
-                          'pm_time_out_end',
-                          fallback: '17:00',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SettingMiniCard(
-                        label: 'Late Threshold',
-                        value:
-                            '${settingValue(settings, 'late_threshold', '15')} min',
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: SettingMiniCard(
-                        label: 'Auto Time-Out',
-                        value:
-                            '${settingValue(settings, 'auto_timeout', '480')} min',
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SettingMiniCard(
-                        label: 'SMS Notifications',
-                        value: smsEnabled ? 'Enabled' : 'Disabled',
-                        color: smsEnabled
-                            ? const Color(0xFF0F6E52)
-                            : const Color(0xFF9CA3AF),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: SettingMiniCard(
-                        label: 'First Scan Activation',
-                        value: autoActivate ? 'Enabled' : 'Disabled',
-                        color: autoActivate
-                            ? const Color(0xFF0F6E52)
-                            : const Color(0xFF9CA3AF),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          PremiumCard(
-            title: 'Enrollment & Activation',
-            subtitle:
-                'Same inactive/deleted record controls from web Settings.',
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: StatusCountTile(
-                        label: 'Inactive Students',
-                        value: inactiveStudents,
-                        icon: Icons.person_off_rounded,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: StatusCountTile(
-                        label: 'Inactive Teachers',
-                        value: inactiveTeachers,
-                        icon: Icons.school_outlined,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: StatusCountTile(
-                        label: 'Deleted Students',
-                        value: deletedStudents,
-                        icon: Icons.delete_outline_rounded,
-                        color: const Color(0xFFB91C1C),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: StatusCountTile(
-                        label: 'Deleted Teachers',
-                        value: deletedTeachers,
-                        icon: Icons.delete_sweep_outlined,
-                        color: const Color(0xFFB91C1C),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                AdminActionButton(
-                  icon: Icons.verified_rounded,
-                  label: 'Activate All Inactive',
-                  onTap: saving ? null : bulkActivate,
-                ),
-                const SizedBox(height: 10),
-                DangerActionButton(
-                  icon: Icons.delete_forever_rounded,
-                  label: 'Permanently Remove Deleted',
-                  onTap: saving ? null : bulkPurgeDeleted,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          PremiumCard(
-            title: 'Control Modules',
-            subtitle: 'Mobile shortcuts matching the web Settings modules.',
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: AdminActionButton(
-                        icon: Icons.tune_rounded,
-                        label: 'Edit Settings',
-                        onTap: saving ? null : openSettingsSheet,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: AdminActionButton(
-                        icon: Icons.person_add_alt_1_rounded,
-                        label: 'Create Admin Account',
-                        onTap: saving ? null : openCreateUserSheet,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: AdminActionButton(
-                        icon: Icons.event_available_rounded,
-                        label: 'Add Holiday',
-                        onTap: saving ? null : openHolidaySheet,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: AdminActionButton(
-                        icon: Icons.image_rounded,
-                        label: 'Logo Uploads',
-                        onTap: saving ? null : openWebSettings,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                const AdminModuleTile(
-                  icon: Icons.image_rounded,
-                  title: 'System Logo and Platform Logos',
-                  subtitle:
-                      'Open the web logo uploader for system, Android, iOS, Windows, and Mac logos.',
-                ),
-                const AdminModuleTile(
-                  icon: Icons.access_time_filled_rounded,
-                  title: 'Attendance Time Windows',
-                  subtitle:
-                      'Set time-in, end-of-day time-out, grace period, and late rules.',
-                ),
-                const AdminModuleTile(
-                  icon: Icons.groups_rounded,
-                  title: 'Enrollment and Activation',
-                  subtitle:
-                      'Monitor inactive/deleted records and run bulk activation tools.',
-                ),
-                const AdminModuleTile(
-                  icon: Icons.manage_accounts_rounded,
-                  title: 'Admin Accounts',
-                  subtitle:
-                      'Create Super Admin, School Admin, SDS, and ASDS accounts.',
-                ),
-                const AdminModuleTile(
-                  icon: Icons.event_available_rounded,
-                  title: 'Holiday Management',
-                  subtitle:
-                      'Attendance exclusions for holidays and non-school days.',
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          PremiumCard(
-            title: 'Account Controls',
-            subtitle: '${users.length} account(s) synced from the server.',
+            title: 'Account Management',
+            subtitle: 'Create and manage administrator accounts.',
             child: Column(
               children: [
                 AdminActionButton(
@@ -2078,7 +1591,7 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
           ),
           const SizedBox(height: 14),
           PremiumCard(
-            title: 'Holiday Schedule',
+            title: 'Holiday Management',
             subtitle:
                 'Add or remove holidays excluded from attendance calculations.',
             child: Column(
@@ -2098,18 +1611,6 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
                   ),
                 if (holidays.isEmpty)
                   const EmptyText('No holidays configured.'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          PremiumCard(
-            title: 'Recent Activities',
-            subtitle: 'Latest login and system activity records.',
-            child: Column(
-              children: [
-                for (final item in logs.take(8))
-                  ActivityRow(Map<String, dynamic>.from(item as Map)),
-                if (logs.isEmpty) const EmptyText('No recent activity found.'),
               ],
             ),
           ),
