@@ -177,9 +177,7 @@ class ApiService {
       if (decoded is Map) return Map<String, dynamic>.from(decoded);
       throw Exception(fallback);
     } catch (_) {
-      throw Exception(
-        _errorFromBody(response.body, fallback: fallback),
-      );
+      throw Exception(_errorFromBody(response.body, fallback: fallback));
     }
   }
 
@@ -195,9 +193,7 @@ class ApiService {
       if (decoded is List) return decoded;
       return [];
     } catch (_) {
-      throw Exception(
-        _errorFromBody(response.body, fallback: fallback),
-      );
+      throw Exception(_errorFromBody(response.body, fallback: fallback));
     }
   }
 
@@ -295,10 +291,7 @@ class ApiService {
     final response = await _request(
       () => http.put(
         Uri.parse('${AppConfig.baseUrl}$path'),
-        headers: {
-          ...authHeaders,
-          'Content-Type': 'application/json',
-        },
+        headers: {...authHeaders, 'Content-Type': 'application/json'},
         body: jsonEncode(body),
       ),
     );
@@ -324,10 +317,7 @@ class ApiService {
     final response = await _request(
       () => http.post(
         Uri.parse('${AppConfig.baseUrl}$path'),
-        headers: {
-          ...authHeaders,
-          'Content-Type': 'application/json',
-        },
+        headers: {...authHeaders, 'Content-Type': 'application/json'},
         body: jsonEncode(body),
       ),
     );
@@ -1289,6 +1279,8 @@ class SuperAdminControlPage extends StatefulWidget {
 
 class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
   Map<String, dynamic> dashboard = {};
+  Map<String, dynamic> settings = {};
+  Map<String, dynamic> statusCounts = {};
   List<dynamic> users = [];
   List<dynamic> holidays = [];
   List<dynamic> logs = [];
@@ -1301,7 +1293,10 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
   void initState() {
     super.initState();
     load();
-    timer = Timer.periodic(const Duration(seconds: 12), (_) => load(silent: true));
+    timer = Timer.periodic(
+      const Duration(seconds: 12),
+      (_) => load(silent: true),
+    );
   }
 
   @override
@@ -1317,6 +1312,8 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
     try {
       final results = await Future.wait([
         widget.api.map('/api/dashboard-data?date=${date()}'),
+        widget.api.map('/api/settings'),
+        widget.api.map('/api/status-counts'),
         widget.api.list('/api/users'),
         widget.api.list('/api/holidays'),
         widget.api.list('/api/user-logs'),
@@ -1324,9 +1321,11 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
       if (!mounted) return;
       setState(() {
         dashboard = results[0] as Map<String, dynamic>;
-        users = results[1] as List<dynamic>;
-        holidays = results[2] as List<dynamic>;
-        logs = results[3] as List<dynamic>;
+        settings = results[1] as Map<String, dynamic>;
+        statusCounts = results[2] as Map<String, dynamic>;
+        users = results[3] as List<dynamic>;
+        holidays = results[4] as List<dynamic>;
+        logs = results[5] as List<dynamic>;
         loading = false;
         error = null;
       });
@@ -1396,9 +1395,9 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
       await load(silent: true);
       if (!mounted) return;
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Admin account created.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Admin account created.')));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1421,15 +1420,135 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
       await load(silent: true);
       if (!mounted) return;
       Navigator.pop(context);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Holiday saved.')));
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Holiday saved.')),
+        SnackBar(
+          content: Text(readableError(e, fallback: 'Unable to save holiday.')),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> saveSettings(Map<String, dynamic> body) async {
+    if (saving) return;
+    setState(() => saving = true);
+    try {
+      await widget.api.putJson('/api/settings', body);
+      await load(silent: true);
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Settings saved successfully.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(readableError(e, fallback: 'Unable to save settings.')),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> bulkActivate() async {
+    if (saving) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Activate inactive records?'),
+        content: const Text(
+          'This will activate all inactive students and teachers without waiting for their first QR scan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Activate'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() => saving = true);
+    try {
+      final result = await widget.api.postJson('/api/bulk-activate', {});
+      await load(silent: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Activated ${result['students'] ?? 0} students and ${result['teachers'] ?? 0} teachers.',
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            readableError(e, fallback: 'Unable to save holiday.'),
+            readableError(e, fallback: 'Unable to activate inactive records.'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> bulkPurgeDeleted() async {
+    if (saving) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Permanently remove deleted records?'),
+        content: const Text(
+          'This permanently deletes removed students and teachers. This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFB91C1C),
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() => saving = true);
+    try {
+      final result = await widget.api.postJson('/api/bulk-purge-deleted', {});
+      await load(silent: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Removed ${result['students'] ?? 0} students and ${result['teachers'] ?? 0} teachers.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            readableError(e, fallback: 'Unable to remove deleted records.'),
           ),
         ),
       );
@@ -1464,9 +1583,9 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
       await widget.api.deleteJson('/api/holidays/$id');
       await load(silent: true);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Holiday removed.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Holiday removed.')));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1509,6 +1628,29 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
     );
   }
 
+  void openSettingsSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => MobileSettingsFormSheet(
+        settings: settings,
+        saving: saving,
+        onSubmit: saveSettings,
+      ),
+    );
+  }
+
+  Future<void> openWebSettings() async {
+    final uri = Uri.parse('${AppConfig.baseUrl}/admin/settings');
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to open web Settings.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (loading && dashboard.isEmpty) {
@@ -1539,6 +1681,22 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
     final totalStudents = intValue(dashboard['total_students']);
     final totalTeachers = intValue(dashboard['total_teachers']);
     final absentees = intValue(dashboard['two_day_absentees']);
+    final inactiveStudents = intValue(statusCounts['inactive_students']);
+    final inactiveTeachers = intValue(statusCounts['inactive_teachers']);
+    final deletedStudents = intValue(statusCounts['deleted_students']);
+    final deletedTeachers = intValue(statusCounts['deleted_teachers']);
+    final systemName = settingValue(settings, 'system_name', AppConfig.appName);
+    final divisionName = settingValue(
+      settings,
+      'division_name',
+      AppConfig.subtitle,
+    );
+    final smsEnabled = settingEnabled(settings, 'sms_enabled', fallback: true);
+    final autoActivate = settingEnabled(
+      settings,
+      'auto_activate_on_scan',
+      fallback: true,
+    );
 
     return RefreshIndicator(
       onRefresh: () => load(silent: false),
@@ -1640,12 +1798,199 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
           ),
           const SizedBox(height: 14),
           PremiumCard(
-            title: 'Control Modules',
-            subtitle: 'Role-based administrative areas available to Super Admin.',
+            title: 'System Settings',
+            subtitle: 'Same editable settings used by the web Settings page.',
+            child: Column(
+              children: [
+                SettingInfoTile(
+                  icon: Icons.badge_rounded,
+                  label: 'System Name',
+                  value: systemName,
+                ),
+                SettingInfoTile(
+                  icon: Icons.apartment_rounded,
+                  label: 'Division Name',
+                  value: divisionName,
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AdminActionButton(
+                        icon: Icons.tune_rounded,
+                        label: 'Edit Settings',
+                        onTap: saving ? null : openSettingsSheet,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: AdminActionButton(
+                        icon: Icons.image_rounded,
+                        label: 'Logo Uploads',
+                        onTap: saving ? null : openWebSettings,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          PremiumCard(
+            title: 'Attendance Configuration',
+            subtitle: 'Time windows, late rules, SMS, and activation policy.',
             child: Column(
               children: [
                 Row(
                   children: [
+                    Expanded(
+                      child: SettingMiniCard(
+                        label: 'AM Time In End',
+                        value: settingTime(
+                          settings,
+                          'am_time_in_end',
+                          fallback: '08:00',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: SettingMiniCard(
+                        label: 'PM Time Out End',
+                        value: settingTime(
+                          settings,
+                          'pm_time_out_end',
+                          fallback: '17:00',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SettingMiniCard(
+                        label: 'Late Threshold',
+                        value:
+                            '${settingValue(settings, 'late_threshold', '15')} min',
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: SettingMiniCard(
+                        label: 'Auto Time-Out',
+                        value:
+                            '${settingValue(settings, 'auto_timeout', '480')} min',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SettingMiniCard(
+                        label: 'SMS Notifications',
+                        value: smsEnabled ? 'Enabled' : 'Disabled',
+                        color: smsEnabled
+                            ? const Color(0xFF0F6E52)
+                            : const Color(0xFF9CA3AF),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: SettingMiniCard(
+                        label: 'First Scan Activation',
+                        value: autoActivate ? 'Enabled' : 'Disabled',
+                        color: autoActivate
+                            ? const Color(0xFF0F6E52)
+                            : const Color(0xFF9CA3AF),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          PremiumCard(
+            title: 'Enrollment & Activation',
+            subtitle:
+                'Same inactive/deleted record controls from web Settings.',
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: StatusCountTile(
+                        label: 'Inactive Students',
+                        value: inactiveStudents,
+                        icon: Icons.person_off_rounded,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: StatusCountTile(
+                        label: 'Inactive Teachers',
+                        value: inactiveTeachers,
+                        icon: Icons.school_outlined,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: StatusCountTile(
+                        label: 'Deleted Students',
+                        value: deletedStudents,
+                        icon: Icons.delete_outline_rounded,
+                        color: const Color(0xFFB91C1C),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: StatusCountTile(
+                        label: 'Deleted Teachers',
+                        value: deletedTeachers,
+                        icon: Icons.delete_sweep_outlined,
+                        color: const Color(0xFFB91C1C),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                AdminActionButton(
+                  icon: Icons.verified_rounded,
+                  label: 'Activate All Inactive',
+                  onTap: saving ? null : bulkActivate,
+                ),
+                const SizedBox(height: 10),
+                DangerActionButton(
+                  icon: Icons.delete_forever_rounded,
+                  label: 'Permanently Remove Deleted',
+                  onTap: saving ? null : bulkPurgeDeleted,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          PremiumCard(
+            title: 'Control Modules',
+            subtitle: 'Mobile shortcuts matching the web Settings modules.',
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: AdminActionButton(
+                        icon: Icons.tune_rounded,
+                        label: 'Edit Settings',
+                        onTap: saving ? null : openSettingsSheet,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: AdminActionButton(
                         icon: Icons.person_add_alt_1_rounded,
@@ -1653,7 +1998,11 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
                         onTap: saving ? null : openCreateUserSheet,
                       ),
                     ),
-                    const SizedBox(width: 10),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
                     Expanded(
                       child: AdminActionButton(
                         icon: Icons.event_available_rounded,
@@ -1661,38 +2010,46 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
                         onTap: saving ? null : openHolidaySheet,
                       ),
                     ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: AdminActionButton(
+                        icon: Icons.image_rounded,
+                        label: 'Logo Uploads',
+                        onTap: saving ? null : openWebSettings,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
                 const AdminModuleTile(
+                  icon: Icons.image_rounded,
+                  title: 'System Logo and Platform Logos',
+                  subtitle:
+                      'Open the web logo uploader for system, Android, iOS, Windows, and Mac logos.',
+                ),
+                const AdminModuleTile(
+                  icon: Icons.access_time_filled_rounded,
+                  title: 'Attendance Time Windows',
+                  subtitle:
+                      'Set time-in, end-of-day time-out, grace period, and late rules.',
+                ),
+                const AdminModuleTile(
+                  icon: Icons.groups_rounded,
+                  title: 'Enrollment and Activation',
+                  subtitle:
+                      'Monitor inactive/deleted records and run bulk activation tools.',
+                ),
+                const AdminModuleTile(
                   icon: Icons.manage_accounts_rounded,
-                  title: 'Admin Account Creation',
-                  subtitle: 'Create Super Admin, School Admin, SDS, or ASDS accounts.',
+                  title: 'Admin Accounts',
+                  subtitle:
+                      'Create Super Admin, School Admin, SDS, and ASDS accounts.',
                 ),
-                AdminModuleTile(
-                  icon: Icons.manage_accounts_rounded,
-                  title: 'User Management',
-                  subtitle: 'Manage accounts, roles, activation, and access.',
-                ),
-                AdminModuleTile(
-                  icon: Icons.account_balance_rounded,
-                  title: 'School Management',
-                  subtitle: 'Schools, grade levels, sections, logos, and advisers.',
-                ),
-                AdminModuleTile(
+                const AdminModuleTile(
                   icon: Icons.event_available_rounded,
                   title: 'Holiday Management',
-                  subtitle: 'Attendance exclusions for holidays and non-school days.',
-                ),
-                AdminModuleTile(
-                  icon: Icons.notifications_active_rounded,
-                  title: 'Notifications',
-                  subtitle: 'Announcements, push alerts, and absence notifications.',
-                ),
-                AdminModuleTile(
-                  icon: Icons.analytics_rounded,
-                  title: 'Reports and Audit Logs',
-                  subtitle: 'Reports, analytics, exports, and activity history.',
+                  subtitle:
+                      'Attendance exclusions for holidays and non-school days.',
                 ),
               ],
             ),
@@ -1722,7 +2079,8 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
           const SizedBox(height: 14),
           PremiumCard(
             title: 'Holiday Schedule',
-            subtitle: 'Add or remove holidays excluded from attendance calculations.',
+            subtitle:
+                'Add or remove holidays excluded from attendance calculations.',
             child: Column(
               children: [
                 AdminActionButton(
@@ -1733,12 +2091,13 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
                 const SizedBox(height: 12),
                 for (final item in holidays.take(8))
                   HolidayRow(
-                    Map<String, dynamic>.from(item as Map),
+                    Map<String, dynamic>.from(item),
                     onDelete: saving
                         ? null
-                        : () => deleteHoliday(Map<String, dynamic>.from(item as Map)),
+                        : () => deleteHoliday(Map<String, dynamic>.from(item)),
                   ),
-                if (holidays.isEmpty) const EmptyText('No holidays configured.'),
+                if (holidays.isEmpty)
+                  const EmptyText('No holidays configured.'),
               ],
             ),
           ),
@@ -1847,12 +2206,473 @@ class AdminActionButton extends StatelessWidget {
       minimumSize: const Size.fromHeight(48),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      textStyle: const TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w900,
-      ),
+      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
     ),
   );
+}
+
+class DangerActionButton extends StatelessWidget {
+  const DangerActionButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton.icon(
+    onPressed: onTap,
+    icon: Icon(icon, size: 18),
+    label: Text(
+      label,
+      textAlign: TextAlign.center,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+    ),
+    style: OutlinedButton.styleFrom(
+      foregroundColor: const Color(0xFFB91C1C),
+      side: const BorderSide(color: Color(0xFFF3B4B4)),
+      minimumSize: const Size.fromHeight(48),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+    ),
+  );
+}
+
+class SettingInfoTile extends StatelessWidget {
+  const SettingInfoTile({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(bottom: 10),
+    padding: const EdgeInsets.all(13),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF8FBF9),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: const Color(0xFFE2ECE6)),
+    ),
+    child: Row(
+      children: [
+        Icon(icon, color: const Color(0xFF0F6E52), size: 22),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Color(0xFF64726B),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF0F211B),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class SettingMiniCard extends StatelessWidget {
+  const SettingMiniCard({
+    super.key,
+    required this.label,
+    required this.value,
+    this.color = const Color(0xFF0F6E52),
+  });
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minHeight: 74),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF8FBF9),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: const Color(0xFFE2ECE6)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Color(0xFF64726B),
+            fontSize: 10.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: color,
+            fontSize: 17,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -.2,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class StatusCountTile extends StatelessWidget {
+  const StatusCountTile({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.color = const Color(0xFF0F6E52),
+  });
+  final String label;
+  final int value;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minHeight: 82),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .06),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: color.withValues(alpha: .18)),
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: .12),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(icon, color: color, size: 21),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '$value',
+                style: const TextStyle(
+                  color: Color(0xFF0F211B),
+                  fontSize: 22,
+                  height: 1,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF64726B),
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class MobileSettingsFormSheet extends StatefulWidget {
+  const MobileSettingsFormSheet({
+    super.key,
+    required this.settings,
+    required this.saving,
+    required this.onSubmit,
+  });
+  final Map<String, dynamic> settings;
+  final bool saving;
+  final Future<void> Function(Map<String, dynamic> body) onSubmit;
+
+  @override
+  State<MobileSettingsFormSheet> createState() =>
+      _MobileSettingsFormSheetState();
+}
+
+class _MobileSettingsFormSheetState extends State<MobileSettingsFormSheet> {
+  late final TextEditingController systemName;
+  late final TextEditingController divisionName;
+  late final TextEditingController amTimeInEnd;
+  late final TextEditingController amTimeOutUntil;
+  late final TextEditingController pmTimeInStart;
+  late final TextEditingController pmTimeOutEnd;
+  late final TextEditingController lateThreshold;
+  late final TextEditingController autoTimeout;
+  bool smsEnabled = true;
+  bool autoActivate = true;
+  bool submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    systemName = TextEditingController(
+      text: settingValue(widget.settings, 'system_name', AppConfig.appName),
+    );
+    divisionName = TextEditingController(
+      text: settingValue(widget.settings, 'division_name', AppConfig.subtitle),
+    );
+    amTimeInEnd = TextEditingController(
+      text: settingTime(widget.settings, 'am_time_in_end', fallback: '08:00'),
+    );
+    amTimeOutUntil = TextEditingController(
+      text: settingTime(
+        widget.settings,
+        'am_time_out_until',
+        fallback: '12:00',
+      ),
+    );
+    pmTimeInStart = TextEditingController(
+      text: settingTime(widget.settings, 'pm_time_in_start', fallback: '13:00'),
+    );
+    pmTimeOutEnd = TextEditingController(
+      text: settingTime(widget.settings, 'pm_time_out_end', fallback: '17:00'),
+    );
+    lateThreshold = TextEditingController(
+      text: settingValue(widget.settings, 'late_threshold', '15'),
+    );
+    autoTimeout = TextEditingController(
+      text: settingValue(widget.settings, 'auto_timeout', '480'),
+    );
+    smsEnabled = settingEnabled(widget.settings, 'sms_enabled', fallback: true);
+    autoActivate = settingEnabled(
+      widget.settings,
+      'auto_activate_on_scan',
+      fallback: true,
+    );
+  }
+
+  @override
+  void dispose() {
+    systemName.dispose();
+    divisionName.dispose();
+    amTimeInEnd.dispose();
+    amTimeOutUntil.dispose();
+    pmTimeInStart.dispose();
+    pmTimeOutEnd.dispose();
+    lateThreshold.dispose();
+    autoTimeout.dispose();
+    super.dispose();
+  }
+
+  bool validTime(String value) =>
+      RegExp(r'^\d{2}:\d{2}$').hasMatch(value.trim());
+
+  Future<void> submit() async {
+    if (submitting) return;
+    final times = [
+      amTimeInEnd.text,
+      amTimeOutUntil.text,
+      pmTimeInStart.text,
+      pmTimeOutEnd.text,
+    ];
+    if (systemName.text.trim().isEmpty || divisionName.text.trim().isEmpty) {
+      showLocalMessage('System name and division name are required.');
+      return;
+    }
+    if (times.any((item) => !validTime(item))) {
+      showLocalMessage('Please use HH:mm format for time windows.');
+      return;
+    }
+    if (int.tryParse(lateThreshold.text.trim()) == null ||
+        int.tryParse(autoTimeout.text.trim()) == null) {
+      showLocalMessage('Late threshold and auto time-out must be numbers.');
+      return;
+    }
+    setState(() => submitting = true);
+    await widget.onSubmit({
+      'system_name': systemName.text.trim(),
+      'division_name': divisionName.text.trim(),
+      'am_time_in_end': amTimeInEnd.text.trim(),
+      'am_time_out_until': amTimeOutUntil.text.trim(),
+      'pm_time_in_start': pmTimeInStart.text.trim(),
+      'pm_time_out_end': pmTimeOutEnd.text.trim(),
+      'late_threshold': lateThreshold.text.trim(),
+      'auto_timeout': autoTimeout.text.trim(),
+      'sms_enabled': smsEnabled ? '1' : '0',
+      'auto_activate_on_scan': autoActivate ? '1' : '0',
+    });
+    if (mounted) setState(() => submitting = false);
+  }
+
+  void showLocalMessage(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    return AdminFormShell(
+      title: 'Settings',
+      subtitle: 'Edit the same system rules used by the web Settings page.',
+      bottomInset: bottom,
+      child: Column(
+        children: [
+          AdminTextInput(
+            controller: systemName,
+            label: 'System Name',
+            icon: Icons.badge_rounded,
+          ),
+          AdminTextInput(
+            controller: divisionName,
+            label: 'Division Name',
+            icon: Icons.apartment_rounded,
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: AdminTextInput(
+                  controller: amTimeInEnd,
+                  label: 'AM Time In End',
+                  icon: Icons.login_rounded,
+                  keyboardType: TextInputType.datetime,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: AdminTextInput(
+                  controller: amTimeOutUntil,
+                  label: 'AM Time Out Until',
+                  icon: Icons.logout_rounded,
+                  keyboardType: TextInputType.datetime,
+                ),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: AdminTextInput(
+                  controller: pmTimeInStart,
+                  label: 'PM Time In Start',
+                  icon: Icons.login_rounded,
+                  keyboardType: TextInputType.datetime,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: AdminTextInput(
+                  controller: pmTimeOutEnd,
+                  label: 'PM Time Out End',
+                  icon: Icons.logout_rounded,
+                  keyboardType: TextInputType.datetime,
+                ),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: AdminTextInput(
+                  controller: lateThreshold,
+                  label: 'Late Threshold',
+                  icon: Icons.timer_rounded,
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: AdminTextInput(
+                  controller: autoTimeout,
+                  label: 'Auto Time-Out',
+                  icon: Icons.av_timer_rounded,
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+            ],
+          ),
+          DropdownButtonFormField<bool>(
+            initialValue: smsEnabled,
+            decoration: adminInputDecoration(
+              'SMS Notifications',
+              Icons.sms_rounded,
+            ),
+            items: const [
+              DropdownMenuItem(value: true, child: Text('Enabled')),
+              DropdownMenuItem(value: false, child: Text('Disabled')),
+            ],
+            onChanged: (value) => setState(() => smsEnabled = value ?? true),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<bool>(
+            initialValue: autoActivate,
+            decoration: adminInputDecoration(
+              'Auto-Activate on First Scan',
+              Icons.verified_user_rounded,
+            ),
+            items: const [
+              DropdownMenuItem(value: true, child: Text('Enabled')),
+              DropdownMenuItem(value: false, child: Text('Disabled')),
+            ],
+            onChanged: (value) => setState(() => autoActivate = value ?? true),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: submitting || widget.saving ? null : submit,
+            icon: submitting || widget.saving
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.save_rounded),
+            label: const Text('Save Settings'),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF0F6E52),
+              foregroundColor: Colors.white,
+              minimumSize: const Size.fromHeight(50),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class AdminAccountFormSheet extends StatefulWidget {
@@ -1898,7 +2718,9 @@ class _AdminAccountFormSheetState extends State<AdminAccountFormSheet> {
       return;
     }
     if (role == 'principal' && schoolId == null) {
-      showLocalMessage('School Administrator accounts must be assigned to a school.');
+      showLocalMessage(
+        'School Administrator accounts must be assigned to a school.',
+      );
       return;
     }
     setState(() => submitting = true);
@@ -1915,7 +2737,9 @@ class _AdminAccountFormSheetState extends State<AdminAccountFormSheet> {
   }
 
   void showLocalMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -1927,18 +2751,51 @@ class _AdminAccountFormSheetState extends State<AdminAccountFormSheet> {
       bottomInset: bottom,
       child: Column(
         children: [
-          AdminTextInput(controller: username, label: 'Username', icon: Icons.person_rounded),
-          AdminTextInput(controller: fullname, label: 'Full Name', icon: Icons.badge_rounded),
-          AdminTextInput(controller: email, label: 'Email Address', icon: Icons.email_rounded, keyboardType: TextInputType.emailAddress),
-          AdminTextInput(controller: password, label: 'Temporary Password', icon: Icons.lock_rounded, obscure: true),
+          AdminTextInput(
+            controller: username,
+            label: 'Username',
+            icon: Icons.person_rounded,
+          ),
+          AdminTextInput(
+            controller: fullname,
+            label: 'Full Name',
+            icon: Icons.badge_rounded,
+          ),
+          AdminTextInput(
+            controller: email,
+            label: 'Email Address',
+            icon: Icons.email_rounded,
+            keyboardType: TextInputType.emailAddress,
+          ),
+          AdminTextInput(
+            controller: password,
+            label: 'Temporary Password',
+            icon: Icons.lock_rounded,
+            obscure: true,
+          ),
           DropdownButtonFormField<String>(
-            value: role,
-            decoration: adminInputDecoration('Role', Icons.admin_panel_settings_rounded),
+            initialValue: role,
+            decoration: adminInputDecoration(
+              'Role',
+              Icons.admin_panel_settings_rounded,
+            ),
             items: const [
-              DropdownMenuItem(value: 'principal', child: Text('School Administrator')),
-              DropdownMenuItem(value: 'super_admin', child: Text('Super Administrator')),
-              DropdownMenuItem(value: 'superintendent', child: Text('SDS View Only')),
-              DropdownMenuItem(value: 'asst_superintendent', child: Text('ASDS View Only')),
+              DropdownMenuItem(
+                value: 'principal',
+                child: Text('School Administrator'),
+              ),
+              DropdownMenuItem(
+                value: 'super_admin',
+                child: Text('Super Administrator'),
+              ),
+              DropdownMenuItem(
+                value: 'superintendent',
+                child: Text('SDS View Only'),
+              ),
+              DropdownMenuItem(
+                value: 'asst_superintendent',
+                child: Text('ASDS View Only'),
+              ),
             ],
             onChanged: (value) => setState(() {
               role = value ?? 'principal';
@@ -1948,8 +2805,11 @@ class _AdminAccountFormSheetState extends State<AdminAccountFormSheet> {
           const SizedBox(height: 12),
           if (role == 'principal')
             DropdownButtonFormField<int>(
-              value: schoolId,
-              decoration: adminInputDecoration('Assigned School', Icons.account_balance_rounded),
+              initialValue: schoolId,
+              decoration: adminInputDecoration(
+                'Assigned School',
+                Icons.account_balance_rounded,
+              ),
               items: [
                 for (final item in widget.schools)
                   DropdownMenuItem<int>(
@@ -1977,7 +2837,9 @@ class _AdminAccountFormSheetState extends State<AdminAccountFormSheet> {
               backgroundColor: const Color(0xFF0F6E52),
               foregroundColor: Colors.white,
               minimumSize: const Size.fromHeight(50),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
             ),
           ),
         ],
@@ -2052,16 +2914,24 @@ class _HolidayFormSheetState extends State<HolidayFormSheet> {
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
     return AdminFormShell(
       title: 'Add Holiday',
-      subtitle: 'Exclude a national, local, or school holiday from attendance calculations.',
+      subtitle:
+          'Exclude a national, local, or school holiday from attendance calculations.',
       bottomInset: bottom,
       child: Column(
         children: [
-          AdminTextInput(controller: name, label: 'Holiday Name', icon: Icons.event_rounded),
+          AdminTextInput(
+            controller: name,
+            label: 'Holiday Name',
+            icon: Icons.event_rounded,
+          ),
           InkWell(
             onTap: pickDate,
             borderRadius: BorderRadius.circular(16),
             child: InputDecorator(
-              decoration: adminInputDecoration('Holiday Date', Icons.calendar_month_rounded),
+              decoration: adminInputDecoration(
+                'Holiday Date',
+                Icons.calendar_month_rounded,
+              ),
               child: Text(
                 '$holidayDate - ${readableDate(holidayDate)}',
                 style: const TextStyle(fontWeight: FontWeight.w800),
@@ -2070,8 +2940,11 @@ class _HolidayFormSheetState extends State<HolidayFormSheet> {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
-            value: holidayType,
-            decoration: adminInputDecoration('Holiday Type', Icons.flag_rounded),
+            initialValue: holidayType,
+            decoration: adminInputDecoration(
+              'Holiday Type',
+              Icons.flag_rounded,
+            ),
             items: const [
               DropdownMenuItem(value: 1, child: Text('National Holiday')),
               DropdownMenuItem(value: 0, child: Text('Local Holiday')),
@@ -2085,8 +2958,11 @@ class _HolidayFormSheetState extends State<HolidayFormSheet> {
           const SizedBox(height: 12),
           if (holidayType == 2)
             DropdownButtonFormField<int>(
-              value: schoolId,
-              decoration: adminInputDecoration('School', Icons.account_balance_rounded),
+              initialValue: schoolId,
+              decoration: adminInputDecoration(
+                'School',
+                Icons.account_balance_rounded,
+              ),
               items: [
                 for (final item in widget.schools)
                   DropdownMenuItem<int>(
@@ -2114,7 +2990,9 @@ class _HolidayFormSheetState extends State<HolidayFormSheet> {
               backgroundColor: const Color(0xFF0F6E52),
               foregroundColor: Colors.white,
               minimumSize: const Size.fromHeight(50),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
             ),
           ),
         ],
@@ -2265,12 +3143,15 @@ class UserControlTile extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 21,
-            backgroundColor:
-                active ? const Color(0xFFE5F7EF) : const Color(0xFFFEE2E2),
+            backgroundColor: active
+                ? const Color(0xFFE5F7EF)
+                : const Color(0xFFFEE2E2),
             child: Text(
               initials('${user['fullname'] ?? user['username'] ?? 'U'}'),
               style: TextStyle(
-                color: active ? const Color(0xFF0F6E52) : const Color(0xFFB91C1C),
+                color: active
+                    ? const Color(0xFF0F6E52)
+                    : const Color(0xFFB91C1C),
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -2306,8 +3187,9 @@ class UserControlTile extends StatelessWidget {
           TextButton(
             onPressed: busy ? null : () => onToggle(user),
             style: TextButton.styleFrom(
-              foregroundColor:
-                  active ? const Color(0xFFB91C1C) : const Color(0xFF0F6E52),
+              foregroundColor: active
+                  ? const Color(0xFFB91C1C)
+                  : const Color(0xFF0F6E52),
               padding: const EdgeInsets.symmetric(horizontal: 10),
             ),
             child: Text(active ? 'Deactivate' : 'Activate'),
@@ -2374,7 +3256,8 @@ class ActivityRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final actor = '${row['fullname'] ?? row['username'] ?? 'System user'}';
-    final action = '${row['action'] ?? row['activity'] ?? row['description'] ?? 'Activity recorded'}';
+    final action =
+        '${row['action'] ?? row['activity'] ?? row['description'] ?? 'Activity recorded'}';
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
@@ -4282,10 +5165,7 @@ class _SchoolsPageState extends State<SchoolsPage> {
             ],
           ),
           const SizedBox(height: 8),
-          BackLine(
-            'Back',
-            () => setState(() => section = null),
-          ),
+          BackLine('Back', () => setState(() => section = null)),
           InfoPill(
             'Adviser',
             adviserText(section!).replaceFirst('Adviser: ', ''),
@@ -5921,6 +6801,40 @@ String roleLabel(String role) {
 }
 
 int intValue(dynamic value) => int.tryParse('$value') ?? 0;
+
+String settingValue(
+  Map<String, dynamic> settings,
+  String key,
+  String fallback,
+) {
+  final value = '${settings[key] ?? ''}'.trim();
+  if (value.isEmpty || value.toLowerCase() == 'null') return fallback;
+  return value;
+}
+
+String settingTime(
+  Map<String, dynamic> settings,
+  String key, {
+  required String fallback,
+}) {
+  var value = settingValue(settings, key, fallback).trim();
+  if (value.contains('T')) value = value.split('T').last;
+  if (RegExp(r'^\d{2}:\d{2}:\d{2}$').hasMatch(value)) {
+    return value.substring(0, 5);
+  }
+  if (RegExp(r'^\d{2}:\d{2}$').hasMatch(value)) return value;
+  return fallback;
+}
+
+bool settingEnabled(
+  Map<String, dynamic> settings,
+  String key, {
+  required bool fallback,
+}) {
+  final value = '${settings[key] ?? ''}'.trim().toLowerCase();
+  if (value.isEmpty || value == 'null') return fallback;
+  return ['1', 'true', 'yes', 'enabled', 'on'].contains(value);
+}
 
 List<String> weekdayDatesOfWeek(String baseDate) {
   final base = DateTime.tryParse(baseDate) ?? DateTime.now();
