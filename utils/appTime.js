@@ -124,7 +124,7 @@ function formatTime12(value) {
     let hour = parseInt(p.hour, 10);
     const suffix = hour >= 12 ? 'PM' : 'AM';
     hour = hour % 12 || 12;
-    return `${String(hour).padStart(2, '0')}:${p.minute}:${p.second} ${suffix}`;
+    return `${String(hour).padStart(2, '0')}:${p.minute} ${suffix}`;
 }
 
 module.exports = {
