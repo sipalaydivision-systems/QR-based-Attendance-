@@ -85,7 +85,9 @@ async function loadAttendance() {
     document.getElementById('attCount').textContent = data.length + ' record(s)';
 
     document.getElementById('attendanceBody').innerHTML = data.map(function(r) {
-        var statusClass = r.status === 'present' ? 'badge-active' : r.status === 'late' ? 'badge-late' : 'badge-inactive';
+        var rawStatus = String(r.status || '').toLowerCase();
+        var statusClass = rawStatus === 'present' ? 'badge-active' : rawStatus === 'late' ? 'badge-late' : 'badge-inactive';
+        var statusText = formatStatusLabel(r.status);
         var timeOutText = r.time_out ? new Date(r.time_out).toLocaleTimeString() : (r.monitoring_status === 'Pending Time Out' ? 'Pending Time Out' : '-');
         return '<tr>' +
             '<td><strong>' + (r.person_name || 'N/A') + '</strong></td>' +
@@ -94,7 +96,7 @@ async function loadAttendance() {
             '<td>' + (r.grade_name || '-') + (r.section_name ? ' / ' + r.section_name : '') + '</td>' +
             '<td>' + (r.time_in ? new Date(r.time_in).toLocaleTimeString() : '-') + '</td>' +
             '<td>' + timeOutText + '</td>' +
-            '<td><span class="badge ' + statusClass + '">' + r.status + '</span></td>' +
+            '<td><span class="badge ' + statusClass + '">' + statusText + '</span></td>' +
             '</tr>';
     }).join('') || '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon"><i class="fa-solid fa-clipboard-list" style="font-size:2.5rem;color:var(--gray-300);"></i></div><h4>No attendance records found</h4><p>No records for the selected date and filters.</p></div></td></tr>';
 

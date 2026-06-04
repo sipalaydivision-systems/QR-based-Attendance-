@@ -290,7 +290,7 @@ function renderCards(items) {
         return '<div class="school-card-v2" onclick="viewSchool('+s.id+')">'+ 
             '<div class="sc-header">'+
                 '<div class="sc-icon">'+iconHtml+'</div>'+
-                '<span class="badge '+statusCls+'">'+s.status+'</span>'+
+                '<span class="badge '+statusCls+'">'+formatStatusLabel(s.status)+'</span>'+
             '</div>'+
                 '<div class="sc-body">'+
                     '<div class="sc-name">'+s.name+'</div>'+
@@ -323,7 +323,7 @@ function renderTable(items) {
             '<td>'+(s.student_count||0)+'</td>'+
             '<td>'+(s.teacher_count||0)+'</td>'+
             '<td>'+(s.section_count||0)+'</td>'+
-            '<td><span class="badge '+statusCls+'">'+s.status+'</span></td>'+
+            '<td><span class="badge '+statusCls+'">'+formatStatusLabel(s.status)+'</span></td>'+
             '<td onclick="event.stopPropagation()"><div class="action-btns">'+
                 '<button class="action-btn edit" onclick="editSchoolById('+s.id+')" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>'+
                 '<button class="action-btn delete" onclick="openDeleteModal('+s.id+')" title="Delete"><i class="fa-solid fa-trash-can"></i></button>'+
@@ -490,7 +490,7 @@ function exportSchools() {
     filtered.forEach(function(s) {
         csv += '"'+(s.name||'')+'",'+(s.school_code||'')+','+
                '"'+(s.address||'')+'","'+(s.contact||'')+'",'+
-               s.status+','+(s.student_count||0)+','+(s.teacher_count||0)+','+(s.section_count||0)+'\n';
+               formatStatusLabel(s.status)+','+(s.student_count||0)+','+(s.teacher_count||0)+','+(s.section_count||0)+'\n';
     });
     var blob = new Blob([csv], {type:'text/csv'});
     var a = document.createElement('a');

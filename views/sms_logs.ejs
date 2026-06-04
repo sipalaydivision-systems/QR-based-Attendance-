@@ -51,7 +51,7 @@ async function loadSmsLogs() {
             return '<tr><td>' + new Date(l.created_at).toLocaleString() + '</td>' +
                 '<td>' + (l.recipient || '-') + '</td>' +
                 '<td>' + (l.message || '-') + '</td>' +
-                '<td><span class="badge badge-' + statusClass + '">' + l.status + '</span></td></tr>';
+                '<td><span class="badge badge-' + statusClass + '">' + formatStatusLabel(l.status) + '</span></td></tr>';
         }).join('') || '<tr><td colspan="4" class="text-center">No SMS logs found</td></tr>';
     } catch(e) { console.error(e); }
 }

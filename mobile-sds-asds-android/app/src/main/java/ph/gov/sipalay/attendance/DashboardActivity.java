@@ -646,7 +646,7 @@ public class DashboardActivity extends Activity {
                 if (student == null) continue;
                 String meta = "LRN: " + firstNonEmpty(student.optString("lrn", ""), "-")
                         + " - Adviser: " + (adviser.isEmpty() ? "No adviser assigned" : adviser);
-                card.addView(recordRow(studentName(student), meta, student.optString("status", "active"), Ui.GREEN_DARK));
+                card.addView(recordRow(studentName(student), meta, formatStatusLabel(student.optString("status", "inactive")), Ui.GREEN_DARK));
             }
             if (students.length() > 120) {
                 card.addView(Ui.text(this, "+" + (students.length() - 120) + " more students", 11, Ui.GREEN_DARK, Typeface.BOLD));
@@ -1509,11 +1509,38 @@ public class DashboardActivity extends Activity {
 
     private String studentMeta(JSONObject student) {
         String lrn = student.optString("lrn", "").trim();
-        String status = student.optString("status", "").trim();
+        String status = formatStatusLabel(student.optString("status", "").trim());
         String meta = "";
         if (!lrn.isEmpty()) meta += " - " + lrn;
-        if (!status.isEmpty()) meta += " - " + status;
+        if (!status.isEmpty() && !"-".equals(status)) meta += " - " + status;
         return meta;
+    }
+
+    private String formatStatusLabel(String value) {
+        String raw = value == null ? "" : value.trim();
+        if (raw.isEmpty() || "null".equalsIgnoreCase(raw)) return "-";
+        String key = raw.replace('_', ' ').toLowerCase(Locale.US);
+        switch (key) {
+            case "present": return "Present";
+            case "absent": return "Absent";
+            case "late": return "Late";
+            case "inactive": return "Inactive";
+            case "active": return "Active";
+            case "flagged": return "Flagged";
+            case "pending time out": return "Pending Time Out";
+            case "no time out": return "No Time Out";
+            case "no time in": return "No Time In";
+            case "complete": return "Complete";
+            default:
+                String[] parts = key.split("\\s+");
+                StringBuilder out = new StringBuilder();
+                for (String part : parts) {
+                    if (part.isEmpty()) continue;
+                    if (out.length() > 0) out.append(' ');
+                    out.append(part.substring(0, 1).toUpperCase(Locale.US)).append(part.substring(1));
+                }
+                return out.length() == 0 ? raw : out.toString();
+        }
     }
 
     private LinearLayout recordRow(String title, String subtitle, String meta, int accent) {

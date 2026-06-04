@@ -216,8 +216,7 @@ async function saveStudent(e) {
         section_id: document.getElementById('studentSection').value,
         guardian_name: document.getElementById('studentGuardian').value,
         guardian_contact: document.getElementById('studentGuardianContact').value,
-        category: document.getElementById('studentCategory').value,
-        status: 'active'
+        category: document.getElementById('studentCategory').value
     };
     var url = id ? '/api/students/' + id : '/api/students';
     var method = id ? 'PUT' : 'POST';

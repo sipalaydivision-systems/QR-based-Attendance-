@@ -453,7 +453,7 @@
                             '<div style="font-size:0.6875rem;color:var(--gray-500);">' + (r.grade_name || '') + (r.section_name ? ' · ' + r.section_name : '') + '</div>' +
                         '</div>' +
                         '<div style="text-align:right;flex-shrink:0;">' +
-                            '<div style="font-size:0.6875rem;font-weight:700;color:' + sc + ';"><i class="fa-solid ' + si + '"></i> ' + r.status + '</div>' +
+                            '<div style="font-size:0.6875rem;font-weight:700;color:' + sc + ';"><i class="fa-solid ' + si + '"></i> ' + formatStatusLabel(r.status) + '</div>' +
                             '<div style="font-size:0.6875rem;color:var(--gray-400);">' + timeStr + '</div>' +
                         '</div>' +
                     '</div>';

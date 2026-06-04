@@ -107,6 +107,26 @@ async function ensureRuntimeSchema() {
         await db.query('ALTER TABLE students ADD COLUMN active_from DATE NULL AFTER qr_code');
         console.log('Added missing students.active_from column.');
     }
+
+    await db.query("ALTER TABLE students MODIFY COLUMN status ENUM('active','inactive','deleted') DEFAULT 'inactive'");
+
+    // Imported students should not become attendance-eligible until their first valid attendance scan.
+    const [inactiveResult] = await db.query(`
+        UPDATE students s
+        SET s.status = 'inactive',
+            s.active_from = NULL
+        WHERE s.status = 'active'
+          AND NOT EXISTS (
+              SELECT 1
+              FROM attendance a
+              WHERE a.person_type = 'student'
+                AND a.person_id = s.id
+                AND a.time_in IS NOT NULL
+          )
+    `);
+    if (inactiveResult.affectedRows) {
+        console.log(`Marked ${inactiveResult.affectedRows} student(s) without attendance history as inactive.`);
+    }
 }
 
 // Root redirect

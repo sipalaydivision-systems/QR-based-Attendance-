@@ -238,8 +238,7 @@ async function saveStudent(e) {
         track: document.getElementById('studentTrack').value,
         guardian_name: document.getElementById('studentGuardian').value,
         guardian_contact: document.getElementById('studentGuardianContact').value,
-        category: 'shs_student',
-        status: 'active'
+        category: 'shs_student'
     };
     var url = id ? '/api/students/' + id : '/api/students';
     var method = id ? 'PUT' : 'POST';

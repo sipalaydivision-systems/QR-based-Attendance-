@@ -58,8 +58,26 @@ async function init() {
         await ensureColumn('teachers', 'section_id', 'INT NULL AFTER grade_level_id');
         await ensureColumn('sections', 'adviser_teacher_id', 'INT NULL AFTER adviser');
         await ensureColumn('students', 'active_from', 'DATE NULL AFTER qr_code');
+        await ensureColumnDefinition('students', 'status', "ENUM('active','inactive','deleted') DEFAULT 'inactive'");
         await ensureColumnDefinition('schools', 'logo', 'MEDIUMTEXT');
         await ensureColumnDefinition('settings', 'setting_value', 'MEDIUMTEXT');
+
+        const [inactiveResult] = await db.query(`
+            UPDATE students s
+            SET s.status = 'inactive',
+                s.active_from = NULL
+            WHERE s.status = 'active'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM attendance a
+                  WHERE a.person_type = 'student'
+                    AND a.person_id = s.id
+                    AND a.time_in IS NOT NULL
+              )
+        `);
+        if (inactiveResult.affectedRows) {
+            console.log(`Marked ${inactiveResult.affectedRows} student(s) without attendance history as inactive.`);
+        }
 
         console.log('Running database seed...');
         require('./seed');

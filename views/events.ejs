@@ -101,7 +101,7 @@ function renderEvents() {
             '<td>' + ev.event_date + '</td>' +
             '<td>' + (ev.school_name || 'All') + '</td>' +
             '<td>' + (ev.description || '-') + '</td>' +
-            '<td><span class="badge badge-' + ev.status + '">' + ev.status + '</span></td>' +
+            '<td><span class="badge badge-' + ev.status + '">' + formatStatusLabel(ev.status) + '</span></td>' +
             '<td><button class="btn btn-sm btn-secondary" onclick="viewEventAtt(' + ev.id + ',\'' + ev.name.replace(/'/g, "\\'") + '\')">View</button></td>' +
             '<td>' +
             '<button class="btn btn-sm btn-secondary" onclick="editEvent(' + ev.id + ')">Edit</button> ' +

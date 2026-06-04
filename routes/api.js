@@ -383,16 +383,23 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
             return res.json({ success: false, error: 'This person has been removed from the system.' });
         }
 
-        // Auto-activate inactive person on first scan (if setting enabled)
+        // Imported students become attendance-eligible only after their first valid QR scan.
         if (person.person_status === 'inactive') {
-            const [[autoSetting]] = await db.query("SELECT setting_value FROM settings WHERE setting_key='auto_activate_on_scan'");
-            const autoActivate = !autoSetting || autoSetting.setting_value !== '0'; // default: enabled
-            if (autoActivate) {
-                const table = personType === 'student' ? 'students' : 'teachers';
-                await db.query('UPDATE ' + table + ' SET status = ? WHERE id = ?', ['active', person.id]);
+            if (personType === 'student') {
+                await db.query(
+                    "UPDATE students SET status = 'active', active_from = ? WHERE id = ?",
+                    [today, person.id]
+                );
                 person.person_status = 'active';
             } else {
-                return res.json({ success: false, error: 'This person is inactive. Please contact the admin to activate.' });
+                const [[autoSetting]] = await db.query("SELECT setting_value FROM settings WHERE setting_key='auto_activate_on_scan'");
+                const autoActivate = !autoSetting || autoSetting.setting_value !== '0'; // default: enabled
+                if (autoActivate) {
+                    await db.query('UPDATE teachers SET status = ? WHERE id = ?', ['active', person.id]);
+                    person.person_status = 'active';
+                } else {
+                    return res.json({ success: false, error: 'This person is inactive. Please contact the admin to activate.' });
+                }
             }
         }
 
@@ -830,11 +837,11 @@ router.post('/students', requireAuth, async (req, res) => {
     try {
         const qr_code = 'STU-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);
         const [result] = await db.query(
-            `INSERT INTO students (lrn, firstname, lastname, middlename, gender, birthdate, grade_level_id, section_id, school_id, guardian_name, guardian_contact, qr_code, category)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO students (lrn, firstname, lastname, middlename, gender, birthdate, grade_level_id, section_id, school_id, guardian_name, guardian_contact, qr_code, category, active_from, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [lrn || null, firstname, lastname, middlename || null, gender || null, birthdate || null,
              grade_level_id || null, section_id || null, school_id, guardian_name || null, guardian_contact || null,
-             qr_code, category || 'student']
+             qr_code, category || 'student', null, 'inactive']
         );
         return res.json({ success: true, id: result.insertId, qr_code });
     } catch (err) {
@@ -850,13 +857,26 @@ router.post('/students', requireAuth, async (req, res) => {
 router.put('/students/:id', requireAuth, async (req, res) => {
     const { firstname, lastname, middlename, gender, birthdate, grade_level_id, section_id, school_id, guardian_name, guardian_contact, status, lrn, category } = req.body;
     try {
-        await db.query(
-            `UPDATE students SET firstname=?, lastname=?, middlename=?, gender=?, birthdate=?, grade_level_id=?, section_id=?, school_id=?, guardian_name=?, guardian_contact=?, status=?, lrn=?, category=? WHERE id=?`,
-            [firstname, lastname, middlename || null, gender || null, birthdate || null,
-             grade_level_id || null, section_id || null, school_id, guardian_name || null,
-             guardian_contact || null, status || 'active', lrn || null, category || 'student',
-             req.params.id]
-        );
+        const validStatus = ['active', 'inactive', 'deleted'].includes(status) ? status : null;
+        const fields = [
+            'firstname=?', 'lastname=?', 'middlename=?', 'gender=?', 'birthdate=?',
+            'grade_level_id=?', 'section_id=?', 'school_id=?', 'guardian_name=?',
+            'guardian_contact=?', 'lrn=?', 'category=?'
+        ];
+        const params = [
+            firstname, lastname, middlename || null, gender || null, birthdate || null,
+            grade_level_id || null, section_id || null, school_id, guardian_name || null,
+            guardian_contact || null, lrn || null, category || 'student'
+        ];
+        if (validStatus) {
+            fields.push('status=?');
+            params.push(validStatus);
+            if (validStatus === 'active') {
+                fields.push('active_from = COALESCE(active_from, CURDATE())');
+            }
+        }
+        params.push(req.params.id);
+        await db.query(`UPDATE students SET ${fields.join(', ')} WHERE id=?`, params);
         return res.json({ success: true });
     } catch (err) {
         console.error('Update student error:', err);
@@ -1420,7 +1440,7 @@ router.get('/status-counts', requireAuth, async (req, res) => {
 // ---- Bulk Activate All Inactive ----
 router.post('/bulk-activate', requireAuth, async (req, res) => {
     try {
-        const [sr] = await db.query("UPDATE students SET status='active' WHERE status='inactive'");
+        const [sr] = await db.query("UPDATE students SET status='active', active_from=CURDATE() WHERE status='inactive'");
         const [tr] = await db.query("UPDATE teachers SET status='active' WHERE status='inactive'");
         return res.json({ success: true, students: sr.affectedRows, teachers: tr.affectedRows });
     } catch (err) {
@@ -2002,6 +2022,10 @@ router.get('/not-scanned-today', requireAuth, async (req, res) => {
     const type = req.query.type || 'student';
     const schoolId = applySchoolFilter(req);
     try {
+        if (!(await shouldCountComputedAbsences(today, schoolId))) {
+            return res.json([]);
+        }
+
         let query, params;
         if (type === 'student') {
             query = `SELECT s.id, s.firstname, s.lastname, s.lrn, sc.name as school_name,
@@ -2011,8 +2035,9 @@ router.get('/not-scanned-today', requireAuth, async (req, res) => {
                 LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id
                 LEFT JOIN sections sec ON s.section_id = sec.id
                 WHERE s.status = 'active'
+                AND COALESCE(s.active_from, DATE(s.created_at)) < ?
                 AND s.id NOT IN (SELECT person_id FROM attendance WHERE person_type = 'student' AND date = ?)`;
-            params = [today];
+            params = [today, today];
             if (schoolId) { query += ' AND s.school_id = ?'; params.push(schoolId); }
         } else {
             query = `SELECT t.id, t.firstname, t.lastname, t.employee_id, sc.name as school_name
@@ -2221,7 +2246,7 @@ router.get('/school-kpi/:id', requireAuth, async (req, res) => {
     const today = new Date().toISOString().slice(0, 10);
     try {
         const [totalStudents] = await db.query(
-            "SELECT COUNT(*) as cnt FROM students WHERE school_id = ? AND status = 'active'", [schoolId]);
+            "SELECT COUNT(*) as cnt FROM students WHERE school_id = ? AND status = 'active' AND COALESCE(active_from, DATE(created_at)) < ?", [schoolId, today]);
         const [presentStudents] = await db.query(
             "SELECT COUNT(DISTINCT a.person_id) as cnt FROM attendance a INNER JOIN students s ON a.person_id = s.id AND a.person_type = 'student' WHERE s.school_id = ? AND a.date = ? AND a.status IN ('present','late')", [schoolId, today]);
         const [lateStudents] = await db.query(
@@ -2232,8 +2257,8 @@ router.get('/school-kpi/:id', requireAuth, async (req, res) => {
         const [presentTeachers] = await db.query(
             "SELECT COUNT(DISTINCT a.person_id) as cnt FROM attendance a INNER JOIN teachers t ON a.person_id = t.id AND a.person_type = 'teacher' WHERE t.school_id = ? AND a.date = ?", [schoolId, today]);
 
-        const total = totalStudents[0].cnt;
         const present = presentStudents[0].cnt;
+        const total = Math.max(totalStudents[0].cnt, present);
         return res.json({
             students_total: total,
             students_present: present,
@@ -2254,13 +2279,13 @@ router.get('/section-kpi/:id', requireAuth, async (req, res) => {
     const today = new Date().toISOString().slice(0, 10);
     try {
         const [totalStudents] = await db.query(
-            "SELECT COUNT(*) as cnt FROM students WHERE section_id = ? AND status = 'active'", [sectionId]);
+            "SELECT COUNT(*) as cnt FROM students WHERE section_id = ? AND status = 'active' AND COALESCE(active_from, DATE(created_at)) < ?", [sectionId, today]);
         const [presentStudents] = await db.query(
             "SELECT COUNT(DISTINCT a.person_id) as cnt FROM attendance a INNER JOIN students s ON a.person_id = s.id AND a.person_type = 'student' WHERE s.section_id = ? AND a.date = ? AND a.status IN ('present','late')", [sectionId, today]);
         const absentStudents = await countSectionStudentsWithoutTimeIn(today, sectionId);
 
-        const total = totalStudents[0].cnt;
         const present = presentStudents[0].cnt;
+        const total = Math.max(totalStudents[0].cnt, present);
         return res.json({
             total: total,
             present: present,

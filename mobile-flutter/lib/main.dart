@@ -4022,8 +4022,8 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
     final section = '${row['section_name'] ?? '-'}';
     final lrn = '${row['lrn'] ?? '-'}';
     final adviser = '${row['adviser'] ?? '-'}';
-    final status = '${row['attendance_status'] ?? '-'}';
-    final monitoring = '${row['monitoring_status'] ?? ''}'.trim();
+    final status = formatStatusLabel(row['attendance_status']);
+    final monitoring = formatStatusLabel(row['monitoring_status']);
     final absentDays = intValue(row['absent_days']);
     final absentFromDate = '${row['absent_from_date'] ?? ''}'.trim();
     final absentInfo = absentDays > 0
@@ -4069,7 +4069,7 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
             ),
             const SizedBox(height: 2),
             Text(
-              'Status: $status${monitoring.isNotEmpty ? ' | $monitoring' : ''} | Date: ${readableDate(widget.targetDate)}',
+              'Status: $status${monitoring != '-' ? ' | $monitoring' : ''} | Date: ${readableDate(widget.targetDate)}',
               style: TextStyle(
                 color: status == 'Absent'
                     ? const Color(0xFFB91C1C)
@@ -4299,7 +4299,7 @@ class _AbsentStudentsSheetState extends State<AbsentStudentsSheet> {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  'Status: ${row['attendance_status'] ?? 'Absent'} | Absent days: ${row['absent_days'] ?? 1}',
+                                  'Status: ${formatStatusLabel(row['attendance_status'] ?? 'Absent')} | Absent days: ${row['absent_days'] ?? 1}',
                                   style: const TextStyle(
                                     color: Color(0xFFB91C1C),
                                     fontWeight: FontWeight.w900,
@@ -5082,7 +5082,7 @@ class FlagTile extends StatelessWidget {
     final grade = '${row['grade_name'] ?? '-'}';
     final section = '${row['section_name'] ?? '-'}';
     final daysAbsent = absenceDays(row);
-    final status = '${row['attendance_status'] ?? 'Absent'}';
+    final status = formatStatusLabel(row['attendance_status'] ?? 'Absent');
     final adviserName = '${row['adviser'] ?? '-'}';
     final adviserPhone = adviserPhoneFromRow(row) ?? '-';
     final adviserEmail = adviserEmailFromRow(row) ?? '-';
@@ -6300,7 +6300,7 @@ String absenceNotificationPayload(List flags) {
     'grade_name': first['grade_name'],
     'section_name': first['section_name'],
     'absent_days': first['absent_days'],
-    'attendance_status': first['attendance_status'] ?? 'Absent',
+    'attendance_status': formatStatusLabel(first['attendance_status'] ?? 'Absent'),
     'adviser': first['adviser'],
     'adviser_contact': first['adviser_contact'],
     'adviser_email': first['adviser_email'],
@@ -6413,6 +6413,39 @@ String roleLabel(String role) {
 }
 
 int intValue(dynamic value) => int.tryParse('$value') ?? 0;
+
+String formatStatusLabel(dynamic value) {
+  final raw = '${value ?? ''}'.trim();
+  if (raw.isEmpty || raw.toLowerCase() == 'null') return '-';
+  switch (raw.toLowerCase().replaceAll('_', ' ')) {
+    case 'present':
+      return 'Present';
+    case 'absent':
+      return 'Absent';
+    case 'late':
+      return 'Late';
+    case 'inactive':
+      return 'Inactive';
+    case 'active':
+      return 'Active';
+    case 'flagged':
+      return 'Flagged';
+    case 'pending time out':
+      return 'Pending Time Out';
+    case 'no time out':
+      return 'No Time Out';
+    case 'no time in':
+      return 'No Time In';
+    case 'complete':
+      return 'Complete';
+    default:
+      return raw
+          .split(RegExp(r'[\s_-]+'))
+          .where((part) => part.isNotEmpty)
+          .map((part) => part[0].toUpperCase() + part.substring(1).toLowerCase())
+          .join(' ');
+  }
+}
 
 String settingValue(
   Map<String, dynamic> settings,

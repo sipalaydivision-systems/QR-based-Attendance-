@@ -802,7 +802,8 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
             return { firstname: words[0], lastname: words[words.length - 1], middlename: words.slice(1, -1).join(' ') };
         }
 
-        const importedStatus = 'active';
+        const importedTeacherStatus = 'active';
+        const defaultImportedStudentStatus = 'inactive';
 
         const [schools] = await db.query("SELECT id, name, school_id_code, school_code, status FROM schools WHERE status IS NULL OR status != 'deleted' ORDER BY name");
         const fallbackSchool = defaultSchoolId ? schools.find(s => Number(s.id) === Number(defaultSchoolId)) : null;
@@ -928,7 +929,7 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                              SET employee_id=?, firstname=?, lastname=?, middlename=?, contact=?, email=?,
                                  school_id=?, grade_level_id=?, section_id=?, status=?
                              WHERE id=?`,
-                            [empId || null, fn, ln, mn || null, contact, email, schoolId, gradeId, sectionId, importedStatus, existing.id]
+                            [empId || null, fn, ln, mn || null, contact, email, schoolId, gradeId, sectionId, importedTeacherStatus, existing.id]
                         );
                         await db.query(
                             'UPDATE sections SET adviser = ?, adviser_teacher_id = ? WHERE id = ?',
@@ -943,7 +944,7 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                         `INSERT INTO teachers
                             (employee_id, firstname, lastname, middlename, contact, email, school_id, grade_level_id, section_id, qr_code, status)
                          VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-                        [empId, fn, ln, mn || null, contact, email, schoolId, gradeId, sectionId, qr_code, importedStatus]
+                        [empId, fn, ln, mn || null, contact, email, schoolId, gradeId, sectionId, qr_code, importedTeacherStatus]
                     );
                     await db.query(
                         'UPDATE sections SET adviser = ?, adviser_teacher_id = ? WHERE id = ?',
@@ -981,11 +982,16 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                     const guardianContact = row['Guardian Contact'] || row['guardian_contact'] || null;
 
                     if (lrn) {
-                        const [existing] = await db.query('SELECT id FROM students WHERE lrn = ?', [lrn]);
+                        const [existing] = await db.query('SELECT id, status, active_from FROM students WHERE lrn = ?', [lrn]);
                         if (existing.length > 0) {
+                            const existingStatus = existing[0].status || defaultImportedStudentStatus;
+                            const nextStatus = existingStatus === 'deleted' ? defaultImportedStudentStatus : existingStatus;
+                            const nextActiveFrom = nextStatus === 'active'
+                                ? (existing[0].active_from || importActiveFrom)
+                                : null;
                             await db.query(
                                 'UPDATE students SET firstname=?, lastname=?, middlename=?, school_id=?, grade_level_id=?, section_id=?, guardian_contact=?, category=?, active_from=?, status=? WHERE id=?',
-                                [fn, ln, mn || null, schoolId || null, gradeId || null, sectionId || null, guardianContact, category, importActiveFrom, importedStatus, existing[0].id]
+                                [fn, ln, mn || null, schoolId || null, gradeId || null, sectionId || null, guardianContact, category, nextActiveFrom, nextStatus, existing[0].id]
                             );
                             updated++;
                             continue;
@@ -994,7 +1000,7 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                     const qr_code = lrn ? 'STU-' + lrn : 'STU-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);
                     await db.query(
                         'INSERT INTO students (lrn, firstname, lastname, middlename, school_id, grade_level_id, section_id, guardian_contact, qr_code, category, active_from, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-                        [lrn, fn, ln, mn || null, schoolId || null, gradeId || null, sectionId || null, guardianContact, qr_code, category, importActiveFrom, importedStatus]
+                        [lrn, fn, ln, mn || null, schoolId || null, gradeId || null, sectionId || null, guardianContact, qr_code, category, null, defaultImportedStudentStatus]
                     );
                     imported++;
                 }

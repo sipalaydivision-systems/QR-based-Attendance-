@@ -527,7 +527,7 @@ function renderStudents() {
             timeOutHtml = '<span style="color:var(--warning);font-weight:600"><i class="fa fa-hourglass-half" style="margin-right:4px"></i>Pending Time Out</span>';
         }
 
-        var statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+        var statusLabel = formatStatusLabel(status);
         var badgeClass = isStudentInactive ? 'badge badge-inactive' : (status === 'not recorded' ? 'badge badge-inactive' : 'status-badge status-' + status);
 
         return '<tr'+rowClass+'>'+

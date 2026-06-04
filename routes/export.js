@@ -10,6 +10,49 @@ const { requireAuth, requireRole, applySchoolFilter } = require('../middleware/a
 
 router.use(requireAuth);
 
+function formatStatusLabel(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const normalized = raw.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').toLowerCase();
+    const labels = {
+        active: 'Active',
+        inactive: 'Inactive',
+        deleted: 'Deleted',
+        present: 'Present',
+        absent: 'Absent',
+        late: 'Late',
+        flagged: 'Flagged',
+        pending: 'Pending',
+        sent: 'Sent',
+        failed: 'Failed',
+        complete: 'Complete',
+        'no time in': 'No Time In',
+        'no time out': 'No Time Out',
+        'pending time out': 'Pending Time Out'
+    };
+    if (labels[normalized]) return labels[normalized];
+    return normalized.split(' ').filter(Boolean).map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+}
+
+function labelRowStatuses(rows) {
+    return rows.map(row => ({ ...row, status: formatStatusLabel(row.status) }));
+}
+
+async function isAttendanceDay(dateStr, schoolId) {
+    const [schoolDays] = await db.query('SELECT is_school_day FROM school_days WHERE date = ? LIMIT 1', [dateStr]);
+    if (schoolDays.length > 0) return !!schoolDays[0].is_school_day;
+
+    const dayOfWeek = new Date(dateStr + 'T00:00:00').getDay();
+    if (dayOfWeek === 0 || dayOfWeek === 6) return false;
+
+    let holidayQuery = 'SELECT id FROM holidays WHERE holiday_date = ? AND (school_id IS NULL';
+    const holidayParams = [dateStr];
+    if (schoolId) { holidayQuery += ' OR school_id = ?'; holidayParams.push(schoolId); }
+    holidayQuery += ') LIMIT 1';
+    const [holidays] = await db.query(holidayQuery, holidayParams);
+    return holidays.length === 0;
+}
+
 // ---- Export Attendance Report (CSV) ----
 router.get('/report', async (req, res) => {
     try {
@@ -38,7 +81,7 @@ router.get('/report', async (req, res) => {
 
         const fields = ['date', 'name', 'person_type', 'school_name', 'time_in', 'time_out', 'status'];
         const parser = new Parser({ fields });
-        const csvData = parser.parse(rows);
+        const csvData = parser.parse(labelRowStatuses(rows));
 
         res.header('Content-Type', 'text/csv');
         res.attachment(`attendance_report_${date}_to_${endDate}.csv`);
@@ -67,7 +110,7 @@ router.get('/students', async (req, res) => {
         const [rows] = await db.query(query, params);
         const fields = ['lrn', 'lastname', 'firstname', 'middlename', 'gender', 'birthdate', 'school_name', 'grade_level', 'section', 'status', 'category', 'guardian_name', 'guardian_contact', 'qr_code'];
         const parser = new Parser({ fields });
-        const csvData = parser.parse(rows);
+        const csvData = parser.parse(labelRowStatuses(rows));
 
         res.header('Content-Type', 'text/csv');
         res.attachment('students_export.csv');
@@ -83,21 +126,28 @@ router.get('/not-scanned-today', async (req, res) => {
     try {
         const today = new Date().toISOString().slice(0, 10);
         const schoolId = applySchoolFilter(req);
+        const fields = ['lrn', 'lastname', 'firstname', 'school_name', 'grade_level', 'section'];
+        const parser = new Parser({ fields });
+        if (!(await isAttendanceDay(today, schoolId))) {
+            res.header('Content-Type', 'text/csv');
+            res.attachment(`not_scanned_${today}.csv`);
+            return res.send(parser.parse([]));
+        }
+
         let query = `SELECT s.lrn, s.lastname, s.firstname, sc.name as school_name, gl.name as grade_level, sec.name as section
             FROM students s
             LEFT JOIN schools sc ON s.school_id = sc.id
             LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id
             LEFT JOIN sections sec ON s.section_id = sec.id
             WHERE s.status = 'active'
+            AND COALESCE(s.active_from, DATE(s.created_at)) < ?
             AND s.id NOT IN (SELECT person_id FROM attendance WHERE person_type = 'student' AND date = ?)`;
-        const params = [today];
+        const params = [today, today];
         if (schoolId) { query += ' AND s.school_id = ?'; params.push(schoolId); }
         query += ' ORDER BY s.lastname, s.firstname';
 
         const [rows] = await db.query(query, params);
-        const fields = ['lrn', 'lastname', 'firstname', 'school_name', 'grade_level', 'section'];
-        const parser = new Parser({ fields });
-        const csvData = parser.parse(rows);
+        const csvData = parser.parse(labelRowStatuses(rows));
 
         res.header('Content-Type', 'text/csv');
         res.attachment(`not_scanned_${today}.csv`);
@@ -138,7 +188,7 @@ router.get('/users', requireRole('super_admin'), async (req, res) => {
             ORDER BY u.fullname`);
         const fields = ['username', 'fullname', 'email', 'role', 'school_name', 'status', 'created_at'];
         const parser = new Parser({ fields });
-        const csvData = parser.parse(rows);
+        const csvData = parser.parse(labelRowStatuses(rows));
 
         res.header('Content-Type', 'text/csv');
         res.attachment('users_export.csv');
