@@ -12,7 +12,7 @@
                 <span class="wb-stat-val" id="wbRate">0%</span>
                 <span class="wb-stat-lbl">Today's Rate</span>
             </div>
-            <input type="date" id="divDate" value="<%= new Date().toISOString().slice(0,10) %>"
+            <input type="date" id="divDate" value="<%= todayDate %>"
                    style="padding:8px 12px;border:1.5px solid rgba(255,255,255,0.45);border-radius:9px;font-size:0.8125rem;background:rgba(255,255,255,0.18);color:#fff;cursor:pointer;">
             <a href="/admin/reports" class="wb-btn"><i class="fa-solid fa-chart-bar"></i> View Reports</a>
         </div>
@@ -211,7 +211,7 @@
         var h = new Date().getHours();
         var greet = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
         document.getElementById('wbGreeting').textContent = greet + ', <%= user.fullname %>';
-        document.getElementById('wbDateLabel').textContent = formatDateLabel('<%= new Date().toISOString().slice(0,10) %>');
+        document.getElementById('wbDateLabel').textContent = formatDateLabel('<%= todayDate %>');
     })();
 
     // ── Dashboard KPIs ───────────────────────────────────────
@@ -343,7 +343,8 @@
         var cells = grid.querySelectorAll('.cal-cell');
         cells.forEach(function(c){ c.remove(); });
 
-        var today = new Date().toISOString().slice(0,10);
+        var now = new Date();
+        var today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
         var firstDay = new Date(calYear, calMonth - 1, 1).getDay(); // 0=Sun
 
         // Empty leading cells

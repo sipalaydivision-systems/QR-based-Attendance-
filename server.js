@@ -6,6 +6,7 @@ const fs = require('fs');
 const db = require('./config/database');
 const MySQLSessionStore = require('./config/mysqlSessionStore');
 const { getScannerKioskToken } = require('./utils/scannerKiosk');
+const { todayDate, currentMonth, nowIso } = require('./utils/appTime');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -51,6 +52,8 @@ app.use(session({
 app.use(async (req, res, next) => {
     res.locals.user = req.session.user || null;
     res.locals.baseUrl = process.env.BASE_URL || `http://localhost:${PORT}`;
+    res.locals.todayDate = todayDate();
+    res.locals.currentMonth = currentMonth();
     try {
         const [rows] = await db.query(
             "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('system_name','division_name','system_logo','platform_android_logo','platform_ios_logo','platform_windows_logo','platform_mac_logo')"
@@ -170,12 +173,12 @@ app.get('/api/mobile-health', (req, res) => {
     return res.json({
         ok: true,
         authenticated: !!(req.session && req.session.user),
-        serverTime: new Date().toISOString()
+        serverTime: nowIso()
     });
 });
 
 function manilaDateString() {
-    return new Date(Date.now() + (8 * 60 * 60 * 1000)).toISOString().slice(0, 10);
+    return todayDate();
 }
 
 async function getDownloadPageStats() {

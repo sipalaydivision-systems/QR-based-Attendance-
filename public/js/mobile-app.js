@@ -3,8 +3,13 @@
   var CHECK_MS = 60000;
   var permissionAsked = false;
 
+  function localDateString(date) {
+    var d = date || new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
   function getTodayKey() {
-    return new Date().toISOString().slice(0, 10);
+    return localDateString();
   }
 
   function loadNotifiedMap() {
@@ -198,7 +203,7 @@
       try {
         var dateEl = document.getElementById('dashDate');
         var schoolEl = document.getElementById('dashSchool');
-        var params = new URLSearchParams({ date: dateEl ? dateEl.value : new Date().toISOString().slice(0, 10) });
+        var params = new URLSearchParams({ date: dateEl ? dateEl.value : localDateString() });
         if (schoolEl && schoolEl.value) params.append('school', schoolEl.value);
         var res = await fetch('/api/dashboard-data?' + params, { credentials: 'same-origin' });
         if (!res.ok) return;

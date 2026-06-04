@@ -8,6 +8,7 @@ const router = express.Router();
 const db = require('../config/database');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { getScannerKioskToken } = require('../utils/scannerKiosk');
+const { todayDate } = require('../utils/appTime');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -739,7 +740,7 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
     const requestedActiveFrom = String(req.body.active_from || '').trim();
     const importActiveFrom = /^\d{4}-\d{2}-\d{2}$/.test(requestedActiveFrom)
         ? requestedActiveFrom
-        : new Date().toISOString().slice(0, 10);
+        : todayDate();
     const errors = [];
     let imported = 0;
     let updated = 0;

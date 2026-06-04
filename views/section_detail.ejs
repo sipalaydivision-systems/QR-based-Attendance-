@@ -334,7 +334,11 @@ var appSuffix = window.location.search.indexOf('app=1') !== -1 ? '?app=1' : '';
 var now = new Date();
 var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 document.getElementById('todayDate').textContent = months[now.getMonth()] + ' ' + now.getDate() + ', ' + now.getFullYear();
-var todayStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+function localDateString(date) {
+    var d = date || new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+var todayStr = localDateString(now);
 
 if (appSuffix) {
     var backBtnEl = document.getElementById('backBtn');
@@ -345,7 +349,10 @@ if (appSuffix) {
 
 function formatTime12(timeStr) {
     if (!timeStr) return '';
-    var parts = timeStr.split(':');
+    var raw = String(timeStr);
+    var match = raw.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (!match) return raw;
+    var parts = [match[1], match[2], match[3] || '00'];
     var h = parseInt(parts[0], 10);
     var m = parts[1];
     var ampm = h >= 12 ? 'PM' : 'AM';
@@ -414,7 +421,7 @@ async function loadData() {
             banner.style.display = 'none';
         }
         currentIsSchoolDay = !!(sdRes && sdRes.isSchoolDay);
-        currentDateIsFuture = todayStr > new Date().toISOString().slice(0, 10);
+        currentDateIsFuture = todayStr > localDateString();
 
         allStudents = stuRes;
         var sec = secRes.find(function(s){return s.id === sectionId;});

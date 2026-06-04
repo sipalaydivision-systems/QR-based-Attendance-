@@ -4,7 +4,7 @@
     <button class="btn btn-primary" onclick="openSdModal()">+ Add Non-School Day</button>
     <div class="filter-group">
         <label for="sdMonth">Month:</label>
-        <input type="month" id="sdMonth" value="<%= new Date().toISOString().slice(0,7) %>" onchange="loadSchoolDays()">
+        <input type="month" id="sdMonth" value="<%= currentMonth %>" onchange="loadSchoolDays()">
     </div>
 </div>
 

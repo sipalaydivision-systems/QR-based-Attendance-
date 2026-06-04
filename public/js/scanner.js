@@ -53,6 +53,13 @@
         }
     }
 
+    function displayTime(time) {
+        if (!time) return new Date().toLocaleTimeString();
+        if (/\bAM\b|\bPM\b/i.test(String(time))) return String(time);
+        const parsed = new Date(time);
+        return Number.isNaN(parsed.getTime()) ? String(time) : parsed.toLocaleTimeString();
+    }
+
     function showResult(message, type, code, person, action, time) {
         const resultEl = document.getElementById('scanResult');
         resultEl.className = 'scan-result ' + type;
@@ -62,14 +69,14 @@
             resultEl.innerHTML =
                 '<p class="scan-name">' + person.name + '</p>' +
                 '<p class="scan-action">' + actionText + '</p>' +
-                (time ? '<p style="color:#6b7280;font-size:0.875rem">' + new Date(time).toLocaleTimeString() + '</p>' : '');
+                (time ? '<p style="color:#6b7280;font-size:0.875rem">' + displayTime(time) + '</p>' : '');
         } else {
             resultEl.innerHTML = '<p>' + message + '</p>';
         }
     }
 
     function addRecentScan(name, action, time) {
-        recentScans.unshift({ name, action, time: time || new Date().toISOString() });
+        recentScans.unshift({ name, action, time: displayTime(time) });
         if (recentScans.length > 20) recentScans.pop();
         renderRecentScans();
     }
@@ -79,7 +86,7 @@
         if (!container) return;
         container.innerHTML = recentScans.map(s => {
             const actionText = s.action === 'time_in' ? 'IN' : s.action === 'time_out' ? 'OUT' : 'DONE';
-            return '<div class="recent-scan-item"><span>' + s.name + ' — ' + actionText + '</span><span>' + new Date(s.time).toLocaleTimeString() + '</span></div>';
+            return '<div class="recent-scan-item"><span>' + s.name + ' - ' + actionText + '</span><span>' + displayTime(s.time) + '</span></div>';
         }).join('');
     }
 

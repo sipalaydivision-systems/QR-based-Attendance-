@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const router = express.Router();
 const db = require('../config/database');
+const { nowDateTime } = require('../utils/appTime');
 
 // GET /login
 router.get('/login', (req, res) => {
@@ -38,7 +39,7 @@ router.post('/login', async (req, res) => {
             school_id: user.school_id
         };
         // Update last login
-        await db.query('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]);
+        await db.query('UPDATE users SET last_login = ? WHERE id = ?', [nowDateTime(), user.id]);
         // Log the action
         await db.query(
             'INSERT INTO user_logs (user_id, action, ip_address) VALUES (?, ?, ?)',
@@ -133,7 +134,7 @@ router.post('/app-login', async (req, res) => {
             role: user.role,
             school_id: user.school_id
         };
-        await db.query('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]);
+        await db.query('UPDATE users SET last_login = ? WHERE id = ?', [nowDateTime(), user.id]);
         await db.query(
             'INSERT INTO user_logs (user_id, action, ip_address) VALUES (?, ?, ?)',
             [user.id, 'mobile_app_login', req.ip]

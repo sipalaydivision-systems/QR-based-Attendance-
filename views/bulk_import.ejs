@@ -215,7 +215,7 @@ function showPreview(data) {
     // Tags
     var schoolSel = document.getElementById('importSchool');
     var schoolText = schoolSel.value ? schoolSel.options[schoolSel.selectedIndex].text : 'From file';
-    var dateVal = document.getElementById('importDate').value || new Date().toISOString().slice(0,10);
+    var dateVal = document.getElementById('importDate').value || localDateString();
     var tags = '';
     tags += '<span class="preview-tag">School: <strong>' + schoolText + '</strong></span>';
     if (!isTeacher) {
@@ -323,6 +323,10 @@ async function loadGrades() {
 loadGrades();
 
 // Set default date to today
-document.getElementById('importDate').value = new Date().toISOString().slice(0,10);
+function localDateString(date) {
+    var d = date || new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+document.getElementById('importDate').value = localDateString();
 </script>
 <%- include('partials/footer') %>

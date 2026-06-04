@@ -149,7 +149,7 @@
                 <span class="wb-stat-val" id="pdWbRate">0%</span>
                 <span class="wb-stat-lbl">Today's Rate</span>
             </div>
-            <input type="date" id="pdDate" value="<%= new Date().toISOString().slice(0,10) %>"
+            <input type="date" id="pdDate" value="<%= todayDate %>"
                    style="padding:8px 12px;border:1.5px solid rgba(255,255,255,0.45);border-radius:9px;font-size:0.8125rem;background:rgba(255,255,255,0.18);color:#fff;cursor:pointer;">
             <a href="/admin/attendance" class="wb-btn"><i class="fa-solid fa-clipboard-list"></i> View Attendance</a>
         </div>
@@ -298,7 +298,7 @@
         var h = new Date().getHours();
         var g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
         document.getElementById('pdGreeting').textContent = g + ', <%= user.fullname %>';
-        document.getElementById('pdDateLabel').textContent = formatDate('<%= new Date().toISOString().slice(0,10) %>');
+        document.getElementById('pdDateLabel').textContent = formatDate('<%= todayDate %>');
     })();
 
     // ---- Load KPI + donut ----

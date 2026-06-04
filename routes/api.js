@@ -6,6 +6,16 @@ const router = express.Router();
 const db = require('../config/database');
 const { requireAuth, requireRole, applySchoolFilter } = require('../middleware/auth');
 const { getScannerKioskTokenFromRequest, isValidScannerKioskToken } = require('../utils/scannerKiosk');
+const {
+    todayDate,
+    nowDateTime,
+    timestampForFilename,
+    normalizeTime,
+    sqlDateTime,
+    compareDateTime,
+    secondsBetween,
+    formatTime12
+} = require('../utils/appTime');
 
 function requireAuthOrScannerKiosk(req, res, next) {
     if (req.session && req.session.user) return next();
@@ -71,10 +81,7 @@ function addMinutes(dateObj, minutes) {
 }
 
 function normalizeTimeSetting(value, fallback) {
-    const raw = String(value || fallback).trim();
-    if (/^\d{2}:\d{2}$/.test(raw)) return raw + ':00';
-    if (/^\d{2}:\d{2}:\d{2}$/.test(raw)) return raw;
-    return fallback;
+    return normalizeTime(value, fallback);
 }
 
 async function getStudentLateThreshold(dateStr) {
@@ -82,16 +89,16 @@ async function getStudentLateThreshold(dateStr) {
     const settings = Object.fromEntries(rows.map(row => [row.setting_key, row.setting_value]));
     const baseTime = normalizeTimeSetting(settings.am_time_in_end, '08:00:00');
     const graceMinutes = parseInt(settings.late_threshold, 10) || 0;
-    return addMinutes(new Date(dateStr + 'T' + baseTime), graceMinutes);
+    return addMinutes(new Date(dateStr + 'T' + baseTime + '+08:00'), graceMinutes);
 }
 
 async function getStudentTimeOutOpen(dateStr) {
     const [[row]] = await db.query("SELECT setting_value FROM settings WHERE setting_key='pm_time_out_end' LIMIT 1");
-    return new Date(dateStr + 'T' + normalizeTimeSetting(row?.setting_value, '17:00:00'));
+    return sqlDateTime(dateStr, normalizeTimeSetting(row?.setting_value, '17:00:00'));
 }
 
 async function shouldCountComputedAbsences(dateStr, schoolId) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayDate();
     if (dateStr > today) return false;
     const schoolDay = await checkSchoolDay(dateStr, schoolId);
     return schoolDay.isSchoolDay;
@@ -221,7 +228,7 @@ async function getRecentSchoolDates(baseDate, schoolId, limit) {
 async function getConsecutiveAbsenceFlags({ baseDate, schoolId, days = 2, includeTeachers = true, maxScanDays = 45 }) {
     const threshold = Math.max(1, Number(days) || 2);
     const scanLimit = Math.max(threshold, Math.min(Number(maxScanDays) || 45, 120));
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayDate();
     const cappedBaseDate = baseDate > today ? today : baseDate;
     const schoolDates = await getRecentSchoolDates(cappedBaseDate, schoolId, scanLimit);
     if (schoolDates.length < threshold) return [];
@@ -317,7 +324,7 @@ async function getConsecutiveAbsenceFlags({ baseDate, schoolId, days = 2, includ
 // GET /api/is-school-day
 router.get('/is-school-day', requireAuthOrScannerKiosk, async (req, res) => {
     try {
-        const date = req.query.date || new Date().toISOString().slice(0, 10);
+        const date = req.query.date || todayDate();
         const schoolId = req.query.school_id ? parseInt(req.query.school_id, 10) : null;
         const result = await checkSchoolDay(date, schoolId);
         return res.json({ date, ...result });
@@ -336,15 +343,9 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
         return res.status(400).json({ success: false, error: 'No QR code provided.' });
     }
 
-    function fmtTime(d) {
-        if (!d) return '--:--';
-        const dt = new Date(d);
-        return dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
-    }
-
     try {
-        const today = new Date().toISOString().slice(0, 10);
-        const now = new Date();
+        const today = todayDate();
+        const now = nowDateTime();
 
         // Check student first (with joins for school, grade, section)
         let [rows] = await db.query(
@@ -426,8 +427,8 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
             // Students only scan once when arriving; lunch is an internal break.
             const lateThreshold = personType === 'student'
                 ? await getStudentLateThreshold(today)
-                : new Date(today + 'T08:00:00');
-            const attendanceStatus = now >= lateThreshold ? 'late' : 'present';
+                : sqlDateTime(today, '08:00:00');
+            const attendanceStatus = compareDateTime(now, lateThreshold) >= 0 ? 'late' : 'present';
 
             // Record time-in
             await db.query(
@@ -438,49 +439,48 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
                 success: true,
                 action: 'TIME_IN',
                 status: attendanceStatus,
-                message: attendanceStatus === 'late' ? 'Attendance recorded — marked as LATE' : 'Attendance recorded successfully',
+                message: attendanceStatus === 'late' ? 'Attendance recorded - marked as LATE' : 'Attendance recorded successfully',
                 person: personInfo,
-                time: fmtTime(now)
+                time: formatTime12(now)
             });
         } else if (!existing[0].time_out) {
             if (personType === 'student') {
                 const timeOutOpen = await getStudentTimeOutOpen(today);
-                if (now < timeOutOpen) {
+                if (compareDateTime(now, timeOutOpen) < 0) {
                     return res.json({
                         success: true,
                         action: 'PENDING_TIME_OUT',
                         status: existing[0].status,
-                        message: 'Already timed in. Lunch break is inside school; end-of-day time out opens at ' + fmtTime(timeOutOpen) + '.',
+                        message: 'Already timed in. Lunch break is inside school; end-of-day time out opens at ' + formatTime12(timeOutOpen) + '.',
                         person: personInfo,
-                        time_in: fmtTime(existing[0].time_in),
+                        time_in: formatTime12(existing[0].time_in),
                         time_out: 'Pending Time Out',
                         monitoring_status: 'Pending Time Out'
                     });
                 }
             }
             // Anti-cheat: reject time_out if scanned too quickly after time_in (< 60 seconds)
-            const timeInMs = new Date(existing[0].time_in).getTime();
-            const elapsedSec = (now.getTime() - timeInMs) / 1000;
+            const elapsedSec = secondsBetween(existing[0].time_in, now);
             if (elapsedSec < 60) {
                 return res.json({
                     success: false,
-                    error: 'Time out rejected — scanned too quickly after time in (' + Math.round(elapsedSec) + 's). Please wait at least 1 minute.',
+                    error: 'Time out rejected - scanned too quickly after time in (' + Math.round(elapsedSec) + 's). Please wait at least 1 minute.',
                     person: personInfo
                 });
             }
             // Record time-out
             await db.query(
-                'UPDATE attendance SET time_out = ?, updated_at = NOW() WHERE id = ?',
-                [now, existing[0].id]
+                'UPDATE attendance SET time_out = ?, updated_at = ? WHERE id = ?',
+                [now, now, existing[0].id]
             );
             return res.json({
                 success: true,
                 action: 'TIME_OUT',
                 message: 'Time out recorded successfully',
                 person: personInfo,
-                time: fmtTime(now),
-                time_in: fmtTime(existing[0].time_in),
-                time_out: fmtTime(now)
+                time: formatTime12(now),
+                time_in: formatTime12(existing[0].time_in),
+                time_out: formatTime12(now)
             });
         } else {
             return res.json({
@@ -488,8 +488,8 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
                 error: person.firstname + ' ' + person.lastname + ' already has complete attendance for today.',
                 person: personInfo,
                 completed: true,
-                time_in: fmtTime(existing[0].time_in),
-                time_out: fmtTime(existing[0].time_out)
+                time_in: formatTime12(existing[0].time_in),
+                time_out: formatTime12(existing[0].time_out)
             });
         }
     } catch (err) {
@@ -505,7 +505,7 @@ const dashboardCache = { data: null, timestamp: 0, key: '' };
 
 router.get('/dashboard-data', requireAuth, async (req, res) => {
     try {
-        const date = req.query.date || new Date().toISOString().slice(0, 10);
+        const date = req.query.date || todayDate();
         const schoolId = applySchoolFilter(req);
         const cacheKey = `${date}-${schoolId || 'all'}`;
 
@@ -664,7 +664,7 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
 // =============================================
 router.get('/division-weekly-trend', requireAuth, async (req, res) => {
     try {
-        const endDate = req.query.date || new Date().toISOString().slice(0, 10);
+        const endDate = req.query.date || todayDate();
         // Get last 4 weeks (Mon-Fri blocks)
         const weeks = [];
         let d = new Date(endDate + 'T00:00:00');
@@ -695,7 +695,7 @@ router.get('/division-weekly-trend', requireAuth, async (req, res) => {
         const labels = weeks.map(w => w.label);
         const present = [];
         const absent = [];
-        const today = new Date().toISOString().slice(0, 10);
+        const today = todayDate();
 
         for (const w of weeks) {
             const [pRow] = await db.query(
@@ -734,7 +734,7 @@ router.get('/realtime-poll', requireAuth, async (req, res) => {
     const schoolId = applySchoolFilter(req);
 
     try {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = todayDate();
         const schoolFilter = schoolId ? ' AND school_id = ?' : '';
         const params = schoolId ? [today, schoolId] : [today];
         const schoolWhere = schoolId ? ' AND school_id = ?' : '';
@@ -1260,7 +1260,7 @@ router.get('/users', requireRole('super_admin'), async (req, res) => {
 // ---- Attendance records ----
 router.get('/attendance', requireAuth, async (req, res) => {
     try {
-        const date = req.query.date || new Date().toISOString().slice(0, 10);
+        const date = req.query.date || todayDate();
         const schoolId = applySchoolFilter(req);
         let query = `SELECT a.*,
             CASE WHEN a.person_type = 'student' THEN TRIM(CONCAT_WS(' ', s.firstname, s.lastname))
@@ -1721,7 +1721,7 @@ router.delete('/school-days/:id', requireAuth, async (req, res) => {
 
 // ---- Reports Data ----
 router.get('/reports', requireAuth, async (req, res) => {
-    const startDate = req.query.start_date || new Date().toISOString().slice(0, 10);
+    const startDate = req.query.start_date || todayDate();
     const endDate = req.query.end_date || startDate;
     const type = req.query.type || 'student';
     const schoolId = applySchoolFilter(req);
@@ -1760,7 +1760,7 @@ router.get('/reports', requireAuth, async (req, res) => {
 
 // ---- Reports: Daily Summary (per-school) ----
 router.get('/reports/daily-summary', requireAuth, async (req, res) => {
-    const date = req.query.date || new Date().toISOString().slice(0, 10);
+    const date = req.query.date || todayDate();
     const schoolId = applySchoolFilter(req);
     try {
         let query = `
@@ -1814,7 +1814,7 @@ router.get('/reports/daily-summary', requireAuth, async (req, res) => {
 
 // ---- Reports: Absentee List ----
 router.get('/reports/absentees', requireAuth, async (req, res) => {
-    const date = req.query.date || new Date().toISOString().slice(0, 10);
+    const date = req.query.date || todayDate();
     const schoolId = applySchoolFilter(req);
     try {
         if (!(await shouldCountComputedAbsences(date, schoolId))) {
@@ -1852,10 +1852,10 @@ router.get('/reports/absentees', requireAuth, async (req, res) => {
 
 // ---- Mobile/Web: Date Attendance Details ----
 router.get('/date-attendance-details', requireAuth, async (req, res) => {
-    const targetDate = req.query.date || new Date().toISOString().slice(0, 10);
+    const targetDate = req.query.date || todayDate();
     const schoolId = applySchoolFilter(req);
     try {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = todayDate();
         const isFutureDate = targetDate > today;
         const schoolFilter = schoolId ? ' AND s.school_id = ?' : '';
         const schoolParams = schoolId ? [targetDate, schoolId] : [targetDate];
@@ -1999,7 +1999,7 @@ router.get('/absence-flags', requireAuth, async (req, res) => {
     let schoolId = applySchoolFilter(req);
     if (!schoolId && req.query.school_id) schoolId = parseInt(req.query.school_id, 10);
     try {
-        const baseDate = req.query.date || new Date().toISOString().slice(0, 10);
+        const baseDate = req.query.date || todayDate();
         const includeTeachers = req.query.include_teachers !== '0';
         const flagged = await getConsecutiveAbsenceFlags({
             baseDate,
@@ -2018,7 +2018,7 @@ router.get('/absence-flags', requireAuth, async (req, res) => {
 
 // ---- Not Scanned Today ----
 router.get('/not-scanned-today', requireAuth, async (req, res) => {
-    const today = req.query.date || new Date().toISOString().slice(0, 10);
+    const today = req.query.date || todayDate();
     const type = req.query.type || 'student';
     const schoolId = applySchoolFilter(req);
     try {
@@ -2078,7 +2078,7 @@ router.get('/inactive-students', requireAuth, async (req, res) => {
 
 // ---- Check if today is a school day ----
 router.get('/is-school-day', requireAuthOrScannerKiosk, async (req, res) => {
-    const date = req.query.date || new Date().toISOString().slice(0, 10);
+    const date = req.query.date || todayDate();
     try {
         const [rows] = await db.query('SELECT * FROM school_days WHERE date = ?', [date]);
         if (rows.length > 0 && !rows[0].is_school_day) {
@@ -2172,7 +2172,7 @@ router.post('/backups', requireRole('super_admin'), async (req, res) => {
     const { execSync } = require('child_process');
     const path = require('path');
     const backupsDir = path.join(__dirname, '..', 'backups');
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const timestamp = timestampForFilename();
     const filename = `backup_${timestamp}.sql`;
     const filePath = path.join(backupsDir, filename);
 
@@ -2243,7 +2243,7 @@ router.delete('/backups/:filename', requireRole('super_admin'), (req, res) => {
 // =============================================
 router.get('/school-kpi/:id', requireAuth, async (req, res) => {
     const schoolId = parseInt(req.params.id, 10);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayDate();
     try {
         const [totalStudents] = await db.query(
             "SELECT COUNT(*) as cnt FROM students WHERE school_id = ? AND status = 'active' AND COALESCE(active_from, DATE(created_at)) < ?", [schoolId, today]);
@@ -2276,7 +2276,7 @@ router.get('/school-kpi/:id', requireAuth, async (req, res) => {
 // Section KPI (today's attendance stats for a section)
 router.get('/section-kpi/:id', requireAuth, async (req, res) => {
     const sectionId = parseInt(req.params.id, 10);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayDate();
     try {
         const [totalStudents] = await db.query(
             "SELECT COUNT(*) as cnt FROM students WHERE section_id = ? AND status = 'active' AND COALESCE(active_from, DATE(created_at)) < ?", [sectionId, today]);

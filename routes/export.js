@@ -7,6 +7,7 @@ const ExcelJS = require('exceljs');
 const router = express.Router();
 const db = require('../config/database');
 const { requireAuth, requireRole, applySchoolFilter } = require('../middleware/auth');
+const { todayDate } = require('../utils/appTime');
 
 router.use(requireAuth);
 
@@ -56,7 +57,7 @@ async function isAttendanceDay(dateStr, schoolId) {
 // ---- Export Attendance Report (CSV) ----
 router.get('/report', async (req, res) => {
     try {
-        const date = req.query.date || new Date().toISOString().slice(0, 10);
+        const date = req.query.date || todayDate();
         const endDate = req.query.end_date || date;
         const schoolId = applySchoolFilter(req);
         const type = req.query.type || 'student';
@@ -124,7 +125,7 @@ router.get('/students', async (req, res) => {
 // ---- Export Not Scanned Today ----
 router.get('/not-scanned-today', async (req, res) => {
     try {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = todayDate();
         const schoolId = applySchoolFilter(req);
         const fields = ['lrn', 'lastname', 'firstname', 'school_name', 'grade_level', 'section'];
         const parser = new Parser({ fields });
@@ -202,7 +203,7 @@ router.get('/users', requireRole('super_admin'), async (req, res) => {
 // ---- Export Outside Report (Timed-out / left school today) ----
 router.get('/outside-report', async (req, res) => {
     try {
-        const date = req.query.date || new Date().toISOString().slice(0, 10);
+        const date = req.query.date || todayDate();
         const schoolId = applySchoolFilter(req);
 
         let query = `SELECT a.person_type, a.time_in, a.time_out, a.status, a.date,

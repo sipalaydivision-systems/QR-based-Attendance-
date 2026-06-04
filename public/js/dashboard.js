@@ -1,13 +1,18 @@
-// Dashboard real-time polling logic — 3-second interval, no page reload
+// Dashboard real-time polling logic - 3-second interval, no page reload
 (function () {
     let currentHash = '';
     let pollTimer = null;
+
+    function localDateString(date) {
+        const d = date || new Date();
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
 
     function getFilters() {
         const dateEl = document.getElementById('dashDate');
         const schoolEl = document.getElementById('dashSchool');
         return {
-            date: dateEl ? dateEl.value : new Date().toISOString().slice(0, 10),
+            date: dateEl ? dateEl.value : localDateString(),
             school: schoolEl ? schoolEl.value : ''
         };
     }

@@ -30,7 +30,7 @@
             </div>
             <div class="rpt-filter-group">
                 <label>Date</label>
-                <input type="date" id="dsDate" value="<%= new Date().toISOString().slice(0,10) %>">
+                <input type="date" id="dsDate" value="<%= todayDate %>">
             </div>
             <button class="btn btn-outline" onclick="exportDailySummaryCSV()"><i class="fa-solid fa-download"></i> CSV</button>
         </div>
@@ -99,7 +99,7 @@
             </div>
             <div class="rpt-filter-group">
                 <label>Date</label>
-                <input type="date" id="absDate" value="<%= new Date().toISOString().slice(0,10) %>">
+                <input type="date" id="absDate" value="<%= todayDate %>">
             </div>
             <button class="btn btn-primary" onclick="loadAbsentees()">Generate</button>
         </div>
@@ -129,7 +129,7 @@
         <div class="rpt-filters">
             <div class="rpt-filter-group">
                 <label>Date</label>
-                <input type="date" id="compDate" value="<%= new Date().toISOString().slice(0,10) %>">
+                <input type="date" id="compDate" value="<%= todayDate %>">
             </div>
             <button class="btn btn-primary" onclick="loadComparison()">Generate</button>
         </div>
@@ -150,9 +150,14 @@
     var compChart = null;
     var currentTab = 'daily';
 
+    function localDateString(date) {
+        var d = date || new Date();
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
     // Set trend date defaults (last 7 days)
-    var today = new Date().toISOString().slice(0, 10);
-    var weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    var today = localDateString();
+    var weekAgo = localDateString(new Date(Date.now() - 7 * 86400000));
     document.getElementById('trendStart').value = weekAgo;
     document.getElementById('trendEnd').value = today;
 

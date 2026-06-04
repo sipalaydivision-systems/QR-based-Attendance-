@@ -342,6 +342,13 @@
         document.getElementById('liveClock').textContent = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
         document.getElementById('liveDate').textContent = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
     }
+    function localDateString(date) {
+        var d = date || new Date();
+        var year = d.getFullYear();
+        var month = String(d.getMonth() + 1).padStart(2, '0');
+        var day = String(d.getDate()).padStart(2, '0');
+        return year + '-' + month + '-' + day;
+    }
     updateClock();
     setInterval(updateClock, 1000);
 
@@ -357,7 +364,7 @@
         if (!box || !text) return;
 
         try {
-            var today = new Date().toISOString().slice(0, 10);
+            var today = localDateString();
             var res = await fetch('/api/is-school-day?date=' + today, scannerFetchOptions());
             if (!res.ok) return;
             var data = await res.json();
