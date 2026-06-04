@@ -305,14 +305,18 @@ function sendWindowsScannerLauncher(req, res) {
     const appBaseUrl = getPublicAppBaseUrl(req);
     const launcher = `@echo off\r\n`
         + `set "APP_URL=${appBaseUrl}/scanner"\r\n`
+        + `set "APP_DIR=%LOCALAPPDATA%\\Edutrack"\r\n`
+        + `set "PROFILE_DIR=%APP_DIR%\\ScannerProfile"\r\n`
+        + `if not exist "%APP_DIR%" mkdir "%APP_DIR%" >nul 2>nul\r\n`
+        + `if not exist "%PROFILE_DIR%" mkdir "%PROFILE_DIR%" >nul 2>nul\r\n`
         + `where msedge >nul 2>nul\r\n`
         + `if %ERRORLEVEL%==0 (\r\n`
-        + `  start "" msedge --kiosk "%APP_URL%" --edge-kiosk-type=fullscreen --no-first-run\r\n`
+        + `  start "" msedge --user-data-dir="%PROFILE_DIR%" --kiosk "%APP_URL%" --edge-kiosk-type=fullscreen --no-first-run --no-default-browser-check --disable-sync --disable-extensions --use-fake-ui-for-media-stream --autoplay-policy=no-user-gesture-required\r\n`
         + `  exit /b\r\n`
         + `)\r\n`
         + `where chrome >nul 2>nul\r\n`
         + `if %ERRORLEVEL%==0 (\r\n`
-        + `  start "" chrome --kiosk "%APP_URL%" --new-window --no-first-run\r\n`
+        + `  start "" chrome --user-data-dir="%PROFILE_DIR%" --kiosk "%APP_URL%" --new-window --no-first-run --no-default-browser-check --disable-sync --disable-extensions --use-fake-ui-for-media-stream --autoplay-policy=no-user-gesture-required\r\n`
         + `  exit /b\r\n`
         + `)\r\n`
         + `start "" "%APP_URL%"\r\n`;
@@ -333,6 +337,10 @@ function sendWindowsScannerAutostart(req, res) {
         'set "APP_LAUNCHER=%APP_DIR%\\%APP_FILE%"',
         'set "STARTUP_DIR=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"',
         'set "STARTUP_LINK=%STARTUP_DIR%\\Edutrack Scanner App.lnk"',
+        'set "STARTUP_CMD=%STARTUP_DIR%\\Edutrack Scanner App.cmd"',
+        'set "RUN_KEY=HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"',
+        'set "RUN_NAME=Edutrack Scanner App"',
+        'set "TASK_NAME=Edutrack Scanner App"',
         'set "DESKTOP_DIR=%USERPROFILE%\\Desktop"',
         'if not exist "%DESKTOP_DIR%" if defined OneDrive set "DESKTOP_DIR=%OneDrive%\\Desktop"',
         'if not exist "%DESKTOP_DIR%" set "DESKTOP_DIR=%USERPROFILE%"',
@@ -340,22 +348,29 @@ function sendWindowsScannerAutostart(req, res) {
         'if not exist "%APP_DIR%" mkdir "%APP_DIR%"',
         'if not exist "%STARTUP_DIR%" mkdir "%STARTUP_DIR%"',
         'del "%DESKTOP_DIR%\\Edutrack Scanner App.cmd" >nul 2>nul',
-        'del "%STARTUP_DIR%\\Edutrack Scanner App.cmd" >nul 2>nul',
+        'del "%STARTUP_CMD%" >nul 2>nul',
+        'del "%STARTUP_LINK%" >nul 2>nul',
+        'reg delete "%RUN_KEY%" /v "%RUN_NAME%" /f >nul 2>nul',
+        'schtasks /Delete /TN "%TASK_NAME%" /F >nul 2>nul',
         'call :writeLauncher "%APP_LAUNCHER%"',
+        'copy /Y "%APP_LAUNCHER%" "%STARTUP_CMD%" >nul 2>nul',
         'call :createShortcut "%DESKTOP_LINK%" "%APP_LAUNCHER%"',
         'call :createShortcut "%STARTUP_LINK%" "%APP_LAUNCHER%"',
+        'reg add "%RUN_KEY%" /v "%RUN_NAME%" /t REG_SZ /d "\\"%APP_LAUNCHER%\\"" /f >nul 2>nul',
+        'schtasks /Create /SC ONLOGON /TN "%TASK_NAME%" /TR "\\"%APP_LAUNCHER%\\"" /F >nul 2>nul',
         'echo.',
         'echo Edutrack Scanner Autostart has been installed.',
         'echo Desktop shortcut: %DESKTOP_LINK%',
         'echo Startup shortcut: %STARTUP_LINK%',
+        'echo Startup command: %STARTUP_CMD%',
+        'echo Windows Run entry: %RUN_NAME%',
+        'echo Windows logon task: %TASK_NAME%',
         'echo.',
-        'echo The scanner will open automatically when this Windows account signs in or restarts.',
+        'echo The scanner will open automatically in fullscreen when this Windows account signs in or restarts.',
         'echo If Windows asks for permission, choose Yes or Run.',
         'echo.',
-        'choice /C YN /N /M "Open scanner now? [Y/N] "',
-        'if errorlevel 2 goto done',
+        'echo Opening scanner now...',
         'start "" "%APP_LAUNCHER%"',
-        ':done',
         'echo.',
         'echo Setup complete. You can close this window.',
         'pause',
@@ -364,15 +379,23 @@ function sendWindowsScannerAutostart(req, res) {
         ':writeLauncher',
         '> "%~1" echo @echo off',
         '>> "%~1" echo set "APP_URL=%APP_URL%"',
+        '>> "%~1" echo set "APP_DIR=%%LOCALAPPDATA%%\\Edutrack"',
+        '>> "%~1" echo set "PROFILE_DIR=%%APP_DIR%%\\ScannerProfile"',
+        '>> "%~1" echo set "LOCK_DIR=%%TEMP%%\\EdutrackScannerLaunch.lock"',
+        '>> "%~1" echo if not exist "%%APP_DIR%%" mkdir "%%APP_DIR%%" ^>nul 2^>nul',
+        '>> "%~1" echo if not exist "%%PROFILE_DIR%%" mkdir "%%PROFILE_DIR%%" ^>nul 2^>nul',
+        '>> "%~1" echo mkdir "%%LOCK_DIR%%" 2^>nul ^|^| exit /b',
         '>> "%~1" echo set "EDGE_X86=%%ProgramFiles(x86)%%\\Microsoft\\Edge\\Application\\msedge.exe"',
         '>> "%~1" echo set "EDGE_X64=%%ProgramFiles%%\\Microsoft\\Edge\\Application\\msedge.exe"',
         '>> "%~1" echo set "CHROME_X64=%%ProgramFiles%%\\Google\\Chrome\\Application\\chrome.exe"',
         '>> "%~1" echo set "CHROME_X86=%%ProgramFiles(x86)%%\\Google\\Chrome\\Application\\chrome.exe"',
-        '>> "%~1" echo if exist "%%EDGE_X86%%" ^(start "" "%%EDGE_X86%%" --kiosk "%%APP_URL%%" --edge-kiosk-type=fullscreen --no-first-run ^& exit /b^)',
-        '>> "%~1" echo if exist "%%EDGE_X64%%" ^(start "" "%%EDGE_X64%%" --kiosk "%%APP_URL%%" --edge-kiosk-type=fullscreen --no-first-run ^& exit /b^)',
-        '>> "%~1" echo if exist "%%CHROME_X64%%" ^(start "" "%%CHROME_X64%%" --kiosk "%%APP_URL%%" --new-window --no-first-run ^& exit /b^)',
-        '>> "%~1" echo if exist "%%CHROME_X86%%" ^(start "" "%%CHROME_X86%%" --kiosk "%%APP_URL%%" --new-window --no-first-run ^& exit /b^)',
+        '>> "%~1" echo if exist "%%EDGE_X86%%" ^(start "" "%%EDGE_X86%%" --user-data-dir="%%PROFILE_DIR%%" --kiosk "%%APP_URL%%" --edge-kiosk-type=fullscreen --no-first-run --no-default-browser-check --disable-sync --disable-extensions --use-fake-ui-for-media-stream --autoplay-policy=no-user-gesture-required ^& timeout /t 8 /nobreak ^>nul ^& rd "%%LOCK_DIR%%" ^>nul 2^>nul ^& exit /b^)',
+        '>> "%~1" echo if exist "%%EDGE_X64%%" ^(start "" "%%EDGE_X64%%" --user-data-dir="%%PROFILE_DIR%%" --kiosk "%%APP_URL%%" --edge-kiosk-type=fullscreen --no-first-run --no-default-browser-check --disable-sync --disable-extensions --use-fake-ui-for-media-stream --autoplay-policy=no-user-gesture-required ^& timeout /t 8 /nobreak ^>nul ^& rd "%%LOCK_DIR%%" ^>nul 2^>nul ^& exit /b^)',
+        '>> "%~1" echo if exist "%%CHROME_X64%%" ^(start "" "%%CHROME_X64%%" --user-data-dir="%%PROFILE_DIR%%" --kiosk "%%APP_URL%%" --new-window --no-first-run --no-default-browser-check --disable-sync --disable-extensions --use-fake-ui-for-media-stream --autoplay-policy=no-user-gesture-required ^& timeout /t 8 /nobreak ^>nul ^& rd "%%LOCK_DIR%%" ^>nul 2^>nul ^& exit /b^)',
+        '>> "%~1" echo if exist "%%CHROME_X86%%" ^(start "" "%%CHROME_X86%%" --user-data-dir="%%PROFILE_DIR%%" --kiosk "%%APP_URL%%" --new-window --no-first-run --no-default-browser-check --disable-sync --disable-extensions --use-fake-ui-for-media-stream --autoplay-policy=no-user-gesture-required ^& timeout /t 8 /nobreak ^>nul ^& rd "%%LOCK_DIR%%" ^>nul 2^>nul ^& exit /b^)',
         '>> "%~1" echo start "" "%%APP_URL%%"',
+        '>> "%~1" echo timeout /t 8 /nobreak ^>nul',
+        '>> "%~1" echo rd "%%LOCK_DIR%%" ^>nul 2^>nul',
         'exit /b',
         '',
         ':createShortcut',
