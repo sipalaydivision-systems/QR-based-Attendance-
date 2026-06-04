@@ -82,13 +82,13 @@ class EdutrackApp extends StatelessWidget {
         navigationBarTheme: NavigationBarThemeData(
           backgroundColor: Colors.transparent,
           indicatorColor: const Color(0xFFEAF7F1),
-                labelTextStyle: WidgetStateProperty.resolveWith(
-                  (states) => TextStyle(
-                    fontSize: 9.5,
-                    height: 1.08,
-                    fontWeight: states.contains(WidgetState.selected)
-                        ? FontWeight.w900
-                        : FontWeight.w700,
+          labelTextStyle: WidgetStateProperty.resolveWith(
+            (states) => TextStyle(
+              fontSize: 9.5,
+              height: 1.08,
+              fontWeight: states.contains(WidgetState.selected)
+                  ? FontWeight.w900
+                  : FontWeight.w700,
               color: states.contains(WidgetState.selected)
                   ? const Color(0xFF0F6E52)
                   : const Color(0xFF6D7772),
@@ -1398,9 +1398,9 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
       await widget.api.deleteJson('/api/users/$id');
       await load(silent: true);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account deleted.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Account deleted.')));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1656,14 +1656,15 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
                   onTap: saving ? null : openCreateUserSheet,
                 ),
                 const SizedBox(height: 12),
-                for (final item in users
-                    .where(
-                      (row) =>
-                          '${(row as Map)['status'] ?? 'active'}'
-                              .toLowerCase() ==
-                          'active',
-                    )
-                    .take(10))
+                for (final item
+                    in users
+                        .where(
+                          (row) =>
+                              '${(row as Map)['status'] ?? 'active'}'
+                                  .toLowerCase() ==
+                              'active',
+                        )
+                        .take(10))
                   UserControlTile(
                     user: Map<String, dynamic>.from(item as Map),
                     busy: saving,
@@ -3082,8 +3083,15 @@ class DashboardPage extends StatelessWidget {
       dashboard['attendance_eligible_students'] ?? active,
     );
     final present = intValue(dashboard['students_present']);
-    final rate = intValue(dashboard['attendance_rate']);
     final absent = intValue(dashboard['students_absent']);
+    final analyticsBase = attendanceBase > 0
+        ? attendanceBase
+        : (active > 0 ? active : present + absent);
+    final rate = analyticsBase > 0
+        ? clampPercent(((present / analyticsBase) * 100).round())
+        : clampPercent(intValue(dashboard['attendance_rate']));
+    final scoreColor = attendanceScoreColor(rate);
+    final scoreLabel = attendanceScoreLabel(rate);
     final schools = (dashboard['schools'] as List?) ?? [];
     final schoolRates = schools
         .map((item) => intValue((item as Map)['rate']))
@@ -3215,93 +3223,134 @@ class DashboardPage extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: const Color(0xFFDCE6E1)),
+              border: Border.all(color: attendanceScoreSoftColor(rate)),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF111827).withValues(alpha: .07),
+                  color: scoreColor.withValues(alpha: .10),
                   blurRadius: 18,
                   offset: const Offset(0, 8),
                 ),
               ],
             ),
-            child: Row(
+            child: Column(
               children: [
-                SizedBox(
-                  width: 136,
-                  height: 136,
-                  child: CustomPaint(
-                    painter: RingPainter(rate),
-                    child: Center(
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    AttendanceScoreRing(rate: rate, color: scoreColor),
+                    const SizedBox(width: 18),
+                    Expanded(
                       child: Column(
-                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '$rate%',
-                            style: const TextStyle(
-                              fontSize: 34,
+                          const Text(
+                            'Today Analytics',
+                            style: TextStyle(
+                              fontSize: 21,
                               fontWeight: FontWeight.w900,
-                              height: 1,
+                              letterSpacing: -.4,
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'ATTENDANCE',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Color(0xFF5F716B),
+                          const SizedBox(height: 7),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: attendanceScoreSoftColor(rate),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              scoreLabel,
+                              style: TextStyle(
+                                color: scoreColor,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            '$present of $analyticsBase students present',
+                            style: const TextStyle(
                               fontWeight: FontWeight.w900,
-                              letterSpacing: .8,
+                              color: Color(0xFF1F2A26),
+                              height: 1.25,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          RateBar(
+                            'Live Attendance Rate',
+                            rate,
+                            color: scoreColor,
+                          ),
+                          const SizedBox(height: 2),
+                          InkWell(
+                            borderRadius: BorderRadius.circular(8),
+                            onTap: () => openAbsentDetails(
+                              title: 'Absent Students Today',
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Text(
+                                absent == 1
+                                    ? '1 student absent'
+                                    : '$absent students absent',
+                                style: const TextStyle(
+                                  color: Color(0xFF74827E),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 18),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Today Analytics',
-                        style: TextStyle(
-                          fontSize: 19,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -.3,
-                        ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AnalyticsMetric(
+                        label: 'Total Students',
+                        value: '$analyticsBase',
+                        color: const Color(0xFF138A64),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '$present of $attendanceBase students present',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF27332F),
-                        ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: AnalyticsMetric(
+                        label: 'Present Students',
+                        value: '$present',
+                        color: const Color(0xFF138A64),
                       ),
-                      const SizedBox(height: 12),
-                      RateBar('Live rate', rate),
-                      const SizedBox(height: 2),
-                      InkWell(
-                        borderRadius: BorderRadius.circular(8),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AnalyticsMetric(
+                        label: 'Absent Students',
+                        value: '$absent',
+                        color: const Color(0xFFDC2626),
                         onTap: () =>
                             openAbsentDetails(title: 'Absent Students Today'),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Text(
-                            absent == 1
-                                ? '1 student absent'
-                                : '$absent students absent',
-                            style: const TextStyle(
-                              color: Color(0xFF74827E),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: AnalyticsMetric(
+                        label: 'Attendance Percentage',
+                        value: '$rate%',
+                        color: scoreColor,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -3414,6 +3463,121 @@ class KpiPill extends StatelessWidget {
               color: Color(0xFF5C6E66),
               fontSize: 11,
               fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class AttendanceScoreRing extends StatelessWidget {
+  const AttendanceScoreRing({
+    super.key,
+    required this.rate,
+    required this.color,
+  });
+
+  final int rate;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final target = clampPercent(rate) / 100;
+    return SizedBox(
+      width: 132,
+      height: 132,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0, end: target),
+        duration: const Duration(milliseconds: 750),
+        curve: Curves.easeOutCubic,
+        builder: (context, value, _) {
+          final displayRate = (value * 100).round();
+          return CustomPaint(
+            painter: RingPainter(value, color: color),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '$displayRate%',
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 32,
+                      fontWeight: FontWeight.w900,
+                      height: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'ATTENDANCE',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Color(0xFF5F716B),
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: .8,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class AnalyticsMetric extends StatelessWidget {
+  const AnalyticsMetric({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.color,
+    this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(18),
+    child: Container(
+      constraints: const BoxConstraints(minHeight: 72),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: .18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: color,
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFF5C6E66),
+              fontSize: 10.5,
+              fontWeight: FontWeight.w900,
             ),
           ),
         ],
@@ -5823,49 +5987,73 @@ class Analytics extends StatelessWidget {
 }
 
 class RateBar extends StatelessWidget {
-  const RateBar(this.name, this.rate, {super.key});
+  const RateBar(this.name, this.rate, {super.key, this.color});
   final String name;
   final int rate;
+  final Color? color;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 10),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w800),
+  Widget build(BuildContext context) {
+    final clamped = clampPercent(rate);
+    final accent = color ?? attendanceScoreColor(clamped);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              Text(
+                '$clamped%',
+                style: TextStyle(color: accent, fontWeight: FontWeight.w900),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: clamped / 100),
+            duration: const Duration(milliseconds: 650),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, _) => ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: Stack(
+                children: [
+                  Container(
+                    height: 9,
+                    width: double.infinity,
+                    color: const Color(0xFFE5EEE9),
+                  ),
+                  FractionallySizedBox(
+                    widthFactor: value,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      height: 9,
+                      color: accent,
+                    ),
+                  ),
+                ],
               ),
             ),
-            Text('$rate%', style: const TextStyle(fontWeight: FontWeight.w900)),
-          ],
-        ),
-        const SizedBox(height: 5),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(99),
-          child: LinearProgressIndicator(
-            value: rate.clamp(0, 100) / 100,
-            minHeight: 8,
-            backgroundColor: const Color(0xFFE5EEE9),
-            color: rate >= 75
-                ? const Color(0xFF00885B)
-                : const Color(0xFFF97316),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }
 
 class RingPainter extends CustomPainter {
-  RingPainter(this.rate);
-  final int rate;
+  RingPainter(this.progress, {required this.color});
+  final double progress;
+  final Color color;
+
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
@@ -5874,24 +6062,25 @@ class RingPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 13
       ..strokeCap = StrokeCap.round
-      ..color = const Color(0xFFCFFBE8);
+      ..color = color.withValues(alpha: .18);
     final fg = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 13
       ..strokeCap = StrokeCap.round
-      ..color = const Color(0xFFF08A00);
+      ..color = color;
     canvas.drawCircle(center, radius, bg);
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
       -math.pi / 2,
-      math.pi * 2 * rate.clamp(0, 100) / 100,
+      math.pi * 2 * progress.clamp(0, 1),
       false,
       fg,
     );
   }
 
   @override
-  bool shouldRepaint(RingPainter oldDelegate) => oldDelegate.rate != rate;
+  bool shouldRepaint(RingPainter oldDelegate) =>
+      oldDelegate.progress != progress || oldDelegate.color != color;
 }
 
 class AlertStrip extends StatelessWidget {
@@ -6300,7 +6489,9 @@ String absenceNotificationPayload(List flags) {
     'grade_name': first['grade_name'],
     'section_name': first['section_name'],
     'absent_days': first['absent_days'],
-    'attendance_status': formatStatusLabel(first['attendance_status'] ?? 'Absent'),
+    'attendance_status': formatStatusLabel(
+      first['attendance_status'] ?? 'Absent',
+    ),
     'adviser': first['adviser'],
     'adviser_contact': first['adviser_contact'],
     'adviser_email': first['adviser_email'],
@@ -6414,6 +6605,32 @@ String roleLabel(String role) {
 
 int intValue(dynamic value) => int.tryParse('$value') ?? 0;
 
+int clampPercent(int value) => value.clamp(0, 100).toInt();
+
+Color attendanceScoreColor(int rate) {
+  final clamped = clampPercent(rate);
+  if (clamped >= 90) return const Color(0xFF138A64);
+  if (clamped >= 75) return const Color(0xFFD97706);
+  if (clamped >= 50) return const Color(0xFFF97316);
+  return const Color(0xFFDC2626);
+}
+
+Color attendanceScoreSoftColor(int rate) {
+  final clamped = clampPercent(rate);
+  if (clamped >= 90) return const Color(0xFFDDF7EA);
+  if (clamped >= 75) return const Color(0xFFFFF3C4);
+  if (clamped >= 50) return const Color(0xFFFFE2C7);
+  return const Color(0xFFFFD7D7);
+}
+
+String attendanceScoreLabel(int rate) {
+  final clamped = clampPercent(rate);
+  if (clamped >= 90) return 'Excellent Attendance';
+  if (clamped >= 75) return 'Good Attendance';
+  if (clamped >= 50) return 'Fair Attendance';
+  return 'Poor Attendance';
+}
+
 String formatStatusLabel(dynamic value) {
   final raw = '${value ?? ''}'.trim();
   if (raw.isEmpty || raw.toLowerCase() == 'null') return '-';
@@ -6442,7 +6659,9 @@ String formatStatusLabel(dynamic value) {
       return raw
           .split(RegExp(r'[\s_-]+'))
           .where((part) => part.isNotEmpty)
-          .map((part) => part[0].toUpperCase() + part.substring(1).toLowerCase())
+          .map(
+            (part) => part[0].toUpperCase() + part.substring(1).toLowerCase(),
+          )
           .join(' ');
   }
 }

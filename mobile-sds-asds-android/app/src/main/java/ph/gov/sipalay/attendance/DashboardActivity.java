@@ -39,6 +39,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -297,20 +298,7 @@ public class DashboardActivity extends Activity {
     private void renderDashboard(boolean animate) {
         content.addView(greetingPanel(), Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 10)));
 
-        LinearLayout ringPanel = panel();
-        ringPanel.setGravity(Gravity.CENTER);
-        ringPanel.setPadding(Ui.dp(this, 14), Ui.dp(this, 14), Ui.dp(this, 14), Ui.dp(this, 14));
-        ringPanel.setBackground(Ui.strokeBg(Color.WHITE, Ui.GREEN, Ui.dp(this, 18)));
-        AttendanceRingView ring = new AttendanceRingView(this);
-        ringPanel.addView(ring, Ui.lp(Ui.dp(this, 184), Ui.dp(this, 152)));
-        int active = activeStudents();
-        int present = dashboard.optInt("students_present");
-        TextView summary = Ui.text(this, present + " of " + active + " students present", 14, Color.rgb(46, 58, 55), Typeface.BOLD);
-        summary.setGravity(Gravity.CENTER);
-        ringPanel.addView(summary);
-        content.addView(ringPanel, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 10)));
-        ring.setPercent(dashboard.optInt("attendance_rate"));
-        if (animate) Ui.reveal(ringPanel, 40);
+        addTodayAnalyticsPanel(animate);
 
         if (!dashboard.optBoolean("is_school_day", true)) {
             TextView note = Ui.text(this, nonSchoolDayAlertText(), 13, Color.rgb(141, 71, 0), Typeface.BOLD);
@@ -345,6 +333,121 @@ public class DashboardActivity extends Activity {
         card.addView(name, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 2), 0, 0));
         card.addView(role, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 2), 0, 0));
         return card;
+    }
+
+    private void addTodayAnalyticsPanel(boolean animate) {
+        int total = activeStudents();
+        int present = dashboard.optInt("students_present");
+        int absent = dashboard.optInt("students_absent");
+        int rate = attendanceRate(total, present);
+        int scoreColor = attendanceScoreColor(rate);
+
+        LinearLayout card = panel();
+        card.setPadding(Ui.dp(this, 15), Ui.dp(this, 15), Ui.dp(this, 15), Ui.dp(this, 15));
+        card.setBackground(Ui.gradient(Color.WHITE, Color.rgb(248, 252, 250), Ui.dp(this, 22)));
+
+        LinearLayout titleRow = new LinearLayout(this);
+        titleRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView title = Ui.text(this, "Today Analytics", 20, Ui.INK, Typeface.BOLD);
+        TextView label = Ui.text(this, attendanceScoreLabel(rate), 11, scoreColor, Typeface.BOLD);
+        label.setGravity(Gravity.CENTER);
+        label.setPadding(Ui.dp(this, 9), Ui.dp(this, 5), Ui.dp(this, 9), Ui.dp(this, 5));
+        label.setBackground(Ui.strokeBg(attendanceScoreSoftColor(rate), scoreColor, Ui.dp(this, 18)));
+        titleRow.addView(title, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        titleRow.addView(label);
+        card.addView(titleRow);
+
+        LinearLayout body = new LinearLayout(this);
+        body.setGravity(Gravity.CENTER_VERTICAL);
+        body.setPadding(0, Ui.dp(this, 12), 0, Ui.dp(this, 8));
+
+        AttendanceRingView ring = new AttendanceRingView(this);
+        body.addView(ring, Ui.lp(Ui.dp(this, 150), Ui.dp(this, 136)));
+
+        LinearLayout info = new LinearLayout(this);
+        info.setOrientation(LinearLayout.VERTICAL);
+        info.setPadding(Ui.dp(this, 12), 0, 0, 0);
+        TextView summary = Ui.text(this, present + " of " + total + " students present", 14, Ui.INK, Typeface.BOLD);
+        summary.setLineSpacing(Ui.dp(this, 2), 1.0f);
+        TextView live = Ui.text(this, "Live Attendance Rate", 11, Color.rgb(88, 102, 98), Typeface.BOLD);
+        LinearLayout rateRow = new LinearLayout(this);
+        rateRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView rateLabel = Ui.text(this, "Attendance Percentage", 12, Color.rgb(71, 84, 80), Typeface.BOLD);
+        TextView rateValue = Ui.text(this, rate + "%", 22, scoreColor, Typeface.BOLD);
+        rateRow.addView(rateLabel, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        rateRow.addView(rateValue);
+        AttendanceProgressView progressView = new AttendanceProgressView(this);
+        TextView absentText = Ui.text(this, absent + " " + (absent == 1 ? "student" : "students") + " absent", 12, Color.rgb(101, 113, 109), Typeface.BOLD);
+
+        info.addView(summary);
+        info.addView(live, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 9), 0, 0));
+        info.addView(rateRow, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 3), 0, 0));
+        info.addView(progressView, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 10), 0, Ui.dp(this, 7), 0, 0));
+        info.addView(absentText);
+        body.addView(info, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        card.addView(body);
+
+        GridLayout statGrid = new GridLayout(this);
+        statGrid.setColumnCount(2);
+        statGrid.addView(scoreStat("Total Students", total, Ui.GREEN_DARK));
+        statGrid.addView(scoreStat("Present Students", present, Ui.GREEN_DARK));
+        statGrid.addView(scoreStat("Absent Students", absent, Ui.RED));
+        statGrid.addView(scoreStat("Live Rate", rate, scoreColor, "%"));
+        card.addView(statGrid);
+
+        content.addView(card, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, 0, 0, Ui.dp(this, 10)));
+        ring.setPercent(rate, scoreColor);
+        progressView.setPercent(rate, scoreColor);
+        if (animate) Ui.reveal(card, 40);
+    }
+
+    private LinearLayout scoreStat(String label, int value, int accent) {
+        return scoreStat(label, value, accent, "");
+    }
+
+    private LinearLayout scoreStat(String label, int value, int accent, String suffix) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(Ui.dp(this, 10), Ui.dp(this, 9), Ui.dp(this, 10), Ui.dp(this, 9));
+        box.setBackground(Ui.strokeBg(Color.rgb(248, 251, 249), Color.rgb(225, 235, 231), Ui.dp(this, 14)));
+        TextView number = Ui.text(this, value + suffix, 17, accent, Typeface.BOLD);
+        TextView name = Ui.text(this, label, 10, Color.rgb(86, 99, 95), Typeface.BOLD);
+        box.addView(number);
+        box.addView(name, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 2), 0, 0));
+        GridLayout.LayoutParams lp = new GridLayout.LayoutParams();
+        lp.width = 0;
+        lp.height = LinearLayout.LayoutParams.WRAP_CONTENT;
+        lp.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
+        lp.setMargins(Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4));
+        box.setLayoutParams(lp);
+        return box;
+    }
+
+    private int attendanceRate(int total, int present) {
+        int apiRate = dashboard.optInt("attendance_rate", -1);
+        int rate = total > 0 ? Math.round((present * 100f) / Math.max(total, 1)) : apiRate;
+        return Math.max(0, Math.min(100, rate));
+    }
+
+    private int attendanceScoreColor(int rate) {
+        if (rate >= 90) return Ui.GREEN_DARK;
+        if (rate >= 75) return Color.rgb(217, 119, 6);
+        if (rate >= 50) return Color.rgb(249, 115, 22);
+        return Ui.RED;
+    }
+
+    private int attendanceScoreSoftColor(int rate) {
+        if (rate >= 90) return Ui.GREEN_SOFT;
+        if (rate >= 75) return Color.rgb(255, 248, 231);
+        if (rate >= 50) return Color.rgb(255, 237, 213);
+        return Color.rgb(254, 226, 226);
+    }
+
+    private String attendanceScoreLabel(int rate) {
+        if (rate >= 90) return "Excellent Attendance";
+        if (rate >= 75) return "Good Attendance";
+        if (rate >= 50) return "Fair Attendance";
+        return "Poor Attendance";
     }
 
     private void addCompactActions(boolean animate) {
