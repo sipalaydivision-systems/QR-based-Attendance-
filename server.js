@@ -307,12 +307,12 @@ function sendWindowsScannerLauncher(req, res) {
         + `set "APP_URL=${appBaseUrl}/scanner"\r\n`
         + `where msedge >nul 2>nul\r\n`
         + `if %ERRORLEVEL%==0 (\r\n`
-        + `  start "" msedge --app="%APP_URL%" --start-fullscreen\r\n`
+        + `  start "" msedge --kiosk "%APP_URL%" --edge-kiosk-type=fullscreen --no-first-run\r\n`
         + `  exit /b\r\n`
         + `)\r\n`
         + `where chrome >nul 2>nul\r\n`
         + `if %ERRORLEVEL%==0 (\r\n`
-        + `  start "" chrome --app="%APP_URL%" --start-fullscreen\r\n`
+        + `  start "" chrome --kiosk "%APP_URL%" --new-window --no-first-run\r\n`
         + `  exit /b\r\n`
         + `)\r\n`
         + `start "" "%APP_URL%"\r\n`;
@@ -368,10 +368,10 @@ function sendWindowsScannerAutostart(req, res) {
         '>> "%~1" echo set "EDGE_X64=%%ProgramFiles%%\\Microsoft\\Edge\\Application\\msedge.exe"',
         '>> "%~1" echo set "CHROME_X64=%%ProgramFiles%%\\Google\\Chrome\\Application\\chrome.exe"',
         '>> "%~1" echo set "CHROME_X86=%%ProgramFiles(x86)%%\\Google\\Chrome\\Application\\chrome.exe"',
-        '>> "%~1" echo if exist "%%EDGE_X86%%" ^(start "" "%%EDGE_X86%%" --app="%%APP_URL%%" --start-fullscreen ^& exit /b^)',
-        '>> "%~1" echo if exist "%%EDGE_X64%%" ^(start "" "%%EDGE_X64%%" --app="%%APP_URL%%" --start-fullscreen ^& exit /b^)',
-        '>> "%~1" echo if exist "%%CHROME_X64%%" ^(start "" "%%CHROME_X64%%" --app="%%APP_URL%%" --start-fullscreen ^& exit /b^)',
-        '>> "%~1" echo if exist "%%CHROME_X86%%" ^(start "" "%%CHROME_X86%%" --app="%%APP_URL%%" --start-fullscreen ^& exit /b^)',
+        '>> "%~1" echo if exist "%%EDGE_X86%%" ^(start "" "%%EDGE_X86%%" --kiosk "%%APP_URL%%" --edge-kiosk-type=fullscreen --no-first-run ^& exit /b^)',
+        '>> "%~1" echo if exist "%%EDGE_X64%%" ^(start "" "%%EDGE_X64%%" --kiosk "%%APP_URL%%" --edge-kiosk-type=fullscreen --no-first-run ^& exit /b^)',
+        '>> "%~1" echo if exist "%%CHROME_X64%%" ^(start "" "%%CHROME_X64%%" --kiosk "%%APP_URL%%" --new-window --no-first-run ^& exit /b^)',
+        '>> "%~1" echo if exist "%%CHROME_X86%%" ^(start "" "%%CHROME_X86%%" --kiosk "%%APP_URL%%" --new-window --no-first-run ^& exit /b^)',
         '>> "%~1" echo start "" "%%APP_URL%%"',
         'exit /b',
         '',
@@ -420,9 +420,9 @@ app.get('/download/scanner-mac-app', (req, res) => {
     const launcher = `#!/bin/bash\n`
         + `APP_URL="${appBaseUrl}/scanner"\n`
         + `if [ -d "/Applications/Google Chrome.app" ]; then\n`
-        + `  open -na "Google Chrome" --args --app="$APP_URL" --start-fullscreen\n`
+        + `  open -na "Google Chrome" --args --kiosk "$APP_URL"\n`
         + `elif [ -d "/Applications/Microsoft Edge.app" ]; then\n`
-        + `  open -na "Microsoft Edge" --args --app="$APP_URL" --start-fullscreen\n`
+        + `  open -na "Microsoft Edge" --args --kiosk "$APP_URL" --edge-kiosk-type=fullscreen\n`
         + `else\n`
         + `  open "$APP_URL"\n`
         + `fi\n`;
