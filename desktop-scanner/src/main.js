@@ -1058,7 +1058,7 @@ ipcMain.handle('settings:save', async (_event, nextSettings) => {
   return settings;
 });
 
-ipcMain.handle('connection:check', async () => refreshConnectionState({ trigger: 'manual-check', syncIfPossible: true }));
+ipcMain.handle('connection:check', async () => refreshConnectionState({ trigger: 'manual-check', forceDirectory: true, syncIfPossible: true }));
 ipcMain.handle('scan:submit', async (_event, payload) => submitScan(payload));
 ipcMain.handle('queue:sync', async () => syncOfflineQueue({ trigger: 'manual' }));
 ipcMain.handle('queue:get', async () => currentDashboard());

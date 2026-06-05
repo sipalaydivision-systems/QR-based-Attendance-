@@ -108,29 +108,23 @@
       <aside class="side-panel">
         <section class="record-card">
           <div class="panel-head">
-            <span>Scans on this PC</span>
-            <h2>Recent scans</h2>
-          </div>
-
-          <div class="scan-feedback" id="scanFeedback">
-            <strong>Waiting for scan</strong>
-            <span>Only attendance scanned from this computer will appear in the table.</span>
+            <h2>Attendance log</h2>
           </div>
 
           <div class="local-table-wrap">
-            <table class="local-scan-table" aria-label="Recent scans on this computer">
+            <table class="local-scan-table" aria-label="Attendance log">
               <thead>
                 <tr>
-                  <th>Time</th>
                   <th>Name</th>
-                  <th>Type</th>
-                  <th>Action</th>
-                  <th>Sync</th>
+                  <th>Grade</th>
+                  <th>Section</th>
+                  <th>School</th>
+                  <th>Time</th>
                 </tr>
               </thead>
               <tbody id="localScanRows"></tbody>
             </table>
-            <div class="table-empty" id="localScanEmpty">No scans from this computer yet.</div>
+            <div class="table-empty" id="localScanEmpty">No attendance recorded yet.</div>
           </div>
 
           <div class="confirm-box hidden" id="confirmBox">
@@ -181,6 +175,20 @@
         </section>
       </aside>
     </main>
+  </div>
+
+  <div class="scan-modal hidden" id="scanModal" aria-live="polite">
+    <section class="scan-modal-card" id="scanModalCard">
+      <button class="modal-close" id="closeScanModalBtn" title="Close scan result" aria-label="Close scan result">&times;</button>
+      <span id="scanModalLabel">Attendance recorded</span>
+      <h2 id="scanModalTitle">Time In recorded</h2>
+      <p id="scanModalMessage">Attendance record saved successfully.</p>
+      <div class="modal-person">
+        <strong id="scanModalName">Student Name</strong>
+        <small id="scanModalMeta">Grade - Section | School</small>
+      </div>
+      <div class="modal-time" id="scanModalTime">09:40 PM</div>
+    </section>
   </div>
 
   <div class="settings-drawer" id="settingsDrawer" aria-hidden="true">
@@ -287,7 +295,7 @@
       </section>
 
       <div class="drawer-actions">
-        <button class="secondary" id="testServerBtn">Test Server</button>
+        <button class="secondary" id="testServerBtn">Refresh Records</button>
         <button class="secondary" id="minimizeBtn">Hide to Tray</button>
         <button class="primary" id="saveSettingsBtn">Save Settings</button>
       </div>

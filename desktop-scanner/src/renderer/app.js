@@ -24,7 +24,8 @@ const state = {
   lastSyncAt: null,
   syncInProgress: false,
   lastHistoryId: '',
-  initialized: false
+  initialized: false,
+  scanModalTimer: null
 };
 
 const $ = (id) => document.getElementById(id);
@@ -177,7 +178,7 @@ function updateTodayScansCard() {
   $('todayScansValue').textContent = String(total);
   $('todayScansDetail').textContent = state.queuedTodayCount
     ? `${state.queuedTodayCount} scan(s) from this PC are waiting to sync.`
-    : 'Only attendance scanned from this PC is counted here.';
+    : "Today's attendance records.";
 }
 
 function updateScannerStatus(title, detail, tone = 'neutral') {
@@ -421,6 +422,29 @@ function humanizeSync(value) {
   return 'Local';
 }
 
+function cleanCell(value) {
+  const text = String(value || '').trim();
+  if (!text || /^n\/a$/i.test(text)) return '-';
+  return text;
+}
+
+function modalTimeForResult(data) {
+  if (data.action === 'TIME_OUT') return data.time_out || data.time || 'Recorded';
+  if (data.action === 'TIME_IN') return data.time_in || data.time || 'Recorded';
+  if (data.action === 'PENDING_TIME_OUT' || data.action === 'CONFIRM_TIME_OUT') return data.time_out || 'Pending Time Out';
+  if (data.time_in || data.time_out) return data.time_out || data.time_in;
+  return data.time || 'Recorded';
+}
+
+function modalMetaForPerson(person) {
+  if (!person) return 'Attendance record';
+  const grade = cleanCell(person.grade);
+  const section = cleanCell(person.section);
+  const school = cleanCell(person.school);
+  const classText = [grade, section].filter((item) => item !== '-').join(' - ');
+  return [classText, school].filter((item) => item && item !== '-').join(' | ') || 'Attendance record';
+}
+
 function friendlyKioskMessage(data) {
   const raw = String(data?.message || data?.error || '').trim();
   const lower = raw.toLowerCase();
@@ -448,11 +472,35 @@ function friendlyKioskMessage(data) {
   };
 }
 
-function showScanFeedback(title, message, tone = 'success') {
-  const feedback = $('scanFeedback');
-  feedback.className = `scan-feedback ${tone}`.trim();
-  feedback.querySelector('strong').textContent = title;
-  feedback.querySelector('span').textContent = message;
+function closeScanModal() {
+  if (state.scanModalTimer) {
+    clearTimeout(state.scanModalTimer);
+    state.scanModalTimer = null;
+  }
+  $('scanModal').classList.add('hidden');
+}
+
+function showScanFeedback(title, message, tone = 'success', data = {}) {
+  const modal = $('scanModal');
+  const card = $('scanModalCard');
+  const person = data.person || null;
+  const actionLabel = humanizeAction(data.action);
+  const isOffline = !!data.offline;
+
+  card.className = `scan-modal-card ${tone}`.trim();
+  $('scanModalLabel').textContent = isOffline ? 'Saved offline' : 'Attendance recorded';
+  $('scanModalTitle').textContent = title;
+  $('scanModalMessage').textContent = message;
+  $('scanModalName').textContent = person?.name || 'Attendance record';
+  $('scanModalMeta').textContent = modalMetaForPerson(person);
+  $('scanModalTime').textContent = `${actionLabel}: ${modalTimeForResult(data)}`;
+
+  modal.classList.remove('hidden');
+
+  if (state.scanModalTimer) clearTimeout(state.scanModalTimer);
+  if (data.action !== 'CONFIRM_TIME_OUT') {
+    state.scanModalTimer = setTimeout(closeScanModal, tone === 'error' ? 5200 : 3600);
+  }
 }
 
 function renderLocalScans(scans = []) {
@@ -467,19 +515,18 @@ function renderLocalScans(scans = []) {
     const tr = document.createElement('tr');
     const scanDate = parseSqlDateTime(scan.scanTime);
     const time = scanDate ? formatShortTime(scanDate) : '--:--';
-    const personType = String(scan.personType || 'person').toLowerCase();
     const name = scan.name || 'Attendance Record';
-    const school = scan.schoolName || 'N/A';
-    const section = [scan.gradeLevel, scan.sectionName].filter(Boolean).join(' - ');
-    const syncStatus = String(scan.syncStatus || '').toLowerCase();
-    const syncTone = syncStatus === 'failed' ? 'failed' : syncStatus === 'pending' ? 'pending' : '';
+    const grade = cleanCell(scan.gradeLevel);
+    const section = cleanCell(scan.sectionName);
+    const school = cleanCell(scan.schoolName);
+    const action = humanizeAction(scan.eventAction);
 
     tr.innerHTML = `
-      <td>${escapeHtml(time)}</td>
-      <td>${escapeHtml(name)}<small>${escapeHtml(school)}${section ? ` | ${escapeHtml(section)}` : ''}</small></td>
-      <td>${escapeHtml(personType === 'teacher' ? 'Teacher' : 'Student')}</td>
-      <td>${escapeHtml(humanizeAction(scan.eventAction))}</td>
-      <td><span class="status-badge ${escapeHtml(syncTone)}">${escapeHtml(humanizeSync(scan.syncStatus))}</span></td>
+      <td>${escapeHtml(name)}</td>
+      <td>${escapeHtml(grade)}</td>
+      <td>${escapeHtml(section)}</td>
+      <td>${escapeHtml(school)}</td>
+      <td><span class="time-badge"><b>${escapeHtml(action)}</b><small>${escapeHtml(time)}</small></span></td>
     `;
     rows.appendChild(tr);
   });
@@ -538,7 +585,7 @@ function applySchoolDayStatus(status) {
 function renderResult(data) {
   const tone = resultTone(data);
   const friendly = friendlyKioskMessage(data);
-  showScanFeedback(friendly.title, friendly.message, tone);
+  showScanFeedback(friendly.title, friendly.message, tone, data);
   $('confirmBox').classList.toggle('hidden', data.action !== 'CONFIRM_TIME_OUT');
 
   if (data.action === 'CONFIRM_TIME_OUT') state.pendingTimeoutQr = data.qrCode || state.pendingTimeoutQr;
@@ -558,7 +605,7 @@ function resetForNewDayIfNeeded() {
   state.queuedTodayCount = 0;
   state.hasLiveResult = false;
   renderLocalScans([]);
-  showScanFeedback('Waiting for scan', 'Only attendance scanned from this computer will appear in the table.', 'neutral');
+  closeScanModal();
   updateTodayScansCard();
 }
 
@@ -861,10 +908,12 @@ async function saveSettingsFromForm() {
 }
 
 async function testConnection() {
-  $('settingsNote').textContent = 'Testing server connection...';
+  $('settingsNote').textContent = 'Refreshing student and teacher records...';
   const result = await api.checkConnection();
   applyScannerStatusPayload(result, { silentNotifications: true, quietStatusLine: true });
-  $('settingsNote').textContent = result.online ? 'Connected to Server.' : result.message;
+  $('settingsNote').textContent = result.online
+    ? 'Connected to Server. Local student and teacher records are updated.'
+    : result.message;
 }
 
 async function checkConnection(options = {}) {
@@ -942,6 +991,10 @@ function bindEvents() {
   bindClick('syncNowBtn', syncQueue);
   bindClick('fullscreenBtn', () => api.toggleFullscreen());
   bindClick('minimizeBtn', () => api.minimize());
+  bindClick('closeScanModalBtn', closeScanModal);
+  $('scanModal').addEventListener('click', (event) => {
+    if (event.target.id === 'scanModal') closeScanModal();
+  });
   bindClick('confirmTimeoutBtn', confirmTimeout);
   bindClick('cancelTimeoutBtn', () => {
     $('confirmBox').classList.add('hidden');
