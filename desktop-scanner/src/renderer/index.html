@@ -9,9 +9,9 @@
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand-cluster">
+      <div class="brand">
         <div class="brand-logo" id="brandLogo"><span>ET</span></div>
-        <div class="brand-copy">
+        <div>
           <span class="division-tag" id="divisionName">Schools Division of Sipalay City</span>
           <h1>Edutrack Scanner</h1>
           <p id="brandName">Edutrack attendance desktop kiosk</p>
@@ -61,281 +61,197 @@
       </div>
     </header>
 
-    <main class="workspace">
-      <section class="scanner-panel">
-        <div class="summary-grid">
-          <article class="summary-card" id="connectionSummaryCard">
-            <div class="summary-icon">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M4.5 12a7.5 7.5 0 0 1 15 0"></path>
-                <path d="M7.5 12a4.5 4.5 0 0 1 9 0"></path>
-                <path d="M12 15.5h.01"></path>
-              </svg>
-            </div>
-            <div class="summary-copy">
-              <span>Connection Status</span>
-              <strong id="connectionCardValue">Checking...</strong>
-              <p id="connectionCardDetail">Connecting to Railway server.</p>
-            </div>
-          </article>
-
-          <article class="summary-card" id="schoolSummaryCard">
-            <div class="summary-icon">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M3 10.5L12 4l9 6.5"></path>
-                <path d="M5 10.5V20h14v-9.5"></path>
-                <path d="M9 20v-5h6v5"></path>
-              </svg>
-            </div>
-            <div class="summary-copy">
-              <span>Assigned School</span>
-              <strong id="assignedSchoolValue">Division kiosk</strong>
-              <p id="assignedSchoolDetail">Configured for all schools.</p>
-            </div>
-          </article>
-
-          <article class="summary-card" id="scannerSummaryCard">
-            <div class="summary-icon">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M7 3H5a2 2 0 0 0-2 2v2"></path>
-                <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
-                <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path>
-                <path d="M3 17v2a2 2 0 0 0 2 2h2"></path>
-                <path d="M5 12h14"></path>
-              </svg>
-            </div>
-            <div class="summary-copy">
-              <span>Scanner Status</span>
-              <strong id="scannerStatusValue">Preparing scanner</strong>
-              <p id="scannerStatusDetail">Starting the Edutrack dashboard.</p>
-            </div>
-          </article>
-
-          <article class="summary-card" id="todaySummaryCard">
-            <div class="summary-icon">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M7 2v4"></path>
-                <path d="M17 2v4"></path>
-                <path d="M3 9h18"></path>
-                <rect x="3" y="5" width="18" height="16" rx="2"></rect>
-              </svg>
-            </div>
-            <div class="summary-copy">
-              <span>Today's Total Scans</span>
-              <strong id="todayScansValue">0</strong>
-              <p id="todayScansDetail">Awaiting the first attendance record.</p>
-            </div>
-          </article>
-
-          <article class="summary-card" id="pendingSummaryCard">
-            <div class="summary-icon">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 6v6l4 2"></path>
-                <circle cx="12" cy="12" r="9"></circle>
-              </svg>
-            </div>
-            <div class="summary-copy">
-              <span>Pending Records</span>
-              <strong id="pendingSummaryValue">0</strong>
-              <p id="pendingSummaryDetail">No offline attendance records are waiting.</p>
-            </div>
-          </article>
-
-          <article class="summary-card" id="syncSummaryCard">
-            <div class="summary-icon">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 3v6"></path>
-                <path d="M9 6l3 3l3-3"></path>
-                <path d="M12 21v-6"></path>
-                <path d="M15 18l-3-3l-3 3"></path>
-                <path d="M4 12h6"></path>
-                <path d="M14 12h6"></path>
-              </svg>
-            </div>
-            <div class="summary-copy">
-              <span>Server Sync Status</span>
-              <strong id="syncStatusValue">Checking...</strong>
-              <p id="syncStatusDetail">Preparing the queue monitor.</p>
-            </div>
-          </article>
+    <main class="scanner-layout">
+      <section class="scanner-column">
+        <div class="scanner-status-row">
+          <div class="live-badge"><i></i> Live QR Scanner</div>
+          <div class="queue-chip" id="queueChip">0 queued</div>
+          <div class="mode-tabs" role="tablist" aria-label="Scanner mode">
+            <button class="mode-tab active" data-mode="webcam">Webcam</button>
+            <button class="mode-tab" data-mode="usb">USB Scanner</button>
+          </div>
         </div>
 
-        <section class="stage-card">
-          <div class="stage-header">
-            <div class="stage-copy">
-              <span class="live-badge"><i></i> Edutrack Live Scanner</span>
-              <h2>Scan attendance from one official desktop dashboard</h2>
-              <p>Use a webcam or USB QR scanner to record student and teacher attendance. When the internet drops, Edutrack Scanner keeps working, stores records locally, and synchronizes them to Railway when the connection returns.</p>
-            </div>
-
-            <div class="stage-actions">
-              <div class="queue-chip" id="queueChip">0 queued</div>
-              <div class="mode-tabs" role="tablist" aria-label="Scanner mode">
-                <button class="mode-tab active" data-mode="webcam">Webcam</button>
-                <button class="mode-tab" data-mode="usb">USB Scanner</button>
-              </div>
-            </div>
+        <div class="scan-stage webcam-stage" id="webcamStage">
+          <div id="reader"></div>
+          <div class="scan-frame" aria-hidden="true">
+            <span class="corner tl"></span>
+            <span class="corner tr"></span>
+            <span class="corner bl"></span>
+            <span class="corner br"></span>
+            <i class="scan-beam"></i>
           </div>
-
-          <div class="scan-stage webcam-stage" id="webcamStage">
-            <div id="reader"></div>
-            <div class="scan-overlay" aria-hidden="true">
-              <span class="corner tl"></span>
-              <span class="corner tr"></span>
-              <span class="corner bl"></span>
-              <span class="corner br"></span>
-              <i class="scan-beam"></i>
-            </div>
-            <div class="camera-fallback" id="cameraFallback">
-              <div class="fallback-icon">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M4 7h16v10H4z"></path>
-                  <path d="M9 7l1.5-2h3L15 7"></path>
-                  <circle cx="12" cy="12" r="3"></circle>
-                </svg>
-              </div>
-              <strong>Camera dashboard is ready</strong>
-              <span>Allow camera access when Windows asks. You can switch to USB Scanner any time.</span>
-              <button class="primary small" id="startCameraBtn">Start Camera</button>
-            </div>
+          <div class="camera-overlay">
+            <span><i></i> LIVE</span>
+            <b>QR Scanner</b>
           </div>
+          <div class="camera-fallback" id="cameraFallback">
+            <strong>Camera dashboard is ready</strong>
+            <span>Allow camera access or switch to USB Scanner.</span>
+            <button class="primary small" id="startCameraBtn">Start Camera</button>
+          </div>
+        </div>
 
-          <div class="scan-stage usb-stage hidden" id="usbStage">
-            <div class="usb-focus">
-              <div class="usb-icon">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 3v11"></path>
-                  <path d="M8 7l4-4l4 4"></path>
-                  <path d="M8 14l4 4l4-4"></path>
-                  <path d="M6 18h12"></path>
-                </svg>
-              </div>
-              <h3>USB scanner is listening</h3>
-              <p>Click inside the input once, then scan a student or teacher QR code. Most USB scanners type the QR value and press Enter automatically.</p>
-              <input id="usbInput" type="text" autocomplete="off" spellcheck="false" placeholder="Waiting for USB scanner input...">
+        <div class="scan-stage usb-stage hidden" id="usbStage">
+          <div class="usb-focus">
+            <div class="usb-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 3v11"></path>
+                <path d="M8 7l4-4l4 4"></path>
+                <path d="M8 14l4 4l4-4"></path>
+                <path d="M6 18h12"></path>
+              </svg>
+            </div>
+            <h2>USB scanner is listening</h2>
+            <p>Scan a student or teacher QR code. Keyboard-style USB scanners submit automatically after Enter.</p>
+            <input id="usbInput" type="text" autocomplete="off" spellcheck="false" placeholder="Waiting for USB scanner input...">
+            <div class="usb-actions">
               <button class="primary" id="manualScanBtn">Submit Scan</button>
+              <button class="secondary" id="focusUsbBtn">Focus Input</button>
             </div>
           </div>
+        </div>
 
-          <div class="stage-footer">
-            <span class="stage-footer-text">Duplicate scans are blocked briefly to avoid accidental repeated attendance records, even while the app is offline.</span>
-            <button class="secondary" id="focusUsbBtn">Focus USB Input</button>
-          </div>
-        </section>
+        <div class="scan-hint">
+          <span>Position QR code within the frame to record attendance.</span>
+          <strong id="statusLine">Launching Edutrack Scanner...</strong>
+        </div>
       </section>
 
-      <aside class="activity-panel">
+      <aside class="side-panel">
         <section class="record-card">
           <div class="panel-head">
-            <div>
-              <span>Last Scanned Record</span>
-              <h2>Attendance feedback</h2>
-            </div>
+            <span>Last Scanned Record</span>
+            <h2>Attendance feedback</h2>
           </div>
 
-          <div class="result-shell">
-            <div class="empty-result" id="emptyResult">
-              <span>QR</span>
-              <h2>Waiting for attendance scan</h2>
-              <p>Scan a student or teacher QR code to record Time In or Time Out inside Edutrack Scanner.</p>
+          <div class="empty-result" id="emptyResult">
+            <span>QR</span>
+            <h3>Waiting for scan</h3>
+            <p>Student and teacher attendance will appear here after each scan.</p>
+          </div>
+
+          <div class="result-content hidden" id="resultContent">
+            <div class="result-status" id="resultStatus">
+              <div class="status-icon" id="statusIcon">OK</div>
+              <div>
+                <h2 id="statusTitle">Attendance recorded</h2>
+                <p id="statusMessage">The latest attendance record will appear here.</p>
+              </div>
             </div>
 
-            <div class="result-content hidden" id="resultContent">
-              <div class="result-status" id="resultStatus">
-                <div class="status-icon" id="statusIcon">OK</div>
-                <div>
-                  <h2 id="statusTitle">Attendance recorded</h2>
-                  <p id="statusMessage">The latest attendance record will appear here.</p>
-                </div>
+            <div class="person-card">
+              <div class="avatar" id="personAvatar">ET</div>
+              <div>
+                <h3 id="personName">Person Name</h3>
+                <span id="personType">Student</span>
               </div>
+            </div>
 
-              <div class="person-card">
-                <div class="avatar" id="personAvatar">ET</div>
-                <div>
-                  <h3 id="personName">Person Name</h3>
-                  <span id="personType">Student</span>
-                </div>
-              </div>
+            <div class="detail-grid" id="detailGrid"></div>
+            <div class="time-grid" id="timeGrid"></div>
 
-              <div class="detail-grid" id="detailGrid"></div>
-              <div class="time-grid" id="timeGrid"></div>
-
-              <div class="confirm-box hidden" id="confirmBox">
-                <p>This person is already timed in. Confirm only when this is the end-of-day Time Out scan.</p>
-                <div class="confirm-actions">
-                  <button class="secondary" id="cancelTimeoutBtn">Cancel</button>
-                  <button class="primary warning" id="confirmTimeoutBtn">Record Time Out</button>
-                </div>
+            <div class="confirm-box hidden" id="confirmBox">
+              <p>Confirm end-of-day Time Out.</p>
+              <div class="confirm-actions">
+                <button class="secondary" id="cancelTimeoutBtn">Cancel</button>
+                <button class="primary warning" id="confirmTimeoutBtn">Record Time Out</button>
               </div>
             </div>
           </div>
         </section>
 
-        <section class="health-card">
-          <div class="panel-head">
+        <section class="sync-panel">
+          <div class="panel-head compact-head">
             <div>
-              <span>Sync Dashboard</span>
-              <h2>Offline and synchronization status</h2>
+              <span>Offline Sync</span>
+              <h2 id="syncStatusValue">Checking...</h2>
             </div>
             <button class="primary small" id="syncNowBtn">Sync Now</button>
           </div>
+          <p id="syncStatusDetail">Preparing the queue monitor.</p>
 
-          <div class="health-list health-grid">
-            <article class="health-item">
-              <span>Online / Offline Status</span>
-              <strong id="syncConnectionValue">Checking...</strong>
-              <p id="syncConnectionDetail">Waiting for the first connectivity check.</p>
-            </article>
-
-            <article class="health-item">
-              <span>Total Pending Records</span>
+          <div class="sync-grid">
+            <article>
+              <span>Pending</span>
               <strong id="pendingRecordsValue">0</strong>
-              <p id="pendingRecordsDetail">Offline attendance records waiting to upload.</p>
+              <p id="pendingRecordsDetail">No offline records are waiting.</p>
             </article>
-
-            <article class="health-item">
-              <span>Last Successful Sync</span>
+            <article>
+              <span>Today</span>
+              <strong id="todayScansValue">0</strong>
+              <p id="todayScansDetail">Awaiting the first attendance record.</p>
+            </article>
+            <article>
+              <span>Last Sync</span>
               <strong id="lastSyncValue">Not yet synced</strong>
-              <p id="lastSyncDetail">Queued scans will upload automatically when internet returns.</p>
+              <p id="lastSyncDetail">Queued scans upload automatically.</p>
             </article>
-
-            <article class="health-item progress-item">
-              <span>Sync Progress</span>
-              <strong id="syncProgressValue">Idle</strong>
-              <p id="syncProgressDetail">No synchronization is running right now.</p>
-              <div class="progress-bar" aria-hidden="true">
-                <div class="progress-fill" id="syncProgressFill"></div>
-              </div>
-            </article>
-
-            <article class="health-item">
-              <span>Total Synced Records</span>
-              <strong id="totalSyncedValue">0</strong>
-              <p id="totalSyncedDetail">Attendance records that already reached Railway.</p>
-            </article>
-
-            <article class="health-item">
-              <span>Active Scan Mode</span>
+            <article>
+              <span>Mode</span>
               <strong id="scannerModeValue">Webcam Scanner</strong>
-              <p id="scannerModeDetail">Use the webcam or switch to USB input for kiosk hardware scanners.</p>
+              <p id="scannerModeDetail">Ready for QR scanning.</p>
             </article>
           </div>
 
-          <section class="history-section">
-            <div class="history-head">
-              <span>Synchronization History</span>
-              <small id="historySummary">Recent background and manual sync activity.</small>
-            </div>
+          <div class="progress-block">
+            <span>Sync Progress</span>
+            <strong id="syncProgressValue">Idle</strong>
+            <p id="syncProgressDetail">No synchronization is running right now.</p>
+            <div class="progress-bar"><div class="progress-fill" id="syncProgressFill"></div></div>
+          </div>
+
+          <details class="sync-history">
+            <summary>Synchronization History</summary>
+            <small id="historySummary">Recent background and manual sync activity.</small>
             <div class="history-list" id="syncHistoryList">
               <div class="history-empty">No synchronization history yet.</div>
             </div>
-          </section>
+          </details>
+        </section>
+
+        <section class="system-strip">
+          <div class="mini-card" id="connectionSummaryCard">
+            <span>Connection</span>
+            <strong id="connectionCardValue">Checking...</strong>
+            <p id="connectionCardDetail">Connecting to Railway server.</p>
+          </div>
+          <div class="mini-card" id="schoolSummaryCard">
+            <span>Assigned School</span>
+            <strong id="assignedSchoolValue">Division kiosk</strong>
+            <p id="assignedSchoolDetail">Configured for all schools.</p>
+          </div>
+          <div class="mini-card" id="scannerSummaryCard">
+            <span>Scanner</span>
+            <strong id="scannerStatusValue">Preparing</strong>
+            <p id="scannerStatusDetail">Starting scanner.</p>
+          </div>
+          <div class="mini-card" id="pendingSummaryCard">
+            <span>Pending Records</span>
+            <strong id="pendingSummaryValue">0</strong>
+            <p id="pendingSummaryDetail">No offline records are waiting.</p>
+          </div>
+          <div class="mini-card" id="syncSummaryCard">
+            <span>Sync</span>
+            <strong>Ready</strong>
+            <p>Railway sync monitor is active.</p>
+          </div>
+          <div class="mini-card">
+            <span>Total Synced</span>
+            <strong id="totalSyncedValue">0</strong>
+            <p id="totalSyncedDetail">Records sent to Railway.</p>
+          </div>
+          <div class="mini-card">
+            <span>Online / Offline</span>
+            <strong id="syncConnectionValue">Checking...</strong>
+            <p id="syncConnectionDetail">Waiting for connectivity check.</p>
+          </div>
         </section>
       </aside>
     </main>
 
-    <footer class="status-strip">
-      <span id="statusLine">Launching Edutrack Scanner...</span>
+    <footer class="bottom-bar">
+      <span>Offline mode stays enabled. Records sync automatically when internet returns.</span>
       <button class="status-button" id="minimizeBtn">Hide to Tray</button>
     </footer>
   </div>

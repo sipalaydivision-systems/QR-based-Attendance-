@@ -221,6 +221,16 @@ function updateTotalSynced(value, failedCount = 0) {
     : 'Attendance records that already reached Railway.';
 }
 
+function resolveAssetUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^(https?:|data:|file:|blob:)/i.test(raw)) return raw;
+
+  const serverUrl = String(state.settings.serverUrl || '').trim().replace(/\/+$/, '');
+  if (raw.startsWith('/') && serverUrl) return `${serverUrl}${raw}`;
+  return raw;
+}
+
 function updateSyncProgress(payload) {
   const total = Number(payload.syncProgress?.total) || 0;
   const completed = Number(payload.syncProgress?.completed) || 0;
@@ -262,8 +272,9 @@ function applyBrand(settings) {
   document.title = 'Edutrack Scanner';
 
   const logo = $('brandLogo');
-  if (settings.systemLogo) {
-    logo.innerHTML = `<img src="${settings.systemLogo}" alt="Edutrack logo">`;
+  const logoUrl = resolveAssetUrl(settings.systemLogo);
+  if (logoUrl) {
+    logo.innerHTML = `<img src="${escapeHtml(logoUrl)}" alt="Edutrack logo" onerror="this.remove();this.parentElement.innerHTML='<span>ET</span>';">`;
   } else {
     logo.innerHTML = '<span>ET</span>';
   }
