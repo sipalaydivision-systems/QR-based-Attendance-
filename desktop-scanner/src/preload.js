@@ -15,5 +15,10 @@ contextBridge.exposeInMainWorld('edutrack', {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('queue:status', listener);
     return () => ipcRenderer.removeListener('queue:status', listener);
+  },
+  onScannerStatus: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('scanner:status', listener);
+    return () => ipcRenderer.removeListener('scanner:status', listener);
   }
 });

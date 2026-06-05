@@ -1,4 +1,8 @@
-﻿const api = window.edutrack;
+const api = window.edutrack;
+
+const OFFLINE_NOTIFICATION = 'Offline Mode Enabled - Attendance records are being stored locally.';
+const CONNECTION_RESTORED_NOTIFICATION = 'Connection Restored - Synchronizing attendance records.';
+const SYNC_COMPLETE_NOTIFICATION = 'Synchronization Completed Successfully.';
 
 const state = {
   settings: {},
@@ -9,7 +13,16 @@ const state = {
   pendingTimeoutQr: '',
   usbBuffer: '',
   lastUsbKeyAt: 0,
-  busy: false
+  busy: false,
+  todayKey: currentDayKey(),
+  serverTodayScanCount: 0,
+  queuedTodayCount: 0,
+  connectionOnline: false,
+  hasLiveResult: false,
+  lastSyncAt: null,
+  syncInProgress: false,
+  lastHistoryId: '',
+  initialized: false
 };
 
 const $ = (id) => document.getElementById(id);
@@ -18,12 +31,54 @@ function pad(value) {
   return String(value).padStart(2, '0');
 }
 
+function currentDayKey(date = new Date()) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 function formatLocalSqlDateTime(date = new Date()) {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  return `${currentDayKey(date)} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function parseSqlDateTime(value) {
+  const match = String(value || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (!match) return null;
+  return new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+    Number(match[4]),
+    Number(match[5]),
+    Number(match[6] || 0)
+  );
 }
 
 function formatDateLong(date = new Date()) {
   return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+function formatShortTime(date = new Date()) {
+  return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+}
+
+function formatHistoryTime(value) {
+  const date = parseSqlDateTime(value);
+  if (!date) return 'Pending';
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function updateClock() {
@@ -36,32 +91,181 @@ function setStatusLine(message) {
   $('statusLine').textContent = message;
 }
 
+function setCardTone(id, tone) {
+  const card = $(id);
+  if (!card) return;
+  if (tone) card.dataset.tone = tone;
+  else delete card.dataset.tone;
+}
+
+function showToast(message, tone = 'info') {
+  const stack = $('toastStack');
+  const toast = document.createElement('div');
+  toast.className = `toast ${tone}`.trim();
+  toast.textContent = message;
+  stack.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('visible'));
+
+  setTimeout(() => {
+    toast.classList.remove('visible');
+    setTimeout(() => toast.remove(), 220);
+  }, 3600);
+}
+
 function setConnection(online, message) {
+  state.connectionOnline = !!online;
+
   const pill = $('connectionPill');
   pill.classList.toggle('online', !!online);
   pill.classList.toggle('offline', !online);
   pill.querySelector('b').textContent = online ? 'Online' : 'Offline';
-  if (message) setStatusLine(message);
+  $('connectionDetail').textContent = online ? 'Connected to Railway server' : 'Offline scanner mode';
+  $('connectionCardValue').textContent = online ? 'Online' : 'Offline';
+  $('connectionCardDetail').textContent = message || (online ? 'Attendance records are reaching Railway.' : 'Scans can still be saved on this computer.');
+  $('syncConnectionValue').textContent = online ? 'Online' : 'Offline';
+  $('syncConnectionDetail').textContent = message || (online ? 'Railway is reachable and ready to receive scans.' : 'Offline mode is active and saving attendance locally.');
+  $('offlineBadge').classList.toggle('hidden', !!online);
+  setCardTone('connectionSummaryCard', online ? 'success' : 'danger');
 }
 
 function initials(name) {
   const parts = String(name || 'Edutrack').trim().split(/\s+/).filter(Boolean);
   if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  return String(name || 'ED').slice(0, 2).toUpperCase();
+  return String(name || 'ET').slice(0, 2).toUpperCase();
+}
+
+function selectedSchoolName() {
+  const selected = String(state.settings.selectedSchoolId || '').trim();
+  const school = (state.settings.schools || []).find((item) => String(item.id) === selected);
+  return school ? school.name : '';
+}
+
+function refreshAssignedSchool() {
+  const schoolName = selectedSchoolName();
+  $('assignedSchoolValue').textContent = schoolName || 'Division kiosk';
+  $('assignedSchoolDetail').textContent = schoolName
+    ? 'Desktop scanner is assigned to this school.'
+    : 'Configured for division-wide attendance scanning.';
 }
 
 function updateQueue(count) {
-  $('queueChip').textContent = `${Number(count) || 0} offline`;
+  const queued = Number(count) || 0;
+  $('queueChip').textContent = `${queued} queued`;
+}
+
+function updatePendingSummary(payload) {
+  const queued = Number(payload.queuedCount) || 0;
+  $('pendingSummaryValue').textContent = String(queued);
+  $('pendingRecordsValue').textContent = String(queued);
+
+  const detail = queued
+    ? `${queued} offline attendance record(s) are waiting to upload.`
+    : 'No offline attendance records are waiting.';
+
+  $('pendingSummaryDetail').textContent = detail;
+  $('pendingRecordsDetail').textContent = detail;
+  $('historySummary').textContent = queued
+    ? `${queued} record(s) are still pending synchronization.`
+    : 'Recent background and manual sync activity.';
+  setCardTone('pendingSummaryCard', queued ? 'warning' : 'success');
+}
+
+function updateTodayScansCard() {
+  const total = Math.max(0, Number(state.serverTodayScanCount) || 0) + Math.max(0, Number(state.queuedTodayCount) || 0);
+  $('todayScansValue').textContent = String(total);
+  $('todayScansDetail').textContent = state.queuedTodayCount
+    ? `${state.queuedTodayCount} offline scan(s) are still waiting to sync.`
+    : 'All synced and queued attendance records for today are included.';
+}
+
+function updateScannerStatus(title, detail, tone = 'neutral') {
+  $('scannerStatusValue').textContent = title;
+  $('scannerStatusDetail').textContent = detail;
+  setCardTone('scannerSummaryCard', tone === 'neutral' ? '' : tone);
+}
+
+function updateSyncStatus(title, detail, tone = 'neutral') {
+  $('syncStatusValue').textContent = title;
+  $('syncStatusDetail').textContent = detail;
+  setCardTone('syncSummaryCard', tone === 'neutral' ? '' : tone);
+}
+
+function updateLastSyncFromPayload(value, detail) {
+  const date = parseSqlDateTime(value);
+  if (date) state.lastSyncAt = date;
+
+  if (state.lastSyncAt) {
+    $('lastSyncValue').textContent = formatShortTime(state.lastSyncAt);
+    $('lastSyncDetail').textContent = detail || 'Latest successful synchronization with Railway.';
+    return;
+  }
+
+  $('lastSyncValue').textContent = 'Not yet synced';
+  $('lastSyncDetail').textContent = detail || 'Queued scans will upload automatically when internet returns.';
+}
+
+function updateScannerModeDetail(mode = state.scannerMode) {
+  if (mode === 'usb') {
+    $('scannerModeValue').textContent = 'USB QR Scanner';
+    $('scannerModeDetail').textContent = 'Keyboard-style USB scanners can submit codes instantly after Enter.';
+    return;
+  }
+  $('scannerModeValue').textContent = 'Webcam Scanner';
+  $('scannerModeDetail').textContent = 'The camera dashboard can scan student and teacher QR codes live.';
+}
+
+function updateTotalSynced(value, failedCount = 0) {
+  $('totalSyncedValue').textContent = String(Number(value) || 0);
+  $('totalSyncedDetail').textContent = failedCount
+    ? `${failedCount} record(s) still need another retry or review.`
+    : 'Attendance records that already reached Railway.';
+}
+
+function updateSyncProgress(payload) {
+  const total = Number(payload.syncProgress?.total) || 0;
+  const completed = Number(payload.syncProgress?.completed) || 0;
+  const synced = Number(payload.syncProgress?.synced) || 0;
+  const skipped = Number(payload.syncProgress?.skipped) || 0;
+  const failed = Number(payload.syncProgress?.failed) || 0;
+  const remaining = Number(payload.syncProgress?.remaining) || 0;
+
+  let value = 'Idle';
+  let detail = 'No synchronization is running right now.';
+  let percent = payload.queuedCount ? 0 : 100;
+
+  if (payload.syncInProgress && total > 0) {
+    value = `${Math.min(completed, total)} / ${total}`;
+    detail = `Synced ${synced}, skipped ${skipped}, failed ${failed}, remaining ${remaining}.`;
+    percent = Math.max(8, Math.round((completed / total) * 100));
+  } else if (payload.queuedCount) {
+    value = `${payload.queuedCount} queued`;
+    detail = 'Pending records are ready to upload as soon as Railway is reachable.';
+    percent = 0;
+  } else if (payload.online) {
+    value = 'Ready';
+    detail = 'All pending records are synchronized.';
+    percent = 100;
+  } else {
+    value = 'Offline';
+    detail = 'Offline mode is saving attendance records locally.';
+    percent = 0;
+  }
+
+  $('syncProgressValue').textContent = value;
+  $('syncProgressDetail').textContent = detail;
+  $('syncProgressFill').style.width = `${percent}%`;
 }
 
 function applyBrand(settings) {
-  $('brandName').textContent = settings.brandName || 'Edutrack';
   $('divisionName').textContent = settings.divisionName || 'Schools Division of Sipalay City';
+  $('brandName').textContent = `${settings.brandName || 'Edutrack'} attendance desktop kiosk`;
+  document.title = 'Edutrack Scanner';
+
   const logo = $('brandLogo');
   if (settings.systemLogo) {
     logo.innerHTML = `<img src="${settings.systemLogo}" alt="Edutrack logo">`;
   } else {
-    logo.innerHTML = '<span>ES</span>';
+    logo.innerHTML = '<span>ET</span>';
   }
 }
 
@@ -78,23 +282,34 @@ function populateSchools(settings) {
   select.value = selected;
 }
 
-function applySettings(settings) {
-  state.settings = settings;
-  state.scannerMode = settings.scannerMode || 'webcam';
-  applyBrand(settings);
-  populateSchools(settings);
+function reflectModeSelection(mode) {
+  document.querySelectorAll('.mode-tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.mode === mode));
+  $('webcamStage').classList.toggle('hidden', mode !== 'webcam');
+  $('usbStage').classList.toggle('hidden', mode !== 'usb');
+  $('scannerModeInput').value = mode;
+}
 
-  $('serverUrlInput').value = settings.serverUrl || '';
-  $('scannerModeInput').value = state.scannerMode;
-  $('timeInInput').value = settings.timeInStart || '07:00';
-  $('timeOutInput').value = settings.timeOutOpen || '17:00';
-  $('duplicateInput').value = settings.duplicateIntervalSeconds || 5;
-  $('autoStartInput').checked = !!settings.autoStart;
-  $('fullscreenInput').checked = !!settings.startFullscreen;
-  $('trayInput').checked = !!settings.minimizeToTray;
-  $('offlineSyncInput').checked = settings.offlineSync !== false;
+function applySettings(settings, options = {}) {
+  state.settings = { ...state.settings, ...settings };
+  state.scannerMode = state.settings.scannerMode || 'webcam';
 
-  setMode(state.scannerMode, false);
+  applyBrand(state.settings);
+  populateSchools(state.settings);
+  refreshAssignedSchool();
+
+  $('serverUrlInput').value = state.settings.serverUrl || '';
+  $('timeInInput').value = state.settings.timeInStart || '07:00';
+  $('timeOutInput').value = state.settings.timeOutOpen || '17:00';
+  $('duplicateInput').value = state.settings.duplicateIntervalSeconds || 5;
+  $('offlineSyncInput').checked = state.settings.offlineSync !== false;
+  $('fullscreenInput').checked = !!state.settings.startFullscreen;
+  $('trayInput').checked = !!state.settings.minimizeToTray;
+  $('autoStartInput').checked = typeof options.autoStartEnabled === 'boolean'
+    ? options.autoStartEnabled
+    : !!state.settings.autoStart;
+
+  reflectModeSelection(state.scannerMode);
+  updateScannerModeDetail(state.scannerMode);
 }
 
 function scanCooldownMs() {
@@ -116,30 +331,33 @@ function isDuplicate(qrCode) {
 
 function resultTone(data) {
   if (!data.success && !data.offline) return 'error';
+  if (data.offline && !data.success) return 'warning';
   if (data.offline) return 'warning';
   if (['PENDING_TIME_OUT', 'CONFIRM_TIME_OUT'].includes(data.action) || data.status === 'late') return 'warning';
   return 'success';
 }
 
 function titleForResult(data) {
-  if (data.offline) return 'Offline Mode: Saved Locally';
-  if (!data.success) return data.person ? 'Scan Needs Attention' : 'Invalid QR Code';
-  if (data.action === 'TIME_IN' && data.status === 'late') return 'Late Time In Recorded';
-  if (data.action === 'TIME_IN') return 'Time In Recorded';
-  if (data.action === 'TIME_OUT') return 'Time Out Recorded';
-  if (data.action === 'PENDING_TIME_OUT') return 'Already Timed In';
-  if (data.action === 'CONFIRM_TIME_OUT') return 'Confirm Time Out';
-  return 'Scan Recorded';
+  if (data.offline && data.success && data.action === 'TIME_IN') return 'Saved locally';
+  if (data.offline && data.success && data.action === 'TIME_OUT') return 'Time out saved locally';
+  if (data.offline && !data.success) return 'Offline review';
+  if (!data.success) return data.person ? 'Scan needs attention' : 'QR code not recognized';
+  if (data.action === 'TIME_IN' && data.status === 'late') return 'Late time in recorded';
+  if (data.action === 'TIME_IN') return 'Time in recorded';
+  if (data.action === 'TIME_OUT') return 'Time out recorded';
+  if (data.action === 'PENDING_TIME_OUT') return 'Already timed in';
+  if (data.action === 'CONFIRM_TIME_OUT') return 'Confirm time out';
+  return 'Attendance recorded';
 }
 
 function statusIconForTone(tone) {
-  if (tone === 'error') return '!';
+  if (tone === 'error') return 'X';
   if (tone === 'warning') return '!';
-  return '✓';
+  return 'OK';
 }
 
 function detailItem(label, value, full = false) {
-  return `<div class="detail-item ${full ? 'full' : ''}"><span>${label}</span><strong>${value || 'N/A'}</strong></div>`;
+  return `<div class="detail-item ${full ? 'full' : ''}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value || 'N/A')}</strong></div>`;
 }
 
 function renderPersonDetails(person) {
@@ -157,7 +375,7 @@ function renderPersonDetails(person) {
 }
 
 function timeItem(label, value) {
-  return `<div class="time-item"><span>${label}</span><strong>${value || '--:--'}</strong></div>`;
+  return `<div class="time-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value || '--:--')}</strong></div>`;
 }
 
 function renderTimes(data) {
@@ -167,42 +385,223 @@ function renderTimes(data) {
   if (data.time) {
     return timeItem(data.action === 'TIME_OUT' ? 'Time Out' : 'Time In', data.time);
   }
-  return '';
+  return `${timeItem('Attendance Event', 'Recorded')}${timeItem('Storage Mode', state.connectionOnline ? 'Railway' : 'Local Queue')}`;
+}
+
+function showResultCard({ tone, title, message, person, detailHtml, timeHtml, needsConfirm }) {
+  const status = $('resultStatus');
+  status.className = `result-status ${tone}`.trim();
+  $('statusIcon').textContent = statusIconForTone(tone);
+  $('statusTitle').textContent = title;
+  $('statusMessage').textContent = message;
+
+  $('emptyResult').classList.add('hidden');
+  $('resultContent').classList.remove('hidden');
+  $('personName').textContent = person?.name || 'Unknown QR code';
+  $('personType').textContent = person?.type || 'Scanner Result';
+  $('personAvatar').textContent = initials(person?.name || 'ET');
+  $('detailGrid').innerHTML = detailHtml;
+  $('timeGrid').innerHTML = timeHtml;
+  $('confirmBox').classList.toggle('hidden', !needsConfirm);
 }
 
 function renderResult(data) {
   const tone = resultTone(data);
-  const status = $('resultStatus');
-  status.className = `result-status ${tone === 'success' ? '' : tone}`.trim();
-  $('statusIcon').textContent = statusIconForTone(tone);
-  $('statusTitle').textContent = titleForResult(data);
-  $('statusMessage').textContent = data.message || data.error || 'Scan processed.';
-
-  $('emptyResult').classList.add('hidden');
-  $('resultContent').classList.remove('hidden');
-
   const person = data.person || null;
-  $('personName').textContent = person?.name || 'Unknown QR Code';
-  $('personType').textContent = person?.type || 'Scanner Result';
-  $('personAvatar').textContent = initials(person?.name || 'QR');
-  $('detailGrid').innerHTML = person ? renderPersonDetails(person) : detailItem('QR Status', data.error || data.message || 'Unknown scan', true);
-  $('timeGrid').innerHTML = renderTimes(data);
 
-  const needsConfirm = data.action === 'CONFIRM_TIME_OUT';
-  $('confirmBox').classList.toggle('hidden', !needsConfirm);
-  if (needsConfirm) state.pendingTimeoutQr = data.qrCode || state.pendingTimeoutQr;
+  showResultCard({
+    tone,
+    title: titleForResult(data),
+    message: data.message || data.error || 'Attendance record processed.',
+    person: {
+      name: person?.name || 'Unknown QR Code',
+      type: person?.type || 'Scanner Result'
+    },
+    detailHtml: person
+      ? renderPersonDetails(person)
+      : detailItem('QR Status', data.error || data.message || 'Unknown scan', true),
+    timeHtml: renderTimes(data),
+    needsConfirm: data.action === 'CONFIRM_TIME_OUT'
+  });
 
-  if (data.queuedCount !== undefined) updateQueue(data.queuedCount);
+  if (data.action === 'CONFIRM_TIME_OUT') state.pendingTimeoutQr = data.qrCode || state.pendingTimeoutQr;
+  state.hasLiveResult = true;
+}
+
+function renderServerRecord(record) {
+  if (!record || state.hasLiveResult) return;
+
+  showResultCard({
+    tone: record.status === 'late' ? 'warning' : 'success',
+    title: record.action === 'TIME_OUT' ? 'Latest server time out' : 'Latest server time in',
+    message: 'Most recent attendance record synced from the Railway database.',
+    person: {
+      name: record.name || 'Recent attendance record',
+      type: record.type || 'Scanner Result'
+    },
+    detailHtml: `${detailItem('School', record.school || 'N/A', true)}${detailItem('Recorded By', 'Railway Server')}${detailItem('Attendance Status', (record.status || 'Recorded').replace(/_/g, ' '))}`,
+    timeHtml: record.action === 'TIME_OUT'
+      ? `${timeItem('Time Out', record.time)}${timeItem('Server Sync', 'Synced')}`
+      : `${timeItem('Time In', record.time)}${timeItem('Server Sync', 'Synced')}`,
+    needsConfirm: false
+  });
+}
+
+function resetForNewDayIfNeeded() {
+  const today = currentDayKey();
+  if (state.todayKey === today) return;
+  state.todayKey = today;
+  state.serverTodayScanCount = 0;
+  state.queuedTodayCount = 0;
+  state.hasLiveResult = false;
+  $('emptyResult').classList.remove('hidden');
+  $('resultContent').classList.add('hidden');
+  updateTodayScansCard();
+}
+
+function applyServerSummary(summary, queuedTodayCount = 0) {
+  resetForNewDayIfNeeded();
+  state.serverTodayScanCount = Number(summary?.todayScanCount) || 0;
+  state.queuedTodayCount = Number(queuedTodayCount) || 0;
+  updateTodayScansCard();
+  renderServerRecord(summary?.lastRecord || null);
+}
+
+function triggerLabel(triggerSource) {
+  const value = String(triggerSource || '').toLowerCase();
+  if (value === 'manual' || value === 'tray') return 'Manual sync';
+  if (value === 'startup') return 'Startup sync';
+  if (value === 'background' || value === 'manual-check') return 'Background sync';
+  if (value === 'pre-submit') return 'Pre-scan sync';
+  return 'Synchronization';
+}
+
+function renderHistory(entries = []) {
+  const list = $('syncHistoryList');
+  list.innerHTML = '';
+
+  if (!entries.length) {
+    const empty = document.createElement('div');
+    empty.className = 'history-empty';
+    empty.textContent = 'No synchronization history yet.';
+    list.appendChild(empty);
+    return;
+  }
+
+  entries.forEach((entry) => {
+    const item = document.createElement('article');
+    item.className = `history-item ${String(entry.status || '').toLowerCase()}`.trim();
+
+    const head = document.createElement('div');
+    head.className = 'history-item-head';
+
+    const title = document.createElement('strong');
+    title.textContent = triggerLabel(entry.triggerSource);
+
+    const stamp = document.createElement('span');
+    stamp.textContent = formatHistoryTime(entry.finishedAt || entry.startedAt);
+    head.appendChild(title);
+    head.appendChild(stamp);
+
+    const status = document.createElement('p');
+    status.textContent = entry.detailMessage || 'Synchronization activity recorded.';
+
+    const meta = document.createElement('small');
+    meta.textContent = `Status: ${String(entry.status || 'running').toUpperCase()} | Total ${entry.totalEvents || 0} | Synced ${entry.syncedEvents || 0} | Skipped ${entry.skippedEvents || 0} | Failed ${entry.failedEvents || 0} | Remaining ${entry.remainingEvents || 0}`;
+
+    item.appendChild(head);
+    item.appendChild(status);
+    item.appendChild(meta);
+    list.appendChild(item);
+  });
+}
+
+function handleStateNotifications(previous, payload, options = {}) {
+  if (!state.initialized || options.silentNotifications) return;
+
+  if (previous.online !== null && previous.online !== payload.online) {
+    if (!payload.online) {
+      showToast(OFFLINE_NOTIFICATION, 'warning');
+    } else if (payload.online && Number(payload.queuedCount || 0) > 0) {
+      showToast(CONNECTION_RESTORED_NOTIFICATION, 'success');
+    }
+  }
+
+  if (previous.syncInProgress && !payload.syncInProgress) {
+    const latest = Array.isArray(payload.recentSyncHistory) ? payload.recentSyncHistory[0] : null;
+    if (latest && latest.syncHistoryId !== previous.lastHistoryId && latest.status === 'success') {
+      showToast(SYNC_COMPLETE_NOTIFICATION, 'success');
+    }
+  }
+}
+
+function applyScannerStatusPayload(payload, options = {}) {
+  const previous = {
+    online: state.initialized ? state.connectionOnline : null,
+    syncInProgress: state.syncInProgress,
+    lastHistoryId: state.lastHistoryId
+  };
+
+  if (payload.config?.settings) {
+    applySettings(payload.config.settings, { autoStartEnabled: state.settings.autoStart });
+  }
+
+  updateQueue(payload.queuedCount || 0);
+  state.queuedTodayCount = Number(payload.queuedTodayCount) || 0;
+  applyServerSummary(payload.config?.summary || null, state.queuedTodayCount);
+  setConnection(payload.online, payload.message);
+  updatePendingSummary(payload);
+  updateSyncProgress(payload);
+  updateTotalSynced(payload.totalSyncedRecords || 0, payload.failedRecordsCount || 0);
+  renderHistory(payload.recentSyncHistory || []);
+
+  if (payload.lastSuccessfulSyncAt) {
+    updateLastSyncFromPayload(payload.lastSuccessfulSyncAt, Number(payload.queuedCount)
+      ? 'A connection is available, but some offline scans are still queued.'
+      : 'Latest successful synchronization completed.');
+  } else if (payload.online && Number(payload.queuedCount || 0) === 0) {
+    updateLastSyncFromPayload(null, 'Live attendance scans are reaching Railway successfully.');
+  } else {
+    updateLastSyncFromPayload(null, 'Queued scans will upload automatically when internet returns.');
+  }
+
+  if (payload.syncInProgress) {
+    updateSyncStatus('Synchronizing', payload.syncProgress?.currentLabel
+      ? `Uploading ${payload.syncProgress.currentLabel} and other pending attendance records.`
+      : 'Synchronizing queued attendance records with Railway.', 'warning');
+    updateScannerStatus('Synchronizing records', 'Offline attendance records are being uploaded in the background.', 'warning');
+  } else if (payload.online) {
+    if (Number(payload.queuedCount || 0) > 0) {
+      updateSyncStatus('Queue waiting', `${payload.queuedCount} offline attendance record(s) are still waiting to sync.`, 'warning');
+    } else if (Number(payload.failedRecordsCount || 0) > 0) {
+      updateSyncStatus('Needs retry', `${payload.failedRecordsCount} record(s) still need another synchronization attempt.`, 'warning');
+    } else {
+      updateSyncStatus('Up to date', 'Desktop attendance records are synced with Railway.', 'success');
+    }
+  } else {
+    updateSyncStatus(Number(payload.queuedCount || 0) > 0 ? 'Queued locally' : 'Offline', payload.message || 'The desktop scanner is waiting for internet connectivity.', Number(payload.queuedCount || 0) > 0 ? 'warning' : 'danger');
+  }
+
+  state.syncInProgress = !!payload.syncInProgress;
+  state.lastHistoryId = payload.recentSyncHistory?.[0]?.syncHistoryId || state.lastHistoryId;
+
+  handleStateNotifications(previous, payload, options);
+  if (payload.message && !options.quietStatusLine) setStatusLine(payload.message);
 }
 
 async function submitQrCode(qrCode, options = {}) {
   const trimmed = String(qrCode || '').trim();
   if (!trimmed || state.busy) return;
-  if (!options.confirmTimeOut && isDuplicate(trimmed)) return;
+  if (!options.confirmTimeOut && isDuplicate(trimmed)) {
+    setStatusLine('Duplicate scan ignored to protect attendance accuracy.');
+    updateScannerStatus('Duplicate blocked', 'The same QR code was scanned again too quickly.', 'warning');
+    return;
+  }
 
   state.busy = true;
   state.pendingTimeoutQr = trimmed;
-  setStatusLine('Processing scan...');
+  setStatusLine('Processing attendance scan...');
+  updateScannerStatus('Processing scan', 'Preparing the attendance record for Railway or offline storage.', 'warning');
 
   const result = await api.submitScan({
     qrCode: trimmed,
@@ -214,23 +613,51 @@ async function submitQrCode(qrCode, options = {}) {
 
   result.qrCode = trimmed;
   renderResult(result);
-  if (result.offline) setConnection(false, result.message || "Can't connect to server due to no internet connection.");
-  else setConnection(true, 'Scan processed through the Railway server.');
+  applyScannerStatusPayload(result, { quietStatusLine: true });
 
+  if (result.offline) {
+    if (result.success && ['TIME_IN', 'TIME_OUT'].includes(result.action)) {
+      updateScannerStatus('Offline record saved', 'Attendance has been saved locally and will upload automatically.', 'warning');
+      setStatusLine(OFFLINE_NOTIFICATION);
+    } else {
+      updateScannerStatus('Offline review', result.error || 'Please review the latest offline attendance response.', result.success ? 'warning' : 'danger');
+      setStatusLine(result.message || OFFLINE_NOTIFICATION);
+    }
+  } else if (result.action === 'TIME_IN' || result.action === 'TIME_OUT') {
+    state.lastSyncAt = new Date();
+    updateLastSyncFromPayload(formatLocalSqlDateTime(state.lastSyncAt), 'Latest attendance update reached the Railway database successfully.');
+    updateScannerStatus('Ready for next scan', 'Student and teacher QR codes can be scanned again.', 'success');
+    setStatusLine(result.message || 'Attendance recorded successfully.');
+  } else if (result.action === 'CONFIRM_TIME_OUT') {
+    updateScannerStatus('Awaiting confirmation', 'Confirm this end-of-day time out to finish the attendance record.', 'warning');
+    setStatusLine(result.message || 'Please confirm before recording time out.');
+  } else if (result.action === 'PENDING_TIME_OUT') {
+    updateScannerStatus('Already timed in', 'Time out will be available at the scheduled end-of-day time.', 'warning');
+    setStatusLine(result.message || 'This person is already timed in for today.');
+  } else if (!result.success) {
+    updateScannerStatus('Scan needs attention', result.error || 'Please review the latest attendance response.', 'danger');
+    setStatusLine(result.error || 'The scan needs attention.');
+  } else {
+    updateScannerStatus('Ready for next scan', 'The scanner is connected and ready for another QR code.', 'success');
+    setStatusLine(result.message || 'Attendance request completed.');
+  }
+
+  updateTodayScansCard();
   state.busy = false;
-  if ($('usbInput')) $('usbInput').value = '';
+  $('usbInput').value = '';
 }
 
 async function confirmTimeout() {
   if (!state.pendingTimeoutQr) return;
-  await submitQrCode(state.pendingTimeoutQr, { confirmTimeOut: true, allowQueue: false, requireTimeOutConfirmation: true });
+  await submitQrCode(state.pendingTimeoutQr, { confirmTimeOut: true, allowQueue: true, requireTimeOutConfirmation: true });
 }
 
 async function startCamera() {
   if (state.cameraRunning) return;
   if (!window.Html5Qrcode) {
     $('cameraFallback').classList.remove('hidden');
-    setStatusLine('Camera scanner library is unavailable. Use USB Scanner mode.');
+    setStatusLine('Camera scanner library is unavailable. Switch to USB Scanner mode.');
+    updateScannerStatus('Camera unavailable', 'The desktop app can still scan through a USB QR scanner.', 'danger');
     return;
   }
 
@@ -245,7 +672,8 @@ async function startCamera() {
     state.cameraRunning = true;
     $('cameraFallback').classList.add('hidden');
     setStatusLine('Camera scanner is active. Position a QR code inside the frame.');
-  } catch (firstErr) {
+    updateScannerStatus('Webcam ready', 'The live camera scanner is ready for student and teacher QR codes.', 'success');
+  } catch (_firstErr) {
     try {
       await state.html5QrCode.start(
         { facingMode: 'user' },
@@ -256,37 +684,42 @@ async function startCamera() {
       state.cameraRunning = true;
       $('cameraFallback').classList.add('hidden');
       setStatusLine('Camera scanner is active using the available camera.');
-    } catch (err) {
+      updateScannerStatus('Webcam ready', 'The available camera is active and ready for attendance scans.', 'success');
+    } catch (_err) {
       $('cameraFallback').classList.remove('hidden');
       setStatusLine('Camera is unavailable. Switch to USB Scanner mode or allow camera permission.');
+      updateScannerStatus('Camera permission needed', 'Allow Windows camera access or use a USB QR scanner instead.', 'warning');
     }
   }
 }
 
 async function stopCamera() {
   if (state.html5QrCode && state.cameraRunning) {
-    try { await state.html5QrCode.stop(); } catch (_err) {}
+    try {
+      await state.html5QrCode.stop();
+    } catch (_err) {
+      // Ignore stop failures so the next start attempt can still recover.
+    }
   }
   state.cameraRunning = false;
 }
 
 async function setMode(mode, persist = true) {
-  state.scannerMode = mode;
-  document.querySelectorAll('.mode-tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.mode === mode));
-  $('webcamStage').classList.toggle('hidden', mode !== 'webcam');
-  $('usbStage').classList.toggle('hidden', mode !== 'usb');
-  $('scannerModeInput').value = mode;
+  state.scannerMode = mode === 'usb' ? 'usb' : 'webcam';
+  reflectModeSelection(state.scannerMode);
+  updateScannerModeDetail(state.scannerMode);
 
-  if (mode === 'webcam') {
+  if (state.scannerMode === 'webcam') {
     await startCamera();
   } else {
     await stopCamera();
     setTimeout(() => $('usbInput')?.focus(), 80);
     setStatusLine('USB scanner mode is active. Scan a QR code or paste it into the input.');
+    updateScannerStatus('USB scanner ready', 'This desktop station is listening for keyboard-style QR scanners.', 'success');
   }
 
   if (persist) {
-    state.settings = await api.saveSettings({ scannerMode: mode });
+    state.settings = await api.saveSettings({ scannerMode: state.scannerMode });
   }
 }
 
@@ -313,34 +746,39 @@ async function saveSettingsFromForm() {
     minimizeToTray: $('trayInput').checked,
     offlineSync: $('offlineSyncInput').checked
   });
-  applySettings(settings);
-  $('settingsNote').textContent = 'Settings saved successfully.';
+
+  applySettings(settings, { autoStartEnabled: settings.autoStart });
+  await setMode(settings.scannerMode || state.scannerMode, false);
+  $('settingsNote').textContent = 'Edutrack Scanner settings saved successfully.';
   closeSettings();
-  checkConnection();
+  await checkConnection({ silentNotifications: true });
 }
 
 async function testConnection() {
-  $('settingsNote').textContent = 'Testing connection...';
+  $('settingsNote').textContent = 'Testing Railway connection...';
   const result = await api.checkConnection();
+  applyScannerStatusPayload(result, { silentNotifications: true, quietStatusLine: true });
   $('settingsNote').textContent = result.online ? 'Connected to Railway server.' : result.message;
-  if (result.config?.settings) applySettings(result.config.settings);
-  updateQueue(result.queuedCount || 0);
-  setConnection(result.online, result.message);
 }
 
-async function checkConnection() {
+async function checkConnection(options = {}) {
   const result = await api.checkConnection();
-  if (result.config?.settings) applySettings(result.config.settings);
-  updateQueue(result.queuedCount || 0);
-  setConnection(result.online, result.message);
+  applyScannerStatusPayload(result, options);
   return result;
 }
 
 async function syncQueue() {
-  setStatusLine('Syncing offline queue...');
+  setStatusLine('Syncing queued attendance records...');
   const result = await api.syncQueue();
-  updateQueue(result.remaining || 0);
-  setStatusLine(result.remaining ? `${result.synced || 0} scans synced. ${result.remaining} still waiting for internet.` : 'Offline queue is synced.');
+  applyScannerStatusPayload(result, { quietStatusLine: true });
+
+  if ((result.remaining || 0) === 0 && (result.synced || result.skipped || result.failed)) {
+    setStatusLine(SYNC_COMPLETE_NOTIFICATION);
+  } else if (result.remaining || result.failed) {
+    setStatusLine('Some queued records still need Railway before they can finish syncing.');
+  } else {
+    setStatusLine('No queued attendance records need synchronization right now.');
+  }
 }
 
 function isEditable(target) {
@@ -374,10 +812,15 @@ function bindEvents() {
   document.querySelectorAll('.mode-tab').forEach((tab) => {
     tab.addEventListener('click', () => setMode(tab.dataset.mode));
   });
+
   $('startCameraBtn').addEventListener('click', startCamera);
   $('manualScanBtn').addEventListener('click', () => submitQrCode($('usbInput').value));
   $('usbInput').addEventListener('keydown', (event) => {
     if (event.key === 'Enter') submitQrCode($('usbInput').value);
+  });
+  $('focusUsbBtn').addEventListener('click', async () => {
+    await setMode('usb');
+    $('usbInput').focus();
   });
   $('settingsBtn').addEventListener('click', openSettings);
   $('closeSettingsBtn').addEventListener('click', closeSettings);
@@ -385,31 +828,49 @@ function bindEvents() {
   $('saveSettingsBtn').addEventListener('click', saveSettingsFromForm);
   $('testServerBtn').addEventListener('click', testConnection);
   $('syncBtn').addEventListener('click', syncQueue);
+  $('syncNowBtn').addEventListener('click', syncQueue);
   $('fullscreenBtn').addEventListener('click', () => api.toggleFullscreen());
+  $('minimizeBtn').addEventListener('click', () => api.minimize());
   $('confirmTimeoutBtn').addEventListener('click', confirmTimeout);
   $('cancelTimeoutBtn').addEventListener('click', () => {
     $('confirmBox').classList.add('hidden');
-    setStatusLine('Time Out was not recorded. Ready for the next scan.');
+    setStatusLine('Time out was not recorded. The scanner is ready for the next attendance scan.');
+    updateScannerStatus('Ready for next scan', 'The previous time out request was cancelled.', 'success');
   });
   $('scannerModeInput').addEventListener('change', () => setMode($('scannerModeInput').value));
   window.addEventListener('keydown', handleUsbKeydown);
-  api.onQueueStatus((payload) => updateQueue(payload.queuedCount || 0));
+
+  api.onQueueStatus((payload) => {
+    updateQueue(payload.queuedCount || 0);
+    state.queuedTodayCount = Number(payload.queuedTodayCount) || 0;
+    updateTodayScansCard();
+  });
+
+  api.onScannerStatus((payload) => {
+    applyScannerStatusPayload(payload, { quietStatusLine: true });
+  });
 }
 
 async function init() {
   updateClock();
   setInterval(updateClock, 1000);
   bindEvents();
+  updateTodayScansCard();
+  updateScannerStatus('Preparing scanner', 'Loading scanner settings and desktop branding.', 'warning');
 
   const initial = await api.getSettings();
-  applySettings(initial.settings);
-  updateQueue(initial.queuedCount || 0);
+  applySettings(initial.settings, { autoStartEnabled: initial.autoStartEnabled });
+  applyScannerStatusPayload(initial, { silentNotifications: true, quietStatusLine: true });
+  await setMode(state.scannerMode, false);
 
-  await checkConnection();
-  setInterval(checkConnection, 30000);
-  setInterval(syncQueue, 20000);
+  await checkConnection({ silentNotifications: true, quietStatusLine: true });
+  state.initialized = true;
+  setStatusLine('Edutrack Scanner is ready for attendance scanning.');
 }
 
 init().catch((err) => {
   setConnection(false, err.message || "Can't connect to server due to no internet connection.");
+  updateSyncStatus('Offline', err.message || 'The desktop scanner could not reach Railway during startup.', 'danger');
+  updateScannerStatus('Startup needs attention', 'The scanner opened, but the first connectivity check did not finish cleanly.', 'danger');
+  setStatusLine(err.message || 'The desktop scanner started with limited connectivity.');
 });

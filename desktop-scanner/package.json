@@ -1,7 +1,7 @@
 {
   "name": "edutrack-desktop-scanner",
   "version": "1.0.0",
-  "description": "Edutrack Attendance Monitoring App desktop QR scanner",
+  "description": "Edutrack Scanner desktop attendance application",
   "main": "src/main.js",
   "author": "Schools Division of Sipalay City",
   "license": "UNLICENSED",
@@ -10,10 +10,11 @@
     "start": "electron .",
     "dist": "electron-builder --win nsis",
     "dist:win": "electron-builder --win nsis",
-    "copy:installer": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$src=(Get-ChildItem -Path dist -Filter 'Edutrack-Scanner-Setup-*.exe' | Select-Object -First 1); if (!$src) { throw 'Installer not found' }; New-Item -ItemType Directory -Force -Path ..\\public\\downloads | Out-Null; Copy-Item $src.FullName ..\\public\\downloads\\Edutrack-Scanner-Setup.exe -Force\""
+    "copy:installer": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$src=(Get-ChildItem -Path dist -Filter 'Edutrack-Scanner-Setup-*.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1); if (!$src) { throw 'Installer not found' }; New-Item -ItemType Directory -Force -Path ..\\public\\downloads | Out-Null; Copy-Item $src.FullName ..\\public\\downloads\\Edutrack-Scanner-Setup.exe -Force\""
   },
   "dependencies": {
-    "html5-qrcode": "^2.3.8"
+    "html5-qrcode": "^2.3.8",
+    "sql.js": "^1.13.0"
   },
   "devDependencies": {
     "electron": "^31.7.7",
@@ -28,10 +29,12 @@
     "files": [
       "src/**/*",
       "node_modules/html5-qrcode/**/*",
+      "node_modules/sql.js/**/*",
       "package.json"
     ],
     "win": {
       "target": "nsis",
+      "icon": "src/assets/edutrack-scanner.ico",
       "artifactName": "Edutrack-Scanner-Setup-${version}.${ext}"
     },
     "nsis": {
@@ -40,6 +43,9 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Edutrack Scanner",
+      "installerIcon": "src/assets/edutrack-scanner.ico",
+      "uninstallerIcon": "src/assets/edutrack-scanner.ico",
+      "installerHeaderIcon": "src/assets/edutrack-scanner.ico",
       "runAfterFinish": true,
       "deleteAppDataOnUninstall": false
     }

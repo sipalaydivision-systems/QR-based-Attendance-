@@ -30,6 +30,158 @@ function getPublicBaseUrl(req) {
     return `${req.protocol}://${req.get('host') || ''}`.replace(/\/+$/, '');
 }
 
+function normalizeOptionalSchoolId(value) {
+    const parsed = parseInt(value, 10);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+async function getScannerDesktopSummary(schoolId) {
+    const today = todayDate();
+    let totalQuery = `
+        SELECT
+            COALESCE(SUM(CASE WHEN time_in IS NOT NULL THEN 1 ELSE 0 END), 0)
+            + COALESCE(SUM(CASE WHEN time_out IS NOT NULL THEN 1 ELSE 0 END), 0) AS total_scans
+        FROM attendance
+        WHERE date = ?`;
+    const totalParams = [today];
+    if (schoolId) {
+        totalQuery += ' AND school_id = ?';
+        totalParams.push(schoolId);
+    }
+
+    let latestQuery = `
+        SELECT
+            a.person_type,
+            a.time_in,
+            a.time_out,
+            a.status,
+            sc.name AS school_name,
+            CASE
+                WHEN a.person_type = 'student' THEN CONCAT_WS(' ', s.firstname, s.lastname)
+                ELSE CONCAT_WS(' ', t.firstname, t.lastname)
+            END AS person_name
+        FROM attendance a
+        LEFT JOIN students s ON a.person_type = 'student' AND a.person_id = s.id
+        LEFT JOIN teachers t ON a.person_type = 'teacher' AND a.person_id = t.id
+        LEFT JOIN schools sc ON a.school_id = sc.id
+        WHERE a.date = ?`;
+    const latestParams = [today];
+    if (schoolId) {
+        latestQuery += ' AND a.school_id = ?';
+        latestParams.push(schoolId);
+    }
+    latestQuery += ' ORDER BY COALESCE(a.updated_at, a.time_out, a.time_in, a.created_at) DESC LIMIT 1';
+
+    const [[totalRow], [latestRows]] = await Promise.all([
+        db.query(totalQuery, totalParams),
+        db.query(latestQuery, latestParams)
+    ]);
+
+    const latestRecord = latestRows[0]
+        ? {
+            name: latestRows[0].person_name || 'Attendance Record',
+            type: latestRows[0].person_type || 'person',
+            school: latestRows[0].school_name || 'N/A',
+            action: latestRows[0].time_out ? 'TIME_OUT' : 'TIME_IN',
+            time: formatTime12(latestRows[0].time_out || latestRows[0].time_in),
+            status: latestRows[0].status || 'present'
+        }
+        : null;
+
+    return {
+        today,
+        todayScanCount: totalRow[0]?.total_scans || 0,
+        lastRecord: latestRecord
+    };
+}
+
+async function getScannerDesktopDirectory(schoolId) {
+    const studentParams = [];
+    const teacherParams = [];
+
+    let studentQuery = `
+        SELECT
+            s.id AS person_id,
+            s.qr_code,
+            'student' AS person_type,
+            s.lrn AS person_code,
+            CONCAT_WS(' ', s.firstname, s.lastname) AS person_name,
+            s.school_id,
+            sc.name AS school_name,
+            gl.name AS grade_name,
+            sec.name AS section_name,
+            COALESCE(NULLIF(sec.adviser, ''), TRIM(CONCAT_WS(' ', at.firstname, at.middlename, at.lastname))) AS adviser,
+            at.contact AS adviser_contact,
+            at.email AS adviser_email,
+            s.status AS person_status,
+            COALESCE(s.updated_at, s.created_at) AS updated_at
+        FROM students s
+        LEFT JOIN schools sc ON s.school_id = sc.id
+        LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id
+        LEFT JOIN sections sec ON s.section_id = sec.id
+        LEFT JOIN teachers at ON sec.adviser_teacher_id = at.id
+        WHERE s.qr_code IS NOT NULL
+          AND s.qr_code <> ''
+          AND s.status <> 'deleted'`;
+
+    let teacherQuery = `
+        SELECT
+            t.id AS person_id,
+            t.qr_code,
+            'teacher' AS person_type,
+            t.employee_id AS person_code,
+            CONCAT_WS(' ', t.firstname, t.lastname) AS person_name,
+            t.school_id,
+            sc.name AS school_name,
+            gl.name AS grade_name,
+            sec.name AS section_name,
+            COALESCE(NULLIF(sec.adviser, ''), TRIM(CONCAT_WS(' ', at.firstname, at.middlename, at.lastname))) AS adviser,
+            at.contact AS adviser_contact,
+            at.email AS adviser_email,
+            t.status AS person_status,
+            COALESCE(t.updated_at, t.created_at) AS updated_at
+        FROM teachers t
+        LEFT JOIN schools sc ON t.school_id = sc.id
+        LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
+        LEFT JOIN sections sec ON t.section_id = sec.id
+        LEFT JOIN teachers at ON sec.adviser_teacher_id = at.id
+        WHERE t.qr_code IS NOT NULL
+          AND t.qr_code <> ''
+          AND t.status <> 'deleted'`;
+
+    if (schoolId) {
+        studentQuery += ' AND s.school_id = ?';
+        teacherQuery += ' AND t.school_id = ?';
+        studentParams.push(schoolId);
+        teacherParams.push(schoolId);
+    }
+
+    studentQuery += ' ORDER BY sc.name, person_name';
+    teacherQuery += ' ORDER BY sc.name, person_name';
+
+    const [[students], [teachers]] = await Promise.all([
+        db.query(studentQuery, studentParams),
+        db.query(teacherQuery, teacherParams)
+    ]);
+
+    return [...students, ...teachers].map((row) => ({
+        personId: row.person_id,
+        qrCode: row.qr_code,
+        personType: row.person_type,
+        personCode: row.person_code || '',
+        name: row.person_name || 'Attendance Record',
+        schoolId: row.school_id || null,
+        school: row.school_name || 'N/A',
+        grade: row.grade_name || 'N/A',
+        section: row.section_name || 'N/A',
+        adviser: row.adviser || 'N/A',
+        adviserContact: row.adviser_contact || '',
+        adviserEmail: row.adviser_email || '',
+        personStatus: row.person_status || 'active',
+        updatedAt: row.updated_at || nowDateTime()
+    }));
+}
+
 function normalizeKioskScanTime(value) {
     const raw = String(value || '').trim();
     const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/);
@@ -45,13 +197,17 @@ function normalizeKioskScanTime(value) {
 
 router.get('/scanner-desktop-config', async (req, res) => {
     try {
+        const schoolId = normalizeOptionalSchoolId(req.query.school_id);
         const [settingsRows] = await db.query(
             "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('system_name','division_name','system_logo','am_time_in_end','pm_time_out_end','late_threshold')"
         );
         const settings = {};
         settingsRows.forEach(row => { settings[row.setting_key] = row.setting_value; });
 
-        const [schools] = await db.query("SELECT id, name FROM schools WHERE status = 'active' ORDER BY name");
+        const [[schools], summary] = await Promise.all([
+            db.query("SELECT id, name FROM schools WHERE status = 'active' ORDER BY name"),
+            getScannerDesktopSummary(schoolId)
+        ]);
 
         return res.json({
             success: true,
@@ -60,11 +216,27 @@ router.get('/scanner-desktop-config', async (req, res) => {
             serverTime: nowDateTime(),
             today: todayDate(),
             settings,
-            schools
+            schools,
+            summary
         });
     } catch (err) {
         console.error('Scanner desktop config error:', err);
         return res.status(500).json({ success: false, error: 'Failed to load scanner desktop configuration.' });
+    }
+});
+
+router.get('/scanner-desktop-directory', requireAuthOrScannerKiosk, async (req, res) => {
+    try {
+        const schoolId = normalizeOptionalSchoolId(req.query.school_id);
+        const people = await getScannerDesktopDirectory(schoolId);
+        return res.json({
+            success: true,
+            generatedAt: nowDateTime(),
+            people
+        });
+    } catch (err) {
+        console.error('Scanner desktop directory error:', err);
+        return res.status(500).json({ success: false, error: 'Failed to load scanner desktop directory.' });
     }
 });
 
@@ -520,9 +692,11 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
         }
 
         const personInfo = {
+            id: person.id,
             name: person.firstname + ' ' + person.lastname,
             type: personType,
             school: person.school_name || 'N/A',
+            person_status: person.person_status || 'active',
             adviser: person.adviser || 'N/A',
             adviser_contact: person.adviser_contact || '',
             adviser_email: person.adviser_email || ''

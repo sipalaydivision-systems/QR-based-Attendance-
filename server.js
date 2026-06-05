@@ -423,16 +423,13 @@ function sendWindowsScannerInstaller(req, res) {
             'foreach ($linkPath in $links) {',
             '  $shortcut = $ws.CreateShortcut($linkPath)',
             '  $shortcut.TargetPath = $exe',
-            "  $shortcut.Arguments = '--autostart'",
             '  $shortcut.WorkingDirectory = $installDir',
-            "  $shortcut.Description = 'Edutrack Attendance Scanner'",
+            '  $shortcut.IconLocation = $exe',
+            "  $shortcut.Description = 'Edutrack Scanner'",
             '  $shortcut.Save()',
             '}',
-            "$runKey = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'",
-            'New-Item -Path $runKey -Force | Out-Null',
-            "Set-ItemProperty -Path $runKey -Name 'Edutrack Scanner' -Value ('\"{0}\" --autostart' -f $exe)",
-            "Write-Host 'Launching Edutrack Scanner in fullscreen mode...'",
-            "Start-Process -FilePath $exe -ArgumentList '--autostart'",
+            "Write-Host 'Launching Edutrack Scanner dashboard...'",
+            'Start-Process -FilePath $exe',
             "Write-Host 'Edutrack Scanner installed successfully.'"
         ];
 
@@ -462,7 +459,8 @@ function sendWindowsScannerInstaller(req, res) {
             '  exit /b 1',
             ')',
             'echo.',
-            'echo Edutrack Scanner is installed and configured to auto-start when Windows signs in.',
+            'echo Edutrack Scanner is installed successfully.',
+            'echo You can enable or disable Windows auto-start inside the app settings.',
             'echo You can close this window.',
             'timeout /t 4 /nobreak >nul',
             'exit /b 0'
