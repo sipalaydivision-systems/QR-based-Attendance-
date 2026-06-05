@@ -3084,6 +3084,13 @@ class DashboardPage extends StatelessWidget {
     );
     final present = intValue(dashboard['students_present']);
     final absent = intValue(dashboard['students_absent']);
+    final teachers = intValue(
+      dashboard['active_teachers'] ?? dashboard['total_teachers'],
+    );
+    final flaggedFromDashboard = intValue(dashboard['flagged_absent_2day']);
+    final flaggedCount = flaggedFromDashboard > 0
+        ? flaggedFromDashboard
+        : flags.length;
     final analyticsBase = attendanceBase > 0
         ? attendanceBase
         : (active > 0 ? active : present + absent);
@@ -3130,6 +3137,16 @@ class DashboardPage extends StatelessWidget {
           targetDate: day,
           title: title ?? 'Absent Students',
         ),
+      );
+    }
+
+    Future<void> openFlaggedStudents() async {
+      if (!context.mounted) return;
+      await showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => FlaggedStudentsSheet(flags: flags),
       );
     }
 
@@ -3191,25 +3208,26 @@ class DashboardPage extends StatelessWidget {
                         label: 'Students',
                         value: '$active',
                         icon: Icons.groups_rounded,
+                        accent: const Color(0xFF138A64),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: KpiPill(
-                        label: 'Present',
-                        value: '$present',
-                        icon: Icons.how_to_reg_rounded,
+                        label: 'Teachers',
+                        value: '$teachers',
+                        icon: Icons.school_rounded,
+                        accent: const Color(0xFF4F46E5),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: KpiPill(
-                        label: 'Absent',
-                        value: '$absent',
-                        icon: Icons.person_off_rounded,
+                        label: '2-Day Flagged Students',
+                        value: '$flaggedCount',
+                        icon: Icons.warning_amber_rounded,
                         accent: const Color(0xFFDC2626),
-                        onTap: () =>
-                            openAbsentDetails(title: 'Absent Students Today'),
+                        onTap: openFlaggedStudents,
                       ),
                     ),
                   ],
@@ -3431,44 +3449,163 @@ class KpiPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) => InkWell(
     onTap: onTap,
-    borderRadius: BorderRadius.circular(14),
+    borderRadius: BorderRadius.circular(16),
     child: Container(
-      constraints: const BoxConstraints(minHeight: 78),
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      constraints: const BoxConstraints(minHeight: 88),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFF5F7F6),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFDCE6E1)),
+        color: accent.withValues(alpha: .07),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: accent.withValues(alpha: .18)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Icon(icon, color: accent, size: 16),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Color(0xFF111827),
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-              height: 1,
+          Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .86),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: accent, size: 16),
+          ),
+          const SizedBox(height: 7),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 260),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, .18),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
+            ),
+            child: Text(
+              value,
+              key: ValueKey(value),
+              style: const TextStyle(
+                color: Color(0xFF111827),
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                height: 1,
+              ),
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 4),
           Text(
             label,
-            maxLines: 1,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: Color(0xFF5C6E66),
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
+              fontSize: 10.3,
+              height: 1.08,
+              fontWeight: FontWeight.w900,
             ),
           ),
         ],
       ),
     ),
   );
+}
+
+class FlaggedStudentsSheet extends StatelessWidget {
+  const FlaggedStudentsSheet({super.key, required this.flags});
+
+  final List<dynamic> flags;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = flags
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+    return DraggableScrollableSheet(
+      initialChildSize: .82,
+      minChildSize: .48,
+      maxChildSize: .94,
+      builder: (context, controller) => Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFFF5F7F6),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 44,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFCAD5CF),
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 10, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '2-Day Flagged Students',
+                          style: TextStyle(
+                            color: Color(0xFF0F1F1A),
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Text(
+                          rows.length == 1
+                              ? '1 student needs adviser follow-up'
+                              : '${rows.length} students need adviser follow-up',
+                          style: const TextStyle(
+                            color: Color(0xFF5F716B),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: rows.isEmpty
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text(
+                          'No 2-day flagged students detected.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Color(0xFF64726B),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    )
+                  : ListView(
+                      controller: controller,
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                      children: [for (final row in rows) FlagTile(row)],
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class AttendanceScoreRing extends StatelessWidget {
