@@ -1,4 +1,7 @@
 node_modules/
+desktop-scanner/node_modules/
+desktop-scanner/dist/
+public/downloads/Edutrack-Scanner-Windows.zip
 .env
 .gradle/
 mobile-sds-asds-android/.gradle/

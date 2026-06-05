@@ -251,9 +251,23 @@ async function getDownloadPageStats() {
     }
 }
 
+function getScannerPackageParts() {
+    const downloadsDir = path.join(__dirname, 'public', 'downloads');
+    const parts = [];
+    for (let i = 1; i <= 12; i++) {
+        const filename = `Edutrack-Scanner-Windows.zip.part${i}`;
+        const filePath = path.join(downloadsDir, filename);
+        if (!fs.existsSync(filePath)) break;
+        parts.push({ filename, filePath });
+    }
+    return parts;
+}
+
 app.get('/mobile-app', async (req, res) => {
     const apkPath = path.join(__dirname, 'public', 'downloads', 'school-attendance-division.apk');
     const iosPath = path.join(__dirname, 'public', 'downloads', 'edutrack-ios.ipa');
+    const scannerInstallerPath = path.join(__dirname, 'public', 'downloads', 'Edutrack-Scanner-Setup.exe');
+    const scannerPackageParts = getScannerPackageParts();
     const appBaseUrl = getPublicAppBaseUrl(req);
     const stats = await getDownloadPageStats();
     res.render('mobile_app', {
@@ -261,6 +275,7 @@ app.get('/mobile-app', async (req, res) => {
         apkAvailable: fs.existsSync(apkPath),
         iosAvailable: fs.existsSync(iosPath),
         desktopAvailable: true,
+        scannerInstallerAvailable: fs.existsSync(scannerInstallerPath) || scannerPackageParts.length > 0,
         stats,
         appBaseUrl
     });
@@ -360,6 +375,106 @@ function sendWindowsScannerLauncher(req, res) {
     return res.send(launcher);
 }
 
+function sendWindowsScannerInstaller(req, res) {
+    const installerPath = path.join(__dirname, 'public', 'downloads', 'Edutrack-Scanner-Setup.exe');
+    if (fs.existsSync(installerPath)) {
+        return res.download(installerPath, 'Edutrack-Scanner-Setup.exe');
+    }
+    const packageParts = getScannerPackageParts();
+    if (packageParts.length > 0) {
+        const appBaseUrl = getPublicAppBaseUrl(req) || `${req.protocol}://${req.get('host') || ''}`.replace(/\/+$/, '');
+        const partUrls = packageParts.map(part => `${appBaseUrl}/downloads/${part.filename}`);
+        const psLines = [
+            "$ErrorActionPreference = 'Stop'",
+            "$ProgressPreference = 'SilentlyContinue'",
+            "$installDir = Join-Path $env:LOCALAPPDATA 'Edutrack Scanner'",
+            "$tmpDir = Join-Path $env:TEMP 'EdutrackScannerInstall'",
+            "$zipPath = Join-Path $tmpDir 'Edutrack-Scanner-Windows.zip'",
+            '$partUrls = @(',
+            ...partUrls.map(url => `'${url}'`),
+            ')',
+            "Write-Host 'Downloading Edutrack Scanner desktop app...'",
+            'New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null',
+            'Remove-Item $zipPath -Force -ErrorAction SilentlyContinue',
+            '$partFiles = @()',
+            'for ($i = 0; $i -lt $partUrls.Count; $i++) {',
+            "  $partFile = Join-Path $tmpDir ('scanner.part' + ($i + 1))",
+            '  Invoke-WebRequest -Uri $partUrls[$i] -OutFile $partFile -UseBasicParsing',
+            '  $partFiles += $partFile',
+            '}',
+            "Write-Host 'Preparing installer package...'",
+            '$out = [System.IO.File]::Open($zipPath, [System.IO.FileMode]::Create)',
+            'try {',
+            '  foreach ($partFile in $partFiles) {',
+            '    $in = [System.IO.File]::OpenRead($partFile)',
+            '    try { $in.CopyTo($out) } finally { $in.Close() }',
+            '  }',
+            '} finally { $out.Close() }',
+            "Write-Host 'Installing Edutrack Scanner...'",
+            'if (Test-Path $installDir) { Remove-Item $installDir -Recurse -Force }',
+            'New-Item -ItemType Directory -Force -Path $installDir | Out-Null',
+            'Expand-Archive -Path $zipPath -DestinationPath $installDir -Force',
+            "$exe = Join-Path $installDir 'Edutrack Scanner.exe'",
+            "if (!(Test-Path $exe)) { throw 'Edutrack Scanner executable was not installed correctly.' }",
+            '$ws = New-Object -ComObject WScript.Shell',
+            "$desktop = [Environment]::GetFolderPath('Desktop')",
+            "$startMenu = Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs'",
+            "$links = @((Join-Path $desktop 'Edutrack Scanner.lnk'), (Join-Path $startMenu 'Edutrack Scanner.lnk'))",
+            'foreach ($linkPath in $links) {',
+            '  $shortcut = $ws.CreateShortcut($linkPath)',
+            '  $shortcut.TargetPath = $exe',
+            "  $shortcut.Arguments = '--autostart'",
+            '  $shortcut.WorkingDirectory = $installDir',
+            "  $shortcut.Description = 'Edutrack Attendance Scanner'",
+            '  $shortcut.Save()',
+            '}',
+            "$runKey = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'",
+            'New-Item -Path $runKey -Force | Out-Null',
+            "Set-ItemProperty -Path $runKey -Name 'Edutrack Scanner' -Value ('\"{0}\" --autostart' -f $exe)",
+            "Write-Host 'Launching Edutrack Scanner in fullscreen mode...'",
+            "Start-Process -FilePath $exe -ArgumentList '--autostart'",
+            "Write-Host 'Edutrack Scanner installed successfully.'"
+        ];
+
+        function escapeBatchEcho(line) {
+            return String(line)
+                .replace(/\^/g, '^^')
+                .replace(/&/g, '^&')
+                .replace(/\|/g, '^|')
+                .replace(/</g, '^<')
+                .replace(/>/g, '^>');
+        }
+
+        const batchLines = [
+            '@echo off',
+            'setlocal',
+            'set "TMP_DIR=%TEMP%\\EdutrackScannerInstall"',
+            'set "PS1=%TMP_DIR%\\install-edutrack-scanner.ps1"',
+            'if not exist "%TMP_DIR%" mkdir "%TMP_DIR%"',
+            'echo Installing Edutrack Scanner desktop app...',
+            `> "%PS1%" echo ${escapeBatchEcho(psLines[0])}`,
+            ...psLines.slice(1).map(line => line ? `>> "%PS1%" echo ${escapeBatchEcho(line)}` : '>> "%PS1%" echo.'),
+            'powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%"',
+            'if errorlevel 1 (',
+            '  echo.',
+            '  echo Edutrack Scanner installation failed. Please check your internet connection and try again.',
+            '  pause',
+            '  exit /b 1',
+            ')',
+            'echo.',
+            'echo Edutrack Scanner is installed and configured to auto-start when Windows signs in.',
+            'echo You can close this window.',
+            'timeout /t 4 /nobreak >nul',
+            'exit /b 0'
+        ];
+
+        res.setHeader('Content-Type', 'application/octet-stream');
+        res.setHeader('Content-Disposition', 'attachment; filename="Edutrack-Scanner-Windows-Installer.cmd"');
+        return res.send(batchLines.join('\r\n') + '\r\n');
+    }
+    return sendWindowsScannerLauncher(req, res);
+}
+
 function sendWindowsScannerAutostart(req, res) {
     const appBaseUrl = getPublicAppBaseUrl(req);
     const launcher = [
@@ -447,9 +562,9 @@ app.get('/download/desktop-app', sendWindowsDesktopLauncher);
 
 app.get('/download/windows-app', sendWindowsDesktopLauncher);
 
-app.get('/download/scanner-windows-app', sendWindowsScannerLauncher);
+app.get('/download/scanner-windows-app', sendWindowsScannerInstaller);
 
-app.get('/download/scanner-app', sendWindowsScannerLauncher);
+app.get('/download/scanner-app', sendWindowsScannerInstaller);
 
 app.get('/download/scanner-autostart-app', sendWindowsScannerAutostart);
 

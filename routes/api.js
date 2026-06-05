@@ -5,7 +5,7 @@ const multer = require('multer');
 const router = express.Router();
 const db = require('../config/database');
 const { requireAuth, requireRole, applySchoolFilter } = require('../middleware/auth');
-const { getScannerKioskTokenFromRequest, isValidScannerKioskToken } = require('../utils/scannerKiosk');
+const { getScannerKioskToken, getScannerKioskTokenFromRequest, isValidScannerKioskToken } = require('../utils/scannerKiosk');
 const {
     todayDate,
     nowDateTime,
@@ -22,6 +22,51 @@ function requireAuthOrScannerKiosk(req, res, next) {
     if (isValidScannerKioskToken(getScannerKioskTokenFromRequest(req))) return next();
     return res.status(401).json({ error: 'Not authenticated' });
 }
+
+function getPublicBaseUrl(req) {
+    const configured = process.env.BASE_URL || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : '');
+    const normalized = String(configured || '').replace(/\/+$/, '');
+    if (normalized && !/localhost|127\.0\.0\.1/i.test(normalized)) return normalized;
+    return `${req.protocol}://${req.get('host') || ''}`.replace(/\/+$/, '');
+}
+
+function normalizeKioskScanTime(value) {
+    const raw = String(value || '').trim();
+    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (!match) return null;
+    const hour = match[4].padStart(2, '0');
+    const second = match[6] || '00';
+    const date = `${match[1]}-${match[2]}-${match[3]}`;
+    return {
+        date,
+        dateTime: `${date} ${hour}:${match[5]}:${second}`
+    };
+}
+
+router.get('/scanner-desktop-config', async (req, res) => {
+    try {
+        const [settingsRows] = await db.query(
+            "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('system_name','division_name','system_logo','am_time_in_end','pm_time_out_end','late_threshold')"
+        );
+        const settings = {};
+        settingsRows.forEach(row => { settings[row.setting_key] = row.setting_value; });
+
+        const [schools] = await db.query("SELECT id, name FROM schools WHERE status = 'active' ORDER BY name");
+
+        return res.json({
+            success: true,
+            baseUrl: getPublicBaseUrl(req),
+            kioskToken: getScannerKioskToken(),
+            serverTime: nowDateTime(),
+            today: todayDate(),
+            settings,
+            schools
+        });
+    } catch (err) {
+        console.error('Scanner desktop config error:', err);
+        return res.status(500).json({ success: false, error: 'Failed to load scanner desktop configuration.' });
+    }
+});
 
 // Logo upload config. Logos are stored as data URLs so Railway redeploys do not wipe uploaded files.
 const logoUpload = multer({
@@ -397,17 +442,25 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
     }
 
     try {
-        const today = todayDate();
-        const now = nowDateTime();
+        const scannerKioskAuthorized = isValidScannerKioskToken(getScannerKioskTokenFromRequest(req));
+        const queuedScanTime = scannerKioskAuthorized ? normalizeKioskScanTime(req.body.scan_time) : null;
+        const today = queuedScanTime ? queuedScanTime.date : todayDate();
+        const now = queuedScanTime ? queuedScanTime.dateTime : nowDateTime();
+        const requireTimeOutConfirmation = req.body.require_time_out_confirmation === true || req.body.require_time_out_confirmation === 'true' || req.body.require_time_out_confirmation === '1';
+        const confirmedTimeOut = req.body.confirm_time_out === true || req.body.confirm_time_out === 'true' || req.body.confirm_time_out === '1';
 
         // Check student first (with joins for school, grade, section)
         let [rows] = await db.query(
             `SELECT s.id, s.firstname, s.lastname, s.lrn, s.school_id, s.status AS person_status,
-                    sc.name AS school_name, gl.name AS grade_name, sec.name AS section_name
+                    sc.name AS school_name, gl.name AS grade_name, sec.name AS section_name,
+                    COALESCE(NULLIF(sec.adviser, ''), TRIM(CONCAT_WS(' ', at.firstname, at.middlename, at.lastname))) AS adviser,
+                    at.contact AS adviser_contact,
+                    at.email AS adviser_email
              FROM students s
              LEFT JOIN schools sc ON s.school_id = sc.id
              LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id
              LEFT JOIN sections sec ON s.section_id = sec.id
+             LEFT JOIN teachers at ON sec.adviser_teacher_id = at.id
              WHERE s.qr_code = ?`,
             [qr_code]
         );
@@ -418,9 +471,15 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
         if (!person) {
             [rows] = await db.query(
                 `SELECT t.id, t.firstname, t.lastname, t.employee_id, t.school_id, t.status AS person_status,
-                        sc.name AS school_name
+                        sc.name AS school_name, gl.name AS grade_name, sec.name AS section_name,
+                        COALESCE(NULLIF(sec.adviser, ''), TRIM(CONCAT_WS(' ', at.firstname, at.middlename, at.lastname))) AS adviser,
+                        at.contact AS adviser_contact,
+                        at.email AS adviser_email
                  FROM teachers t
                  LEFT JOIN schools sc ON t.school_id = sc.id
+                 LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
+                 LEFT JOIN sections sec ON t.section_id = sec.id
+                 LEFT JOIN teachers at ON sec.adviser_teacher_id = at.id
                  WHERE t.qr_code = ?`,
                 [qr_code]
             );
@@ -463,7 +522,10 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
         const personInfo = {
             name: person.firstname + ' ' + person.lastname,
             type: personType,
-            school: person.school_name || 'N/A'
+            school: person.school_name || 'N/A',
+            adviser: person.adviser || 'N/A',
+            adviser_contact: person.adviser_contact || '',
+            adviser_email: person.adviser_email || ''
         };
         if (personType === 'student') {
             personInfo.lrn = person.lrn || 'N/A';
@@ -471,6 +533,8 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
             personInfo.section = person.section_name || 'N/A';
         } else {
             personInfo.employee_id = person.employee_id || 'N/A';
+            personInfo.grade = person.grade_name || 'N/A';
+            personInfo.section = person.section_name || 'N/A';
         }
 
         // Check existing attendance for today
@@ -522,6 +586,18 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
                     success: false,
                     error: 'Time out rejected - scanned too quickly after time in (' + Math.round(elapsedSec) + 's). Please wait at least 1 minute.',
                     person: personInfo
+                });
+            }
+            if (requireTimeOutConfirmation && !confirmedTimeOut) {
+                return res.json({
+                    success: true,
+                    action: 'CONFIRM_TIME_OUT',
+                    status: existing[0].status,
+                    message: 'Already timed in. Please confirm before recording end-of-day Time Out.',
+                    person: personInfo,
+                    time_in: formatTime12(existing[0].time_in),
+                    time_out: 'Pending Time Out',
+                    monitoring_status: 'Pending Time Out'
                 });
             }
             // Record time-out

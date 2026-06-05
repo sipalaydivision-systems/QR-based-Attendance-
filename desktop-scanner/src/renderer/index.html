@@ -1,0 +1,186 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attendance Scanner - Edutrack</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand-block">
+        <div class="brand-logo" id="brandLogo"><span>ES</span></div>
+        <div>
+          <h1 id="brandName">Edutrack</h1>
+          <p id="divisionName">Schools Division of Sipalay City</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <div class="connection-pill" id="connectionPill"><span></span><b>Checking</b></div>
+        <div class="clock-block">
+          <strong id="clockTime">--:--</strong>
+          <span id="clockDate">Loading date</span>
+        </div>
+        <button class="icon-button" id="fullscreenBtn" title="Toggle full screen">⛶</button>
+        <button class="icon-button" id="settingsBtn" title="Scanner settings">⚙</button>
+      </div>
+    </header>
+
+    <main class="scanner-layout">
+      <section class="scanner-card">
+        <div class="scanner-header">
+          <div>
+            <span class="live-badge"><i></i> LIVE QR Scanner</span>
+            <h2>Scan attendance QR codes</h2>
+            <p>Use a USB QR scanner or webcam. Records are sent to the Railway server automatically.</p>
+          </div>
+          <div class="queue-chip" id="queueChip">0 offline</div>
+        </div>
+
+        <div class="mode-tabs" role="tablist" aria-label="Scanner mode">
+          <button class="mode-tab active" data-mode="webcam">Webcam Scanner</button>
+          <button class="mode-tab" data-mode="usb">USB Scanner</button>
+        </div>
+
+        <div class="scan-stage webcam-stage" id="webcamStage">
+          <div id="reader"></div>
+          <div class="scan-overlay" aria-hidden="true">
+            <span class="corner tl"></span>
+            <span class="corner tr"></span>
+            <span class="corner bl"></span>
+            <span class="corner br"></span>
+            <i class="scan-beam"></i>
+          </div>
+          <div class="camera-fallback" id="cameraFallback">
+            <div class="fallback-icon">▦</div>
+            <strong>Camera scanner is ready</strong>
+            <span>Allow camera access when Windows asks. You can also switch to USB Scanner.</span>
+            <button class="primary small" id="startCameraBtn">Start Camera</button>
+          </div>
+        </div>
+
+        <div class="scan-stage usb-stage hidden" id="usbStage">
+          <div class="usb-focus">
+            <div class="usb-icon">⌁</div>
+            <h3>USB scanner listening</h3>
+            <p>Click inside the input once, then scan any student or teacher QR code. Most USB scanners type the QR value and press Enter automatically.</p>
+            <input id="usbInput" type="text" autocomplete="off" spellcheck="false" placeholder="Waiting for USB scanner input...">
+            <button class="primary" id="manualScanBtn">Submit Scan</button>
+          </div>
+        </div>
+
+        <p class="scan-hint">Duplicate scans are ignored briefly to prevent accidental repeated records.</p>
+      </section>
+
+      <aside class="result-panel" id="resultPanel">
+        <div class="empty-result" id="emptyResult">
+          <span>Scan</span>
+          <h2>Waiting for QR code</h2>
+          <p>Scan a student or teacher QR code to record Time In or Time Out.</p>
+        </div>
+
+        <div class="result-content hidden" id="resultContent">
+          <div class="result-status" id="resultStatus">
+            <div class="status-icon" id="statusIcon">✓</div>
+            <div>
+              <h2 id="statusTitle">Time In Recorded</h2>
+              <p id="statusMessage">Attendance recorded successfully.</p>
+            </div>
+          </div>
+
+          <div class="person-card">
+            <div class="avatar" id="personAvatar">ED</div>
+            <div>
+              <h3 id="personName">Person Name</h3>
+              <span id="personType">Student</span>
+            </div>
+          </div>
+
+          <div class="detail-grid" id="detailGrid"></div>
+
+          <div class="time-grid" id="timeGrid"></div>
+
+          <div class="confirm-box hidden" id="confirmBox">
+            <p>This person is already timed in. Confirm only if this is the end-of-day Time Out scan.</p>
+            <div class="confirm-actions">
+              <button class="secondary" id="cancelTimeoutBtn">Cancel</button>
+              <button class="primary warning" id="confirmTimeoutBtn">Record Time Out</button>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="status-strip">
+      <span id="statusLine">Initializing scanner...</span>
+      <button id="syncBtn">Sync Offline Queue</button>
+    </footer>
+  </div>
+
+  <div class="settings-drawer" id="settingsDrawer" aria-hidden="true">
+    <div class="drawer-backdrop" id="drawerBackdrop"></div>
+    <section class="drawer-card">
+      <div class="drawer-head">
+        <div>
+          <span>Scanner Settings</span>
+          <h2>Admin Configuration</h2>
+        </div>
+        <button class="icon-button" id="closeSettingsBtn">×</button>
+      </div>
+
+      <label>
+        Server URL
+        <input id="serverUrlInput" type="url" placeholder="https://school-attendance-qrbased.up.railway.app">
+      </label>
+
+      <label>
+        Scanner Mode
+        <select id="scannerModeInput">
+          <option value="webcam">Webcam scanner</option>
+          <option value="usb">USB QR scanner</option>
+        </select>
+      </label>
+
+      <label>
+        School Assignment
+        <select id="schoolInput">
+          <option value="">All schools / division kiosk</option>
+        </select>
+      </label>
+
+      <div class="settings-row">
+        <label>
+          Time In Start
+          <input id="timeInInput" type="time">
+        </label>
+        <label>
+          Time Out Opens
+          <input id="timeOutInput" type="time">
+        </label>
+      </div>
+
+      <label>
+        Duplicate Scan Window (seconds)
+        <input id="duplicateInput" type="number" min="1" max="60">
+      </label>
+
+      <div class="toggle-list">
+        <label><input id="autoStartInput" type="checkbox"> Start scanner when Windows starts</label>
+        <label><input id="fullscreenInput" type="checkbox"> Open in full screen</label>
+        <label><input id="trayInput" type="checkbox"> Keep running in system tray when closed</label>
+        <label><input id="offlineSyncInput" type="checkbox"> Save scans offline and sync automatically</label>
+      </div>
+
+      <div class="drawer-actions">
+        <button class="secondary" id="testServerBtn">Test Connection</button>
+        <button class="primary" id="saveSettingsBtn">Save Settings</button>
+      </div>
+      <p class="settings-note" id="settingsNote">Settings are saved on this computer only.</p>
+    </section>
+  </div>
+
+  <script src="../../node_modules/html5-qrcode/html5-qrcode.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
