@@ -299,14 +299,14 @@ async function createSchoolRecord(rawName) {
 
 async function findTeacherMatch(empId, firstname, lastname, middlename, schoolId) {
     if (empId) {
-        const [byEmployeeId] = await db.query('SELECT id, status, section_id FROM teachers WHERE employee_id = ?', [empId]);
+        const [byEmployeeId] = await db.query('SELECT id, status, active_from, section_id FROM teachers WHERE employee_id = ?', [empId]);
         if (byEmployeeId.length > 0) return byEmployeeId[0];
     }
 
     const incomingName = normalizePersonName(fullName(firstname, lastname, middlename));
     if (!incomingName || !schoolId) return null;
     const [teachers] = await db.query(
-        'SELECT id, firstname, lastname, middlename, status, section_id FROM teachers WHERE school_id = ? AND status != ?',
+        'SELECT id, firstname, lastname, middlename, status, active_from, section_id FROM teachers WHERE school_id = ? AND status != ?',
         [schoolId, 'deleted']
     );
     return teachers.find(teacher =>
@@ -803,7 +803,7 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
             return { firstname: words[0], lastname: words[words.length - 1], middlename: words.slice(1, -1).join(' ') };
         }
 
-        const importedTeacherStatus = 'active';
+        const importedTeacherStatus = 'inactive';
         const defaultImportedStudentStatus = 'inactive';
 
         const [schools] = await db.query("SELECT id, name, school_id_code, school_code, status FROM schools WHERE status IS NULL OR status != 'deleted' ORDER BY name");
@@ -919,6 +919,11 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
 
                     const existing = await findTeacherMatch(empId, fn, ln, mn, schoolId);
                     if (existing) {
+                        const existingStatus = existing.status || importedTeacherStatus;
+                        const nextStatus = existingStatus === 'deleted' ? importedTeacherStatus : existingStatus;
+                        const nextActiveFrom = nextStatus === 'active'
+                            ? (existing.active_from || importActiveFrom)
+                            : null;
                         if (existing.section_id && Number(existing.section_id) !== Number(sectionId)) {
                             await db.query(
                                 'UPDATE sections SET adviser = NULL, adviser_teacher_id = NULL WHERE id = ? AND adviser_teacher_id = ?',
@@ -928,9 +933,9 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                         await db.query(
                             `UPDATE teachers
                              SET employee_id=?, firstname=?, lastname=?, middlename=?, contact=?, email=?,
-                                 school_id=?, grade_level_id=?, section_id=?, status=?
+                                 school_id=?, grade_level_id=?, section_id=?, active_from=?, status=?
                              WHERE id=?`,
-                            [empId || null, fn, ln, mn || null, contact, email, schoolId, gradeId, sectionId, importedTeacherStatus, existing.id]
+                            [empId || null, fn, ln, mn || null, contact, email, schoolId, gradeId, sectionId, nextActiveFrom, nextStatus, existing.id]
                         );
                         await db.query(
                             'UPDATE sections SET adviser = ?, adviser_teacher_id = ? WHERE id = ?',
@@ -943,9 +948,9 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                     const qr_code = empId ? 'TCH-' + empId : 'TCH-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);
                     const [teacherResult] = await db.query(
                         `INSERT INTO teachers
-                            (employee_id, firstname, lastname, middlename, contact, email, school_id, grade_level_id, section_id, qr_code, status)
-                         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-                        [empId, fn, ln, mn || null, contact, email, schoolId, gradeId, sectionId, qr_code, importedTeacherStatus]
+                            (employee_id, firstname, lastname, middlename, contact, email, school_id, grade_level_id, section_id, qr_code, active_from, status)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+                        [empId, fn, ln, mn || null, contact, email, schoolId, gradeId, sectionId, qr_code, null, importedTeacherStatus]
                     );
                     await db.query(
                         'UPDATE sections SET adviser = ?, adviser_teacher_id = ? WHERE id = ?',

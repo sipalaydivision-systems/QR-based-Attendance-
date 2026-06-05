@@ -111,7 +111,20 @@ async function ensureRuntimeSchema() {
         console.log('Added missing students.active_from column.');
     }
 
+    const [teacherActiveFromColumns] = await db.query(
+        `SELECT COLUMN_NAME
+         FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'teachers'
+           AND COLUMN_NAME = 'active_from'`
+    );
+    if (teacherActiveFromColumns.length === 0) {
+        await db.query('ALTER TABLE teachers ADD COLUMN active_from DATE NULL AFTER qr_code');
+        console.log('Added missing teachers.active_from column.');
+    }
+
     await db.query("ALTER TABLE students MODIFY COLUMN status ENUM('active','inactive','deleted') DEFAULT 'inactive'");
+    await db.query("ALTER TABLE teachers MODIFY COLUMN status ENUM('active','inactive','deleted') DEFAULT 'inactive'");
 
     // Imported students should not become attendance-eligible until their first valid attendance scan.
     const [inactiveResult] = await db.query(`
@@ -129,6 +142,24 @@ async function ensureRuntimeSchema() {
     `);
     if (inactiveResult.affectedRows) {
         console.log(`Marked ${inactiveResult.affectedRows} student(s) without attendance history as inactive.`);
+    }
+
+    // Imported teachers/advisers follow the same attendance eligibility rule.
+    const [inactiveTeachersResult] = await db.query(`
+        UPDATE teachers t
+        SET t.status = 'inactive',
+            t.active_from = NULL
+        WHERE t.status = 'active'
+          AND NOT EXISTS (
+              SELECT 1
+              FROM attendance a
+              WHERE a.person_type = 'teacher'
+                AND a.person_id = t.id
+                AND a.time_in IS NOT NULL
+          )
+    `);
+    if (inactiveTeachersResult.affectedRows) {
+        console.log(`Marked ${inactiveTeachersResult.affectedRows} teacher(s) without attendance history as inactive.`);
     }
 }
 

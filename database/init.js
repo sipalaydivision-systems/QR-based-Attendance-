@@ -56,9 +56,11 @@ async function init() {
         await ensureColumn('teachers', 'email', 'VARCHAR(255) AFTER contact');
         await ensureColumn('teachers', 'grade_level_id', 'INT NULL AFTER email');
         await ensureColumn('teachers', 'section_id', 'INT NULL AFTER grade_level_id');
+        await ensureColumn('teachers', 'active_from', 'DATE NULL AFTER qr_code');
         await ensureColumn('sections', 'adviser_teacher_id', 'INT NULL AFTER adviser');
         await ensureColumn('students', 'active_from', 'DATE NULL AFTER qr_code');
         await ensureColumnDefinition('students', 'status', "ENUM('active','inactive','deleted') DEFAULT 'inactive'");
+        await ensureColumnDefinition('teachers', 'status', "ENUM('active','inactive','deleted') DEFAULT 'inactive'");
         await ensureColumnDefinition('schools', 'logo', 'MEDIUMTEXT');
         await ensureColumnDefinition('settings', 'setting_value', 'MEDIUMTEXT');
 
@@ -77,6 +79,23 @@ async function init() {
         `);
         if (inactiveResult.affectedRows) {
             console.log(`Marked ${inactiveResult.affectedRows} student(s) without attendance history as inactive.`);
+        }
+
+        const [inactiveTeachersResult] = await db.query(`
+            UPDATE teachers t
+            SET t.status = 'inactive',
+                t.active_from = NULL
+            WHERE t.status = 'active'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM attendance a
+                  WHERE a.person_type = 'teacher'
+                    AND a.person_id = t.id
+                    AND a.time_in IS NOT NULL
+              )
+        `);
+        if (inactiveTeachersResult.affectedRows) {
+            console.log(`Marked ${inactiveTeachersResult.affectedRows} teacher(s) without attendance history as inactive.`);
         }
 
         console.log('Running database seed...');

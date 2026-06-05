@@ -97,11 +97,24 @@ async function getStudentTimeOutOpen(dateStr) {
     return sqlDateTime(dateStr, normalizeTimeSetting(row?.setting_value, '17:00:00'));
 }
 
+async function getSchoolDayEndDateTime(dateStr) {
+    const [[row]] = await db.query("SELECT setting_value FROM settings WHERE setting_key='pm_time_out_end' LIMIT 1");
+    return sqlDateTime(dateStr, normalizeTimeSetting(row?.setting_value, '17:00:00'));
+}
+
+async function hasSchoolDayEnded(dateStr) {
+    const today = todayDate();
+    if (dateStr < today) return true;
+    if (dateStr > today) return false;
+    return compareDateTime(nowDateTime(), await getSchoolDayEndDateTime(dateStr)) >= 0;
+}
+
 async function shouldCountComputedAbsences(dateStr, schoolId) {
     const today = todayDate();
     if (dateStr > today) return false;
     const schoolDay = await checkSchoolDay(dateStr, schoolId);
-    return schoolDay.isSchoolDay;
+    if (!schoolDay.isSchoolDay) return false;
+    return hasSchoolDayEnded(dateStr);
 }
 
 async function countStudentsWithoutTimeIn(dateStr, schoolId) {
@@ -134,6 +147,42 @@ async function countAttendanceEligibleStudents(dateStr, schoolId) {
     const params = [dateStr];
     if (schoolId) {
         query += ' AND s.school_id = ?';
+        params.push(schoolId);
+    }
+    const [[row]] = await db.query(query, params);
+    return row.count || 0;
+}
+
+async function countTeachersWithoutTimeIn(dateStr, schoolId) {
+    if (!(await shouldCountComputedAbsences(dateStr, schoolId))) return 0;
+    let query = `SELECT COUNT(*) as count
+        FROM teachers t
+        WHERE t.status = 'active'
+          AND COALESCE(t.active_from, DATE(t.created_at)) < ?
+          AND NOT EXISTS (
+              SELECT 1 FROM attendance a
+              WHERE a.person_type = 'teacher'
+                AND a.person_id = t.id
+                AND a.date = ?
+                AND a.time_in IS NOT NULL
+          )`;
+    const params = [dateStr, dateStr];
+    if (schoolId) {
+        query += ' AND t.school_id = ?';
+        params.push(schoolId);
+    }
+    const [[row]] = await db.query(query, params);
+    return row.count || 0;
+}
+
+async function countAttendanceEligibleTeachers(dateStr, schoolId) {
+    let query = `SELECT COUNT(*) as count
+        FROM teachers t
+        WHERE t.status = 'active'
+          AND COALESCE(t.active_from, DATE(t.created_at)) < ?`;
+    const params = [dateStr];
+    if (schoolId) {
+        query += ' AND t.school_id = ?';
         params.push(schoolId);
     }
     const [[row]] = await db.query(query, params);
@@ -230,7 +279,11 @@ async function getConsecutiveAbsenceFlags({ baseDate, schoolId, days = 2, includ
     const scanLimit = Math.max(threshold, Math.min(Number(maxScanDays) || 45, 120));
     const today = todayDate();
     const cappedBaseDate = baseDate > today ? today : baseDate;
-    const schoolDates = await getRecentSchoolDates(cappedBaseDate, schoolId, scanLimit);
+    const recentSchoolDates = await getRecentSchoolDates(cappedBaseDate, schoolId, scanLimit);
+    const schoolDates = [];
+    for (const d of recentSchoolDates) {
+        if (await shouldCountComputedAbsences(d, schoolId)) schoolDates.push(d);
+    }
     if (schoolDates.length < threshold) return [];
 
     let studentQuery = `SELECT s.id, s.firstname, s.lastname, s.lrn, s.school_id, s.section_id, s.created_at, s.active_from, sc.name as school_name,
@@ -247,7 +300,7 @@ async function getConsecutiveAbsenceFlags({ baseDate, schoolId, days = 2, includ
     const studentParams = [];
     if (schoolId) { studentQuery += ' AND s.school_id = ?'; studentParams.push(schoolId); }
 
-    let teacherQuery = `SELECT t.id, t.firstname, t.lastname, t.employee_id, t.school_id, t.created_at, sc.name as school_name, sc.logo as school_logo, sc.contact as school_contact
+    let teacherQuery = `SELECT t.id, t.firstname, t.lastname, t.employee_id, t.school_id, t.created_at, t.active_from, sc.name as school_name, sc.logo as school_logo, sc.contact as school_contact
         FROM teachers t
         LEFT JOIN schools sc ON t.school_id = sc.id
         WHERE t.status = 'active'`;
@@ -396,7 +449,10 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
                 const [[autoSetting]] = await db.query("SELECT setting_value FROM settings WHERE setting_key='auto_activate_on_scan'");
                 const autoActivate = !autoSetting || autoSetting.setting_value !== '0'; // default: enabled
                 if (autoActivate) {
-                    await db.query('UPDATE teachers SET status = ? WHERE id = ?', ['active', person.id]);
+                    await db.query(
+                        "UPDATE teachers SET status = 'active', active_from = ? WHERE id = ?",
+                        [today, person.id]
+                    );
                     person.person_status = 'active';
                 } else {
                     return res.json({ success: false, error: 'This person is inactive. Please contact the admin to activate.' });
@@ -507,7 +563,8 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
     try {
         const date = req.query.date || todayDate();
         const schoolId = applySchoolFilter(req);
-        const cacheKey = `${date}-${schoolId || 'all'}`;
+        const absenceCountingActive = await shouldCountComputedAbsences(date, schoolId);
+        const cacheKey = `${date}-${schoolId || 'all'}-${absenceCountingActive ? 'absence-closed' : 'attendance-open'}`;
 
         // Return cached if fresh (3 seconds)
         if (dashboardCache.key === cacheKey && (Date.now() - dashboardCache.timestamp) < 3000) {
@@ -551,6 +608,8 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
 
         const computedAbsent = await countStudentsWithoutTimeIn(date, schoolId);
         const eligibleStudents = await countAttendanceEligibleStudents(date, schoolId);
+        const computedTeacherAbsent = await countTeachersWithoutTimeIn(date, schoolId);
+        const eligibleTeachers = await countAttendanceEligibleTeachers(date, schoolId);
 
         // Teachers present today (only active teachers)
         const [presentTeachers] = await db.query(
@@ -578,6 +637,8 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
         const breakdown = [];
         for (const s of schoolBreakdown) {
             const eligible = await countAttendanceEligibleStudents(date, s.id);
+            const teacherEligible = await countAttendanceEligibleTeachers(date, s.id);
+            const teacherAbsent = await countTeachersWithoutTimeIn(date, s.id);
             breakdown.push({
                 id: s.id,
                 name: s.name,
@@ -588,8 +649,10 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
                 absent: await countStudentsWithoutTimeIn(date, s.id),
                 rate: Math.max(eligible, s.present || 0) > 0 ? Math.min(100, Math.round((s.present / Math.max(eligible, s.present || 0)) * 100)) : 0,
                 teachers_total: s.teachers_total || 0,
+                attendance_eligible_teachers: Math.max(teacherEligible, s.teachers_present || 0),
                 teachers_present: s.teachers_present || 0,
-                teacher_rate: s.teachers_total > 0 ? Math.min(100, Math.round((s.teachers_present / s.teachers_total) * 100)) : 0
+                teachers_absent: teacherAbsent,
+                teacher_rate: Math.max(teacherEligible, s.teachers_present || 0) > 0 ? Math.min(100, Math.round((s.teachers_present / Math.max(teacherEligible, s.teachers_present || 0)) * 100)) : 0
             });
         }
 
@@ -633,14 +696,18 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
             active_students: totalActive,
             attendance_eligible_students: attendanceDenominator,
             total_teachers: teacherRows[0].count,
+            active_teachers: teacherRows[0].count,
+            attendance_eligible_teachers: Math.max(eligibleTeachers, presentTeachers[0].count),
             students_present: totalPresent,
             students_absent: computedAbsent,
             students_timed_out: timedOutStudents[0].count,
             teachers_present: presentTeachers[0].count,
-            teachers_absent: Math.max(0, teacherRows[0].count - presentTeachers[0].count),
+            teachers_absent: computedTeacherAbsent,
             attendance_rate: attendanceDenominator > 0 ? Math.min(100, Math.round((totalPresent / attendanceDenominator) * 100)) : 0,
             inactive_students: inactiveStudents[0].count,
             flagged_absent_2day: flaggedAbsent.length,
+            absence_counting_active: absenceCountingActive,
+            absence_counting_message: absenceCountingActive ? 'Absence counting is active.' : 'Absences are pending until the official end-of-school-day time.',
             is_school_day: isSchoolDay,
             non_school_day_reason: nonSchoolDayReason,
             non_school_day_type: nonSchoolDayType,
@@ -735,6 +802,7 @@ router.get('/realtime-poll', requireAuth, async (req, res) => {
 
     try {
         const today = todayDate();
+        const absenceCountingActive = await shouldCountComputedAbsences(today, schoolId);
         const schoolFilter = schoolId ? ' AND school_id = ?' : '';
         const params = schoolId ? [today, schoolId] : [today];
         const schoolWhere = schoolId ? ' AND school_id = ?' : '';
@@ -778,13 +846,14 @@ router.get('/realtime-poll', requireAuth, async (req, res) => {
             schoolParams
         );
 
-        const raw = `${countRows[0].cnt}-${latestRows[0].latest || ''}-${studentRows[0].cnt}-${studentRows[0].active}-${studentRows[0].inactive}-${studentRows[0].checksum}-${teacherRows[0].cnt}-${teacherRows[0].checksum}-${schoolRows[0].cnt}-${schoolRows[0].checksum}-${gradeRows[0].cnt}-${gradeRows[0].checksum}-${sectionRows[0].cnt}-${sectionRows[0].checksum}-${notificationRows[0].cnt}-${notificationRows[0].latest || ''}`;
+        const raw = `${absenceCountingActive ? 'closed' : 'open'}-${countRows[0].cnt}-${latestRows[0].latest || ''}-${studentRows[0].cnt}-${studentRows[0].active}-${studentRows[0].inactive}-${studentRows[0].checksum}-${teacherRows[0].cnt}-${teacherRows[0].checksum}-${schoolRows[0].cnt}-${schoolRows[0].checksum}-${gradeRows[0].cnt}-${gradeRows[0].checksum}-${sectionRows[0].cnt}-${sectionRows[0].checksum}-${notificationRows[0].cnt}-${notificationRows[0].latest || ''}`;
         const hash = crypto.createHash('md5').update(raw).digest('hex').substring(0, 12);
         const changed = hash !== clientHash;
 
         return res.json({
             changed,
             hash,
+            absence_counting_active: absenceCountingActive,
             attendance_count: countRows[0].cnt,
             student_count: studentRows[0].cnt
         });
@@ -934,9 +1003,9 @@ router.post('/teachers', requireAuth, async (req, res) => {
         if (assignment?.error) return res.status(400).json({ error: assignment.error });
         const qr_code = 'TCH-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);
         const [result] = await db.query(
-            `INSERT INTO teachers (employee_id, firstname, lastname, middlename, department, subject, contact, email, school_id, grade_level_id, section_id, qr_code)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [employee_id || null, firstname, lastname, middlename || null, department || null, subject || null, contact || null, email || null, school_id, grade_level_id || null, section_id || null, qr_code]
+            `INSERT INTO teachers (employee_id, firstname, lastname, middlename, department, subject, contact, email, school_id, grade_level_id, section_id, qr_code, active_from, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [employee_id || null, firstname, lastname, middlename || null, department || null, subject || null, contact || null, email || null, school_id, grade_level_id || null, section_id || null, qr_code, null, 'inactive']
         );
         await syncTeacherAdviserAssignment({
             teacherId: result.insertId,
@@ -961,14 +1030,26 @@ router.put('/teachers/:id', requireAuth, async (req, res) => {
         return res.status(400).json({ error: 'First name, last name, and school are required.' });
     }
     try {
-        const [[existing]] = await db.query('SELECT id, section_id FROM teachers WHERE id = ? AND status != ?', [req.params.id, 'deleted']);
+        const [[existing]] = await db.query('SELECT id, section_id, status FROM teachers WHERE id = ? AND status != ?', [req.params.id, 'deleted']);
         if (!existing) return res.status(404).json({ error: 'Teacher not found.' });
         const assignment = await validateTeacherAssignment({ teacherId: req.params.id, schoolId: school_id, gradeLevelId: grade_level_id, sectionId: section_id });
         if (assignment?.error) return res.status(400).json({ error: assignment.error });
-        await db.query(
-            `UPDATE teachers SET employee_id=?, firstname=?, lastname=?, middlename=?, department=?, subject=?, contact=?, email=?, school_id=?, grade_level_id=?, section_id=?, status=? WHERE id=?`,
-            [employee_id || null, firstname, lastname, middlename || null, department || null, subject || null, contact || null, email || null, school_id, grade_level_id || null, section_id || null, status || 'active', req.params.id]
-        );
+        const validStatus = ['active', 'inactive', 'deleted'].includes(status) ? status : (existing.status || 'inactive');
+        const fields = [
+            'employee_id=?', 'firstname=?', 'lastname=?', 'middlename=?', 'department=?', 'subject=?',
+            'contact=?', 'email=?', 'school_id=?', 'grade_level_id=?', 'section_id=?', 'status=?'
+        ];
+        const params = [
+            employee_id || null, firstname, lastname, middlename || null, department || null, subject || null,
+            contact || null, email || null, school_id, grade_level_id || null, section_id || null, validStatus
+        ];
+        if (validStatus === 'active') {
+            fields.push('active_from = COALESCE(active_from, CURDATE())');
+        } else if (validStatus === 'inactive') {
+            fields.push('active_from = NULL');
+        }
+        params.push(req.params.id);
+        await db.query(`UPDATE teachers SET ${fields.join(', ')} WHERE id=?`, params);
         await syncTeacherAdviserAssignment({
             teacherId: req.params.id,
             oldSectionId: existing.section_id,
@@ -1779,6 +1860,7 @@ router.get('/reports/daily-summary', requireAuth, async (req, res) => {
         const schools = [];
         for (const s of rows) {
             const eligible = Math.max(await countAttendanceEligibleStudents(date, s.id), s.present || 0);
+            const eligibleTeachers = Math.max(await countAttendanceEligibleTeachers(date, s.id), s.teachers_present || 0);
             schools.push({
                 id: s.id,
                 name: s.name,
@@ -1789,7 +1871,9 @@ router.get('/reports/daily-summary', requireAuth, async (req, res) => {
                 absent: await countStudentsWithoutTimeIn(date, s.id),
                 rate: eligible > 0 ? Math.min(100, Math.round((s.present / eligible) * 100)) : 0,
                 teachers_present: s.teachers_present || 0,
-                teachers_total: s.teachers_total || 0
+                teachers_total: s.teachers_total || 0,
+                attendance_eligible_teachers: eligibleTeachers,
+                teachers_absent: await countTeachersWithoutTimeIn(date, s.id)
             });
         }
 
@@ -1801,8 +1885,9 @@ router.get('/reports/daily-summary', requireAuth, async (req, res) => {
             acc.absent += s.absent;
             acc.teachers_present += s.teachers_present;
             acc.teachers_total += s.teachers_total;
+            acc.teachers_absent += s.teachers_absent;
             return acc;
-        }, { enrolled: 0, present: 0, late: 0, absent: 0, teachers_present: 0, teachers_total: 0 });
+        }, { enrolled: 0, present: 0, late: 0, absent: 0, teachers_present: 0, teachers_total: 0, teachers_absent: 0 });
         totals.rate = totals.enrolled > 0 ? Math.min(100, Math.round((totals.present / totals.enrolled) * 100)) : 0;
 
         return res.json({ schools, totals });
@@ -1860,6 +1945,7 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
         const schoolFilter = schoolId ? ' AND s.school_id = ?' : '';
         const schoolParams = schoolId ? [targetDate, schoolId] : [targetDate];
         const schoolDay = await checkSchoolDay(targetDate, schoolId);
+        const canCountAbsences = await shouldCountComputedAbsences(targetDate, schoolId);
 
         const [[totalRow]] = await db.query(
             `SELECT COUNT(*) as cnt FROM students s WHERE s.status = 'active' AND COALESCE(s.active_from, DATE(s.created_at)) < ?` + schoolFilter,
@@ -1872,6 +1958,7 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
                 date: targetDate,
                 is_future_date: isFutureDate,
                 is_school_day: schoolDay.isSchoolDay,
+                absence_counting_active: false,
                 non_school_day_reason: schoolDay.reason,
                 totals: {
                     students_total: totalRow.cnt,
@@ -1932,16 +2019,18 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
 
         const [presentRows, absentRows] = await Promise.all([
             db.query(presentQuery, presentParams).then(r => r[0]),
-            db.query(absentQuery, absentParams).then(r => r[0]),
+            canCountAbsences ? db.query(absentQuery, absentParams).then(r => r[0]) : Promise.resolve([]),
         ]);
 
-        const streakFlags = await getConsecutiveAbsenceFlags({
-            baseDate: targetDate,
-            schoolId,
-            days: 1,
-            includeTeachers: false,
-            maxScanDays: 60
-        });
+        const streakFlags = canCountAbsences
+            ? await getConsecutiveAbsenceFlags({
+                baseDate: targetDate,
+                schoolId,
+                days: 1,
+                includeTeachers: false,
+                maxScanDays: 60
+            })
+            : [];
         const streakByStudentId = new Map(
             streakFlags.map(item => [String(item.id), item])
         );
@@ -1978,6 +2067,7 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
         return res.json({
             date: targetDate,
             is_school_day: schoolDay.isSchoolDay,
+            absence_counting_active: canCountAbsences,
             non_school_day_reason: schoolDay.reason,
             totals: {
                 students_total: totalRow.cnt,
@@ -2022,7 +2112,9 @@ router.get('/not-scanned-today', requireAuth, async (req, res) => {
     const type = req.query.type || 'student';
     const schoolId = applySchoolFilter(req);
     try {
-        if (!(await shouldCountComputedAbsences(today, schoolId))) {
+        const schoolDay = await checkSchoolDay(today, schoolId);
+        const canCountAbsences = await shouldCountComputedAbsences(today, schoolId);
+        if (today > todayDate() || !schoolDay.isSchoolDay) {
             return res.json([]);
         }
 
@@ -2044,13 +2136,18 @@ router.get('/not-scanned-today', requireAuth, async (req, res) => {
                 FROM teachers t
                 LEFT JOIN schools sc ON t.school_id = sc.id
                 WHERE t.status = 'active'
+                AND COALESCE(t.active_from, DATE(t.created_at)) < ?
                 AND t.id NOT IN (SELECT person_id FROM attendance WHERE person_type = 'teacher' AND date = ?)`;
-            params = [today];
+            params = [today, today];
             if (schoolId) { query += ' AND t.school_id = ?'; params.push(schoolId); }
         }
         query += ' ORDER BY lastname, firstname';
         const [rows] = await db.query(query, params);
-        return res.json(rows);
+        return res.json(rows.map(row => ({
+            ...row,
+            attendance_status: canCountAbsences ? 'Absent' : 'Pending',
+            monitoring_status: canCountAbsences ? 'No Time In' : 'Not Yet Timed In'
+        })));
     } catch (err) {
         return res.status(500).json({ error: 'Failed to fetch not-scanned list.' });
     }
@@ -2256,6 +2353,7 @@ router.get('/school-kpi/:id', requireAuth, async (req, res) => {
             "SELECT COUNT(*) as cnt FROM teachers WHERE school_id = ? AND status = 'active'", [schoolId]);
         const [presentTeachers] = await db.query(
             "SELECT COUNT(DISTINCT a.person_id) as cnt FROM attendance a INNER JOIN teachers t ON a.person_id = t.id AND a.person_type = 'teacher' WHERE t.school_id = ? AND a.date = ?", [schoolId, today]);
+        const absentTeachers = await countTeachersWithoutTimeIn(today, schoolId);
 
         const present = presentStudents[0].cnt;
         const total = Math.max(totalStudents[0].cnt, present);
@@ -2265,7 +2363,8 @@ router.get('/school-kpi/:id', requireAuth, async (req, res) => {
             students_absent: absentStudents,
             students_late: lateStudents[0].cnt,
             teachers_total: totalTeachers[0].cnt,
-            teachers_present: presentTeachers[0].cnt
+            teachers_present: presentTeachers[0].cnt,
+            teachers_absent: absentTeachers
         });
     } catch (err) {
         console.error('School KPI error:', err);
