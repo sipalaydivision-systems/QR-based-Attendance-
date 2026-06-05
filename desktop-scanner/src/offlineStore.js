@@ -5,6 +5,7 @@ const initSqlJs = require('sql.js/dist/sql-asm.js');
 const MAX_SYNC_ATTEMPTS = 5;
 const DEFAULT_PENDING_LIMIT = 8;
 const DEFAULT_HISTORY_LIMIT = 8;
+const DEFAULT_RECENT_SCAN_LIMIT = 12;
 
 let SQL = null;
 let db = null;
@@ -560,9 +561,10 @@ function getRecentSyncHistory(limit = DEFAULT_HISTORY_LIMIT) {
 function getDashboard(options = {}) {
   const pendingLimit = Number(options.pendingLimit || DEFAULT_PENDING_LIMIT);
   const historyLimit = Number(options.historyLimit || DEFAULT_HISTORY_LIMIT);
+  const recentScanLimit = Number(options.recentScanLimit || DEFAULT_RECENT_SCAN_LIMIT);
   const today = String(options.today || nowSql().slice(0, 10));
 
-  const [[counts], [todayCounts], [syncedCount], [failedCount], [reviewCount], [lastSuccessRow]] = [
+  const [[counts], [todayCounts], [localTodayCounts], [syncedCount], [failedCount], [reviewCount], [lastSuccessRow]] = [
     all(`
       SELECT COUNT(*) AS count
       FROM attendance_events
@@ -576,6 +578,13 @@ function getDashboard(options = {}) {
         AND sync_attempts < ?
         AND attendance_date = ?
     `, [MAX_SYNC_ATTEMPTS, today]),
+    all(`
+      SELECT COUNT(*) AS count
+      FROM attendance_events
+      WHERE attendance_date = ?
+        AND person_type IN ('student', 'teacher')
+        AND event_action IN ('TIME_IN', 'TIME_OUT')
+    `, [today]),
     all(`
       SELECT COUNT(*) AS count
       FROM attendance_events
@@ -610,14 +619,26 @@ function getDashboard(options = {}) {
     LIMIT ?
   `, [MAX_SYNC_ATTEMPTS, pendingLimit]).map(hydrateEvent);
 
+  const recentLocalScans = all(`
+    SELECT *
+    FROM attendance_events
+    WHERE attendance_date = ?
+      AND person_type IN ('student', 'teacher')
+      AND event_action IN ('TIME_IN', 'TIME_OUT')
+    ORDER BY scan_time DESC, created_at DESC
+    LIMIT ?
+  `, [today, recentScanLimit]).map(hydrateEvent);
+
   return {
     queuedCount: Number(counts?.count || 0),
     queuedTodayCount: Number(todayCounts?.count || 0),
+    localTodayScanCount: Number(localTodayCounts?.count || 0),
     totalSyncedRecords: Number(syncedCount?.count || 0),
     failedRecordsCount: Number(failedCount?.count || 0),
     reviewRecordsCount: Number(reviewCount?.count || 0),
     lastSuccessfulSyncAt: lastSuccessRow?.finished_at || null,
     pendingRecords,
+    recentLocalScans,
     recentSyncHistory: getRecentSyncHistory(historyLimit)
   };
 }

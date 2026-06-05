@@ -39,7 +39,12 @@ const runtimeState = {
   online: false,
   internetAvailable: false,
   serverAvailable: false,
-  connectionMessage: 'Connecting to Railway server.',
+  connectionMessage: 'Connecting to Server.',
+  schoolDayStatus: {
+    isSchoolDay: true,
+    reason: null,
+    type: null
+  },
   lastConnectionCheckAt: null,
   syncInProgress: false,
   syncProgress: {
@@ -294,6 +299,11 @@ function selectedSchoolQueryValue(selectedSchoolId) {
   return trimmed ? `?school_id=${encodeURIComponent(trimmed)}` : '';
 }
 
+function selectedSchoolAmpValue(selectedSchoolId) {
+  const trimmed = String(selectedSchoolId || '').trim();
+  return trimmed ? `&school_id=${encodeURIComponent(trimmed)}` : '';
+}
+
 function buildPersonCacheRecord(qrCode, person) {
   if (!person) return null;
   return {
@@ -340,6 +350,7 @@ function currentDashboard(extra = {}) {
     internetAvailable: runtimeState.internetAvailable,
     serverAvailable: runtimeState.serverAvailable,
     message: runtimeState.connectionMessage,
+    schoolDayStatus: runtimeState.schoolDayStatus,
     lastConnectionCheckAt: runtimeState.lastConnectionCheckAt,
     syncInProgress: runtimeState.syncInProgress,
     syncProgress: runtimeState.syncProgress,
@@ -443,6 +454,39 @@ async function refreshScannerDirectory(options = {}) {
   setMeta('directoryRefreshedAt', refreshedAt);
   runtimeState.directoryLastRefreshedAt = refreshedAt;
   return { refreshed: true, count };
+}
+
+async function refreshSchoolDayStatus(dateKey = localDateString()) {
+  const settings = await ensureKioskToken();
+  const serverUrl = normalizeServerUrl(settings.serverUrl);
+  const schoolSuffix = selectedSchoolAmpValue(settings.selectedSchoolId);
+
+  const res = await fetchWithTimeout(`${serverUrl}/api/is-school-day?date=${encodeURIComponent(dateKey)}${schoolSuffix}`, {
+    cache: 'no-store',
+    headers: {
+      'X-Scanner-Kiosk-Token': settings.kioskToken
+    }
+  }, 8000);
+
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (_err) {
+    throw new Error('The server returned an invalid school-day response.');
+  }
+
+  if (!res.ok) {
+    throw new Error(data.error || 'Unable to check the school-day schedule.');
+  }
+
+  runtimeState.schoolDayStatus = {
+    isSchoolDay: data.isSchoolDay !== undefined ? !!data.isSchoolDay : data.is_school_day !== false,
+    reason: data.reason || data.non_school_day_reason || null,
+    type: data.type || data.non_school_day_type || null
+  };
+
+  return runtimeState.schoolDayStatus;
 }
 
 async function postScan(payload) {
@@ -728,7 +772,7 @@ async function submitScan(payload) {
       requireTimeOutConfirmation: payload?.requireTimeOutConfirmation !== false,
       confirmTimeOut: !!payload?.confirmTimeOut
     });
-    updateRuntimeConnectionState(true, 'Connected to Railway server.');
+    updateRuntimeConnectionState(true, 'Connected to Server.');
     persistServerScanResult(qrCode, scanTime, data);
     const result = { ...data, online: true, ...currentDashboard() };
     broadcastScannerStatus();
@@ -934,7 +978,7 @@ async function syncOfflineQueue(options = {}) {
   };
 
   if (!networkInterrupted) {
-    updateRuntimeConnectionState(true, 'Connected to Railway server.');
+    updateRuntimeConnectionState(true, 'Connected to Server.');
   }
   if (historyStatus === 'success') {
     runtimeState.lastSuccessfulSyncAt = toLocalSqlDateTime();
@@ -961,7 +1005,13 @@ async function refreshConnectionState(options = {}) {
 
   try {
     config = await refreshDesktopConfig();
-    updateRuntimeConnectionState(true, trigger === 'startup' ? 'Connected to Railway server.' : 'Connected to Railway server.');
+    updateRuntimeConnectionState(true, 'Connected to Server.');
+
+    try {
+      await refreshSchoolDayStatus(localDateString());
+    } catch (schoolDayError) {
+      console.warn('School-day status refresh skipped:', schoolDayError.message);
+    }
 
     try {
       await refreshScannerDirectory({ force: forceDirectory });
@@ -1023,14 +1073,17 @@ ipcMain.handle('app:minimize', async () => {
 ipcMain.handle('app:open-external', async (_event, url) => shell.openExternal(url));
 ipcMain.handle('app:show-error', async (_event, message) => dialog.showErrorBox(APP_TITLE, String(message || 'Unknown error')));
 
-const hasSingleInstanceLock = app.requestSingleInstanceLock();
+const skipSingleInstanceLock = process.env.EDUTRACK_SKIP_SINGLE_INSTANCE === '1';
+const hasSingleInstanceLock = skipSingleInstanceLock || app.requestSingleInstanceLock();
 
 if (!hasSingleInstanceLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    showWindow();
-  });
+  if (!skipSingleInstanceLock) {
+    app.on('second-instance', () => {
+      showWindow();
+    });
+  }
 
   app.whenReady().then(async () => {
     app.setAppUserModelId(APP_USER_MODEL_ID);

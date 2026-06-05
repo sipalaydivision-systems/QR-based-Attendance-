@@ -3,6 +3,7 @@ const api = window.edutrack;
 const OFFLINE_NOTIFICATION = 'Offline Mode Enabled - Attendance records are being stored locally.';
 const CONNECTION_RESTORED_NOTIFICATION = 'Connection Restored - Synchronizing attendance records.';
 const SYNC_COMPLETE_NOTIFICATION = 'Synchronization Completed Successfully.';
+const LOCAL_LOGO_URL = '../assets/edutrack-scanner.png';
 
 const state = {
   settings: {},
@@ -16,6 +17,7 @@ const state = {
   busy: false,
   todayKey: currentDayKey(),
   serverTodayScanCount: 0,
+  localTodayScanCount: 0,
   queuedTodayCount: 0,
   connectionOnline: false,
   hasLiveResult: false,
@@ -119,11 +121,11 @@ function setConnection(online, message) {
   pill.classList.toggle('online', !!online);
   pill.classList.toggle('offline', !online);
   pill.querySelector('b').textContent = online ? 'Online' : 'Offline';
-  $('connectionDetail').textContent = online ? 'Connected to Railway server' : 'Offline scanner mode';
+  $('connectionDetail').textContent = online ? 'Connected to Server' : 'Offline scanner mode';
   $('connectionCardValue').textContent = online ? 'Online' : 'Offline';
-  $('connectionCardDetail').textContent = message || (online ? 'Attendance records are reaching Railway.' : 'Scans can still be saved on this computer.');
+  $('connectionCardDetail').textContent = message || (online ? 'Attendance records are reaching the server.' : 'Scans can still be saved on this computer.');
   $('syncConnectionValue').textContent = online ? 'Online' : 'Offline';
-  $('syncConnectionDetail').textContent = message || (online ? 'Railway is reachable and ready to receive scans.' : 'Offline mode is active and saving attendance locally.');
+  $('syncConnectionDetail').textContent = message || (online ? 'The server is reachable and ready to receive scans.' : 'Offline mode is active and saving attendance locally.');
   $('offlineBadge').classList.toggle('hidden', !!online);
   setCardTone('connectionSummaryCard', online ? 'success' : 'danger');
 }
@@ -171,11 +173,11 @@ function updatePendingSummary(payload) {
 }
 
 function updateTodayScansCard() {
-  const total = Math.max(0, Number(state.serverTodayScanCount) || 0) + Math.max(0, Number(state.queuedTodayCount) || 0);
+  const total = Math.max(0, Number(state.localTodayScanCount) || 0);
   $('todayScansValue').textContent = String(total);
   $('todayScansDetail').textContent = state.queuedTodayCount
-    ? `${state.queuedTodayCount} offline scan(s) are still waiting to sync.`
-    : 'All synced and queued attendance records for today are included.';
+    ? `${state.queuedTodayCount} scan(s) from this PC are waiting to sync.`
+    : 'Only attendance scanned from this PC is counted here.';
 }
 
 function updateScannerStatus(title, detail, tone = 'neutral') {
@@ -196,7 +198,7 @@ function updateLastSyncFromPayload(value, detail) {
 
   if (state.lastSyncAt) {
     $('lastSyncValue').textContent = formatShortTime(state.lastSyncAt);
-    $('lastSyncDetail').textContent = detail || 'Latest successful synchronization with Railway.';
+    $('lastSyncDetail').textContent = detail || 'Latest successful synchronization with the server.';
     return;
   }
 
@@ -208,17 +210,19 @@ function updateScannerModeDetail(mode = state.scannerMode) {
   if (mode === 'usb') {
     $('scannerModeValue').textContent = 'USB QR Scanner';
     $('scannerModeDetail').textContent = 'Keyboard-style USB scanners can submit codes instantly after Enter.';
+    $('modeHint').textContent = 'USB scanner mode is active.';
     return;
   }
   $('scannerModeValue').textContent = 'Webcam Scanner';
   $('scannerModeDetail').textContent = 'The camera dashboard can scan student and teacher QR codes live.';
+  $('modeHint').textContent = 'Webcam scanner mode is active.';
 }
 
 function updateTotalSynced(value, failedCount = 0) {
   $('totalSyncedValue').textContent = String(Number(value) || 0);
   $('totalSyncedDetail').textContent = failedCount
     ? `${failedCount} record(s) still need another retry or review.`
-    : 'Attendance records that already reached Railway.';
+    : 'Attendance records that already reached the server.';
 }
 
 function resolveAssetUrl(value) {
@@ -249,7 +253,7 @@ function updateSyncProgress(payload) {
     percent = Math.max(8, Math.round((completed / total) * 100));
   } else if (payload.queuedCount) {
     value = `${payload.queuedCount} queued`;
-    detail = 'Pending records are ready to upload as soon as Railway is reachable.';
+    detail = 'Pending records are ready to upload as soon as the server is reachable.';
     percent = 0;
   } else if (payload.online) {
     value = 'Ready';
@@ -268,15 +272,15 @@ function updateSyncProgress(payload) {
 
 function applyBrand(settings) {
   $('divisionName').textContent = settings.divisionName || 'Schools Division of Sipalay City';
-  $('brandName').textContent = `${settings.brandName || 'Edutrack'} attendance desktop kiosk`;
+  $('brandName').textContent = '';
   document.title = 'Edutrack Scanner';
 
   const logo = $('brandLogo');
   const logoUrl = resolveAssetUrl(settings.systemLogo);
   if (logoUrl) {
-    logo.innerHTML = `<img src="${escapeHtml(logoUrl)}" alt="Edutrack logo" onerror="this.remove();this.parentElement.innerHTML='<span>ET</span>';">`;
+    logo.innerHTML = `<img src="${escapeHtml(logoUrl)}" alt="Edutrack logo" onerror="this.onerror=null;this.src='${LOCAL_LOGO_URL}';">`;
   } else {
-    logo.innerHTML = '<span>ET</span>';
+    logo.innerHTML = `<img src="${LOCAL_LOGO_URL}" alt="Edutrack logo">`;
   }
 }
 
@@ -396,66 +400,153 @@ function renderTimes(data) {
   if (data.time) {
     return timeItem(data.action === 'TIME_OUT' ? 'Time Out' : 'Time In', data.time);
   }
-  return `${timeItem('Attendance Event', 'Recorded')}${timeItem('Storage Mode', state.connectionOnline ? 'Railway' : 'Local Queue')}`;
+  return `${timeItem('Attendance Event', 'Recorded')}${timeItem('Storage Mode', state.connectionOnline ? 'Server' : 'Local Queue')}`;
 }
 
-function showResultCard({ tone, title, message, person, detailHtml, timeHtml, needsConfirm }) {
-  const status = $('resultStatus');
-  status.className = `result-status ${tone}`.trim();
-  $('statusIcon').textContent = statusIconForTone(tone);
-  $('statusTitle').textContent = title;
-  $('statusMessage').textContent = message;
+function humanizeAction(value) {
+  const action = String(value || '').toUpperCase();
+  if (action === 'TIME_IN') return 'Time In';
+  if (action === 'TIME_OUT') return 'Time Out';
+  if (action === 'PENDING_TIME_OUT') return 'Pending';
+  if (action === 'CONFIRM_TIME_OUT') return 'Confirm';
+  return 'Scan';
+}
 
-  $('emptyResult').classList.add('hidden');
-  $('resultContent').classList.remove('hidden');
-  $('personName').textContent = person?.name || 'Unknown QR code';
-  $('personType').textContent = person?.type || 'Scanner Result';
-  $('personAvatar').textContent = initials(person?.name || 'ET');
-  $('detailGrid').innerHTML = detailHtml;
-  $('timeGrid').innerHTML = timeHtml;
-  $('confirmBox').classList.toggle('hidden', !needsConfirm);
+function humanizeSync(value) {
+  const status = String(value || '').toLowerCase();
+  if (status === 'synced') return 'Synced';
+  if (status === 'pending') return 'Queued';
+  if (status === 'failed') return 'Retry';
+  if (status === 'skipped') return 'Skipped';
+  return 'Local';
+}
+
+function friendlyKioskMessage(data) {
+  const raw = String(data?.message || data?.error || '').trim();
+  const lower = raw.toLowerCase();
+  if (/class suspension|classes suspended|suspended/.test(lower)) {
+    return {
+      title: 'Classes Suspended',
+      message: raw || 'Attendance scanning is not required while classes are suspended.'
+    };
+  }
+  if (/holiday|regular holiday|special non-working/.test(lower)) {
+    return {
+      title: 'Holiday',
+      message: raw || 'Attendance scanning is not required today because it is marked as a holiday.'
+    };
+  }
+  if (/no class|no classes|non-school|weekend|saturday|sunday/.test(lower)) {
+    return {
+      title: 'No Classes Today',
+      message: raw || 'Attendance scanning is not required today.'
+    };
+  }
+  return {
+    title: titleForResult(data || {}),
+    message: raw || 'Attendance record processed.'
+  };
+}
+
+function showScanFeedback(title, message, tone = 'success') {
+  const feedback = $('scanFeedback');
+  feedback.className = `scan-feedback ${tone}`.trim();
+  feedback.querySelector('strong').textContent = title;
+  feedback.querySelector('span').textContent = message;
+}
+
+function renderLocalScans(scans = []) {
+  const rows = $('localScanRows');
+  const empty = $('localScanEmpty');
+  rows.innerHTML = '';
+
+  const localScans = Array.isArray(scans) ? scans : [];
+  empty.classList.toggle('hidden', localScans.length > 0);
+
+  localScans.forEach((scan) => {
+    const tr = document.createElement('tr');
+    const scanDate = parseSqlDateTime(scan.scanTime);
+    const time = scanDate ? formatShortTime(scanDate) : '--:--';
+    const personType = String(scan.personType || 'person').toLowerCase();
+    const name = scan.name || 'Attendance Record';
+    const school = scan.schoolName || 'N/A';
+    const section = [scan.gradeLevel, scan.sectionName].filter(Boolean).join(' - ');
+    const syncStatus = String(scan.syncStatus || '').toLowerCase();
+    const syncTone = syncStatus === 'failed' ? 'failed' : syncStatus === 'pending' ? 'pending' : '';
+
+    tr.innerHTML = `
+      <td>${escapeHtml(time)}</td>
+      <td>${escapeHtml(name)}<small>${escapeHtml(school)}${section ? ` | ${escapeHtml(section)}` : ''}</small></td>
+      <td>${escapeHtml(personType === 'teacher' ? 'Teacher' : 'Student')}</td>
+      <td>${escapeHtml(humanizeAction(scan.eventAction))}</td>
+      <td><span class="status-badge ${escapeHtml(syncTone)}">${escapeHtml(humanizeSync(scan.syncStatus))}</span></td>
+    `;
+    rows.appendChild(tr);
+  });
+}
+
+function schoolDayText(status) {
+  if (!status || status.isSchoolDay !== false) {
+    return null;
+  }
+
+  const reason = String(status.reason || '').trim();
+  const type = String(status.type || '').trim();
+  const combined = `${type} ${reason}`.toLowerCase();
+
+  if (/class suspension|suspended/.test(combined)) {
+    return {
+      title: 'Classes Suspended',
+      message: reason
+        ? `Classes are suspended today: ${reason}. Attendance scanning is not required.`
+        : 'Classes are suspended today. Attendance scanning is not required.'
+    };
+  }
+
+  if (/holiday|regular|special non-working/.test(combined)) {
+    return {
+      title: 'Holiday',
+      message: reason
+        ? `Today is marked as a holiday: ${reason}. Attendance scanning is not required.`
+        : 'Today is marked as a holiday. Attendance scanning is not required.'
+    };
+  }
+
+  if (/saturday|sunday|weekend/.test(combined)) {
+    return {
+      title: 'Weekend',
+      message: 'Classes are not scheduled today. Attendance scanning is not required.'
+    };
+  }
+
+  return {
+    title: 'No Classes Today',
+    message: reason
+      ? `No classes today: ${reason}. Attendance scanning is not required.`
+      : 'No classes today. Attendance scanning is not required.'
+  };
+}
+
+function applySchoolDayStatus(status) {
+  const text = schoolDayText(status);
+  $('dayNotice').classList.toggle('hidden', !text);
+  if (!text) return;
+  $('dayNoticeTitle').textContent = text.title;
+  $('dayNoticeText').textContent = text.message;
 }
 
 function renderResult(data) {
   const tone = resultTone(data);
-  const person = data.person || null;
-
-  showResultCard({
-    tone,
-    title: titleForResult(data),
-    message: data.message || data.error || 'Attendance record processed.',
-    person: {
-      name: person?.name || 'Unknown QR Code',
-      type: person?.type || 'Scanner Result'
-    },
-    detailHtml: person
-      ? renderPersonDetails(person)
-      : detailItem('QR Status', data.error || data.message || 'Unknown scan', true),
-    timeHtml: renderTimes(data),
-    needsConfirm: data.action === 'CONFIRM_TIME_OUT'
-  });
+  const friendly = friendlyKioskMessage(data);
+  showScanFeedback(friendly.title, friendly.message, tone);
+  $('confirmBox').classList.toggle('hidden', data.action !== 'CONFIRM_TIME_OUT');
 
   if (data.action === 'CONFIRM_TIME_OUT') state.pendingTimeoutQr = data.qrCode || state.pendingTimeoutQr;
   state.hasLiveResult = true;
 }
 
 function renderServerRecord(record) {
-  if (!record || state.hasLiveResult) return;
-
-  showResultCard({
-    tone: record.status === 'late' ? 'warning' : 'success',
-    title: record.action === 'TIME_OUT' ? 'Latest server time out' : 'Latest server time in',
-    message: 'Most recent attendance record synced from the Railway database.',
-    person: {
-      name: record.name || 'Recent attendance record',
-      type: record.type || 'Scanner Result'
-    },
-    detailHtml: `${detailItem('School', record.school || 'N/A', true)}${detailItem('Recorded By', 'Railway Server')}${detailItem('Attendance Status', (record.status || 'Recorded').replace(/_/g, ' '))}`,
-    timeHtml: record.action === 'TIME_OUT'
-      ? `${timeItem('Time Out', record.time)}${timeItem('Server Sync', 'Synced')}`
-      : `${timeItem('Time In', record.time)}${timeItem('Server Sync', 'Synced')}`,
-    needsConfirm: false
-  });
+  return record;
 }
 
 function resetForNewDayIfNeeded() {
@@ -463,10 +554,11 @@ function resetForNewDayIfNeeded() {
   if (state.todayKey === today) return;
   state.todayKey = today;
   state.serverTodayScanCount = 0;
+  state.localTodayScanCount = 0;
   state.queuedTodayCount = 0;
   state.hasLiveResult = false;
-  $('emptyResult').classList.remove('hidden');
-  $('resultContent').classList.add('hidden');
+  renderLocalScans([]);
+  showScanFeedback('Waiting for scan', 'Only attendance scanned from this computer will appear in the table.', 'neutral');
   updateTodayScansCard();
 }
 
@@ -475,7 +567,6 @@ function applyServerSummary(summary, queuedTodayCount = 0) {
   state.serverTodayScanCount = Number(summary?.todayScanCount) || 0;
   state.queuedTodayCount = Number(queuedTodayCount) || 0;
   updateTodayScansCard();
-  renderServerRecord(summary?.lastRecord || null);
 }
 
 function triggerLabel(triggerSource) {
@@ -559,11 +650,15 @@ function applyScannerStatusPayload(payload, options = {}) {
 
   updateQueue(payload.queuedCount || 0);
   state.queuedTodayCount = Number(payload.queuedTodayCount) || 0;
+  state.localTodayScanCount = Number(payload.localTodayScanCount) || 0;
   applyServerSummary(payload.config?.summary || null, state.queuedTodayCount);
+  applySchoolDayStatus(payload.schoolDayStatus || null);
   setConnection(payload.online, payload.message);
   updatePendingSummary(payload);
+  updateTodayScansCard();
   updateSyncProgress(payload);
   updateTotalSynced(payload.totalSyncedRecords || 0, payload.failedRecordsCount || 0);
+  renderLocalScans(payload.recentLocalScans || []);
   renderHistory(payload.recentSyncHistory || []);
 
   if (payload.lastSuccessfulSyncAt) {
@@ -571,15 +666,15 @@ function applyScannerStatusPayload(payload, options = {}) {
       ? 'A connection is available, but some offline scans are still queued.'
       : 'Latest successful synchronization completed.');
   } else if (payload.online && Number(payload.queuedCount || 0) === 0) {
-    updateLastSyncFromPayload(null, 'Live attendance scans are reaching Railway successfully.');
+    updateLastSyncFromPayload(null, 'Live attendance scans are reaching the server successfully.');
   } else {
     updateLastSyncFromPayload(null, 'Queued scans will upload automatically when internet returns.');
   }
 
   if (payload.syncInProgress) {
-    updateSyncStatus('Synchronizing', payload.syncProgress?.currentLabel
-      ? `Uploading ${payload.syncProgress.currentLabel} and other pending attendance records.`
-      : 'Synchronizing queued attendance records with Railway.', 'warning');
+      updateSyncStatus('Synchronizing', payload.syncProgress?.currentLabel
+        ? `Uploading ${payload.syncProgress.currentLabel} and other pending attendance records.`
+      : 'Synchronizing queued attendance records with the server.', 'warning');
     updateScannerStatus('Synchronizing records', 'Offline attendance records are being uploaded in the background.', 'warning');
   } else if (payload.online) {
     if (Number(payload.queuedCount || 0) > 0) {
@@ -587,7 +682,7 @@ function applyScannerStatusPayload(payload, options = {}) {
     } else if (Number(payload.failedRecordsCount || 0) > 0) {
       updateSyncStatus('Needs retry', `${payload.failedRecordsCount} record(s) still need another synchronization attempt.`, 'warning');
     } else {
-      updateSyncStatus('Up to date', 'Desktop attendance records are synced with Railway.', 'success');
+      updateSyncStatus('Up to date', 'Desktop attendance records are synced with the server.', 'success');
     }
   } else {
     updateSyncStatus(Number(payload.queuedCount || 0) > 0 ? 'Queued locally' : 'Offline', payload.message || 'The desktop scanner is waiting for internet connectivity.', Number(payload.queuedCount || 0) > 0 ? 'warning' : 'danger');
@@ -612,7 +707,7 @@ async function submitQrCode(qrCode, options = {}) {
   state.busy = true;
   state.pendingTimeoutQr = trimmed;
   setStatusLine('Processing attendance scan...');
-  updateScannerStatus('Processing scan', 'Preparing the attendance record for Railway or offline storage.', 'warning');
+  updateScannerStatus('Processing scan', 'Preparing the attendance record for server or offline storage.', 'warning');
 
   const result = await api.submitScan({
     qrCode: trimmed,
@@ -636,7 +731,7 @@ async function submitQrCode(qrCode, options = {}) {
     }
   } else if (result.action === 'TIME_IN' || result.action === 'TIME_OUT') {
     state.lastSyncAt = new Date();
-    updateLastSyncFromPayload(formatLocalSqlDateTime(state.lastSyncAt), 'Latest attendance update reached the Railway database successfully.');
+    updateLastSyncFromPayload(formatLocalSqlDateTime(state.lastSyncAt), 'Latest attendance update reached the server successfully.');
     updateScannerStatus('Ready for next scan', 'Student and teacher QR codes can be scanned again.', 'success');
     setStatusLine(result.message || 'Attendance recorded successfully.');
   } else if (result.action === 'CONFIRM_TIME_OUT') {
@@ -766,10 +861,10 @@ async function saveSettingsFromForm() {
 }
 
 async function testConnection() {
-  $('settingsNote').textContent = 'Testing Railway connection...';
+  $('settingsNote').textContent = 'Testing server connection...';
   const result = await api.checkConnection();
   applyScannerStatusPayload(result, { silentNotifications: true, quietStatusLine: true });
-  $('settingsNote').textContent = result.online ? 'Connected to Railway server.' : result.message;
+  $('settingsNote').textContent = result.online ? 'Connected to Server.' : result.message;
 }
 
 async function checkConnection(options = {}) {
@@ -786,7 +881,7 @@ async function syncQueue() {
   if ((result.remaining || 0) === 0 && (result.synced || result.skipped || result.failed)) {
     setStatusLine(SYNC_COMPLETE_NOTIFICATION);
   } else if (result.remaining || result.failed) {
-    setStatusLine('Some queued records still need Railway before they can finish syncing.');
+    setStatusLine('Some queued records still need the server before they can finish syncing.');
   } else {
     setStatusLine('No queued attendance records need synchronization right now.');
   }
@@ -796,6 +891,11 @@ function isEditable(target) {
   if (!target) return false;
   const tag = String(target.tagName || '').toLowerCase();
   return tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable;
+}
+
+function bindClick(id, handler) {
+  const element = $(id);
+  if (element) element.addEventListener('click', handler);
 }
 
 function handleUsbKeydown(event) {
@@ -824,26 +924,26 @@ function bindEvents() {
     tab.addEventListener('click', () => setMode(tab.dataset.mode));
   });
 
-  $('startCameraBtn').addEventListener('click', startCamera);
-  $('manualScanBtn').addEventListener('click', () => submitQrCode($('usbInput').value));
+  bindClick('startCameraBtn', startCamera);
+  bindClick('manualScanBtn', () => submitQrCode($('usbInput').value));
   $('usbInput').addEventListener('keydown', (event) => {
     if (event.key === 'Enter') submitQrCode($('usbInput').value);
   });
-  $('focusUsbBtn').addEventListener('click', async () => {
+  bindClick('focusUsbBtn', async () => {
     await setMode('usb');
     $('usbInput').focus();
   });
-  $('settingsBtn').addEventListener('click', openSettings);
-  $('closeSettingsBtn').addEventListener('click', closeSettings);
-  $('drawerBackdrop').addEventListener('click', closeSettings);
-  $('saveSettingsBtn').addEventListener('click', saveSettingsFromForm);
-  $('testServerBtn').addEventListener('click', testConnection);
-  $('syncBtn').addEventListener('click', syncQueue);
-  $('syncNowBtn').addEventListener('click', syncQueue);
-  $('fullscreenBtn').addEventListener('click', () => api.toggleFullscreen());
-  $('minimizeBtn').addEventListener('click', () => api.minimize());
-  $('confirmTimeoutBtn').addEventListener('click', confirmTimeout);
-  $('cancelTimeoutBtn').addEventListener('click', () => {
+  bindClick('settingsBtn', openSettings);
+  bindClick('closeSettingsBtn', closeSettings);
+  bindClick('drawerBackdrop', closeSettings);
+  bindClick('saveSettingsBtn', saveSettingsFromForm);
+  bindClick('testServerBtn', testConnection);
+  bindClick('syncBtn', syncQueue);
+  bindClick('syncNowBtn', syncQueue);
+  bindClick('fullscreenBtn', () => api.toggleFullscreen());
+  bindClick('minimizeBtn', () => api.minimize());
+  bindClick('confirmTimeoutBtn', confirmTimeout);
+  bindClick('cancelTimeoutBtn', () => {
     $('confirmBox').classList.add('hidden');
     setStatusLine('Time out was not recorded. The scanner is ready for the next attendance scan.');
     updateScannerStatus('Ready for next scan', 'The previous time out request was cancelled.', 'success');
@@ -881,7 +981,7 @@ async function init() {
 
 init().catch((err) => {
   setConnection(false, err.message || "Can't connect to server due to no internet connection.");
-  updateSyncStatus('Offline', err.message || 'The desktop scanner could not reach Railway during startup.', 'danger');
+  updateSyncStatus('Offline', err.message || 'The desktop scanner could not reach the server during startup.', 'danger');
   updateScannerStatus('Startup needs attention', 'The scanner opened, but the first connectivity check did not finish cleanly.', 'danger');
   setStatusLine(err.message || 'The desktop scanner started with limited connectivity.');
 });

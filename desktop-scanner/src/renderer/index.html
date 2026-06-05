@@ -10,11 +10,11 @@
   <div class="app-shell">
     <header class="topbar">
       <div class="brand">
-        <div class="brand-logo" id="brandLogo"><span>ET</span></div>
+        <div class="brand-logo" id="brandLogo"><img src="../assets/edutrack-scanner.png" alt="Edutrack logo"></div>
         <div>
           <span class="division-tag" id="divisionName">Schools Division of Sipalay City</span>
           <h1>Edutrack Scanner</h1>
-          <p id="brandName">Edutrack attendance desktop kiosk</p>
+          <p id="brandName" class="visually-hidden"></p>
         </div>
       </div>
 
@@ -23,7 +23,7 @@
           <span></span>
           <div>
             <b>Checking</b>
-            <small id="connectionDetail">Connecting to Railway server.</small>
+            <small id="connectionDetail">Connecting to Server.</small>
           </div>
         </div>
 
@@ -33,15 +33,6 @@
           <strong id="clockTime">--:--</strong>
           <span id="clockDate">Loading date</span>
         </div>
-
-        <button class="icon-button" id="syncBtn" title="Sync pending records now" aria-label="Sync pending records now">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M20 12a8 8 0 0 1-13.66 5.66L4 15"></path>
-            <path d="M4 20v-5h5"></path>
-            <path d="M4 12a8 8 0 0 1 13.66-5.66L20 9"></path>
-            <path d="M20 4v5h-5"></path>
-          </svg>
-        </button>
 
         <button class="icon-button" id="fullscreenBtn" title="Toggle full screen" aria-label="Toggle full screen">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -63,13 +54,9 @@
 
     <main class="scanner-layout">
       <section class="scanner-column">
-        <div class="scanner-status-row">
-          <div class="live-badge"><i></i> Live QR Scanner</div>
-          <div class="queue-chip" id="queueChip">0 queued</div>
-          <div class="mode-tabs" role="tablist" aria-label="Scanner mode">
-            <button class="mode-tab active" data-mode="webcam">Webcam</button>
-            <button class="mode-tab" data-mode="usb">USB Scanner</button>
-          </div>
+        <div class="day-notice hidden" id="dayNotice">
+          <strong id="dayNoticeTitle">No classes today</strong>
+          <span id="dayNoticeText">Attendance scanning is not required today.</span>
         </div>
 
         <div class="scan-stage webcam-stage" id="webcamStage">
@@ -86,8 +73,8 @@
             <b>QR Scanner</b>
           </div>
           <div class="camera-fallback" id="cameraFallback">
-            <strong>Camera dashboard is ready</strong>
-            <span>Allow camera access or switch to USB Scanner.</span>
+            <strong>Camera scanner is ready</strong>
+            <span>Allow camera access or switch to USB Scanner in Settings.</span>
             <button class="primary small" id="startCameraBtn">Start Camera</button>
           </div>
         </div>
@@ -113,7 +100,7 @@
         </div>
 
         <div class="scan-hint">
-          <span>Position QR code within the frame to record attendance.</span>
+          <span id="modeHint">Ready for attendance scanning.</span>
           <strong id="statusLine">Launching Edutrack Scanner...</strong>
         </div>
       </section>
@@ -121,100 +108,45 @@
       <aside class="side-panel">
         <section class="record-card">
           <div class="panel-head">
-            <span>Last Scanned Record</span>
-            <h2>Attendance feedback</h2>
+            <span>Scans on this PC</span>
+            <h2>Recent scans</h2>
           </div>
 
-          <div class="empty-result" id="emptyResult">
-            <span>QR</span>
-            <h3>Waiting for scan</h3>
-            <p>Student and teacher attendance will appear here after each scan.</p>
+          <div class="scan-feedback" id="scanFeedback">
+            <strong>Waiting for scan</strong>
+            <span>Only attendance scanned from this computer will appear in the table.</span>
           </div>
 
-          <div class="result-content hidden" id="resultContent">
-            <div class="result-status" id="resultStatus">
-              <div class="status-icon" id="statusIcon">OK</div>
-              <div>
-                <h2 id="statusTitle">Attendance recorded</h2>
-                <p id="statusMessage">The latest attendance record will appear here.</p>
-              </div>
-            </div>
+          <div class="local-table-wrap">
+            <table class="local-scan-table" aria-label="Recent scans on this computer">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Action</th>
+                  <th>Sync</th>
+                </tr>
+              </thead>
+              <tbody id="localScanRows"></tbody>
+            </table>
+            <div class="table-empty" id="localScanEmpty">No scans from this computer yet.</div>
+          </div>
 
-            <div class="person-card">
-              <div class="avatar" id="personAvatar">ET</div>
-              <div>
-                <h3 id="personName">Person Name</h3>
-                <span id="personType">Student</span>
-              </div>
-            </div>
-
-            <div class="detail-grid" id="detailGrid"></div>
-            <div class="time-grid" id="timeGrid"></div>
-
-            <div class="confirm-box hidden" id="confirmBox">
-              <p>Confirm end-of-day Time Out.</p>
-              <div class="confirm-actions">
-                <button class="secondary" id="cancelTimeoutBtn">Cancel</button>
-                <button class="primary warning" id="confirmTimeoutBtn">Record Time Out</button>
-              </div>
+          <div class="confirm-box hidden" id="confirmBox">
+            <p>Confirm end-of-day Time Out.</p>
+            <div class="confirm-actions">
+              <button class="secondary" id="cancelTimeoutBtn">Cancel</button>
+              <button class="primary warning" id="confirmTimeoutBtn">Record Time Out</button>
             </div>
           </div>
-        </section>
-
-        <section class="sync-panel">
-          <div class="panel-head compact-head">
-            <div>
-              <span>Offline Sync</span>
-              <h2 id="syncStatusValue">Checking...</h2>
-            </div>
-            <button class="primary small" id="syncNowBtn">Sync Now</button>
-          </div>
-          <p id="syncStatusDetail">Preparing the queue monitor.</p>
-
-          <div class="sync-grid">
-            <article>
-              <span>Pending</span>
-              <strong id="pendingRecordsValue">0</strong>
-              <p id="pendingRecordsDetail">No offline records are waiting.</p>
-            </article>
-            <article>
-              <span>Today</span>
-              <strong id="todayScansValue">0</strong>
-              <p id="todayScansDetail">Awaiting the first attendance record.</p>
-            </article>
-            <article>
-              <span>Last Sync</span>
-              <strong id="lastSyncValue">Not yet synced</strong>
-              <p id="lastSyncDetail">Queued scans upload automatically.</p>
-            </article>
-            <article>
-              <span>Mode</span>
-              <strong id="scannerModeValue">Webcam Scanner</strong>
-              <p id="scannerModeDetail">Ready for QR scanning.</p>
-            </article>
-          </div>
-
-          <div class="progress-block">
-            <span>Sync Progress</span>
-            <strong id="syncProgressValue">Idle</strong>
-            <p id="syncProgressDetail">No synchronization is running right now.</p>
-            <div class="progress-bar"><div class="progress-fill" id="syncProgressFill"></div></div>
-          </div>
-
-          <details class="sync-history">
-            <summary>Synchronization History</summary>
-            <small id="historySummary">Recent background and manual sync activity.</small>
-            <div class="history-list" id="syncHistoryList">
-              <div class="history-empty">No synchronization history yet.</div>
-            </div>
-          </details>
         </section>
 
         <section class="system-strip">
           <div class="mini-card" id="connectionSummaryCard">
             <span>Connection</span>
             <strong id="connectionCardValue">Checking...</strong>
-            <p id="connectionCardDetail">Connecting to Railway server.</p>
+            <p id="connectionCardDetail">Connecting to Server.</p>
           </div>
           <div class="mini-card" id="schoolSummaryCard">
             <span>Assigned School</span>
@@ -234,12 +166,12 @@
           <div class="mini-card" id="syncSummaryCard">
             <span>Sync</span>
             <strong>Ready</strong>
-            <p>Railway sync monitor is active.</p>
+            <p>Sync monitor is active.</p>
           </div>
           <div class="mini-card">
             <span>Total Synced</span>
             <strong id="totalSyncedValue">0</strong>
-            <p id="totalSyncedDetail">Records sent to Railway.</p>
+            <p id="totalSyncedDetail">Records sent to the server.</p>
           </div>
           <div class="mini-card">
             <span>Online / Offline</span>
@@ -249,11 +181,6 @@
         </section>
       </aside>
     </main>
-
-    <footer class="bottom-bar">
-      <span>Offline mode stays enabled. Records sync automatically when internet returns.</span>
-      <button class="status-button" id="minimizeBtn">Hide to Tray</button>
-    </footer>
   </div>
 
   <div class="settings-drawer" id="settingsDrawer" aria-hidden="true">
@@ -268,7 +195,7 @@
       </div>
 
       <label>
-        Railway Server URL
+        Server URL
         <input id="serverUrlInput" type="url" placeholder="https://school-attendance-qrbased.up.railway.app">
       </label>
 
@@ -304,14 +231,64 @@
       </label>
 
       <div class="toggle-list">
-        <label><input id="autoStartInput" type="checkbox"> Start Edutrack Scanner when Windows starts</label>
-        <label><input id="fullscreenInput" type="checkbox"> Open the dashboard in full screen</label>
-        <label><input id="trayInput" type="checkbox"> Minimize to the system tray when the window closes</label>
-        <label><input id="offlineSyncInput" type="checkbox"> Save scans offline and sync them automatically</label>
+        <span>Startup and offline</span>
+        <label><input id="autoStartInput" type="checkbox"> Start automatically when Windows starts, including after restart</label>
+        <label><input id="fullscreenInput" type="checkbox"> Open the scanner in full screen</label>
+        <label><input id="trayInput" type="checkbox"> Keep running in the system tray when closed</label>
+        <label><input id="offlineSyncInput" type="checkbox"> Save scans offline and sync automatically</label>
       </div>
 
+      <section class="settings-sync">
+        <div class="settings-section-head">
+          <div>
+            <span>Offline Sync</span>
+            <h3 id="syncStatusValue">Checking...</h3>
+          </div>
+          <button class="primary small" id="syncNowBtn">Sync Now</button>
+        </div>
+        <p id="syncStatusDetail">Preparing the queue monitor.</p>
+        <div class="settings-metrics">
+          <article>
+            <span id="queueChip">0 queued</span>
+            <b id="pendingRecordsValue">0</b>
+            <p id="pendingRecordsDetail">No offline records are waiting.</p>
+          </article>
+          <article>
+            <span>Today</span>
+            <b id="todayScansValue">0</b>
+            <p id="todayScansDetail">Only scans from this PC are counted.</p>
+          </article>
+          <article>
+            <span>Last Sync</span>
+            <b id="lastSyncValue">Not yet synced</b>
+            <p id="lastSyncDetail">Queued scans upload automatically.</p>
+          </article>
+          <article>
+            <span>Mode</span>
+            <b id="scannerModeValue">Webcam Scanner</b>
+            <p id="scannerModeDetail">Ready for QR scanning.</p>
+          </article>
+        </div>
+
+        <div class="progress-block">
+          <span>Sync Progress</span>
+          <strong id="syncProgressValue">Idle</strong>
+          <p id="syncProgressDetail">No synchronization is running right now.</p>
+          <div class="progress-bar"><div class="progress-fill" id="syncProgressFill"></div></div>
+        </div>
+
+        <details class="sync-history">
+          <summary>Synchronization History</summary>
+          <small id="historySummary">Recent background and manual sync activity.</small>
+          <div class="history-list" id="syncHistoryList">
+            <div class="history-empty">No synchronization history yet.</div>
+          </div>
+        </details>
+      </section>
+
       <div class="drawer-actions">
-        <button class="secondary" id="testServerBtn">Test Railway Connection</button>
+        <button class="secondary" id="testServerBtn">Test Server</button>
+        <button class="secondary" id="minimizeBtn">Hide to Tray</button>
         <button class="primary" id="saveSettingsBtn">Save Settings</button>
       </div>
 

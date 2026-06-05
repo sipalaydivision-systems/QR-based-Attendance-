@@ -2427,16 +2427,14 @@ router.get('/inactive-students', requireAuth, async (req, res) => {
 router.get('/is-school-day', requireAuthOrScannerKiosk, async (req, res) => {
     const date = req.query.date || todayDate();
     try {
-        const [rows] = await db.query('SELECT * FROM school_days WHERE date = ?', [date]);
-        if (rows.length > 0 && !rows[0].is_school_day) {
-            return res.json({ is_school_day: false, reason: rows[0].reason || 'Non-school day' });
-        }
-        // If weekend (Sat or Sun), not a school day
-        const dayOfWeek = new Date(date + 'T00:00:00').getDay();
-        if (dayOfWeek === 0 || dayOfWeek === 6) {
-            return res.json({ is_school_day: false, reason: dayOfWeek === 0 ? 'Sunday' : 'Saturday' });
-        }
-        return res.json({ is_school_day: true, reason: null });
+        const schoolId = normalizeOptionalSchoolId(req.query.school_id);
+        const schoolDay = await checkSchoolDay(date, schoolId);
+        return res.json({
+            is_school_day: schoolDay.isSchoolDay,
+            isSchoolDay: schoolDay.isSchoolDay,
+            reason: schoolDay.reason,
+            type: schoolDay.type
+        });
     } catch (err) {
         return res.status(500).json({ error: 'Failed to check school day.' });
     }
