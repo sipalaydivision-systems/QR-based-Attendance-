@@ -216,7 +216,7 @@
 
         /* Countdown */
         .countdown-bar { height: 5px; background: #f1f5f9; border-radius: 0 0 28px 28px; overflow: hidden; }
-        .countdown-bar .fill { height: 100%; animation: countdownShrink 3s linear forwards; }
+        .countdown-bar .fill { height: 100%; animation: countdownShrink 2s linear forwards; }
         .countdown-bar .fill.green { background: linear-gradient(90deg, #22c55e, #4ade80); }
         .countdown-bar .fill.orange { background: linear-gradient(90deg, #f97316, #fb923c); }
         .countdown-bar .fill.rose { background: linear-gradient(90deg, #e11d48, #f43f5e); }
@@ -388,8 +388,8 @@
     var cooldown = false;
     var dismissTimer = null;
     var recentScans = new Map();
-    var DEDUP_WINDOW = 5000;
-    var DISPLAY_TIME = 3000;
+    var DEDUP_WINDOW = 3000;
+    var DISPLAY_TIME = 2000;
     var REQUEST_TIMEOUT = 8000;
     var MAX_RETRIES = 1;
 
@@ -397,14 +397,14 @@
 
     html5QrCode.start(
         { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 400, height: 400 }, aspectRatio: 1.0, disableFlip: false },
+        { fps: 15, qrbox: { width: 400, height: 400 }, aspectRatio: 1.0, disableFlip: false },
         onScanSuccess,
         function() {}
     ).catch(function(err) {
         console.error("Camera error:", err);
         html5QrCode.start(
             { facingMode: "user" },
-            { fps: 10, qrbox: { width: 400, height: 400 }, aspectRatio: 1.0, disableFlip: false },
+            { fps: 15, qrbox: { width: 400, height: 400 }, aspectRatio: 1.0, disableFlip: false },
             onScanSuccess,
             function() {}
         );
@@ -517,7 +517,7 @@
 
             fill.style.animation = 'none'; fill.offsetHeight;
             fill.style.animation = 'countdownShrink 3s linear forwards';
-            dismissTimer = setTimeout(dismissResult, 3000);
+            dismissTimer = setTimeout(dismissResult, 2000);
             return;
         }
 
@@ -569,7 +569,7 @@
 
         fill.style.animation = 'none'; fill.offsetHeight;
         fill.style.animation = 'countdownShrink 3s linear forwards';
-        dismissTimer = setTimeout(dismissResult, 3000);
+        dismissTimer = setTimeout(dismissResult, 2000);
     }
 
     function fillPerson(person) {

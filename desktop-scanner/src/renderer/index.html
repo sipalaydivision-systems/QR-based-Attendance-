@@ -108,7 +108,19 @@
       <aside class="side-panel">
         <section class="record-card">
           <div class="panel-head">
-            <h2>Attendance log</h2>
+            <div class="panel-head-main">
+              <div class="panel-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="2"/><path d="M9 12h6M9 16h4"/></svg>
+              </div>
+              <div>
+                <span class="panel-label">Today's Records</span>
+                <h2>Attendance Log</h2>
+              </div>
+            </div>
+            <div class="scan-counter" id="scanCounter">
+              <strong id="scanCountValue">0</strong>
+              <span>scans</span>
+            </div>
           </div>
 
           <div class="local-table-wrap">
@@ -124,7 +136,13 @@
               </thead>
               <tbody id="localScanRows"></tbody>
             </table>
-            <div class="table-empty" id="localScanEmpty">No attendance recorded yet.</div>
+            <div class="table-empty" id="localScanEmpty">
+              <div class="empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+              </div>
+              <strong>No attendance recorded yet</strong>
+              <span>Scans will appear here in real time</span>
+            </div>
           </div>
 
           <div class="confirm-box hidden" id="confirmBox">

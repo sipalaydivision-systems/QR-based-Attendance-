@@ -501,7 +501,7 @@ function showScanFeedback(title, message, tone = 'success', data = {}) {
 
   if (state.scanModalTimer) clearTimeout(state.scanModalTimer);
   if (data.action !== 'CONFIRM_TIME_OUT') {
-    state.scanModalTimer = setTimeout(closeScanModal, 2000);
+    state.scanModalTimer = setTimeout(closeScanModal, 1500);
   }
 }
 
@@ -512,6 +512,9 @@ function renderLocalScans(scans = []) {
 
   const localScans = Array.isArray(scans) ? scans : [];
   empty.classList.toggle('hidden', localScans.length > 0);
+
+  const counter = $('scanCountValue');
+  if (counter) counter.textContent = String(localScans.length);
 
   localScans.forEach((scan) => {
     const tr = document.createElement('tr');
@@ -821,7 +824,7 @@ async function startCamera() {
     if (!state.html5QrCode) state.html5QrCode = new Html5Qrcode('reader');
     await state.html5QrCode.start(
       { facingMode: 'environment' },
-      { fps: 12, qrbox: { width: 360, height: 360 }, aspectRatio: 1.0, disableFlip: false },
+      { fps: 15, qrbox: { width: 360, height: 360 }, aspectRatio: 1.0, disableFlip: false },
       (decodedText) => submitQrCode(decodedText),
       () => {}
     );
@@ -833,7 +836,7 @@ async function startCamera() {
     try {
       await state.html5QrCode.start(
         { facingMode: 'user' },
-        { fps: 12, qrbox: { width: 360, height: 360 }, aspectRatio: 1.0, disableFlip: false },
+        { fps: 15, qrbox: { width: 360, height: 360 }, aspectRatio: 1.0, disableFlip: false },
         (decodedText) => submitQrCode(decodedText),
         () => {}
       );
@@ -997,7 +1000,7 @@ function scheduleUsbAutoSubmit() {
   clearUsbSubmitTimer();
   const code = normalizeScanInput($('usbInput')?.value || state.usbBuffer);
   if (code.length < 4) return;
-  state.usbSubmitTimer = setTimeout(submitUsbScanInput, 260);
+  state.usbSubmitTimer = setTimeout(submitUsbScanInput, 220);
 }
 
 function handleUsbKeydown(event) {
