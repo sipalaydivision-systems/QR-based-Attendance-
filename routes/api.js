@@ -274,7 +274,24 @@ router.get('/scanner-desktop-config', async (req, res) => {
     try {
         const schoolId = normalizeOptionalSchoolId(req.query.school_id);
         const [settingsRows] = await db.query(
-            "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('system_name','division_name','system_logo','am_time_in_end','pm_time_out_end','late_threshold')"
+            `SELECT setting_key, setting_value
+             FROM settings
+             WHERE setting_key IN (
+                'system_name',
+                'division_name',
+                'system_logo',
+                'am_time_in_end',
+                'pm_time_out_end',
+                'late_threshold',
+                'teacher_duty_start_time',
+                'teacher_duty_end_time',
+                'teacher_late_threshold',
+                'student_attendance_rule',
+                'teacher_attendance_rule',
+                'teacher_time_out_rule',
+                'absence_cutoff_time',
+                'attendance_policy'
+             )`
         );
         const settings = {};
         settingsRows.forEach(row => { settings[row.setting_key] = row.setting_value; });
@@ -395,22 +412,29 @@ function normalizeTimeSetting(value, fallback) {
     return normalizeTime(value, fallback);
 }
 
-async function getStudentLateThreshold(dateStr) {
-    const [rows] = await db.query("SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('am_time_in_end', 'late_threshold')");
+async function getAttendanceLateThreshold(personType, dateStr) {
+    const [rows] = await db.query(
+        `SELECT setting_key, setting_value
+         FROM settings
+         WHERE setting_key IN ('am_time_in_end', 'late_threshold', 'teacher_duty_start_time', 'teacher_late_threshold')`
+    );
     const settings = Object.fromEntries(rows.map(row => [row.setting_key, row.setting_value]));
-    const baseTime = normalizeTimeSetting(settings.am_time_in_end, '08:00:00');
-    const graceMinutes = parseInt(settings.late_threshold, 10) || 0;
+    const isTeacher = personType === 'teacher';
+    const baseTime = normalizeTimeSetting(
+        isTeacher ? (settings.teacher_duty_start_time || settings.am_time_in_end) : settings.am_time_in_end,
+        '08:00:00'
+    );
+    const graceValue = isTeacher
+        ? (settings.teacher_late_threshold ?? settings.late_threshold)
+        : settings.late_threshold;
+    const graceMinutes = parseInt(graceValue, 10) || 0;
     return addMinutes(new Date(dateStr + 'T' + baseTime + '+08:00'), graceMinutes);
 }
 
-async function getStudentTimeOutOpen(dateStr) {
-    const [[row]] = await db.query("SELECT setting_value FROM settings WHERE setting_key='pm_time_out_end' LIMIT 1");
-    return sqlDateTime(dateStr, normalizeTimeSetting(row?.setting_value, '17:00:00'));
-}
-
 async function getSchoolDayEndDateTime(dateStr) {
-    const [[row]] = await db.query("SELECT setting_value FROM settings WHERE setting_key='pm_time_out_end' LIMIT 1");
-    return sqlDateTime(dateStr, normalizeTimeSetting(row?.setting_value, '17:00:00'));
+    const [rows] = await db.query("SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('absence_cutoff_time', 'pm_time_out_end')");
+    const settings = Object.fromEntries(rows.map(row => [row.setting_key, row.setting_value]));
+    return sqlDateTime(dateStr, normalizeTimeSetting(settings.absence_cutoff_time || settings.pm_time_out_end, '17:00:00'));
 }
 
 async function hasSchoolDayEnded(dateStr) {
@@ -812,10 +836,7 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
         );
 
         if (existing.length === 0) {
-            // Students only scan once when arriving; lunch is an internal break.
-            const lateThreshold = personType === 'student'
-                ? await getStudentLateThreshold(today)
-                : sqlDateTime(today, '08:00:00');
+            const lateThreshold = await getAttendanceLateThreshold(personType, today);
             const attendanceStatus = compareDateTime(now, lateThreshold) >= 0 ? 'late' : 'present';
 
             // Record time-in
@@ -831,22 +852,17 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
                 person: personInfo,
                 time: formatTime12(now)
             });
+        } else if (personType === 'student') {
+            return res.json({
+                success: true,
+                action: 'ALREADY_RECORDED',
+                status: existing[0].status,
+                message: 'Already recorded today. Student remains PRESENT for the school day.',
+                person: personInfo,
+                time_in: formatTime12(existing[0].time_in),
+                monitoring_status: 'Inside School'
+            });
         } else if (!existing[0].time_out) {
-            if (personType === 'student') {
-                const timeOutOpen = await getStudentTimeOutOpen(today);
-                if (compareDateTime(now, timeOutOpen) < 0) {
-                    return res.json({
-                        success: true,
-                        action: 'PENDING_TIME_OUT',
-                        status: existing[0].status,
-                        message: 'Already timed in. Lunch break is inside school; end-of-day time out opens at ' + formatTime12(timeOutOpen) + '.',
-                        person: personInfo,
-                        time_in: formatTime12(existing[0].time_in),
-                        time_out: 'Pending Time Out',
-                        monitoring_status: 'Pending Time Out'
-                    });
-                }
-            }
             // Anti-cheat: reject time_out if scanned too quickly after time_in (< 60 seconds)
             const elapsedSec = secondsBetween(existing[0].time_in, now);
             if (elapsedSec < 60) {
@@ -1004,11 +1020,11 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
         const totalPresent = presentStudents[0].count;
         const attendanceDenominator = Math.max(eligibleStudents, totalPresent);
 
-        // Students timed out today (only active students)
-        const [timedOutStudents] = await db.query(
+        // Teachers timed out today (only active teachers)
+        const [timedOutTeachers] = await db.query(
             `SELECT COUNT(DISTINCT a.person_id) as count FROM attendance a
-             INNER JOIN students s ON a.person_id = s.id
-             WHERE a.person_type = 'student' AND s.status = 'active' AND a.date = ? AND a.time_out IS NOT NULL` + (schoolId ? ' AND a.school_id = ?' : ''),
+             INNER JOIN teachers t ON a.person_id = t.id
+             WHERE a.person_type = 'teacher' AND t.status = 'active' AND a.date = ? AND a.time_out IS NOT NULL` + (schoolId ? ' AND a.school_id = ?' : ''),
             [date, ...schoolParams]
         );
 
@@ -1044,7 +1060,8 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
             attendance_eligible_teachers: Math.max(eligibleTeachers, presentTeachers[0].count),
             students_present: totalPresent,
             students_absent: computedAbsent,
-            students_timed_out: timedOutStudents[0].count,
+            students_timed_out: 0,
+            teachers_timed_out: timedOutTeachers[0].count,
             teachers_present: presentTeachers[0].count,
             teachers_absent: computedTeacherAbsent,
             attendance_rate: attendanceDenominator > 0 ? Math.min(100, Math.round((totalPresent / attendanceDenominator) * 100)) : 0,
@@ -1697,7 +1714,8 @@ router.get('/attendance', requireAuth, async (req, res) => {
             gl.name as grade_name,
             sec.name as section_name,
             CASE
-                WHEN a.person_type = 'student' AND a.time_in IS NOT NULL AND a.time_out IS NULL THEN 'Pending Time Out'
+                WHEN a.person_type = 'student' AND a.time_in IS NOT NULL THEN 'Inside School'
+                WHEN a.person_type = 'teacher' AND a.time_in IS NOT NULL AND a.time_out IS NULL THEN 'Pending Time Out'
                 WHEN a.time_out IS NOT NULL THEN 'Complete'
                 ELSE 'No Time In'
             END as monitoring_status
@@ -1731,7 +1749,7 @@ router.get('/settings', requireAuth, async (req, res) => {
     }
 });
 
-router.post('/settings', requireAuth, async (req, res) => {
+router.post('/settings', requireRole('super_admin'), async (req, res) => {
     try {
         const entries = Object.entries(req.body);
         for (const [key, value] of entries) {
@@ -1746,7 +1764,7 @@ router.post('/settings', requireAuth, async (req, res) => {
     }
 });
 
-router.put('/settings', requireAuth, async (req, res) => {
+router.put('/settings', requireRole('super_admin'), async (req, res) => {
     try {
         const entries = Object.entries(req.body);
         for (const [key, value] of entries) {
@@ -1762,7 +1780,7 @@ router.put('/settings', requireAuth, async (req, res) => {
 });
 
 // ---- System Logo Upload ----
-router.post('/settings/logo', requireAuth, (req, res) => {
+router.post('/settings/logo', requireRole('super_admin'), (req, res) => {
     const systemLogoUpload = multer({
         storage: multer.memoryStorage(),
         limits: { fileSize: 2 * 1024 * 1024 },
@@ -1790,7 +1808,7 @@ router.post('/settings/logo', requireAuth, (req, res) => {
     });
 });
 
-router.delete('/settings/logo', requireAuth, async (req, res) => {
+router.delete('/settings/logo', requireRole('super_admin'), async (req, res) => {
     try {
         const [[row]] = await db.query("SELECT setting_value FROM settings WHERE setting_key='system_logo'");
         if (row && row.setting_value && String(row.setting_value).startsWith('/uploads/')) {
@@ -1813,7 +1831,7 @@ const platformLogoKeys = {
 };
 
 // ---- Landing Page Platform Logo Uploads ----
-router.post('/settings/platform-logo/:platform', requireAuth, (req, res) => {
+router.post('/settings/platform-logo/:platform', requireRole('super_admin'), (req, res) => {
     const settingKey = platformLogoKeys[String(req.params.platform || '').toLowerCase()];
     if (!settingKey) return res.status(400).json({ error: 'Unsupported platform logo.' });
 
@@ -1833,7 +1851,7 @@ router.post('/settings/platform-logo/:platform', requireAuth, (req, res) => {
     });
 });
 
-router.delete('/settings/platform-logo/:platform', requireAuth, async (req, res) => {
+router.delete('/settings/platform-logo/:platform', requireRole('super_admin'), async (req, res) => {
     const settingKey = platformLogoKeys[String(req.params.platform || '').toLowerCase()];
     if (!settingKey) return res.status(400).json({ error: 'Unsupported platform logo.' });
     try {
@@ -1863,7 +1881,7 @@ router.get('/status-counts', requireAuth, async (req, res) => {
 });
 
 // ---- Bulk Activate All Inactive ----
-router.post('/bulk-activate', requireAuth, async (req, res) => {
+router.post('/bulk-activate', requireRole('super_admin'), async (req, res) => {
     try {
         const [sr] = await db.query("UPDATE students SET status='active', active_from=CURDATE() WHERE status='inactive'");
         const [tr] = await db.query("UPDATE teachers SET status='active' WHERE status='inactive'");
@@ -1874,7 +1892,7 @@ router.post('/bulk-activate', requireAuth, async (req, res) => {
 });
 
 // ---- Permanently Remove Deleted Records ----
-router.post('/bulk-purge-deleted', requireAuth, async (req, res) => {
+router.post('/bulk-purge-deleted', requireRole('super_admin'), async (req, res) => {
     try {
         const [sr] = await db.query("DELETE FROM students WHERE status='deleted'");
         const [tr] = await db.query("DELETE FROM teachers WHERE status='deleted'");
@@ -1896,7 +1914,7 @@ router.get('/holidays', requireAuth, async (req, res) => {
     }
 });
 
-router.post('/holidays', requireAuth, async (req, res) => {
+router.post('/holidays', requireRole('super_admin'), async (req, res) => {
     const { name, holiday_date, is_national, school_id } = req.body;
     if (!name || !holiday_date) return res.status(400).json({ error: 'Name and date are required.' });
     const holidayType = ['0', '1', '2'].includes(String(is_national)) ? Number(is_national) : 1;
@@ -1912,7 +1930,7 @@ router.post('/holidays', requireAuth, async (req, res) => {
     }
 });
 
-router.delete('/holidays/:id', requireAuth, async (req, res) => {
+router.delete('/holidays/:id', requireRole('super_admin'), async (req, res) => {
     try {
         await db.query('DELETE FROM holidays WHERE id = ?', [req.params.id]);
         return res.json({ success: true });
@@ -2047,7 +2065,7 @@ router.get('/events', requireAuth, async (req, res) => {
     }
 });
 
-router.post('/events', requireAuth, async (req, res) => {
+router.post('/events', requireRole('super_admin'), async (req, res) => {
     const { name, description, event_date, school_id } = req.body;
     if (!name || !event_date) return res.status(400).json({ error: 'Name and date are required.' });
     try {
@@ -2061,7 +2079,7 @@ router.post('/events', requireAuth, async (req, res) => {
     }
 });
 
-router.put('/events/:id', requireAuth, async (req, res) => {
+router.put('/events/:id', requireRole('super_admin'), async (req, res) => {
     const { name, description, event_date, school_id, status } = req.body;
     try {
         await db.query(
@@ -2074,7 +2092,7 @@ router.put('/events/:id', requireAuth, async (req, res) => {
     }
 });
 
-router.delete('/events/:id', requireAuth, async (req, res) => {
+router.delete('/events/:id', requireRole('super_admin'), async (req, res) => {
     try {
         await db.query('UPDATE events SET status = ? WHERE id = ?', ['cancelled', req.params.id]);
         return res.json({ success: true });
@@ -2121,7 +2139,7 @@ router.get('/school-days', requireAuth, async (req, res) => {
     }
 });
 
-router.post('/school-days', requireAuth, async (req, res) => {
+router.post('/school-days', requireRole('super_admin'), async (req, res) => {
     const { date, is_school_day, reason } = req.body;
     if (!date) return res.status(400).json({ error: 'Date is required.' });
     try {
@@ -2135,7 +2153,7 @@ router.post('/school-days', requireAuth, async (req, res) => {
     }
 });
 
-router.delete('/school-days/:id', requireAuth, async (req, res) => {
+router.delete('/school-days/:id', requireRole('super_admin'), async (req, res) => {
     try {
         await db.query('DELETE FROM school_days WHERE id = ?', [req.params.id]);
         return res.json({ success: true });
@@ -2164,7 +2182,9 @@ router.get('/reports', requireAuth, async (req, res) => {
         const [rows] = await db.query(query, params);
         const records = rows.map(row => ({
             ...row,
-            monitoring_status: row.time_in && !row.time_out ? 'Pending Time Out' : (row.time_out ? 'Complete' : 'No Time In')
+            monitoring_status: row.person_type === 'student'
+                ? (row.time_in ? 'Inside School' : 'No Time In')
+                : (row.time_in && !row.time_out ? 'Pending Time Out' : (row.time_out ? 'Complete' : 'No Time In'))
         }));
 
         // Stats summary
@@ -2321,7 +2341,7 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
                 at.email as adviser_email,
                 sc.name as school_name,
                 CASE WHEN SUM(CASE WHEN a.status = 'late' THEN 1 ELSE 0 END) > 0 THEN 'Late' ELSE 'Present' END as attendance_status,
-                CASE WHEN MAX(a.time_out) IS NULL THEN 'Pending Time Out' ELSE 'Complete' END as monitoring_status
+                'Inside School' as monitoring_status
             FROM attendance a
             INNER JOIN students s ON a.person_id = s.id
             LEFT JOIN schools sc ON s.school_id = sc.id
@@ -2383,7 +2403,7 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
             ...row,
             name: `${row.firstname || ''} ${row.lastname || ''}`.trim() || 'Student',
             attendance_status: row.attendance_status || 'Present',
-            monitoring_status: row.monitoring_status || (row.time_out ? 'Complete' : 'Pending Time Out'),
+            monitoring_status: row.monitoring_status || 'Inside School',
             attendance_date: targetDate,
             absent_days: 0,
             absent_from_date: null

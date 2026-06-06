@@ -507,6 +507,11 @@
             icon.innerHTML = '<i class="fas fa-arrow-right-to-bracket"></i>';
             label.textContent = 'TIME IN';
             fill.className = 'fill green';
+        } else if (data.action === 'ALREADY_RECORDED') {
+            banner.className = 'status-banner late';
+            icon.innerHTML = '<i class="fas fa-check-circle"></i>';
+            label.textContent = 'ALREADY RECORDED';
+            fill.className = 'fill orange';
         } else if (data.action === 'PENDING_TIME_OUT') {
             banner.className = 'status-banner late';
             icon.innerHTML = '<i class="fas fa-utensils"></i>';
@@ -525,6 +530,8 @@
         var timeHTML = '';
         if (data.action === 'TIME_IN') {
             timeHTML = '<div class="t-block t-in"><div class="t-time">' + data.time + '</div><div class="t-label"><i class="fas fa-arrow-right-to-bracket"></i> Time In</div></div>';
+        } else if (data.action === 'ALREADY_RECORDED') {
+            timeHTML = '<div class="t-block t-in"><div class="t-time">' + data.time_in + '</div><div class="t-label"><i class="fas fa-check-circle"></i> Present Today</div></div>';
         } else if (data.action === 'PENDING_TIME_OUT') {
             timeHTML = '<div class="t-block t-in"><div class="t-time">' + data.time_in + '</div><div class="t-label"><i class="fas fa-arrow-right-to-bracket"></i> Time In</div></div>' +
                        '<div class="t-block t-out"><div class="t-time">Pending</div><div class="t-label"><i class="fas fa-hourglass-half"></i> End-of-day Time Out</div></div>';

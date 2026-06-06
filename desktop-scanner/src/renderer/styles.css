@@ -67,6 +67,7 @@ svg {
 }
 
 .app-shell {
+  position: relative;
   min-width: 1120px;
   height: 100vh;
   display: grid;
@@ -551,6 +552,10 @@ svg {
   overflow: hidden;
 }
 
+body.settings-open .side-panel {
+  visibility: hidden;
+}
+
 .record-card,
 .drawer-card {
   border-radius: 22px;
@@ -848,9 +853,9 @@ svg {
 }
 
 .settings-drawer {
-  position: fixed;
+  position: absolute;
   inset: 0;
-  z-index: 9999;
+  z-index: 200;
   isolation: isolate;
   opacity: 0;
   pointer-events: none;
@@ -867,7 +872,7 @@ svg {
 .drawer-backdrop {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 201;
   background: transparent;
 }
 
@@ -876,7 +881,7 @@ svg {
   top: 18px;
   right: 18px;
   bottom: 18px;
-  z-index: 2;
+  z-index: 202;
   width: min(520px, calc(100vw - 36px));
   display: grid;
   align-content: start;
@@ -929,6 +934,7 @@ svg {
 }
 
 .toggle-list,
+.admin-managed-settings,
 .settings-sync {
   display: grid;
   gap: 10px;
@@ -936,6 +942,26 @@ svg {
   border-radius: 18px;
   border: 1px solid var(--line);
   background: #f7fbf8;
+}
+
+.admin-managed-settings {
+  border-color: #c8ead8;
+  background: #f3fcf7;
+}
+
+.admin-managed-settings span {
+  color: var(--green-deep);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.admin-managed-settings p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 750;
 }
 
 .toggle-list label {

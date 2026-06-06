@@ -175,6 +175,113 @@
         </section>
       </aside>
     </main>
+
+    <div class="settings-drawer" id="settingsDrawer" aria-hidden="true">
+      <div class="drawer-backdrop" id="drawerBackdrop"></div>
+      <section class="drawer-card">
+        <div class="drawer-head">
+          <div>
+            <span>Edutrack Scanner Settings</span>
+            <h2>Desktop configuration</h2>
+          </div>
+          <button class="icon-button" id="closeSettingsBtn" title="Close settings" aria-label="Close settings">&times;</button>
+        </div>
+
+        <label>
+          Server URL
+          <input id="serverUrlInput" type="url" placeholder="https://school-attendance-qrbased.up.railway.app">
+        </label>
+
+        <label>
+          Preferred Scan Mode
+          <select id="scannerModeInput">
+            <option value="webcam">Webcam scanner</option>
+            <option value="usb">USB QR scanner</option>
+          </select>
+        </label>
+
+        <label>
+          Assigned School
+          <select id="schoolInput">
+            <option value="">All schools / division kiosk</option>
+          </select>
+        </label>
+
+        <div class="admin-managed-settings">
+          <span>Managed by Web Admin</span>
+          <p>Attendance schedules, late cutoffs, teacher time-out rules, school calendar, holidays, and attendance policies sync automatically from the Web Admin Dashboard.</p>
+        </div>
+
+        <label>
+          Duplicate Scan Window (seconds)
+          <input id="duplicateInput" type="number" min="1" max="60">
+        </label>
+
+        <div class="toggle-list">
+          <span>Startup and offline</span>
+          <label><input id="autoStartInput" type="checkbox"> Start automatically when Windows starts, including after restart</label>
+          <label><input id="fullscreenInput" type="checkbox"> Open the scanner in full screen</label>
+          <label><input id="trayInput" type="checkbox"> Keep running in the system tray when closed</label>
+          <label><input id="offlineSyncInput" type="checkbox"> Save scans offline and sync automatically</label>
+        </div>
+
+        <section class="settings-sync">
+          <div class="settings-section-head">
+            <div>
+              <span>Offline Sync</span>
+              <h3 id="syncStatusValue">Checking...</h3>
+            </div>
+            <button class="primary small" id="syncNowBtn">Sync Now</button>
+          </div>
+          <p id="syncStatusDetail">Preparing the queue monitor.</p>
+          <div class="settings-metrics">
+            <article>
+              <span id="queueChip">0 queued</span>
+              <b id="pendingRecordsValue">0</b>
+              <p id="pendingRecordsDetail">No offline records are waiting.</p>
+            </article>
+            <article>
+              <span>Today</span>
+              <b id="todayScansValue">0</b>
+              <p id="todayScansDetail">Only scans from this PC are counted.</p>
+            </article>
+            <article>
+              <span>Last Sync</span>
+              <b id="lastSyncValue">Not yet synced</b>
+              <p id="lastSyncDetail">Queued scans upload automatically.</p>
+            </article>
+            <article>
+              <span>Mode</span>
+              <b id="scannerModeValue">Webcam Scanner</b>
+              <p id="scannerModeDetail">Ready for QR scanning.</p>
+            </article>
+          </div>
+
+          <div class="progress-block">
+            <span>Sync Progress</span>
+            <strong id="syncProgressValue">Idle</strong>
+            <p id="syncProgressDetail">No synchronization is running right now.</p>
+            <div class="progress-bar"><div class="progress-fill" id="syncProgressFill"></div></div>
+          </div>
+
+          <details class="sync-history">
+            <summary>Synchronization History</summary>
+            <small id="historySummary">Recent background and manual sync activity.</small>
+            <div class="history-list" id="syncHistoryList">
+              <div class="history-empty">No synchronization history yet.</div>
+            </div>
+          </details>
+        </section>
+
+        <div class="drawer-actions">
+          <button class="secondary" id="testServerBtn">Refresh Records</button>
+          <button class="secondary" id="minimizeBtn">Hide to Tray</button>
+          <button class="primary" id="saveSettingsBtn">Save Settings</button>
+        </div>
+
+        <p class="settings-note" id="settingsNote">Settings are stored on this computer only.</p>
+      </section>
+    </div>
   </div>
 
   <div class="scan-modal hidden" id="scanModal" aria-live="polite">
@@ -188,119 +295,6 @@
         <small id="scanModalMeta">Grade - Section | School</small>
       </div>
       <div class="modal-time" id="scanModalTime">09:40 PM</div>
-    </section>
-  </div>
-
-  <div class="settings-drawer" id="settingsDrawer" aria-hidden="true">
-    <div class="drawer-backdrop" id="drawerBackdrop"></div>
-    <section class="drawer-card">
-      <div class="drawer-head">
-        <div>
-          <span>Edutrack Scanner Settings</span>
-          <h2>Desktop configuration</h2>
-        </div>
-        <button class="icon-button" id="closeSettingsBtn" title="Close settings" aria-label="Close settings">&times;</button>
-      </div>
-
-      <label>
-        Server URL
-        <input id="serverUrlInput" type="url" placeholder="https://school-attendance-qrbased.up.railway.app">
-      </label>
-
-      <label>
-        Preferred Scan Mode
-        <select id="scannerModeInput">
-          <option value="webcam">Webcam scanner</option>
-          <option value="usb">USB QR scanner</option>
-        </select>
-      </label>
-
-      <label>
-        Assigned School
-        <select id="schoolInput">
-          <option value="">All schools / division kiosk</option>
-        </select>
-      </label>
-
-      <div class="settings-row">
-        <label>
-          Time In Start
-          <input id="timeInInput" type="time">
-        </label>
-        <label>
-          Time Out Opens
-          <input id="timeOutInput" type="time">
-        </label>
-      </div>
-
-      <label>
-        Duplicate Scan Window (seconds)
-        <input id="duplicateInput" type="number" min="1" max="60">
-      </label>
-
-      <div class="toggle-list">
-        <span>Startup and offline</span>
-        <label><input id="autoStartInput" type="checkbox"> Start automatically when Windows starts, including after restart</label>
-        <label><input id="fullscreenInput" type="checkbox"> Open the scanner in full screen</label>
-        <label><input id="trayInput" type="checkbox"> Keep running in the system tray when closed</label>
-        <label><input id="offlineSyncInput" type="checkbox"> Save scans offline and sync automatically</label>
-      </div>
-
-      <section class="settings-sync">
-        <div class="settings-section-head">
-          <div>
-            <span>Offline Sync</span>
-            <h3 id="syncStatusValue">Checking...</h3>
-          </div>
-          <button class="primary small" id="syncNowBtn">Sync Now</button>
-        </div>
-        <p id="syncStatusDetail">Preparing the queue monitor.</p>
-        <div class="settings-metrics">
-          <article>
-            <span id="queueChip">0 queued</span>
-            <b id="pendingRecordsValue">0</b>
-            <p id="pendingRecordsDetail">No offline records are waiting.</p>
-          </article>
-          <article>
-            <span>Today</span>
-            <b id="todayScansValue">0</b>
-            <p id="todayScansDetail">Only scans from this PC are counted.</p>
-          </article>
-          <article>
-            <span>Last Sync</span>
-            <b id="lastSyncValue">Not yet synced</b>
-            <p id="lastSyncDetail">Queued scans upload automatically.</p>
-          </article>
-          <article>
-            <span>Mode</span>
-            <b id="scannerModeValue">Webcam Scanner</b>
-            <p id="scannerModeDetail">Ready for QR scanning.</p>
-          </article>
-        </div>
-
-        <div class="progress-block">
-          <span>Sync Progress</span>
-          <strong id="syncProgressValue">Idle</strong>
-          <p id="syncProgressDetail">No synchronization is running right now.</p>
-          <div class="progress-bar"><div class="progress-fill" id="syncProgressFill"></div></div>
-        </div>
-
-        <details class="sync-history">
-          <summary>Synchronization History</summary>
-          <small id="historySummary">Recent background and manual sync activity.</small>
-          <div class="history-list" id="syncHistoryList">
-            <div class="history-empty">No synchronization history yet.</div>
-          </div>
-        </details>
-      </section>
-
-      <div class="drawer-actions">
-        <button class="secondary" id="testServerBtn">Refresh Records</button>
-        <button class="secondary" id="minimizeBtn">Hide to Tray</button>
-        <button class="primary" id="saveSettingsBtn">Save Settings</button>
-      </div>
-
-      <p class="settings-note" id="settingsNote">Settings are stored on this computer only.</p>
     </section>
   </div>
 

@@ -76,26 +76,54 @@
     <p style="margin-top:0.75rem;font-size:0.75rem;color:var(--gray-400);">Recommended: transparent PNG/SVG-style image exported as PNG, max 2MB.</p>
 </div>
 
-<!-- Attendance Time Windows -->
+<!-- Student Attendance Rules -->
 <div class="settings-section">
-    <h3><i class="fa-solid fa-clock"></i> Attendance Time Windows</h3>
-    <p class="section-desc">Configure the time boundaries for morning and afternoon attendance periods.</p>
+    <h3><i class="fa-solid fa-user-graduate"></i> Student Attendance Settings</h3>
+    <p class="section-desc">Central student rules used by every Edutrack Scanner. Students scan once when entering school; lunch, recess, transfers, library visits, and activities never create Time Out records.</p>
     <div class="settings-grid">
         <div class="form-group">
-            <label>AM Time In End</label>
+            <label>School Start Time</label>
             <input type="time" id="am_time_in_end" class="form-control" value="08:00">
         </div>
         <div class="form-group">
-            <label>AM Time Out Until</label>
-            <input type="time" id="am_time_out_until" class="form-control" value="12:00">
+            <label>Absence Cutoff Time</label>
+            <input type="time" id="absence_cutoff_time" class="form-control" value="17:00">
         </div>
         <div class="form-group">
-            <label>PM Time In Start</label>
-            <input type="time" id="pm_time_in_start" class="form-control" value="13:00">
+            <label>Late Cutoff Grace (minutes)</label>
+            <input type="number" id="late_threshold" class="form-control" min="0" value="15">
         </div>
         <div class="form-group">
-            <label>PM Time Out End</label>
-            <input type="time" id="pm_time_out_end" class="form-control" value="17:00">
+            <label>Student Attendance Rule</label>
+            <select id="student_attendance_rule" class="form-control">
+                <option value="scan_once_time_in">Single Time In scan marks Present for the school day</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<!-- Teacher Attendance Rules -->
+<div class="settings-section">
+    <h3><i class="fa-solid fa-chalkboard-user"></i> Teacher Attendance Settings</h3>
+    <p class="section-desc">Teacher attendance rules are synchronized to scanners for offline validation. Teachers require Time In and Time Out so reports can calculate working hours.</p>
+    <div class="settings-grid">
+        <div class="form-group">
+            <label>Duty Start Time</label>
+            <input type="time" id="teacher_duty_start_time" class="form-control" value="07:00">
+        </div>
+        <div class="form-group">
+            <label>Duty End Time</label>
+            <input type="time" id="teacher_duty_end_time" class="form-control" value="17:00">
+        </div>
+        <div class="form-group">
+            <label>Late Arrival Grace (minutes)</label>
+            <input type="number" id="teacher_late_threshold" class="form-control" min="0" value="15">
+        </div>
+        <div class="form-group">
+            <label>Teacher Time Out Rule</label>
+            <select id="teacher_time_out_rule" class="form-control">
+                <option value="required">Time Out is required</option>
+            </select>
         </div>
     </div>
 </div>
@@ -114,8 +142,8 @@
             <input type="text" id="system_name" class="form-control" placeholder="School Attendance System">
         </div>
         <div class="form-group">
-            <label>Late Threshold (minutes)</label>
-            <input type="number" id="late_threshold" class="form-control" min="0" value="15">
+            <label>Official School Day End</label>
+            <input type="time" id="pm_time_out_end" class="form-control" value="17:00">
         </div>
         <div class="form-group">
             <label>Auto Time-Out (minutes)</label>
@@ -127,6 +155,10 @@
                 <option value="1">Enabled</option>
                 <option value="0">Disabled</option>
             </select>
+        </div>
+        <div class="form-group">
+            <label>Attendance Policy</label>
+            <input type="text" id="attendance_policy" class="form-control" placeholder="Division attendance policy">
         </div>
     </div>
     <div style="margin-top:1rem;">
@@ -288,7 +320,23 @@
 </div>
 
 <script>
-var settingKeys = ['system_name', 'am_time_in_end', 'am_time_out_until', 'pm_time_in_start', 'pm_time_out_end', 'division_name', 'late_threshold', 'auto_timeout', 'sms_enabled', 'auto_activate_on_scan'];
+var settingKeys = [
+    'system_name',
+    'division_name',
+    'am_time_in_end',
+    'absence_cutoff_time',
+    'late_threshold',
+    'student_attendance_rule',
+    'teacher_duty_start_time',
+    'teacher_duty_end_time',
+    'teacher_late_threshold',
+    'teacher_time_out_rule',
+    'pm_time_out_end',
+    'auto_timeout',
+    'attendance_policy',
+    'sms_enabled',
+    'auto_activate_on_scan'
+];
 var platformLogoConfig = {
     android: { key: 'platform_android_logo', input: 'androidLogoFile', preview: 'androidLogoPreview', fallback: '<i class="fa-brands fa-android" style="font-size:2rem;color:var(--gray-300);"></i>' },
     ios: { key: 'platform_ios_logo', input: 'iosLogoFile', preview: 'iosLogoPreview', fallback: '<i class="fa-brands fa-apple" style="font-size:2rem;color:var(--gray-300);"></i>' },

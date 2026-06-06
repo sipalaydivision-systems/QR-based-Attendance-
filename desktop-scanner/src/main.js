@@ -31,6 +31,24 @@ const CONNECTION_RESTORED_MESSAGE = 'Connection Restored - Synchronizing attenda
 const SYNC_COMPLETED_MESSAGE = 'Synchronization Completed Successfully.';
 const DIRECTORY_REFRESH_INTERVAL_MS = 60 * 1000;
 const CONNECTION_CHECK_INTERVAL_MS = 20000;
+const ADMIN_SYNCED_SETTING_KEYS = new Set([
+  'kioskToken',
+  'brandName',
+  'divisionName',
+  'systemLogo',
+  'timeInStart',
+  'timeOutOpen',
+  'lateGraceMinutes',
+  'teacherDutyStart',
+  'teacherDutyEnd',
+  'teacherLateGraceMinutes',
+  'studentAttendanceRule',
+  'teacherAttendanceRule',
+  'teacherTimeOutRule',
+  'absenceCutoffTime',
+  'attendancePolicy',
+  'schools'
+]);
 
 let mainWindow = null;
 let tray = null;
@@ -80,6 +98,14 @@ function defaultSettings() {
     timeInStart: '07:00',
     timeOutOpen: '17:00',
     lateGraceMinutes: 0,
+    teacherDutyStart: '07:00',
+    teacherDutyEnd: '17:00',
+    teacherLateGraceMinutes: 0,
+    studentAttendanceRule: 'scan_once_time_in',
+    teacherAttendanceRule: 'time_in_and_time_out',
+    teacherTimeOutRule: 'required',
+    absenceCutoffTime: '17:00',
+    attendancePolicy: '',
     schools: []
   };
 }
@@ -174,11 +200,17 @@ function loadSettings() {
   return { ...defaultSettings(), ...readJson(settingsPath(), {}) };
 }
 
-function saveSettings(nextSettings) {
-  const settings = { ...loadSettings(), ...nextSettings };
+function saveSettings(nextSettings, options = {}) {
+  const incomingSettings = { ...(nextSettings || {}) };
+  if (!options.allowAdminSyncedSettings) {
+    for (const key of ADMIN_SYNCED_SETTING_KEYS) delete incomingSettings[key];
+  }
+
+  const settings = { ...loadSettings(), ...incomingSettings };
   settings.serverUrl = normalizeServerUrl(settings.serverUrl || DEFAULT_SERVER_URL);
   settings.duplicateIntervalSeconds = Math.max(1, Math.min(60, Number(settings.duplicateIntervalSeconds) || 5));
   settings.lateGraceMinutes = Math.max(0, Math.min(180, Number(settings.lateGraceMinutes) || 0));
+  settings.teacherLateGraceMinutes = Math.max(0, Math.min(180, Number(settings.teacherLateGraceMinutes) || settings.lateGraceMinutes || 0));
   writeJson(settingsPath(), settings);
   configureAutoStart(settings.autoStart);
   return settings;
@@ -430,8 +462,16 @@ async function refreshDesktopConfig() {
     timeInStart: String(data.settings?.am_time_in_end || settings.timeInStart || '07:00').slice(0, 5),
     timeOutOpen: String(data.settings?.pm_time_out_end || settings.timeOutOpen || '17:00').slice(0, 5),
     lateGraceMinutes: Number(data.settings?.late_threshold || settings.lateGraceMinutes || 0) || 0,
+    teacherDutyStart: String(data.settings?.teacher_duty_start_time || data.settings?.am_time_in_end || settings.teacherDutyStart || '07:00').slice(0, 5),
+    teacherDutyEnd: String(data.settings?.teacher_duty_end_time || data.settings?.pm_time_out_end || settings.teacherDutyEnd || '17:00').slice(0, 5),
+    teacherLateGraceMinutes: Number(data.settings?.teacher_late_threshold ?? data.settings?.late_threshold ?? settings.teacherLateGraceMinutes ?? 0) || 0,
+    studentAttendanceRule: data.settings?.student_attendance_rule || settings.studentAttendanceRule || 'scan_once_time_in',
+    teacherAttendanceRule: data.settings?.teacher_attendance_rule || settings.teacherAttendanceRule || 'time_in_and_time_out',
+    teacherTimeOutRule: data.settings?.teacher_time_out_rule || settings.teacherTimeOutRule || 'required',
+    absenceCutoffTime: String(data.settings?.absence_cutoff_time || data.settings?.pm_time_out_end || settings.absenceCutoffTime || '17:00').slice(0, 5),
+    attendancePolicy: data.settings?.attendance_policy || settings.attendancePolicy || '',
     schools: Array.isArray(data.schools) ? data.schools : settings.schools
-  });
+  }, { allowAdminSyncedSettings: true });
 
   return { ...data, settings: nextSettings };
 }
@@ -659,8 +699,17 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
   const existingTimeOut = events.find((item) => item.eventAction === 'TIME_OUT');
 
   if (!existingTimeIn) {
-    const lateThreshold = combineDateAndTime(attendanceDate, loadSettings().timeInStart, '07:00');
-    const graceMinutes = Math.max(0, Number(loadSettings().lateGraceMinutes) || 0);
+    const settings = loadSettings();
+    const isTeacher = person.personType === 'teacher';
+    const lateThreshold = combineDateAndTime(
+      attendanceDate,
+      isTeacher ? settings.teacherDutyStart : settings.timeInStart,
+      '07:00'
+    );
+    const graceMinutes = Math.max(
+      0,
+      Number(isTeacher ? settings.teacherLateGraceMinutes : settings.lateGraceMinutes) || 0
+    );
     const lateBoundary = parseSqlDateTime(lateThreshold);
     const lateCutoff = lateBoundary ? toLocalSqlDateTime(new Date(lateBoundary.getTime() + graceMinutes * 60000)) : lateThreshold;
     const attendanceStatus = compareSqlDateTimes(scanTime, lateCutoff) >= 0 ? 'late' : 'present';
@@ -704,24 +753,20 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
     };
   }
 
-  if (!existingTimeOut) {
-    if (person.personType === 'student') {
-      const timeOutOpen = combineDateAndTime(attendanceDate, loadSettings().timeOutOpen, '17:00');
-      if (compareSqlDateTimes(scanTime, timeOutOpen) < 0) {
-        return {
-          success: true,
-          offline: true,
-          action: 'PENDING_TIME_OUT',
-          status: existingTimeIn.attendanceStatus || 'present',
-          message: `Already timed in. End-of-day time out opens at ${formatTime12(timeOutOpen)}.`,
-          person: personResponseFromCache(person),
-          time_in: formatTime12(existingTimeIn.timeIn || existingTimeIn.scanTime),
-          time_out: 'Pending Time Out',
-          monitoring_status: 'Pending Time Out'
-        };
-      }
-    }
+  if (person.personType === 'student') {
+    return {
+      success: true,
+      offline: true,
+      action: 'ALREADY_RECORDED',
+      status: existingTimeIn.attendanceStatus || 'present',
+      message: 'Already recorded today. Student remains PRESENT for the school day.',
+      person: personResponseFromCache(person),
+      time_in: formatTime12(existingTimeIn.timeIn || existingTimeIn.scanTime),
+      monitoring_status: 'Inside School'
+    };
+  }
 
+  if (!existingTimeOut) {
     const elapsedSec = secondsBetween(existingTimeIn.scanTime, scanTime);
     if (elapsedSec < 60) {
       return {

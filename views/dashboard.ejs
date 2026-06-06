@@ -93,7 +93,7 @@
         <div class="stat-icon-wrap orange"><i class="fa-solid fa-right-from-bracket"></i></div>
         <div class="stat-info">
             <span class="stat-number" id="statTimedOut">—</span>
-            <span class="stat-label">Timed Out</span>
+            <span class="stat-label">Teacher Time Outs</span>
         </div>
     </div>
     <div class="stat-card" style="border-left:3px solid #dc2626;">
@@ -246,7 +246,7 @@
             document.getElementById('statRate').textContent     = data.attendance_rate + '%';
             document.getElementById('saWbRate').textContent     = data.attendance_rate + '%';
             document.getElementById('statTeachers').textContent = data.teachers_present;
-            document.getElementById('statTimedOut').textContent = data.students_timed_out;
+            document.getElementById('statTimedOut').textContent = data.teachers_timed_out || data.students_timed_out || 0;
             document.getElementById('statFlagged').textContent  = data.flagged_absent_2day;
             var inactiveEl = document.getElementById('statInactive');
             if (inactiveEl) inactiveEl.textContent = data.inactive_students;

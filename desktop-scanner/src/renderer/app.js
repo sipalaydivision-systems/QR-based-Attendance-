@@ -314,8 +314,6 @@ function applySettings(settings, options = {}) {
   refreshAssignedSchool();
 
   $('serverUrlInput').value = state.settings.serverUrl || '';
-  $('timeInInput').value = state.settings.timeInStart || '07:00';
-  $('timeOutInput').value = state.settings.timeOutOpen || '17:00';
   $('duplicateInput').value = state.settings.duplicateIntervalSeconds || 5;
   $('offlineSyncInput').checked = state.settings.offlineSync !== false;
   $('fullscreenInput').checked = !!state.settings.startFullscreen;
@@ -349,7 +347,7 @@ function resultTone(data) {
   if (!data.success && !data.offline) return 'error';
   if (data.offline && !data.success) return 'warning';
   if (data.offline) return 'warning';
-  if (['PENDING_TIME_OUT', 'CONFIRM_TIME_OUT'].includes(data.action) || data.status === 'late') return 'warning';
+  if (['ALREADY_RECORDED', 'PENDING_TIME_OUT', 'CONFIRM_TIME_OUT'].includes(data.action) || data.status === 'late') return 'warning';
   return 'success';
 }
 
@@ -361,6 +359,7 @@ function titleForResult(data) {
   if (data.action === 'TIME_IN' && data.status === 'late') return 'Late time in recorded';
   if (data.action === 'TIME_IN') return 'Time in recorded';
   if (data.action === 'TIME_OUT') return 'Time out recorded';
+  if (data.action === 'ALREADY_RECORDED') return 'Already recorded today';
   if (data.action === 'PENDING_TIME_OUT') return 'Already timed in';
   if (data.action === 'CONFIRM_TIME_OUT') return 'Confirm time out';
   return 'Attendance recorded';
@@ -408,6 +407,7 @@ function humanizeAction(value) {
   const action = String(value || '').toUpperCase();
   if (action === 'TIME_IN') return 'Time In';
   if (action === 'TIME_OUT') return 'Time Out';
+  if (action === 'ALREADY_RECORDED') return 'Recorded';
   if (action === 'PENDING_TIME_OUT') return 'Pending';
   if (action === 'CONFIRM_TIME_OUT') return 'Confirm';
   return 'Scan';
@@ -431,6 +431,7 @@ function cleanCell(value) {
 function modalTimeForResult(data) {
   if (data.action === 'TIME_OUT') return data.time_out || data.time || 'Recorded';
   if (data.action === 'TIME_IN') return data.time_in || data.time || 'Recorded';
+  if (data.action === 'ALREADY_RECORDED') return data.time_in || data.time || 'Recorded';
   if (data.action === 'PENDING_TIME_OUT' || data.action === 'CONFIRM_TIME_OUT') return data.time_out || 'Pending Time Out';
   if (data.time_in || data.time_out) return data.time_out || data.time_in;
   return data.time || 'Recorded';
@@ -878,13 +879,25 @@ async function setMode(mode, persist = true) {
 }
 
 function openSettings() {
-  $('settingsDrawer').classList.add('open');
-  $('settingsDrawer').setAttribute('aria-hidden', 'false');
+  const drawer = $('settingsDrawer');
+  drawer.classList.add('open');
+  drawer.style.opacity = '1';
+  drawer.style.pointerEvents = 'auto';
+  drawer.style.background = 'rgba(7, 23, 17, 0.48)';
+  drawer.style.backdropFilter = 'blur(8px)';
+  document.body.classList.add('settings-open');
+  drawer.setAttribute('aria-hidden', 'false');
 }
 
 function closeSettings() {
-  $('settingsDrawer').classList.remove('open');
-  $('settingsDrawer').setAttribute('aria-hidden', 'true');
+  const drawer = $('settingsDrawer');
+  drawer.classList.remove('open');
+  drawer.style.opacity = '';
+  drawer.style.pointerEvents = '';
+  drawer.style.background = '';
+  drawer.style.backdropFilter = '';
+  document.body.classList.remove('settings-open');
+  drawer.setAttribute('aria-hidden', 'true');
 }
 
 async function saveSettingsFromForm() {
@@ -892,8 +905,6 @@ async function saveSettingsFromForm() {
     serverUrl: $('serverUrlInput').value,
     scannerMode: $('scannerModeInput').value,
     selectedSchoolId: $('schoolInput').value,
-    timeInStart: $('timeInInput').value,
-    timeOutOpen: $('timeOutInput').value,
     duplicateIntervalSeconds: $('duplicateInput').value,
     autoStart: $('autoStartInput').checked,
     startFullscreen: $('fullscreenInput').checked,
