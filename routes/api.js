@@ -182,6 +182,81 @@ async function getScannerDesktopDirectory(schoolId) {
     }));
 }
 
+function normalizeDirectoryVersionDate(value) {
+    if (!value) return '';
+    if (value instanceof Date) return value.toISOString();
+    return String(value);
+}
+
+async function getScannerDesktopDirectoryVersion(schoolId) {
+    const studentParams = [];
+    const teacherParams = [];
+
+    let studentQuery = `
+        SELECT
+            COUNT(*) AS person_count,
+            MAX(GREATEST(
+                COALESCE(s.updated_at, s.created_at, '1970-01-01 00:00:00'),
+                COALESCE(sc.updated_at, sc.created_at, '1970-01-01 00:00:00'),
+                COALESCE(gl.created_at, '1970-01-01 00:00:00'),
+                COALESCE(sec.created_at, '1970-01-01 00:00:00')
+            )) AS latest_update
+        FROM students s
+        LEFT JOIN schools sc ON s.school_id = sc.id
+        LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id
+        LEFT JOIN sections sec ON s.section_id = sec.id
+        WHERE s.qr_code IS NOT NULL
+          AND s.qr_code <> ''
+          AND s.status <> 'deleted'`;
+
+    let teacherQuery = `
+        SELECT
+            COUNT(*) AS person_count,
+            MAX(GREATEST(
+                COALESCE(t.updated_at, t.created_at, '1970-01-01 00:00:00'),
+                COALESCE(sc.updated_at, sc.created_at, '1970-01-01 00:00:00'),
+                COALESCE(gl.created_at, '1970-01-01 00:00:00'),
+                COALESCE(sec.created_at, '1970-01-01 00:00:00')
+            )) AS latest_update
+        FROM teachers t
+        LEFT JOIN schools sc ON t.school_id = sc.id
+        LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
+        LEFT JOIN sections sec ON t.section_id = sec.id
+        WHERE t.qr_code IS NOT NULL
+          AND t.qr_code <> ''
+          AND t.status <> 'deleted'`;
+
+    if (schoolId) {
+        studentQuery += ' AND s.school_id = ?';
+        teacherQuery += ' AND t.school_id = ?';
+        studentParams.push(schoolId);
+        teacherParams.push(schoolId);
+    }
+
+    const [[studentRows], [teacherRows]] = await Promise.all([
+        db.query(studentQuery, studentParams),
+        db.query(teacherQuery, teacherParams)
+    ]);
+
+    const student = studentRows[0] || {};
+    const teacher = teacherRows[0] || {};
+    const studentCount = Number(student.person_count || 0);
+    const teacherCount = Number(teacher.person_count || 0);
+    const studentLatest = normalizeDirectoryVersionDate(student.latest_update);
+    const teacherLatest = normalizeDirectoryVersionDate(teacher.latest_update);
+    const latestUpdate = [studentLatest, teacherLatest].filter(Boolean).sort().pop() || null;
+    const directoryVersion = crypto
+        .createHash('sha256')
+        .update([schoolId || 'all', studentCount, studentLatest, teacherCount, teacherLatest].join('|'))
+        .digest('hex');
+
+    return {
+        directoryVersion,
+        peopleCount: studentCount + teacherCount,
+        latestUpdate
+    };
+}
+
 function normalizeKioskScanTime(value) {
     const raw = String(value || '').trim();
     const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/);
@@ -228,15 +303,34 @@ router.get('/scanner-desktop-config', async (req, res) => {
 router.get('/scanner-desktop-directory', requireAuthOrScannerKiosk, async (req, res) => {
     try {
         const schoolId = normalizeOptionalSchoolId(req.query.school_id);
-        const people = await getScannerDesktopDirectory(schoolId);
+        const [people, directoryMeta] = await Promise.all([
+            getScannerDesktopDirectory(schoolId),
+            getScannerDesktopDirectoryVersion(schoolId)
+        ]);
         return res.json({
             success: true,
             generatedAt: nowDateTime(),
+            ...directoryMeta,
             people
         });
     } catch (err) {
         console.error('Scanner desktop directory error:', err);
         return res.status(500).json({ success: false, error: 'Failed to load scanner desktop directory.' });
+    }
+});
+
+router.get('/scanner-desktop-directory-version', requireAuthOrScannerKiosk, async (req, res) => {
+    try {
+        const schoolId = normalizeOptionalSchoolId(req.query.school_id);
+        const directoryMeta = await getScannerDesktopDirectoryVersion(schoolId);
+        return res.json({
+            success: true,
+            generatedAt: nowDateTime(),
+            ...directoryMeta
+        });
+    } catch (err) {
+        console.error('Scanner desktop directory version error:', err);
+        return res.status(500).json({ success: false, error: 'Failed to check scanner directory updates.' });
     }
 });
 

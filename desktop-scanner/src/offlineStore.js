@@ -270,53 +270,75 @@ function setMeta(metaKey, metaValue) {
   });
 }
 
+function writePersonCacheRecord(rawPerson, cachedAt) {
+  const person = normalizePerson(rawPerson);
+  if (!person.qrCode || !person.serverPersonId || !person.personType || !person.name) return false;
+
+  run(`
+    INSERT INTO people_cache (
+      qr_code, server_person_id, person_type, person_code, name,
+      school_id, school_name, grade_level, section_name,
+      adviser, adviser_contact, adviser_email, person_status, updated_at, cached_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(qr_code) DO UPDATE SET
+      server_person_id = excluded.server_person_id,
+      person_type = excluded.person_type,
+      person_code = excluded.person_code,
+      name = excluded.name,
+      school_id = excluded.school_id,
+      school_name = excluded.school_name,
+      grade_level = excluded.grade_level,
+      section_name = excluded.section_name,
+      adviser = excluded.adviser,
+      adviser_contact = excluded.adviser_contact,
+      adviser_email = excluded.adviser_email,
+      person_status = excluded.person_status,
+      updated_at = excluded.updated_at,
+      cached_at = excluded.cached_at
+  `, [
+    person.qrCode,
+    person.serverPersonId,
+    person.personType,
+    person.personCode || null,
+    person.name,
+    person.schoolId,
+    person.schoolName || null,
+    person.gradeLevel || null,
+    person.sectionName || null,
+    person.adviser || null,
+    person.adviserContact || null,
+    person.adviserEmail || null,
+    person.personStatus || 'active',
+    person.updatedAt,
+    cachedAt
+  ]);
+  return true;
+}
+
 function upsertPeople(people, cachedAt = nowSql()) {
   if (!Array.isArray(people) || people.length === 0) return 0;
   return transaction(() => {
     let count = 0;
     for (const rawPerson of people) {
-      const person = normalizePerson(rawPerson);
-      if (!person.qrCode || !person.serverPersonId || !person.personType || !person.name) continue;
-      run(`
-        INSERT INTO people_cache (
-          qr_code, server_person_id, person_type, person_code, name,
-          school_id, school_name, grade_level, section_name,
-          adviser, adviser_contact, adviser_email, person_status, updated_at, cached_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(qr_code) DO UPDATE SET
-          server_person_id = excluded.server_person_id,
-          person_type = excluded.person_type,
-          person_code = excluded.person_code,
-          name = excluded.name,
-          school_id = excluded.school_id,
-          school_name = excluded.school_name,
-          grade_level = excluded.grade_level,
-          section_name = excluded.section_name,
-          adviser = excluded.adviser,
-          adviser_contact = excluded.adviser_contact,
-          adviser_email = excluded.adviser_email,
-          person_status = excluded.person_status,
-          updated_at = excluded.updated_at,
-          cached_at = excluded.cached_at
-      `, [
-        person.qrCode,
-        person.serverPersonId,
-        person.personType,
-        person.personCode || null,
-        person.name,
-        person.schoolId,
-        person.schoolName || null,
-        person.gradeLevel || null,
-        person.sectionName || null,
-        person.adviser || null,
-        person.adviserContact || null,
-        person.adviserEmail || null,
-        person.personStatus || 'active',
-        person.updatedAt,
-        cachedAt
-      ]);
-      count += 1;
+      if (writePersonCacheRecord(rawPerson, cachedAt)) count += 1;
+    }
+    return count;
+  });
+}
+
+function replacePeopleCache(people, cachedAt = nowSql(), options = {}) {
+  const schoolId = Number(options.schoolId || 0) || null;
+  return transaction(() => {
+    if (schoolId) {
+      run("UPDATE people_cache SET person_status = 'deleted', cached_at = ? WHERE school_id = ?", [cachedAt, schoolId]);
+    } else {
+      run("UPDATE people_cache SET person_status = 'deleted', cached_at = ?", [cachedAt]);
+    }
+
+    let count = 0;
+    for (const rawPerson of Array.isArray(people) ? people : []) {
+      if (writePersonCacheRecord(rawPerson, cachedAt)) count += 1;
     }
     return count;
   });
@@ -689,6 +711,7 @@ module.exports = {
   getMeta,
   setMeta,
   upsertPeople,
+  replacePeopleCache,
   getPersonByQrCode,
   insertAttendanceEvent,
   getAttendanceEventById,

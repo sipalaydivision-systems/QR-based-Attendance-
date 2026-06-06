@@ -8,6 +8,7 @@ const {
   getMeta,
   setMeta,
   upsertPeople,
+  replacePeopleCache,
   getPersonByQrCode,
   insertAttendanceEvent,
   getAttendanceEventById,
@@ -28,7 +29,7 @@ const NO_INTERNET_MESSAGE = "Can't connect to server due to no internet connecti
 const OFFLINE_MODE_MESSAGE = 'Offline Mode Enabled - Attendance records are being stored locally.';
 const CONNECTION_RESTORED_MESSAGE = 'Connection Restored - Synchronizing attendance records.';
 const SYNC_COMPLETED_MESSAGE = 'Synchronization Completed Successfully.';
-const DIRECTORY_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+const DIRECTORY_REFRESH_INTERVAL_MS = 60 * 1000;
 const CONNECTION_CHECK_INTERVAL_MS = 20000;
 
 let mainWindow = null;
@@ -304,6 +305,31 @@ function selectedSchoolAmpValue(selectedSchoolId) {
   return trimmed ? `&school_id=${encodeURIComponent(trimmed)}` : '';
 }
 
+async function fetchScannerDirectoryVersion(settings) {
+  const serverUrl = normalizeServerUrl(settings.serverUrl);
+  const schoolSuffix = selectedSchoolQueryValue(settings.selectedSchoolId);
+  const res = await fetchWithTimeout(`${serverUrl}/api/scanner-desktop-directory-version${schoolSuffix}`, {
+    cache: 'no-store',
+    headers: {
+      'X-Scanner-Kiosk-Token': settings.kioskToken
+    }
+  }, 8000);
+
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (_err) {
+    throw new Error('The server returned an invalid scanner directory version response.');
+  }
+
+  if (!res.ok || !data.success || !data.directoryVersion) {
+    throw new Error(data.error || 'Unable to check scanner directory updates.');
+  }
+
+  return data;
+}
+
 function buildPersonCacheRecord(qrCode, person) {
   if (!person) return null;
   return {
@@ -419,13 +445,29 @@ async function ensureKioskToken() {
 
 async function refreshScannerDirectory(options = {}) {
   const force = !!options.force;
+  const settings = await ensureKioskToken();
   const lastRefreshEpoch = Number(getMeta('directoryRefreshEpoch') || 0);
-  if (!force && lastRefreshEpoch && Date.now() - lastRefreshEpoch < DIRECTORY_REFRESH_INTERVAL_MS) {
-    runtimeState.directoryLastRefreshedAt = getMeta('directoryRefreshedAt') || runtimeState.directoryLastRefreshedAt;
-    return { refreshed: false, count: 0 };
+  let remoteDirectory = null;
+
+  if (!force) {
+    try {
+      remoteDirectory = await fetchScannerDirectoryVersion(settings);
+      const cachedVersion = getMeta('directoryVersion');
+      if (cachedVersion && remoteDirectory.directoryVersion === cachedVersion) {
+        runtimeState.directoryLastRefreshedAt = getMeta('directoryRefreshedAt') || runtimeState.directoryLastRefreshedAt;
+        setMeta('directoryVersionCheckedAt', toLocalSqlDateTime());
+        setMeta('directoryRefreshEpoch', String(Date.now()));
+        return { refreshed: false, count: Number(remoteDirectory.peopleCount || 0) };
+      }
+    } catch (versionError) {
+      if (lastRefreshEpoch && Date.now() - lastRefreshEpoch < DIRECTORY_REFRESH_INTERVAL_MS) {
+        runtimeState.directoryLastRefreshedAt = getMeta('directoryRefreshedAt') || runtimeState.directoryLastRefreshedAt;
+        return { refreshed: false, count: 0 };
+      }
+      console.warn('Scanner directory version check skipped:', versionError.message);
+    }
   }
 
-  const settings = await ensureKioskToken();
   const serverUrl = normalizeServerUrl(settings.serverUrl);
   const schoolSuffix = selectedSchoolQueryValue(settings.selectedSchoolId);
 
@@ -449,9 +491,15 @@ async function refreshScannerDirectory(options = {}) {
   }
 
   const refreshedAt = toLocalSqlDateTime();
-  const count = upsertPeople(data.people || [], refreshedAt);
+  const count = replacePeopleCache(data.people || [], refreshedAt, {
+    schoolId: settings.selectedSchoolId
+  });
+  const directoryVersion = data.directoryVersion || remoteDirectory?.directoryVersion || '';
   setMeta('directoryRefreshEpoch', String(Date.now()));
   setMeta('directoryRefreshedAt', refreshedAt);
+  if (directoryVersion) setMeta('directoryVersion', directoryVersion);
+  if (data.latestUpdate || remoteDirectory?.latestUpdate) setMeta('directoryLatestUpdate', data.latestUpdate || remoteDirectory.latestUpdate);
+  if (data.peopleCount != null || remoteDirectory?.peopleCount != null) setMeta('directoryPeopleCount', data.peopleCount ?? remoteDirectory.peopleCount);
   runtimeState.directoryLastRefreshedAt = refreshedAt;
   return { refreshed: true, count };
 }

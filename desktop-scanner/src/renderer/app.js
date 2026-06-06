@@ -499,7 +499,7 @@ function showScanFeedback(title, message, tone = 'success', data = {}) {
 
   if (state.scanModalTimer) clearTimeout(state.scanModalTimer);
   if (data.action !== 'CONFIRM_TIME_OUT') {
-    state.scanModalTimer = setTimeout(closeScanModal, tone === 'error' ? 5200 : 3600);
+    state.scanModalTimer = setTimeout(closeScanModal, 2000);
   }
 }
 
@@ -520,13 +520,14 @@ function renderLocalScans(scans = []) {
     const section = cleanCell(scan.sectionName);
     const school = cleanCell(scan.schoolName);
     const action = humanizeAction(scan.eventAction);
+    const actionClass = scan.eventAction === 'TIME_OUT' ? 'time-out' : 'time-in';
 
     tr.innerHTML = `
-      <td>${escapeHtml(name)}</td>
-      <td>${escapeHtml(grade)}</td>
-      <td>${escapeHtml(section)}</td>
-      <td>${escapeHtml(school)}</td>
-      <td><span class="time-badge"><b>${escapeHtml(action)}</b><small>${escapeHtml(time)}</small></span></td>
+      <td data-label="Name">${escapeHtml(name)}</td>
+      <td data-label="Grade">${escapeHtml(grade)}</td>
+      <td data-label="Section">${escapeHtml(section)}</td>
+      <td data-label="School">${escapeHtml(school)}</td>
+      <td data-label="Time"><span class="time-badge ${actionClass}"><b>${escapeHtml(action)}</b><small>${escapeHtml(time)}</small></span></td>
     `;
     rows.appendChild(tr);
   });
