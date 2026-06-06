@@ -10,18 +10,18 @@
 !macroend
 
 ; After files are installed, write the Windows startup registry key
-; so the scanner launches automatically on every Windows start/restart
-; even before the user opens the app for the first time.
+; under HKLM so the scanner auto-launches for ALL user accounts on
+; this machine on every Windows start/restart.
 !macro customInstall
-  WriteRegStr HKCU \
-    "Software\Microsoft\Windows\CurrentVersion\Run" \
+  WriteRegStr HKLM \
+    "SOFTWARE\Microsoft\Windows\CurrentVersion\Run" \
     "Edutrack Scanner" \
     '"$INSTDIR\Edutrack Scanner.exe" --autostart'
 !macroend
 
-; Remove the startup registry key on uninstall.
+; Remove the machine-wide startup registry key on uninstall.
 !macro customUnInstall
-  DeleteRegValue HKCU \
-    "Software\Microsoft\Windows\CurrentVersion\Run" \
+  DeleteRegValue HKLM \
+    "SOFTWARE\Microsoft\Windows\CurrentVersion\Run" \
     "Edutrack Scanner"
 !macroend
