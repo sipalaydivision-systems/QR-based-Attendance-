@@ -47,7 +47,9 @@
       "uninstallerIcon": "src/assets/edutrack-scanner.ico",
       "installerHeaderIcon": "src/assets/edutrack-scanner.ico",
       "runAfterFinish": true,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "allowElevation": true,
+      "include": "build/installer.nsh"
     }
   }
 }
