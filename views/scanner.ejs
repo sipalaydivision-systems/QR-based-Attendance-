@@ -418,17 +418,41 @@
         });
     }, 30000);
 
+    function normalizeScanInput(value) {
+        var cleaned = String(value || '')
+            .replace(/^\uFEFF/, '')
+            .replace(/[\u0000-\u001F\u007F]/g, '')
+            .trim()
+            .replace(/^["']|["']$/g, '')
+            .trim();
+
+        try {
+            var parsed = new URL(cleaned);
+            return parsed.searchParams.get('qr_code')
+                || parsed.searchParams.get('qr')
+                || parsed.searchParams.get('code')
+                || parsed.searchParams.get('q')
+                || decodeURIComponent(parsed.pathname.split('/').filter(Boolean).pop() || cleaned);
+        } catch (_err) {
+            return cleaned;
+        }
+    }
+
     function onScanSuccess(decodedText) {
         if (cooldown) return;
+        var qrCode = normalizeScanInput(decodedText);
+        if (!qrCode) return;
         var now = Date.now();
-        var lastScan = recentScans.get(decodedText);
+        var lastScan = recentScans.get(qrCode);
         if (lastScan && (now - lastScan) < DEDUP_WINDOW) return;
-        recentScans.set(decodedText, now);
+        recentScans.set(qrCode, now);
         cooldown = true;
-        sendScan(decodedText, 0);
+        sendScan(qrCode, 0);
     }
 
     function sendScan(qrCode, attempt) {
+        qrCode = normalizeScanInput(qrCode);
+        if (!qrCode) return;
         var controller = new AbortController();
         var timeoutId = setTimeout(function() { controller.abort(); }, REQUEST_TIMEOUT);
 

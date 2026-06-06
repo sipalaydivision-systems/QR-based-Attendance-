@@ -349,6 +349,18 @@ function getPersonByQrCode(qrCode) {
   if (!trimmed) return null;
   const row = get('SELECT * FROM people_cache WHERE qr_code = ?', [trimmed]);
   if (!row) return null;
+  return mapPersonCacheRow(row);
+}
+
+function getPersonByCode(personCode) {
+  const trimmed = String(personCode || '').trim();
+  if (!trimmed) return null;
+  const row = get('SELECT * FROM people_cache WHERE person_code = ? LIMIT 1', [trimmed]);
+  if (!row) return null;
+  return mapPersonCacheRow(row);
+}
+
+function mapPersonCacheRow(row) {
   return {
     qrCode: row.qr_code,
     serverPersonId: Number(row.server_person_id),
@@ -713,6 +725,7 @@ module.exports = {
   upsertPeople,
   replacePeopleCache,
   getPersonByQrCode,
+  getPersonByCode,
   insertAttendanceEvent,
   getAttendanceEventById,
   getAttendanceEventsForPersonDate,

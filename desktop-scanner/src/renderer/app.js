@@ -14,6 +14,7 @@ const state = {
   pendingTimeoutQr: '',
   usbBuffer: '',
   lastUsbKeyAt: 0,
+  usbSubmitTimer: null,
   busy: false,
   todayKey: currentDayKey(),
   serverTodayScanCount: 0,
@@ -745,7 +746,7 @@ function applyScannerStatusPayload(payload, options = {}) {
 }
 
 async function submitQrCode(qrCode, options = {}) {
-  const trimmed = String(qrCode || '').trim();
+  const trimmed = normalizeScanInput(qrCode);
   if (!trimmed || state.busy) return;
   if (!options.confirmTimeOut && isDuplicate(trimmed)) {
     setStatusLine('Duplicate scan ignored to protect attendance accuracy.');
@@ -889,6 +890,26 @@ function openSettings() {
   drawer.setAttribute('aria-hidden', 'false');
 }
 
+function normalizeScanInput(value) {
+  const cleaned = String(value || '')
+    .replace(/^\uFEFF/, '')
+    .replace(/[\u0000-\u001F\u007F]/g, '')
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .trim();
+
+  try {
+    const parsed = new URL(cleaned);
+    return parsed.searchParams.get('qr_code')
+      || parsed.searchParams.get('qr')
+      || parsed.searchParams.get('code')
+      || parsed.searchParams.get('q')
+      || decodeURIComponent(parsed.pathname.split('/').filter(Boolean).pop() || cleaned);
+  } catch (_err) {
+    return cleaned;
+  }
+}
+
 function closeSettings() {
   const drawer = $('settingsDrawer');
   drawer.classList.remove('open');
@@ -959,6 +980,26 @@ function bindClick(id, handler) {
   if (element) element.addEventListener('click', handler);
 }
 
+function clearUsbSubmitTimer() {
+  if (state.usbSubmitTimer) clearTimeout(state.usbSubmitTimer);
+  state.usbSubmitTimer = null;
+}
+
+function submitUsbScanInput() {
+  clearUsbSubmitTimer();
+  const input = $('usbInput');
+  const code = normalizeScanInput(input?.value || state.usbBuffer);
+  state.usbBuffer = '';
+  if (code) submitQrCode(code);
+}
+
+function scheduleUsbAutoSubmit() {
+  clearUsbSubmitTimer();
+  const code = normalizeScanInput($('usbInput')?.value || state.usbBuffer);
+  if (code.length < 4) return;
+  state.usbSubmitTimer = setTimeout(submitUsbScanInput, 260);
+}
+
 function handleUsbKeydown(event) {
   if (state.scannerMode !== 'usb') return;
   if (isEditable(event.target) && event.target.id !== 'usbInput') return;
@@ -967,16 +1008,15 @@ function handleUsbKeydown(event) {
   if (now - state.lastUsbKeyAt > 120) state.usbBuffer = '';
   state.lastUsbKeyAt = now;
 
-  if (event.key === 'Enter') {
-    const code = state.usbBuffer || $('usbInput').value;
-    state.usbBuffer = '';
-    submitQrCode(code);
+  if (event.key === 'Enter' || event.key === 'Tab') {
+    submitUsbScanInput();
     event.preventDefault();
     return;
   }
 
   if (event.key && event.key.length === 1) {
     state.usbBuffer += event.key;
+    scheduleUsbAutoSubmit();
   }
 }
 
@@ -988,8 +1028,12 @@ function bindEvents() {
   bindClick('startCameraBtn', startCamera);
   bindClick('manualScanBtn', () => submitQrCode($('usbInput').value));
   $('usbInput').addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') submitQrCode($('usbInput').value);
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      event.preventDefault();
+      submitUsbScanInput();
+    }
   });
+  $('usbInput').addEventListener('input', scheduleUsbAutoSubmit);
   bindClick('focusUsbBtn', async () => {
     await setMode('usb');
     $('usbInput').focus();

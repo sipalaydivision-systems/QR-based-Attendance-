@@ -20,15 +20,38 @@
         });
     }
 
+    function normalizeScanInput(value) {
+        const cleaned = String(value || '')
+            .replace(/^\uFEFF/, '')
+            .replace(/[\u0000-\u001F\u007F]/g, '')
+            .trim()
+            .replace(/^["']|["']$/g, '')
+            .trim();
+
+        try {
+            const parsed = new URL(cleaned);
+            return parsed.searchParams.get('qr_code')
+                || parsed.searchParams.get('qr')
+                || parsed.searchParams.get('code')
+                || parsed.searchParams.get('q')
+                || decodeURIComponent(parsed.pathname.split('/').filter(Boolean).pop() || cleaned);
+        } catch (_err) {
+            return cleaned;
+        }
+    }
+
     async function onScanSuccess(decodedText) {
-        if (scannedIds.has(decodedText)) {
-            showResult('This code was already scanned in this session.', 'warning', decodedText);
+        const code = normalizeScanInput(decodedText);
+        if (scannedIds.has(code)) {
+            showResult('This code was already scanned in this session.', 'warning', code);
             return;
         }
-        await submitScan(decodedText);
+        await submitScan(code);
     }
 
     async function submitScan(code) {
+        code = normalizeScanInput(code);
+        if (!code) return;
         const resultEl = document.getElementById('scanResult');
         resultEl.innerHTML = '<p>Processing...</p>';
         resultEl.className = 'scan-result';

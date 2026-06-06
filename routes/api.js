@@ -412,6 +412,51 @@ function normalizeTimeSetting(value, fallback) {
     return normalizeTime(value, fallback);
 }
 
+function cleanScannedQrValue(value) {
+    return String(value || '')
+        .replace(/^\uFEFF/, '')
+        .replace(/[\u0000-\u001F\u007F]/g, '')
+        .trim()
+        .replace(/^["']|["']$/g, '')
+        .trim();
+}
+
+function addQrCandidate(candidates, value) {
+    const cleaned = cleanScannedQrValue(value);
+    if (!cleaned) return;
+    candidates.add(cleaned);
+    try {
+        const decoded = cleanScannedQrValue(decodeURIComponent(cleaned));
+        if (decoded) candidates.add(decoded);
+    } catch (_err) {
+        // Not URI encoded; keep the original candidate only.
+    }
+}
+
+function getQrLookupCandidates(value) {
+    const candidates = new Set();
+    addQrCandidate(candidates, value);
+
+    const cleaned = cleanScannedQrValue(value);
+    try {
+        const parsed = new URL(cleaned);
+        ['qr_code', 'qr', 'code', 'q'].forEach(key => addQrCandidate(candidates, parsed.searchParams.get(key)));
+        const pathParts = parsed.pathname.split('/').filter(Boolean);
+        addQrCandidate(candidates, pathParts[pathParts.length - 1]);
+    } catch (_err) {
+        // Plain QR payloads are expected; URLs are supported as a convenience.
+    }
+
+    Array.from(candidates).forEach(candidate => {
+        if (!/^(STU|TCH)-/i.test(candidate)) {
+            addQrCandidate(candidates, 'STU-' + candidate);
+            addQrCandidate(candidates, 'TCH-' + candidate);
+        }
+    });
+
+    return Array.from(candidates).slice(0, 12);
+}
+
 async function getAttendanceLateThreshold(personType, dateStr) {
     const [rows] = await db.query(
         `SELECT setting_key, setting_value
@@ -726,10 +771,11 @@ router.get('/is-school-day', requireAuthOrScannerKiosk, async (req, res) => {
 // POST /api/scan-attendance
 // =============================================
 router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
-    const { qr_code } = req.body;
+    const qr_code = cleanScannedQrValue(req.body.qr_code);
     if (!qr_code) {
         return res.status(400).json({ success: false, error: 'No QR code provided.' });
     }
+    const qrLookupCandidates = getQrLookupCandidates(qr_code);
 
     try {
         const scannerKioskAuthorized = isValidScannerKioskToken(getScannerKioskTokenFromRequest(req));
@@ -742,7 +788,7 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
         // Check student first (with joins for school, grade, section)
         let [rows] = await db.query(
             `SELECT s.id, s.firstname, s.lastname, s.lrn, s.school_id, s.status AS person_status,
-                    sc.name AS school_name, gl.name AS grade_name, sec.name AS section_name,
+                    s.qr_code, sc.name AS school_name, gl.name AS grade_name, sec.name AS section_name,
                     COALESCE(NULLIF(sec.adviser, ''), TRIM(CONCAT_WS(' ', at.firstname, at.middlename, at.lastname))) AS adviser,
                     at.contact AS adviser_contact,
                     at.email AS adviser_email
@@ -751,8 +797,8 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
              LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id
              LEFT JOIN sections sec ON s.section_id = sec.id
              LEFT JOIN teachers at ON sec.adviser_teacher_id = at.id
-             WHERE s.qr_code = ?`,
-            [qr_code]
+             WHERE s.qr_code IN (?) OR s.lrn IN (?)`,
+            [qrLookupCandidates, qrLookupCandidates]
         );
         let personType = 'student';
         let person = rows[0];
@@ -761,7 +807,7 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
         if (!person) {
             [rows] = await db.query(
                 `SELECT t.id, t.firstname, t.lastname, t.employee_id, t.school_id, t.status AS person_status,
-                        sc.name AS school_name, gl.name AS grade_name, sec.name AS section_name,
+                        t.qr_code, sc.name AS school_name, gl.name AS grade_name, sec.name AS section_name,
                         COALESCE(NULLIF(sec.adviser, ''), TRIM(CONCAT_WS(' ', at.firstname, at.middlename, at.lastname))) AS adviser,
                         at.contact AS adviser_contact,
                         at.email AS adviser_email
@@ -770,8 +816,8 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
                  LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
                  LEFT JOIN sections sec ON t.section_id = sec.id
                  LEFT JOIN teachers at ON sec.adviser_teacher_id = at.id
-                 WHERE t.qr_code = ?`,
-                [qr_code]
+                 WHERE t.qr_code IN (?) OR t.employee_id IN (?)`,
+                [qrLookupCandidates, qrLookupCandidates]
             );
             personType = 'teacher';
             person = rows[0];
@@ -811,6 +857,7 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
 
         const personInfo = {
             id: person.id,
+            qr_code: person.qr_code || qr_code,
             name: person.firstname + ' ' + person.lastname,
             type: personType,
             school: person.school_name || 'N/A',

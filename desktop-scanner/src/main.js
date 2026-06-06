@@ -10,6 +10,7 @@ const {
   upsertPeople,
   replacePeopleCache,
   getPersonByQrCode,
+  getPersonByCode,
   insertAttendanceEvent,
   getAttendanceEventById,
   getAttendanceEventsForPersonDate,
@@ -183,6 +184,51 @@ function secondsBetween(left, right) {
   const end = parseSqlDateTime(right);
   if (!start || !end) return 0;
   return Math.max(0, Math.round((end.getTime() - start.getTime()) / 1000));
+}
+
+function cleanScannedQrValue(value) {
+  return String(value || '')
+    .replace(/^\uFEFF/, '')
+    .replace(/[\u0000-\u001F\u007F]/g, '')
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .trim();
+}
+
+function addQrCandidate(candidates, value) {
+  const cleaned = cleanScannedQrValue(value);
+  if (!cleaned) return;
+  candidates.add(cleaned);
+  try {
+    const decoded = cleanScannedQrValue(decodeURIComponent(cleaned));
+    if (decoded) candidates.add(decoded);
+  } catch (_err) {
+    // Not URI encoded; keep the original candidate only.
+  }
+}
+
+function getQrLookupCandidates(value) {
+  const candidates = new Set();
+  addQrCandidate(candidates, value);
+
+  const cleaned = cleanScannedQrValue(value);
+  try {
+    const parsed = new URL(cleaned);
+    ['qr_code', 'qr', 'code', 'q'].forEach((key) => addQrCandidate(candidates, parsed.searchParams.get(key)));
+    const pathParts = parsed.pathname.split('/').filter(Boolean);
+    addQrCandidate(candidates, pathParts[pathParts.length - 1]);
+  } catch (_err) {
+    // Plain QR payloads are expected; URLs are supported as a convenience.
+  }
+
+  Array.from(candidates).forEach((candidate) => {
+    if (!/^(STU|TCH)-/i.test(candidate)) {
+      addQrCandidate(candidates, `STU-${candidate}`);
+      addQrCandidate(candidates, `TCH-${candidate}`);
+    }
+  });
+
+  return Array.from(candidates).slice(0, 12);
 }
 
 function formatTime12(value) {
@@ -365,7 +411,7 @@ async function fetchScannerDirectoryVersion(settings) {
 function buildPersonCacheRecord(qrCode, person) {
   if (!person) return null;
   return {
-    qrCode,
+    qrCode: cleanScannedQrValue(person.qr_code || person.qrCode || qrCode),
     serverPersonId: person.id || person.personId || person.person_id || null,
     personType: person.type,
     personCode: person.type === 'teacher' ? person.employee_id : person.lrn,
@@ -675,7 +721,17 @@ function needsNonRetriableSkip(resultOrError) {
 }
 
 function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
-  const person = getPersonByQrCode(qrCode);
+  let matchedQrCode = cleanScannedQrValue(qrCode);
+  let person = null;
+  for (const candidate of getQrLookupCandidates(qrCode)) {
+    person = getPersonByQrCode(candidate);
+    if (!person) person = getPersonByCode(candidate);
+    if (person) {
+      matchedQrCode = person.qrCode || candidate;
+      break;
+    }
+  }
+
   if (!person) {
     return {
       success: false,
@@ -717,7 +773,7 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
     insertAttendanceEvent({
       localEventId: createId(),
       syncEventId: createId(),
-      qrCode,
+      qrCode: matchedQrCode,
       serverPersonId: person.serverPersonId,
       personType: person.personType,
       personCode: person.personCode,
@@ -794,7 +850,7 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
     insertAttendanceEvent({
       localEventId: createId(),
       syncEventId: createId(),
-      qrCode,
+      qrCode: matchedQrCode,
       serverPersonId: person.serverPersonId,
       personType: person.personType,
       personCode: person.personCode,
@@ -849,7 +905,7 @@ function updateRuntimeConnectionState(online, message) {
 }
 
 async function submitScan(payload) {
-  const qrCode = String(payload?.qrCode || '').trim();
+  const qrCode = cleanScannedQrValue(payload?.qrCode);
   if (!qrCode) return { success: false, error: 'Invalid QR Code', ...currentDashboard() };
 
   const scanTime = payload?.scanTime || toLocalSqlDateTime();
