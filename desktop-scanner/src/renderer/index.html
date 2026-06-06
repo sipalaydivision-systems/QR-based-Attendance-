@@ -89,10 +89,10 @@
                 <path d="M6 18h12"></path>
               </svg>
             </div>
-            <h2>USB scanner is listening</h2>
-            <p>Scan a student or teacher QR code. Keyboard-style USB scanners submit automatically after Enter.</p>
-            <input id="usbInput" type="text" autocomplete="off" spellcheck="false" placeholder="Waiting for USB scanner input...">
-            <div class="usb-actions">
+            <h2>USB scanner is ready</h2>
+            <p>Just scan the QR code — attendance records automatically. No buttons needed.</p>
+            <input id="usbInput" type="text" autocomplete="off" spellcheck="false" placeholder="Waiting for USB scanner input..." style="opacity:0;position:absolute;pointer-events:none;" tabindex="-1">
+            <div class="usb-actions" style="display:none;">
               <button class="primary" id="manualScanBtn">Submit Scan</button>
               <button class="secondary" id="focusUsbBtn">Focus Input</button>
             </div>

@@ -15,6 +15,7 @@ const state = {
   usbBuffer: '',
   lastUsbKeyAt: 0,
   usbSubmitTimer: null,
+  usbFocusInterval: null,
   busy: false,
   todayKey: currentDayKey(),
   serverTodayScanCount: 0,
@@ -824,7 +825,14 @@ async function startCamera() {
     if (!state.html5QrCode) state.html5QrCode = new Html5Qrcode('reader');
     await state.html5QrCode.start(
       { facingMode: 'environment' },
-      { fps: 15, qrbox: { width: 360, height: 360 }, aspectRatio: 1.0, disableFlip: false },
+      {
+        fps: 25,
+        qrbox: { width: 420, height: 420 },
+        aspectRatio: 1.0,
+        disableFlip: false,
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+        videoConstraints: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: { ideal: 'environment' } }
+      },
       (decodedText) => submitQrCode(decodedText),
       () => {}
     );
@@ -836,7 +844,14 @@ async function startCamera() {
     try {
       await state.html5QrCode.start(
         { facingMode: 'user' },
-        { fps: 15, qrbox: { width: 360, height: 360 }, aspectRatio: 1.0, disableFlip: false },
+        {
+          fps: 25,
+          qrbox: { width: 420, height: 420 },
+          aspectRatio: 1.0,
+          disableFlip: false,
+          experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+          videoConstraints: { width: { ideal: 1280 }, height: { ideal: 720 } }
+        },
         (decodedText) => submitQrCode(decodedText),
         () => {}
       );
@@ -863,17 +878,36 @@ async function stopCamera() {
   state.cameraRunning = false;
 }
 
+function clearUsbFocusLock() {
+  if (state.usbFocusInterval) {
+    clearInterval(state.usbFocusInterval);
+    state.usbFocusInterval = null;
+  }
+}
+
+function startUsbFocusLock() {
+  clearUsbFocusLock();
+  const keepFocused = () => {
+    if ($('settingsDrawer')?.classList.contains('open')) return;
+    const inp = $('usbInput');
+    if (inp && document.activeElement !== inp) inp.focus();
+  };
+  keepFocused();
+  state.usbFocusInterval = setInterval(keepFocused, 400);
+}
+
 async function setMode(mode, persist = true) {
   state.scannerMode = mode === 'usb' ? 'usb' : 'webcam';
   reflectModeSelection(state.scannerMode);
   updateScannerModeDetail(state.scannerMode);
 
   if (state.scannerMode === 'webcam') {
+    clearUsbFocusLock();
     await startCamera();
   } else {
     await stopCamera();
-    setTimeout(() => $('usbInput')?.focus(), 80);
-    setStatusLine('USB scanner mode is active. Scan a QR code or paste it into the input.');
+    startUsbFocusLock();
+    setStatusLine('USB scanner mode active — just scan your QR code.');
     updateScannerStatus('USB scanner ready', 'This desktop station is listening for keyboard-style QR scanners.', 'success');
   }
 
