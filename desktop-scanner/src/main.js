@@ -242,6 +242,33 @@ function combineDateAndTime(dateKey, timeValue, fallback = '00:00') {
   return `${dateKey} ${safeTime}:00`;
 }
 
+function localNonSchoolDayStatus(dateKey) {
+  const day = new Date(`${dateKey}T00:00:00`).getDay();
+  if (day === 0 || day === 6) {
+    return {
+      isSchoolDay: false,
+      reason: day === 0 ? 'Sunday' : 'Saturday',
+      type: 'Weekend'
+    };
+  }
+  return { isSchoolDay: true, reason: null, type: null };
+}
+
+function scanBlockedSchoolDayStatus(dateKey) {
+  const localStatus = localNonSchoolDayStatus(dateKey);
+  if (!localStatus.isSchoolDay) return localStatus;
+  if (dateKey === localDateString() && runtimeState.schoolDayStatus && runtimeState.schoolDayStatus.isSchoolDay === false) {
+    return runtimeState.schoolDayStatus;
+  }
+  return localStatus;
+}
+
+function nonSchoolDayScanMessage(schoolDay) {
+  const type = schoolDay?.type || 'Non-school Day';
+  const reason = schoolDay?.reason;
+  return `No attendance scanning today: ${type}${reason ? ` - ${reason}` : ''}.`;
+}
+
 function loadSettings() {
   return { ...defaultSettings(), ...readJson(settingsPath(), {}) };
 }
@@ -717,7 +744,7 @@ function persistServerScanResult(qrCode, scanTime, data) {
 
 function needsNonRetriableSkip(resultOrError) {
   const message = String(resultOrError?.error || resultOrError?.message || resultOrError || '');
-  return /already has complete attendance|scanned too quickly|QR code not recognized|removed from the system|inactive/i.test(message);
+  return /already has complete attendance|scanned too quickly|QR code not recognized|removed from the system|inactive|no attendance scanning|non-school day|weekend|no classes/i.test(message);
 }
 
 function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
@@ -750,6 +777,18 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
   }
 
   const attendanceDate = String(scanTime || '').slice(0, 10);
+  const schoolDay = scanBlockedSchoolDayStatus(attendanceDate);
+  if (!schoolDay.isSchoolDay) {
+    return {
+      success: false,
+      offline: true,
+      non_school_day: true,
+      error: nonSchoolDayScanMessage(schoolDay),
+      message: nonSchoolDayScanMessage(schoolDay),
+      person: personResponseFromCache(person)
+    };
+  }
+
   const events = getAttendanceEventsForPersonDate(person.personType, person.serverPersonId, attendanceDate);
   const existingTimeIn = events.find((item) => item.eventAction === 'TIME_IN');
   const existingTimeOut = events.find((item) => item.eventAction === 'TIME_OUT');

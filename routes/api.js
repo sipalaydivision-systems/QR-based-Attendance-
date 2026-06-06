@@ -412,6 +412,12 @@ function normalizeTimeSetting(value, fallback) {
     return normalizeTime(value, fallback);
 }
 
+function nonSchoolDayScanMessage(schoolDay) {
+    const type = schoolDay?.type || 'Non-school Day';
+    const reason = schoolDay?.reason;
+    return 'No attendance scanning today: ' + type + (reason ? ' - ' + reason : '') + '.';
+}
+
 function cleanScannedQrValue(value) {
     return String(value || '')
         .replace(/^\uFEFF/, '')
@@ -830,6 +836,17 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
         // Reject deleted persons
         if (person.person_status === 'deleted') {
             return res.json({ success: false, error: 'This person has been removed from the system.' });
+        }
+
+        const schoolDay = await checkSchoolDay(today, person.school_id);
+        if (!schoolDay.isSchoolDay) {
+            return res.json({
+                success: false,
+                error: nonSchoolDayScanMessage(schoolDay),
+                non_school_day: true,
+                non_school_day_type: schoolDay.type,
+                non_school_day_reason: schoolDay.reason
+            });
         }
 
         // Imported students become attendance-eligible only after their first valid QR scan.
