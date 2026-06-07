@@ -37,8 +37,8 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
           channel: stable
+          # No pinned version: pubspec requires Dart ^3.11.5, so use latest stable
 
       - name: Install Flutter dependencies
         working-directory: mobile-flutter
