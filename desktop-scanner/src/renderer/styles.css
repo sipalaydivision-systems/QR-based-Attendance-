@@ -1199,6 +1199,7 @@ body.settings-open .side-panel {
   height: 36px;
   object-fit: contain;
   flex-shrink: 0;
+  mix-blend-mode: multiply;
 }
 
 .assigned-school-info {
