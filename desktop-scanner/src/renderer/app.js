@@ -172,7 +172,7 @@ function applyAssignedSchoolHeader(settings) {
     logoEl.src     = logoSrc;
     logoEl.onerror = function () { this.onerror = null; this.src = LOCAL_LOGO_URL; };
     nameEl.textContent = school.name.toUpperCase();
-    subEl.textContent  = `This Scanner is Assigned to ${school.name}`;
+    subEl.textContent  = '';
     headerEl.classList.remove('hidden');
   } else {
     headerEl.classList.add('hidden');
