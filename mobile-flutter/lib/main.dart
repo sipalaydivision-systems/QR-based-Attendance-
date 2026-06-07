@@ -3105,9 +3105,6 @@ class DashboardPage extends StatelessWidget {
     final sortedSchools = [...schools]
       ..sort((a, b) => intValue((b as Map)['rate'])
           .compareTo(intValue((a as Map)['rate'])));
-    final schoolRates = sortedSchools
-        .map((item) => intValue((item as Map)['rate']))
-        .toList();
 
     Future<void> openAbsentDetails({
       String? targetDate,
@@ -3895,19 +3892,22 @@ class WeekDayAbsenceTile extends StatelessWidget {
     final normalized = isSchoolDay
         ? (absent / math.max(1, maxAbsent)).clamp(0.0, 1.0).toDouble()
         : 0.0;
-    final trackHeight = compact ? 72.0 : 82.0;
-    final minBarHeight = compact ? 38.0 : 44.0;
+    final trackHeight = compact ? 60.0 : 70.0;
+    final minBarHeight = compact ? 10.0 : 12.0;
     final barHeight = isSchoolDay
         ? minBarHeight + ((trackHeight - minBarHeight) * normalized)
         : minBarHeight;
-    final barLabel = isSchoolDay ? '$absent' : '-';
-    final barWidth = compact ? 24.0 : 28.0;
+    final countLabel = isSchoolDay ? '$absent' : '-';
+    final barWidth = compact ? 22.0 : 26.0;
+    final accent = isSchoolDay
+        ? const Color(0xFFDC2626)
+        : const Color(0xFFB6C2BC);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
         width: double.infinity,
-        padding: EdgeInsets.fromLTRB(6, compact ? 8 : 10, 6, compact ? 8 : 10),
+        padding: EdgeInsets.fromLTRB(4, compact ? 8 : 10, 4, compact ? 8 : 10),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -3926,7 +3926,7 @@ class WeekDayAbsenceTile extends StatelessWidget {
               label,
               style: TextStyle(
                 fontSize: compact ? 10 : 11,
-                color: Color(0xFF64726B),
+                color: const Color(0xFF64726B),
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -3934,14 +3934,45 @@ class WeekDayAbsenceTile extends StatelessWidget {
               dayNumber,
               style: TextStyle(
                 fontSize: compact ? 12 : 13,
-                color: Color(0xFF1F2937),
+                color: const Color(0xFF1F2937),
                 fontWeight: FontWeight.w900,
               ),
             ),
-            SizedBox(height: compact ? 5 : 7),
+            SizedBox(height: compact ? 6 : 8),
+            // Count badge — auto-sizes to 1, 2, or 3+ digits without overflow
+            Container(
+              constraints: const BoxConstraints(minWidth: 26),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: accent,
+                borderRadius: BorderRadius.circular(99),
+                boxShadow: isSchoolDay
+                    ? [
+                        BoxShadow(
+                          color: accent.withValues(alpha: .25),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                    : null,
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                countLabel,
+                maxLines: 1,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 12,
+                  height: 1,
+                ),
+              ),
+            ),
+            SizedBox(height: compact ? 6 : 8),
+            // Pure proportional bar (no text inside)
             SizedBox(
               height: trackHeight,
-              width: compact ? 30 : 34,
+              width: barWidth,
               child: Stack(
                 alignment: Alignment.bottomCenter,
                 children: [
@@ -3958,37 +3989,9 @@ class WeekDayAbsenceTile extends StatelessWidget {
                     curve: Curves.easeOutCubic,
                     width: barWidth,
                     height: barHeight,
-                    alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: isSchoolDay
-                          ? const Color(0xFFDC2626)
-                          : const Color(0xFFC4CFCA),
+                      color: accent,
                       borderRadius: BorderRadius.circular(99),
-                      boxShadow: isSchoolDay
-                          ? [
-                              BoxShadow(
-                                color: const Color(
-                                  0xFFDC2626,
-                                ).withValues(alpha: .22),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ]
-                          : null,
-                    ),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        barLabel,
-                        style: TextStyle(
-                          color: isSchoolDay
-                              ? Colors.white
-                              : const Color(0xFF6B7280),
-                          fontWeight: FontWeight.w900,
-                          fontSize: compact ? 11 : 12,
-                          height: 1,
-                        ),
-                      ),
                     ),
                   ),
                 ],
@@ -4635,76 +4638,134 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
     final grade = '${row['grade_name'] ?? '-'}';
     final section = '${row['section_name'] ?? '-'}';
     final lrn = '${row['lrn'] ?? '-'}';
-    final adviser = '${row['adviser'] ?? '-'}';
+    final adviser = '${row['adviser'] ?? '-'}'.trim();
     final status = formatStatusLabel(row['attendance_status']);
-    final monitoring = formatStatusLabel(row['monitoring_status']);
+    final isAbsent = status == 'Absent';
     final absentDays = intValue(row['absent_days']);
     final absentFromDate = '${row['absent_from_date'] ?? ''}'.trim();
-    final absentInfo = absentDays > 0
-        ? 'Absent since: ${readableDate(absentFromDate.isEmpty ? widget.targetDate : absentFromDate)} | ${absentDays == 1 ? '1 day' : '$absentDays days'}'
-        : 'Attendance date: ${readableDate(widget.targetDate)}';
+    final statusColor =
+        isAbsent ? const Color(0xFFDC2626) : const Color(0xFF15803D);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: PremiumCard(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              name,
-              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+            // Header: name + status pill (aligned, never jumbled)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(99),
+                    border: Border.all(color: statusColor.withValues(alpha: .3)),
+                  ),
+                  child: Text(
+                    status,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              'Grade: $grade | Section: $section',
-              style: const TextStyle(
-                color: Color(0xFF4F5E57),
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              'School: $schoolName',
-              style: const TextStyle(
-                color: Color(0xFF4F5E57),
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              'LRN: $lrn | Adviser: $adviser',
-              style: const TextStyle(
-                color: Color(0xFF5E6B65),
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              'Status: $status${monitoring != '-' ? ' | $monitoring' : ''} | Date: ${readableDate(widget.targetDate)}',
-              style: TextStyle(
-                color: status == 'Absent'
-                    ? const Color(0xFFB91C1C)
-                    : const Color(0xFF15803D),
-                fontWeight: FontWeight.w900,
-                fontSize: 12,
-              ),
-            ),
-            if (status == 'Absent') ...[
-              const SizedBox(height: 2),
-              Text(
-                absentInfo,
-                style: const TextStyle(
-                  color: Color(0xFFB91C1C),
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12,
+            const SizedBox(height: 10),
+            _detailRow(Icons.school_rounded, 'Grade & Section',
+                '$grade  •  $section'),
+            _detailRow(Icons.account_balance_rounded, 'School', schoolName),
+            _detailRow(Icons.badge_rounded, 'LRN', lrn),
+            _detailRow(Icons.person_rounded, 'Adviser',
+                adviser.isEmpty ? 'Not assigned' : adviser),
+            if (isAbsent) ...[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFFCD9D9)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.event_busy_rounded,
+                        size: 15, color: Color(0xFFDC2626)),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        absentDays > 0
+                            ? 'Absent since ${readableDate(absentFromDate.isEmpty ? widget.targetDate : absentFromDate)}  ·  ${absentDays == 1 ? '1 day' : '$absentDays days'}'
+                            : 'Attendance date ${readableDate(widget.targetDate)}',
+                        style: const TextStyle(
+                          color: Color(0xFFB91C1C),
+                          fontWeight: FontWeight.w800,
+                          fontSize: 11.5,
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  // Aligned label/value row used by the student detail card
+  Widget _detailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 14, color: const Color(0xFF9AA8A1)),
+          const SizedBox(width: 7),
+          SizedBox(
+            width: 92,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF8A968F),
+                fontWeight: FontWeight.w700,
+                fontSize: 11.5,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: Color(0xFF374151),
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+                height: 1.25,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -5360,10 +5421,11 @@ class AttendancePage extends StatelessWidget {
   final ApiService api;
 
   @override
-  Widget build(BuildContext context) => FutureList(
+  Widget build(BuildContext context) => LiveList(
     title: 'Attendance',
     subtitle: 'Live time-in and time-out records for today.',
-    future: api.list('/api/attendance?date=${date()}'),
+    cacheKey: 'attendance-${date()}',
+    fetch: () => api.list('/api/attendance?date=${date()}'),
     empty: 'No attendance records yet today.',
     builder: (row) {
       final monitoring = '${row['monitoring_status'] ?? ''}'.trim();
@@ -5383,32 +5445,13 @@ class ReportsPage extends StatelessWidget {
   final ApiService api;
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
-    future: api.map('/api/reports/daily-summary?date=${date()}'),
-    builder: (context, snapshot) {
-      if (snapshot.hasError) {
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Text(
-              readableError(
-                snapshot.error!,
-                fallback: 'Failed to load report data.',
-              ),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFFB91C1C),
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        );
-      }
-      if (!snapshot.hasData) {
-        return const Center(child: CircularProgressIndicator());
-      }
-      final totals = (snapshot.data!['totals'] as Map?) ?? {};
-      final schools = (snapshot.data!['schools'] as List?) ?? [];
+  Widget build(BuildContext context) => LiveMap(
+    cacheKey: 'reports-${date()}',
+    fetch: () => api.map('/api/reports/daily-summary?date=${date()}'),
+    errorFallback: 'Failed to load report data.',
+    builder: (context, data, refresh) {
+      final totals = (data['totals'] as Map?) ?? {};
+      final schools = (data['schools'] as List?) ?? [];
       Future<void> openDateDetails(String tab) async {
         await showModalBottomSheet(
           context: context,
@@ -5422,6 +5465,19 @@ class ReportsPage extends StatelessWidget {
         );
       }
 
+      return RefreshIndicator(
+        onRefresh: refresh,
+        child: _legacyReportsBody(context, totals, schools, openDateDetails),
+      );
+    },
+  );
+
+  Widget _legacyReportsBody(
+    BuildContext context,
+    Map totals,
+    List schools,
+    Future<void> Function(String) openDateDetails,
+  ) {
       return ListView(
         padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
         children: [
@@ -5529,8 +5585,7 @@ class ReportsPage extends StatelessWidget {
           ),
         ],
       );
-    },
-  );
+  }
 }
 
 class SchoolsPage extends StatefulWidget {
@@ -5545,41 +5600,61 @@ class _SchoolsPageState extends State<SchoolsPage> {
   Map? school;
   Map? grade;
   Map? section;
-  late Future<Map<String, dynamic>> future;
+  // Static cache — school structure rarely changes, so show it instantly on
+  // re-entry (no spinner) while a fresh copy loads in the background.
+  static Map<String, dynamic>? _cachedStructure;
+  Map<String, dynamic>? structure;
+  String? error;
 
   @override
   void initState() {
     super.initState();
-    future = widget.api.map('/api/mobile-school-structure');
+    structure = _cachedStructure;
+    load(silent: structure != null);
+  }
+
+  Future<void> load({bool silent = false}) async {
+    if (!silent && mounted) setState(() => error = null);
+    try {
+      final data = await widget.api.map('/api/mobile-school-structure');
+      _cachedStructure = data;
+      if (!mounted) return;
+      setState(() {
+        structure = data;
+        error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        error = readableError(e, fallback: 'Failed to load school details.');
+      });
+    }
   }
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
-    future: future,
-    builder: (_, snapshot) {
-      if (snapshot.hasError) {
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Text(
-              readableError(
-                snapshot.error!,
-                fallback: 'Failed to load school details.',
-              ),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFFB91C1C),
-                fontWeight: FontWeight.w800,
-              ),
+  Widget build(BuildContext context) {
+    if (structure == null && error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Text(
+            error!,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xFFB91C1C),
+              fontWeight: FontWeight.w800,
             ),
           ),
-        );
-      }
-      if (!snapshot.hasData) {
-        return const Center(child: CircularProgressIndicator());
-      }
-      final schools = (snapshot.data!['schools'] as List?) ?? [];
-      return ListView(
+        ),
+      );
+    }
+    if (structure == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final schools = (structure!['schools'] as List?) ?? [];
+    return RefreshIndicator(
+      onRefresh: () => load(silent: true),
+      child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           SectionTitle(
@@ -5601,9 +5676,9 @@ class _SchoolsPageState extends State<SchoolsPage> {
               ? schoolView()
               : schoolsList(schools),
         ],
-      );
-    },
-  );
+      ),
+    );
+  }
 
   Widget schoolsList(List schools) => PremiumCard(
     title: 'School List',
@@ -6313,6 +6388,206 @@ class FlagTile extends StatelessWidget {
           ],
         ),
       );
+}
+
+// Stale-while-revalidate list loader. Shows cached data INSTANTLY on
+// re-entry (no spinner), refreshes in the background, stays live via a
+// periodic timer + pull-to-refresh. Fast navigation without losing live data.
+class LiveList extends StatefulWidget {
+  const LiveList({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.cacheKey,
+    required this.fetch,
+    required this.empty,
+    required this.builder,
+    this.recordsTitle = 'Today Records',
+    this.refreshInterval = const Duration(seconds: 20),
+  });
+  final String title;
+  final String subtitle;
+  final String cacheKey;
+  final Future<List<dynamic>> Function() fetch;
+  final String empty;
+  final Widget Function(Map<String, dynamic>) builder;
+  final String recordsTitle;
+  final Duration refreshInterval;
+
+  @override
+  State<LiveList> createState() => _LiveListState();
+}
+
+class _LiveListState extends State<LiveList> {
+  static final Map<String, List<dynamic>> _cache = {};
+  List<dynamic>? rows;
+  String? error;
+  Timer? timer;
+
+  @override
+  void initState() {
+    super.initState();
+    rows = _cache[widget.cacheKey];
+    load(silent: rows != null);
+    timer = Timer.periodic(widget.refreshInterval, (_) => load(silent: true));
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> load({bool silent = false}) async {
+    if (!silent && mounted) setState(() => error = null);
+    try {
+      final data = await widget.fetch();
+      _cache[widget.cacheKey] = data;
+      if (!mounted) return;
+      setState(() {
+        rows = data;
+        error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        error = readableError(
+          e,
+          fallback: 'Failed to load records from the server.',
+        );
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (rows == null && error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Text(
+            error!,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xFFB91C1C),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      );
+    }
+    if (rows == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final data = rows!;
+    return RefreshIndicator(
+      onRefresh: () => load(silent: true),
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          SectionTitle(widget.title, widget.subtitle),
+          const SizedBox(height: 16),
+          PremiumCard(
+            title: widget.recordsTitle,
+            subtitle: '${data.length} synced record(s)',
+            child: Column(
+              children: [
+                if (data.isEmpty) EmptyText(widget.empty),
+                for (final row in data.take(80))
+                  widget.builder(Map<String, dynamic>.from(row as Map)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Stale-while-revalidate map loader (single JSON object endpoints).
+class LiveMap extends StatefulWidget {
+  const LiveMap({
+    super.key,
+    required this.cacheKey,
+    required this.fetch,
+    required this.builder,
+    this.errorFallback = 'Failed to load data.',
+    this.refreshInterval = const Duration(seconds: 25),
+  });
+  final String cacheKey;
+  final Future<Map<String, dynamic>> Function() fetch;
+  final Widget Function(
+    BuildContext context,
+    Map<String, dynamic> data,
+    Future<void> Function() refresh,
+  ) builder;
+  final String errorFallback;
+  final Duration refreshInterval;
+
+  @override
+  State<LiveMap> createState() => _LiveMapState();
+}
+
+class _LiveMapState extends State<LiveMap> {
+  static final Map<String, Map<String, dynamic>> _cache = {};
+  Map<String, dynamic>? data;
+  String? error;
+  Timer? timer;
+
+  @override
+  void initState() {
+    super.initState();
+    data = _cache[widget.cacheKey];
+    load(silent: data != null);
+    timer = Timer.periodic(widget.refreshInterval, (_) => load(silent: true));
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> load({bool silent = false}) async {
+    if (!silent && mounted) setState(() => error = null);
+    try {
+      final result = await widget.fetch();
+      _cache[widget.cacheKey] = result;
+      if (!mounted) return;
+      setState(() {
+        data = result;
+        error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        error = readableError(e, fallback: widget.errorFallback);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (data == null && error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Text(
+            error!,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xFFB91C1C),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      );
+    }
+    if (data == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return widget.builder(context, data!, () => load(silent: true));
+  }
 }
 
 class FutureList extends StatelessWidget {
