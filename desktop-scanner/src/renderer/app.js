@@ -480,29 +480,143 @@ function closeScanModal() {
     clearTimeout(state.scanModalTimer);
     state.scanModalTimer = null;
   }
-  $('scanModal').classList.add('hidden');
+  const modal = $('scanModal');
+  modal.classList.remove('visible');
+  // Wait for the 0.25 s CSS fade before hiding from layout
+  setTimeout(() => {
+    if (!modal.classList.contains('visible')) modal.classList.add('hidden');
+  }, 280);
+}
+
+/* SVG icon markup used inside the status banner */
+const RES_ICONS = {
+  'time-in':  `<svg style="width:22px;height:22px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>`,
+  'time-out': `<svg style="width:22px;height:22px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`,
+  'clock':    `<svg style="width:22px;height:22px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  'check':    `<svg style="width:22px;height:22px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+  'error':    `<svg style="width:22px;height:22px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
+  'pending':  `<svg style="width:22px;height:22px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  'cloud':    `<svg style="width:22px;height:22px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`
+};
+
+function resIconKey(data, tone) {
+  if (tone === 'error') return 'error';
+  if (data?.offline) return 'cloud';
+  const action = String(data?.action || '');
+  if (action === 'TIME_OUT') return 'time-out';
+  if (action === 'ALREADY_RECORDED') return 'check';
+  if (action === 'PENDING_TIME_OUT' || action === 'CONFIRM_TIME_OUT') return 'pending';
+  if (data?.status === 'late') return 'clock';
+  return 'time-in';
+}
+
+function resBannerVariant(data, tone) {
+  if (tone === 'error') return 'error';
+  if (data?.offline) return 'offline';
+  const action = String(data?.action || '');
+  if (action === 'TIME_OUT') return 'time-out';
+  if (action === 'TIME_IN' && data?.status === 'late') return 'late';
+  if (['ALREADY_RECORDED', 'PENDING_TIME_OUT', 'CONFIRM_TIME_OUT'].includes(action)) return 'late';
+  return 'time-in';
 }
 
 function showScanFeedback(title, message, tone = 'success', data = {}) {
   const modal = $('scanModal');
-  const card = $('scanModalCard');
-  const person = data.person || null;
-  const actionLabel = humanizeAction(data.action);
-  const isOffline = !!data.offline;
+  const card  = $('scanModalCard');
+  const person    = data?.person || null;
+  const isOffline = !!data?.offline;
+  const action    = String(data?.action || '');
 
-  card.className = `scan-modal-card ${tone}`.trim();
-  $('scanModalLabel').textContent = isOffline ? 'Saved offline' : 'Attendance recorded';
-  $('scanModalTitle').textContent = title;
-  $('scanModalMessage').textContent = message;
-  $('scanModalName').textContent = person?.name || 'Attendance record';
-  $('scanModalMeta').textContent = modalMetaForPerson(person);
-  $('scanModalTime').textContent = `${actionLabel}: ${modalTimeForResult(data)}`;
+  /* ── Status banner ── */
+  const variant = resBannerVariant(data, tone);
+  $('modalBanner').className  = `res-status-banner ${variant}`;
+  $('modalIcon').innerHTML    = RES_ICONS[resIconKey(data, tone)];
+  $('modalLabel').textContent = title;
+  $('modalMessage').textContent = isOffline ? `Saved offline — ${message}` : message;
 
+  /* ── Person row ── */
+  if (person) {
+    $('modalPersonRow').style.display = '';
+    const parts   = String(person.name || '').trim().split(/\s+/);
+    const initials = parts.length >= 2
+      ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+      : String(person.name || '??').substring(0, 2).toUpperCase();
+    const avatarEl = $('modalAvatar');
+    avatarEl.textContent = initials;
+    avatarEl.className   = `res-p-avatar ${person.type === 'teacher' ? 'teacher' : 'student'}`;
+    $('modalName').textContent   = person.name || '';
+    const badgeEl = $('modalBadge');
+    badgeEl.textContent = person.type === 'teacher' ? 'Teacher' : 'Student';
+    badgeEl.className   = `res-p-badge ${person.type === 'teacher' ? 'teacher' : 'student'}`;
+
+    /* ── Detail grid ── */
+    const isTeacher = person.type === 'teacher';
+    const idLabel   = isTeacher ? 'Employee ID' : 'LRN';
+    const idValue   = isTeacher ? (person.employee_id || 'N/A') : (person.lrn || 'N/A');
+    let grid = `<div class="res-detail-cell full"><div class="d-label">School</div><div class="d-value">${escapeHtml(person.school || 'N/A')}</div></div>`;
+    grid    += `<div class="res-detail-cell"><div class="d-label">${escapeHtml(idLabel)}</div><div class="d-value">${escapeHtml(idValue)}</div></div>`;
+    if (!isTeacher) {
+      grid  += `<div class="res-detail-cell"><div class="d-label">Grade &amp; Section</div><div class="d-value">${escapeHtml((person.grade || 'N/A') + ' — ' + (person.section || 'N/A'))}</div></div>`;
+    }
+    $('modalDetailGrid').innerHTML = grid;
+  } else {
+    $('modalPersonRow').style.display = 'none';
+    $('modalDetailGrid').innerHTML = '';
+  }
+
+  /* ── Time row ── */
+  let timeHTML = '';
+  if (action === 'TIME_IN') {
+    const t = data.time_in || data.time || '—';
+    timeHTML = `<div class="res-t-block t-in"><div class="rt-time">${escapeHtml(t)}</div><div class="rt-label">&#8594; Time In</div></div>`;
+  } else if (action === 'TIME_OUT') {
+    const tin  = data.time_in  || '—';
+    const tout = data.time_out || data.time || '—';
+    timeHTML = `<div class="res-t-block t-in"><div class="rt-time">${escapeHtml(tin)}</div><div class="rt-label">&#8594; Time In</div></div>` +
+               `<div class="res-t-block t-out"><div class="rt-time">${escapeHtml(tout)}</div><div class="rt-label">&#8592; Time Out</div></div>`;
+  } else if (action === 'ALREADY_RECORDED') {
+    const tin = data.time_in || data.time || '—';
+    timeHTML = `<div class="res-t-block t-in"><div class="rt-time">${escapeHtml(tin)}</div><div class="rt-label">&#10003; Present Today</div></div>`;
+  } else if (action === 'PENDING_TIME_OUT' || action === 'CONFIRM_TIME_OUT') {
+    const tin = data.time_in || '—';
+    timeHTML = `<div class="res-t-block t-in"><div class="rt-time">${escapeHtml(tin)}</div><div class="rt-label">&#8594; Time In</div></div>` +
+               `<div class="res-t-block t-pending"><div class="rt-time">Pending</div><div class="rt-label">End-of-day Out</div></div>`;
+  } else if (data?.time_in || data?.time_out) {
+    const tin  = data.time_in  || '—';
+    const tout = data.time_out || 'Pending';
+    timeHTML = `<div class="res-t-block t-in"><div class="rt-time">${escapeHtml(tin)}</div><div class="rt-label">Time In</div></div>` +
+               `<div class="res-t-block t-out"><div class="rt-time">${escapeHtml(tout)}</div><div class="rt-label">Time Out</div></div>`;
+  } else if (data?.time) {
+    timeHTML = `<div class="res-t-block t-in"><div class="rt-time">${escapeHtml(data.time)}</div><div class="rt-label">Recorded</div></div>`;
+  }
+  $('modalTimeRow').innerHTML = timeHTML;
+
+  /* ── Countdown bar ── */
+  const fill = $('modalCountdownFill');
+  const fillColor = variant === 'time-in' ? 'green'
+    : variant === 'time-out' ? 'orange'
+    : variant === 'offline'  ? 'blue'
+    : variant === 'error'    ? 'rose'
+    : 'orange';
+  fill.className = `res-countdown-fill ${fillColor}`;
+  fill.style.animation = 'none';
+  void fill.offsetHeight;
+  const duration = action === 'CONFIRM_TIME_OUT' ? 10 : 3;
+  fill.style.animation = `resCountdownShrink ${duration}s linear forwards`;
+
+  /* ── Animate the card ── */
+  card.style.animation = 'none';
+  void card.offsetHeight;
+  card.style.animation = 'resCardEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1)';
+
+  /* ── Show ── */
   modal.classList.remove('hidden');
+  void modal.offsetHeight;
+  modal.classList.add('visible');
 
   if (state.scanModalTimer) clearTimeout(state.scanModalTimer);
-  if (data.action !== 'CONFIRM_TIME_OUT') {
-    state.scanModalTimer = setTimeout(closeScanModal, 1500);
+  if (action !== 'CONFIRM_TIME_OUT') {
+    state.scanModalTimer = setTimeout(closeScanModal, 3000);
   }
 }
 

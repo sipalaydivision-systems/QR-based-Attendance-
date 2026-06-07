@@ -305,18 +305,43 @@
     </div>
   </div>
 
-  <div class="scan-modal hidden" id="scanModal" aria-live="polite">
-    <section class="scan-modal-card" id="scanModalCard">
-      <button class="modal-close" id="closeScanModalBtn" title="Close scan result" aria-label="Close scan result">&times;</button>
-      <span id="scanModalLabel">Attendance recorded</span>
-      <h2 id="scanModalTitle">Time In recorded</h2>
-      <p id="scanModalMessage">Attendance record saved successfully.</p>
-      <div class="modal-person">
-        <strong id="scanModalName">Student Name</strong>
-        <small id="scanModalMeta">Grade - Section | School</small>
+  <!-- Result overlay — mirrors web scanner modal design -->
+  <div class="result-overlay hidden" id="scanModal" aria-live="polite">
+    <div class="result-card" id="scanModalCard">
+
+      <!-- Status banner -->
+      <div class="res-status-banner" id="modalBanner">
+        <div class="res-status-icon" id="modalIcon"></div>
+        <div class="res-status-text">
+          <h3 id="modalLabel">TIME IN</h3>
+          <p id="modalMessage">Attendance recorded.</p>
+        </div>
       </div>
-      <div class="modal-time" id="scanModalTime">09:40 PM</div>
-    </section>
+
+      <!-- Close button -->
+      <button class="res-close-btn" id="closeScanModalBtn" title="Close" aria-label="Close">&times;</button>
+
+      <!-- Person -->
+      <div class="res-person-row" id="modalPersonRow">
+        <div class="res-p-avatar" id="modalAvatar"></div>
+        <div>
+          <div class="res-p-name" id="modalName"></div>
+          <span class="res-p-badge" id="modalBadge"></span>
+        </div>
+      </div>
+
+      <!-- Detail cells: school / LRN or employee-id / grade & section -->
+      <div class="res-detail-grid" id="modalDetailGrid"></div>
+
+      <!-- Time-in / time-out blocks -->
+      <div class="res-time-row" id="modalTimeRow"></div>
+
+      <!-- Auto-dismiss countdown bar -->
+      <div class="res-countdown-bar">
+        <div class="res-countdown-fill" id="modalCountdownFill"></div>
+      </div>
+
+    </div>
   </div>
 
   <div class="toast-stack" id="toastStack" aria-live="polite" aria-atomic="true"></div>
