@@ -104,21 +104,18 @@ svg {
 }
 
 .brand-logo {
-  width: 58px;
-  height: 58px;
+  width: 48px;
+  height: 48px;
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  overflow: hidden;
-  border-radius: 16px;
-  background: #eaf7f1;
-  border: 1px solid #cbe7d9;
 }
 
 .brand-logo img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  mix-blend-mode: multiply;
 }
 
 .brand-logo span {
