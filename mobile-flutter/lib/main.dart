@@ -4012,12 +4012,50 @@ class DailyAttendanceCalendar extends StatefulWidget {
 
 class _DailyAttendanceCalendarState extends State<DailyAttendanceCalendar> {
   late DateTime focusedDate;
+  late DateTime visibleMonth;
+
+  static const _monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+  static const _weekdayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
   @override
   void initState() {
     super.initState();
-    focusedDate = DateTime.now();
+    final now = DateTime.now();
+    focusedDate = now;
+    visibleMonth = DateTime(now.year, now.month);
   }
+
+  DateTime get _firstAllowed =>
+      DateTime.now().subtract(const Duration(days: 365 * 2));
+  DateTime get _lastAllowed => DateTime.now().add(const Duration(days: 365));
+
+  bool get _canGoPrev =>
+      visibleMonth.isAfter(DateTime(_firstAllowed.year, _firstAllowed.month));
+  bool get _canGoNext =>
+      visibleMonth.isBefore(DateTime(_lastAllowed.year, _lastAllowed.month));
+
+  void _prevMonth() {
+    if (!_canGoPrev) return;
+    setState(() =>
+        visibleMonth = DateTime(visibleMonth.year, visibleMonth.month - 1));
+  }
+
+  void _nextMonth() {
+    if (!_canGoNext) return;
+    setState(() =>
+        visibleMonth = DateTime(visibleMonth.year, visibleMonth.month + 1));
+  }
+
+  void _goToday() {
+    final now = DateTime.now();
+    setState(() => visibleMonth = DateTime(now.year, now.month));
+  }
+
+  bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
   String dateString(DateTime day) =>
       '${day.year.toString().padLeft(4, '0')}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
@@ -4054,29 +4092,304 @@ class _DailyAttendanceCalendarState extends State<DailyAttendanceCalendar> {
           fontWeight: FontWeight.w700,
         ),
       ),
-      const SizedBox(height: 8),
+      const SizedBox(height: 10),
       Container(
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FBF9),
-          borderRadius: BorderRadius.circular(16),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(color: const Color(0xFFDCE6E1)),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF111827).withValues(alpha: .04),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              color: const Color(0xFF0F6E52).withValues(alpha: .08),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
             ),
           ],
         ),
-        child: CalendarDatePicker(
-          initialDate: focusedDate,
-          firstDate: DateTime.now().subtract(const Duration(days: 365 * 2)),
-          lastDate: DateTime.now().add(const Duration(days: 365)),
-          onDateChanged: openDateModal,
+        child: Column(
+          children: [
+            _buildHeader(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+              child: _buildWeekdayRow(),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
+              child: _buildDayGrid(),
+            ),
+            const Divider(height: 1, color: Color(0xFFEDF2EF)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+              child: _buildLegend(),
+            ),
+          ],
         ),
       ),
     ],
   );
+
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF0F6E52), Color(0xFF138A64)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(19)),
+      ),
+      child: Row(
+        children: [
+          _navButton(Icons.chevron_left_rounded, _canGoPrev, _prevMonth),
+          Expanded(
+            child: Column(
+              children: [
+                Text(
+                  _monthNames[visibleMonth.month - 1],
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                    letterSpacing: .3,
+                  ),
+                ),
+                Text(
+                  '${visibleMonth.year}',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: .75),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _navButton(Icons.chevron_right_rounded, _canGoNext, _nextMonth),
+        ],
+      ),
+    );
+  }
+
+  Widget _navButton(IconData icon, bool enabled, VoidCallback onTap) {
+    return Material(
+      color: Colors.white.withValues(alpha: enabled ? .18 : .06),
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: enabled ? onTap : null,
+        child: SizedBox(
+          width: 36,
+          height: 36,
+          child: Icon(
+            icon,
+            color: Colors.white.withValues(alpha: enabled ? 1 : .4),
+            size: 24,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWeekdayRow() {
+    return Row(
+      children: [
+        for (var i = 0; i < 7; i++)
+          Expanded(
+            child: Center(
+              child: Text(
+                _weekdayLabels[i],
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: (i == 0 || i == 6)
+                      ? const Color(0xFFDC8A8A)
+                      : const Color(0xFF8A968F),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildDayGrid() {
+    final firstOfMonth = DateTime(visibleMonth.year, visibleMonth.month, 1);
+    // Sunday-first calendar: weekday Mon=1..Sun=7 -> Sun=0..Sat=6
+    final leadingBlanks = firstOfMonth.weekday % 7;
+    final daysInMonth =
+        DateTime(visibleMonth.year, visibleMonth.month + 1, 0).day;
+
+    final cells = <Widget>[];
+    for (var i = 0; i < leadingBlanks; i++) {
+      cells.add(const Expanded(child: SizedBox(height: 42)));
+    }
+    for (var day = 1; day <= daysInMonth; day++) {
+      cells.add(Expanded(child: _buildDayCell(day)));
+    }
+    // Pad the last week so all rows have 7 cells
+    while (cells.length % 7 != 0) {
+      cells.add(const Expanded(child: SizedBox(height: 42)));
+    }
+
+    final rows = <Widget>[];
+    for (var i = 0; i < cells.length; i += 7) {
+      rows.add(Row(children: cells.sublist(i, i + 7)));
+    }
+    return Column(children: rows);
+  }
+
+  Widget _buildDayCell(int day) {
+    final cellDate = DateTime(visibleMonth.year, visibleMonth.month, day);
+    final now = DateTime.now();
+    final isToday = _sameDay(cellDate, now);
+    final isSelected = _sameDay(cellDate, focusedDate) && !isToday;
+    final isWeekend = cellDate.weekday == DateTime.saturday ||
+        cellDate.weekday == DateTime.sunday;
+    final isDisabled = cellDate.isBefore(
+          DateTime(_firstAllowed.year, _firstAllowed.month, _firstAllowed.day),
+        ) ||
+        cellDate.isAfter(
+          DateTime(_lastAllowed.year, _lastAllowed.month, _lastAllowed.day),
+        );
+
+    Color textColor;
+    if (isToday) {
+      textColor = Colors.white;
+    } else if (isDisabled) {
+      textColor = const Color(0xFFC4CFCA);
+    } else if (isWeekend) {
+      textColor = const Color(0xFFCF6B6B);
+    } else {
+      textColor = const Color(0xFF1F2937);
+    }
+
+    BoxDecoration? decoration;
+    if (isToday) {
+      decoration = BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF138A64), Color(0xFF0F6E52)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F6E52).withValues(alpha: .35),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      );
+    } else if (isSelected) {
+      decoration = BoxDecoration(
+        color: const Color(0xFFE7F6EF),
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0xFF138A64), width: 1.6),
+      );
+    } else if (isWeekend && !isDisabled) {
+      decoration = const BoxDecoration(
+        color: Color(0xFFFCF1F1),
+        shape: BoxShape.circle,
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.all(3),
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: isDisabled ? null : () => openDateModal(cellDate),
+          child: Container(
+            height: 38,
+            alignment: Alignment.center,
+            decoration: decoration,
+            child: Text(
+              '$day',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isToday || isSelected
+                    ? FontWeight.w900
+                    : FontWeight.w600,
+                color: textColor,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLegend() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _legendDot(const Color(0xFF138A64), 'Today', filled: true),
+        const SizedBox(width: 16),
+        _legendDot(const Color(0xFF138A64), 'Selected', filled: false),
+        const SizedBox(width: 16),
+        _legendDot(const Color(0xFFCF6B6B), 'Weekend', filled: true),
+        const Spacer(),
+        InkWell(
+          borderRadius: BorderRadius.circular(99),
+          onTap: _goToday,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE7F6EF),
+              borderRadius: BorderRadius.circular(99),
+              border: Border.all(color: const Color(0xFFBFE5D5)),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.today_rounded,
+                    size: 13, color: Color(0xFF0F6E52)),
+                SizedBox(width: 5),
+                Text(
+                  'Today',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F6E52),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _legendDot(Color color, String label, {required bool filled}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 11,
+          height: 11,
+          decoration: BoxDecoration(
+            color: filled ? color : Colors.transparent,
+            shape: BoxShape.circle,
+            border: Border.all(color: color, width: 1.6),
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF64726B),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class DateAttendanceModal extends StatefulWidget {
