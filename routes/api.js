@@ -1,5 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
+const bcrypt = require('bcrypt');
 const path = require('path');
 const multer = require('multer');
 const router = express.Router();
@@ -270,6 +271,48 @@ function normalizeKioskScanTime(value) {
     };
 }
 
+// POST /api/scanner-admin-login
+// Validates admin credentials from the desktop scanner settings screen.
+// Uses the same accounts as the Web Admin Dashboard — no separate kiosk accounts.
+router.post('/scanner-admin-login', async (req, res) => {
+    const username = String(req.body?.username || '').trim();
+    const password = String(req.body?.password || '');
+    if (!username || !password) {
+        return res.status(400).json({ success: false, error: 'Username and password are required.' });
+    }
+    try {
+        const [rows] = await db.query(
+            "SELECT id, username, fullname, role, school_id, password FROM users WHERE username = ? AND status = 'active'",
+            [username]
+        );
+        if (!rows.length) {
+            return res.json({ success: false, error: 'Invalid username or password.' });
+        }
+        const user = rows[0];
+        const allowedRoles = ['super_admin', 'superintendent', 'asst_superintendent', 'principal'];
+        if (!allowedRoles.includes(user.role)) {
+            return res.json({ success: false, error: 'Access denied. An administrator account is required to configure scanner settings.' });
+        }
+        const match = await bcrypt.compare(password, user.password);
+        if (!match) {
+            return res.json({ success: false, error: 'Invalid username or password.' });
+        }
+        return res.json({
+            success: true,
+            admin: {
+                id: user.id,
+                username: user.username,
+                fullname: user.fullname,
+                role: user.role,
+                school_id: user.school_id
+            }
+        });
+    } catch (err) {
+        console.error('Scanner admin login error:', err);
+        return res.status(500).json({ success: false, error: 'Server error during authentication. Please try again.' });
+    }
+});
+
 router.get('/scanner-desktop-config', async (req, res) => {
     try {
         const schoolId = normalizeOptionalSchoolId(req.query.school_id);
@@ -297,7 +340,7 @@ router.get('/scanner-desktop-config', async (req, res) => {
         settingsRows.forEach(row => { settings[row.setting_key] = row.setting_value; });
 
         const [[schools], summary] = await Promise.all([
-            db.query("SELECT id, name FROM schools WHERE status = 'active' ORDER BY name"),
+            db.query("SELECT id, name, logo FROM schools WHERE status = 'active' ORDER BY name"),
             getScannerDesktopSummary(schoolId)
         ]);
 
@@ -836,6 +879,16 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
         // Reject deleted persons
         if (person.person_status === 'deleted') {
             return res.json({ success: false, error: 'This person has been removed from the system.' });
+        }
+
+        // Enforce scanner school assignment — reject persons from other schools
+        const scannerSchoolId = normalizeOptionalSchoolId(req.body.scanner_school_id);
+        if (scannerSchoolId && Number(person.school_id) !== Number(scannerSchoolId)) {
+            return res.json({
+                success: false,
+                error: `This scanner is assigned to a different school. "${person.school_name || 'This person'}" belongs to another school and cannot be scanned here.`,
+                wrong_school: true
+            });
         }
 
         const schoolDay = await checkSchoolDay(today, person.school_id);

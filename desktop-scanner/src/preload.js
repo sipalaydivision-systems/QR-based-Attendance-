@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('edutrack', {
   submitScan: (payload) => ipcRenderer.invoke('scan:submit', payload),
   syncQueue: () => ipcRenderer.invoke('queue:sync'),
   getQueue: () => ipcRenderer.invoke('queue:get'),
+  adminLogin: (credentials) => ipcRenderer.invoke('admin:login', credentials),
   toggleFullscreen: () => ipcRenderer.invoke('app:fullscreen'),
   minimize: () => ipcRenderer.invoke('app:minimize'),
   openExternal: (url) => ipcRenderer.invoke('app:open-external', url),

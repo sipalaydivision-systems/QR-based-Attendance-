@@ -653,8 +653,10 @@ async function refreshSchoolDayStatus(dateKey = localDateString()) {
 async function postScan(payload) {
   const settings = await ensureKioskToken();
   const serverUrl = normalizeServerUrl(settings.serverUrl);
+  const assignedSchoolId = String(settings.selectedSchoolId || '').trim();
   const body = {
     qr_code: payload.qrCode,
+    scanner_school_id: assignedSchoolId || null,
     require_time_out_confirmation: !!payload.requireTimeOutConfirmation,
     confirm_time_out: !!payload.confirmTimeOut
   };
@@ -772,6 +774,19 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
       success: false,
       offline: true,
       error: 'This person has been removed from the system.',
+      person: personResponseFromCache(person)
+    };
+  }
+
+  // Enforce scanner school assignment for offline scans
+  const offlineSettings = loadSettings();
+  const assignedSchoolId = String(offlineSettings.selectedSchoolId || '').trim();
+  if (assignedSchoolId && String(person.schoolId || '') !== assignedSchoolId) {
+    return {
+      success: false,
+      offline: true,
+      error: `This scanner is assigned to a different school. "${person.name || 'This person'}" belongs to another school and cannot be scanned here.`,
+      wrong_school: true,
       person: personResponseFromCache(person)
     };
   }
@@ -1248,6 +1263,21 @@ ipcMain.handle('settings:save', async (_event, nextSettings) => {
 
 ipcMain.handle('connection:check', async () => refreshConnectionState({ trigger: 'manual-check', forceDirectory: true, syncIfPossible: true }));
 ipcMain.handle('scan:submit', async (_event, payload) => submitScan(payload));
+ipcMain.handle('admin:login', async (_event, { username, password }) => {
+  try {
+    const settings = loadSettings();
+    const serverUrl = normalizeServerUrl(settings.serverUrl);
+    const res = await fetchWithTimeout(`${serverUrl}/api/scanner-admin-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: String(username || ''), password: String(password || '') })
+    }, 10000);
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    return { success: false, error: err.message || 'Unable to connect to server. Check your internet connection and server URL.' };
+  }
+});
 ipcMain.handle('queue:sync', async () => syncOfflineQueue({ trigger: 'manual' }));
 ipcMain.handle('queue:get', async () => currentDashboard());
 ipcMain.handle('app:fullscreen', async () => {

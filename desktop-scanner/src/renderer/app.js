@@ -27,7 +27,12 @@ const state = {
   syncInProgress: false,
   lastHistoryId: '',
   initialized: false,
-  scanModalTimer: null
+  scanModalTimer: null,
+  // Admin authentication for settings access
+  adminAuthenticated: false,
+  adminInfo: null,
+  adminAuthExpiry: 0,
+  pendingAdminCallback: null
 };
 
 const $ = (id) => document.getElementById(id);
@@ -151,6 +156,27 @@ function refreshAssignedSchool() {
   $('assignedSchoolDetail').textContent = schoolName
     ? 'Desktop scanner is assigned to this school.'
     : 'Configured for division-wide attendance scanning.';
+}
+
+function applyAssignedSchoolHeader(settings) {
+  const selected = String(settings.selectedSchoolId || '').trim();
+  const school = (settings.schools || []).find((s) => String(s.id) === selected);
+  const headerEl = $('assignedSchoolHeader');
+  if (!headerEl) return;
+
+  if (school) {
+    const logoEl   = $('schoolLogoImg');
+    const nameEl   = $('schoolNameHeader');
+    const subEl    = $('schoolSubHeader');
+    const logoSrc  = resolveAssetUrl(school.logo) || LOCAL_LOGO_URL;
+    logoEl.src     = logoSrc;
+    logoEl.onerror = function () { this.onerror = null; this.src = LOCAL_LOGO_URL; };
+    nameEl.textContent = school.name.toUpperCase();
+    subEl.textContent  = `This Scanner is Assigned to ${school.name}`;
+    headerEl.classList.remove('hidden');
+  } else {
+    headerEl.classList.add('hidden');
+  }
 }
 
 function updateQueue(count) {
@@ -314,6 +340,7 @@ function applySettings(settings, options = {}) {
   applyBrand(state.settings);
   populateSchools(state.settings);
   refreshAssignedSchool();
+  applyAssignedSchoolHeader(state.settings);
 
   $('serverUrlInput').value = state.settings.serverUrl || '';
   $('duplicateInput').value = state.settings.duplicateIntervalSeconds || 5;
@@ -1059,15 +1086,99 @@ function normalizeScanInput(value) {
   }
 }
 
+// ── Admin Authentication ──────────────────────────────────────────────────────
+
+function isAdminSessionValid() {
+  return state.adminAuthenticated && Date.now() < state.adminAuthExpiry;
+}
+
+function openAdminAuthModal(onSuccess) {
+  state.pendingAdminCallback = onSuccess;
+  $('adminAuthError').textContent = '';
+  $('adminUsernameInput').value = '';
+  $('adminPasswordInput').value = '';
+  $('adminLoginBtn').disabled = false;
+  $('adminLoginSpinner').classList.add('hidden');
+  const modal = $('adminAuthModal');
+  modal.classList.remove('hidden');
+  void modal.offsetHeight;
+  modal.classList.add('visible');
+  setTimeout(() => $('adminUsernameInput').focus(), 80);
+}
+
+function closeAdminAuthModal() {
+  const modal = $('adminAuthModal');
+  modal.classList.remove('visible');
+  setTimeout(() => modal.classList.add('hidden'), 260);
+  state.pendingAdminCallback = null;
+}
+
+async function submitAdminLogin() {
+  const username = ($('adminUsernameInput').value || '').trim();
+  const password = $('adminPasswordInput').value || '';
+  if (!username || !password) {
+    $('adminAuthError').textContent = 'Please enter your admin username and password.';
+    return;
+  }
+  const btn = $('adminLoginBtn');
+  const spinner = $('adminLoginSpinner');
+  btn.disabled = true;
+  spinner.classList.remove('hidden');
+  $('adminAuthError').textContent = '';
+
+  const result = await api.adminLogin({ username, password });
+
+  btn.disabled = false;
+  spinner.classList.add('hidden');
+
+  if (result.success) {
+    state.adminAuthenticated = true;
+    state.adminInfo = result.admin;
+    state.adminAuthExpiry = Date.now() + (30 * 60 * 1000); // 30-minute session
+    const cb = state.pendingAdminCallback;
+    closeAdminAuthModal();
+    if (cb) cb();
+  } else {
+    $('adminAuthError').textContent = result.error || 'Authentication failed. Please try again.';
+    $('adminPasswordInput').value = '';
+    $('adminPasswordInput').focus();
+  }
+}
+
+// ── Settings Drawer ───────────────────────────────────────────────────────────
+
+function _openSettingsDrawer() {
+  const drawer = $('settingsDrawer');
+  drawer.classList.add('open');
+  drawer.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('settings-open');
+  const infoBar = $('adminInfoBar');
+  if (state.adminInfo && infoBar) {
+    const roleLabel = { super_admin: 'Super Admin', superintendent: 'Superintendent', asst_superintendent: 'Asst. Superintendent', principal: 'Principal' };
+    infoBar.textContent = `Signed in as ${state.adminInfo.fullname} · ${roleLabel[state.adminInfo.role] || state.adminInfo.role}`;
+    infoBar.classList.remove('hidden');
+  }
+}
+
+function openSettings() {
+  if (isAdminSessionValid()) {
+    _openSettingsDrawer();
+  } else {
+    openAdminAuthModal(_openSettingsDrawer);
+  }
+}
+
 function closeSettings() {
   const drawer = $('settingsDrawer');
   drawer.classList.remove('open');
-  drawer.style.opacity = '';
-  drawer.style.pointerEvents = '';
-  drawer.style.background = '';
-  drawer.style.backdropFilter = '';
   document.body.classList.remove('settings-open');
   drawer.setAttribute('aria-hidden', 'true');
+  // Revoke admin session on every settings close — require re-auth each time
+  state.adminAuthenticated = false;
+  state.adminInfo = null;
+  state.adminAuthExpiry = 0;
+  const infoBar = $('adminInfoBar');
+  if (infoBar) infoBar.classList.add('hidden');
 }
 
 async function saveSettingsFromForm() {
@@ -1190,6 +1301,18 @@ function bindEvents() {
   bindClick('settingsBtn', openSettings);
   bindClick('closeSettingsBtn', closeSettings);
   bindClick('drawerBackdrop', closeSettings);
+  // Admin auth modal
+  bindClick('cancelAdminLoginBtn', closeAdminAuthModal);
+  bindClick('adminLoginBtn', submitAdminLogin);
+  $('adminPasswordInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submitAdminLogin();
+  });
+  $('adminUsernameInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') $('adminPasswordInput').focus();
+  });
+  $('adminAuthModal').addEventListener('click', (e) => {
+    if (e.target.id === 'adminAuthModal') closeAdminAuthModal();
+  });
   bindClick('saveSettingsBtn', saveSettingsFromForm);
   bindClick('testServerBtn', testConnection);
   bindClick('syncBtn', syncQueue);

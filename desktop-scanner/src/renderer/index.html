@@ -11,10 +11,18 @@
     <header class="topbar">
       <div class="brand">
         <div class="brand-logo" id="brandLogo"><img src="../assets/edutrack-scanner.png" alt="Edutrack logo"></div>
-        <div>
+        <div class="brand-text">
           <span class="division-tag" id="divisionName">Schools Division of Sipalay City</span>
           <h1>Edutrack Scanner</h1>
           <p id="brandName" class="visually-hidden"></p>
+        </div>
+      </div>
+      <!-- Assigned school display — shown only when a school is selected -->
+      <div class="assigned-school-header hidden" id="assignedSchoolHeader">
+        <img id="schoolLogoImg" src="" alt="School logo" class="school-logo-img">
+        <div class="assigned-school-info">
+          <strong id="schoolNameHeader"></strong>
+          <span id="schoolSubHeader"></span>
         </div>
       </div>
 
@@ -193,6 +201,41 @@
       </aside>
     </main>
 
+    <!-- Admin Authentication Modal -->
+    <div class="admin-auth-overlay hidden" id="adminAuthModal" role="dialog" aria-modal="true" aria-labelledby="adminAuthTitle">
+      <div class="admin-auth-card">
+        <div class="admin-auth-head">
+          <div class="admin-auth-shield" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              <polyline points="9 12 11 14 15 10"/>
+            </svg>
+          </div>
+          <div>
+            <h2 id="adminAuthTitle">Admin Required</h2>
+            <p>Scanner settings are protected. Sign in with your Edutrack admin account.</p>
+          </div>
+        </div>
+        <div id="adminAuthError" class="admin-auth-error" role="alert" aria-live="polite"></div>
+        <label class="admin-auth-label">
+          Username
+          <input id="adminUsernameInput" type="text" autocomplete="username" placeholder="Admin username" spellcheck="false">
+        </label>
+        <label class="admin-auth-label">
+          Password
+          <input id="adminPasswordInput" type="password" autocomplete="current-password" placeholder="Admin password">
+        </label>
+        <div class="admin-auth-actions">
+          <button class="secondary" id="cancelAdminLoginBtn">Cancel</button>
+          <button class="primary" id="adminLoginBtn">
+            <span class="btn-spinner hidden" id="adminLoginSpinner" aria-hidden="true"></span>
+            Verify &amp; Open Settings
+          </button>
+        </div>
+        <p class="admin-auth-note">Use the same credentials as the Edutrack Web Admin Dashboard. Only administrators can change scanner configuration.</p>
+      </div>
+    </div>
+
     <div class="settings-drawer" id="settingsDrawer" aria-hidden="true">
       <div class="drawer-backdrop" id="drawerBackdrop"></div>
       <section class="drawer-card">
@@ -203,6 +246,8 @@
           </div>
           <button class="icon-button" id="closeSettingsBtn" title="Close settings" aria-label="Close settings">&times;</button>
         </div>
+        <!-- Admin session info bar -->
+        <div class="admin-info-bar hidden" id="adminInfoBar" aria-live="polite"></div>
 
         <label>
           Server URL

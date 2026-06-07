@@ -37,14 +37,18 @@
   var SETTINGS = {
     serverUrl:                 'https://school-attendance-qrbased.up.railway.app',
     scannerMode:               'usb',
-    selectedSchoolId:          '',
+    selectedSchoolId:          '1',
     duplicateIntervalSeconds:  5,
     autoStart:                 false,
     startFullscreen:           false,
     minimizeToTray:            false,
     offlineSync:               true,
     divisionName:              'Schools Division of Sipalay City',
-    schools:                   []
+    schools:                   [
+      { id: 1, name: 'Agripino Elementary School', logo: null },
+      { id: 2, name: 'Canturay Elementary School', logo: null },
+      { id: 3, name: 'Sipalay City National High School', logo: null }
+    ]
   };
 
   var BASE_STATUS = {
@@ -98,6 +102,13 @@
 
   /* ── Mock API ── */
   window.edutrack = {
+    adminLogin: async function (creds) {
+      if (!creds.username || !creds.password) return { success: false, error: 'Username and password are required.' };
+      if (creds.username === 'admin' && creds.password === 'admin') {
+        return { success: true, admin: { id: 1, username: 'admin', fullname: 'Preview Administrator', role: 'super_admin', school_id: null } };
+      }
+      return { success: false, error: 'Invalid username or password.' };
+    },
     submitScan: async function () {
       var result = DEMO_ACTIONS[_demoIdx % DEMO_ACTIONS.length]();
       _demoIdx++;
