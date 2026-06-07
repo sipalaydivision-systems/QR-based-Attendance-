@@ -24,11 +24,46 @@ function ensureParentDir(filePath) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
 }
 
+let pendingSaveTimer = null;
+
 function saveDatabase() {
   if (!db || !databaseFile) return;
+  // A real write is happening now — cancel any scheduled deferred save
+  if (pendingSaveTimer) {
+    clearTimeout(pendingSaveTimer);
+    pendingSaveTimer = null;
+  }
   ensureParentDir(databaseFile);
   const data = db.export();
   fs.writeFileSync(databaseFile, Buffer.from(data));
+}
+
+// Coalesce non-critical writes (e.g. person-cache upserts) so we don't
+// re-serialize the entire database to disk on every single scan. The data
+// is already committed in-memory; this only delays the disk flush. Critical
+// writes (attendance) call saveDatabase() directly and also flush this.
+function scheduleSave(delayMs = 1200) {
+  if (pendingSaveTimer) return;
+  pendingSaveTimer = setTimeout(() => {
+    pendingSaveTimer = null;
+    try {
+      saveDatabase();
+    } catch (err) {
+      console.warn('Deferred database save failed:', err.message);
+    }
+  }, delayMs);
+}
+
+// Synchronous flush — call before the app quits so nothing is lost.
+function flushPendingSave() {
+  if (!pendingSaveTimer) return;
+  clearTimeout(pendingSaveTimer);
+  pendingSaveTimer = null;
+  try {
+    saveDatabase();
+  } catch (err) {
+    console.warn('Flush database save failed:', err.message);
+  }
 }
 
 function run(sql, params = []) {
@@ -57,12 +92,20 @@ function get(sql, params = []) {
   return all(sql, params)[0] || null;
 }
 
-function transaction(work) {
+function transaction(work, options = {}) {
+  // persist:true (default) → write to disk immediately (critical data).
+  // persist:false → commit in-memory now, flush to disk shortly after
+  //   (used for reconstructable cache data to keep scans snappy).
+  const persist = options.persist !== false;
   db.exec('BEGIN');
   try {
     const result = work();
     db.exec('COMMIT');
-    saveDatabase();
+    if (persist) {
+      saveDatabase();
+    } else {
+      scheduleSave();
+    }
     return result;
   } catch (error) {
     db.exec('ROLLBACK');
@@ -318,17 +361,21 @@ function writePersonCacheRecord(rawPerson, cachedAt) {
 
 function upsertPeople(people, cachedAt = nowSql()) {
   if (!Array.isArray(people) || people.length === 0) return 0;
+  // persist:false — person cache is reconstructable from the server, so we
+  // defer the disk flush to keep scans snappy (no full DB export per scan).
   return transaction(() => {
     let count = 0;
     for (const rawPerson of people) {
       if (writePersonCacheRecord(rawPerson, cachedAt)) count += 1;
     }
     return count;
-  });
+  }, { persist: false });
 }
 
 function replacePeopleCache(people, cachedAt = nowSql(), options = {}) {
   const schoolId = Number(options.schoolId || 0) || null;
+  // persist:false — directory cache is reconstructable from the server, so
+  // defer the disk flush to keep startup/sync smooth.
   return transaction(() => {
     if (schoolId) {
       run("UPDATE people_cache SET person_status = 'deleted', cached_at = ? WHERE school_id = ?", [cachedAt, schoolId]);
@@ -341,7 +388,7 @@ function replacePeopleCache(people, cachedAt = nowSql(), options = {}) {
       if (writePersonCacheRecord(rawPerson, cachedAt)) count += 1;
     }
     return count;
-  });
+  }, { persist: false });
 }
 
 function getPersonByQrCode(qrCode) {
@@ -735,5 +782,6 @@ module.exports = {
   recordSyncHistoryFinish,
   getRecentSyncHistory,
   getDashboard,
-  importLegacyQueue
+  importLegacyQueue,
+  flushPendingSave
 };

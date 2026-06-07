@@ -16,6 +16,7 @@ const state = {
   lastUsbKeyAt: 0,
   usbSubmitTimer: null,
   usbFocusInterval: null,
+  usbFocusOutHandler: null,
   busy: false,
   todayKey: currentDayKey(),
   serverTodayScanCount: 0,
@@ -1026,27 +1027,48 @@ async function stopCamera() {
   state.cameraRunning = false;
 }
 
+function shouldHoldUsbFocus() {
+  if (state.scannerMode !== 'usb') return false;
+  if ($('settingsDrawer')?.classList.contains('open')) return false;
+  // Never steal focus while the admin login modal is open
+  if ($('adminAuthModal')?.classList.contains('visible')) return false;
+  // Never steal focus while the user is typing in another field
+  const active = document.activeElement;
+  if (isEditable(active) && active.id !== 'usbInput') return false;
+  return true;
+}
+
+function keepUsbFocused() {
+  if (!shouldHoldUsbFocus()) return;
+  const inp = $('usbInput');
+  if (inp && document.activeElement !== inp) inp.focus();
+}
+
 function clearUsbFocusLock() {
   if (state.usbFocusInterval) {
     clearInterval(state.usbFocusInterval);
     state.usbFocusInterval = null;
   }
+  if (state.usbFocusOutHandler) {
+    document.removeEventListener('focusout', state.usbFocusOutHandler);
+    state.usbFocusOutHandler = null;
+  }
 }
 
 function startUsbFocusLock() {
   clearUsbFocusLock();
-  const keepFocused = () => {
-    if ($('settingsDrawer')?.classList.contains('open')) return;
-    // Never steal focus while the admin login modal is open
-    if ($('adminAuthModal')?.classList.contains('visible')) return;
-    // Never steal focus while the user is typing in another field (admin, settings, etc.)
-    const active = document.activeElement;
-    if (isEditable(active) && active.id !== 'usbInput') return;
-    const inp = $('usbInput');
-    if (inp && document.activeElement !== inp) inp.focus();
+  keepUsbFocused();
+  // Event-driven: re-focus the instant the hidden input loses focus.
+  // This is more responsive than polling AND avoids constant CPU wakeups,
+  // so scanning stays smooth.
+  state.usbFocusOutHandler = (event) => {
+    if (event.target && event.target.id !== 'usbInput') return;
+    // Defer so the new focus target settles, then reclaim if appropriate.
+    requestAnimationFrame(keepUsbFocused);
   };
-  keepFocused();
-  state.usbFocusInterval = setInterval(keepFocused, 400);
+  document.addEventListener('focusout', state.usbFocusOutHandler);
+  // Slow safety-net (was 400ms) to catch edge cases without churn.
+  state.usbFocusInterval = setInterval(keepUsbFocused, 2000);
 }
 
 async function setMode(mode, persist = true) {

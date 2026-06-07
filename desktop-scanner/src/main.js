@@ -19,7 +19,8 @@ const {
   recordSyncHistoryStart,
   recordSyncHistoryFinish,
   getDashboard,
-  importLegacyQueue
+  importLegacyQueue,
+  flushPendingSave
 } = require('./offlineStore');
 
 const APP_TITLE = 'Edutrack Scanner';
@@ -1338,6 +1339,12 @@ if (!hasSingleInstanceLock) {
 
 app.on('before-quit', () => {
   isQuitting = true;
+  // Flush any deferred cache writes to disk so nothing is lost on exit
+  try {
+    flushPendingSave();
+  } catch (err) {
+    console.warn('Flush on quit failed:', err.message);
+  }
 });
 
 app.on('window-all-closed', () => {
