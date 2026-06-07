@@ -679,6 +679,15 @@ function renderLocalScans(scans = []) {
 }
 
 function schoolDayText(status) {
+  // Always detect weekends from the real local date — works even when offline
+  const dayOfWeek = new Date().getDay(); // 0 = Sunday, 6 = Saturday
+  if (dayOfWeek === 0 || dayOfWeek === 6) {
+    return {
+      title: 'Weekend',
+      message: 'Classes are not scheduled today. Attendance scanning is not required.'
+    };
+  }
+
   if (!status || status.isSchoolDay !== false) {
     return null;
   }
