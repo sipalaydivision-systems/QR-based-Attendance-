@@ -625,11 +625,9 @@ function renderLocalScans(scans = []) {
   const empty = $('localScanEmpty');
   rows.innerHTML = '';
 
-  const localScans = Array.isArray(scans) ? scans : [];
+  // Show only the 6 most recent scans from this device — newest first
+  const localScans = Array.isArray(scans) ? scans.slice(0, 6) : [];
   empty.classList.toggle('hidden', localScans.length > 0);
-
-  const counter = $('scanCountValue');
-  if (counter) counter.textContent = String(localScans.length);
 
   localScans.forEach((scan) => {
     const tr = document.createElement('tr');

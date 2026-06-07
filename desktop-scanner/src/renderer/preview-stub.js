@@ -26,9 +26,12 @@
   };
 
   var SAMPLE_SCANS = [
-    { name: 'Juan Dela Cruz',  gradeLevel: 'Grade 3', sectionName: 'Apple',   schoolName: 'Agripino Elementary', scanTime: new Date().toISOString(), eventAction: 'TIME_IN'  },
-    { name: 'Maria Santos',    gradeLevel: '',         sectionName: '',         schoolName: 'Agripino Elementary', scanTime: new Date().toISOString(), eventAction: 'TIME_IN'  },
-    { name: 'Pedro Reyes',     gradeLevel: 'Grade 5', sectionName: 'Mango',   schoolName: 'Agripino Elementary', scanTime: new Date().toISOString(), eventAction: 'TIME_OUT' }
+    { name: 'Juan Dela Cruz',       gradeLevel: 'Grade 3', sectionName: 'Apple',    schoolName: 'Agripino Elementary School', scanTime: new Date().toISOString(), eventAction: 'TIME_IN'  },
+    { name: 'Maria Santos',         gradeLevel: '',         sectionName: '',          schoolName: 'Agripino Elementary School', scanTime: new Date().toISOString(), eventAction: 'TIME_IN'  },
+    { name: 'Pedro Reyes',          gradeLevel: 'Grade 5', sectionName: 'Mango',    schoolName: 'Agripino Elementary School', scanTime: new Date().toISOString(), eventAction: 'TIME_OUT' },
+    { name: 'Ana Liza Buenaventura',gradeLevel: 'Grade 6', sectionName: 'Sampaguita',schoolName: 'Agripino Elementary School', scanTime: new Date().toISOString(), eventAction: 'TIME_IN'  },
+    { name: 'Carlo Villanueva',     gradeLevel: 'Grade 4', sectionName: 'Rose',     schoolName: 'Agripino Elementary School', scanTime: new Date().toISOString(), eventAction: 'TIME_IN'  },
+    { name: 'Rosa Fernandez',       gradeLevel: 'Grade 2', sectionName: 'Lily',     schoolName: 'Agripino Elementary School', scanTime: new Date().toISOString(), eventAction: 'TIME_IN'  }
   ];
 
   var SETTINGS = {
