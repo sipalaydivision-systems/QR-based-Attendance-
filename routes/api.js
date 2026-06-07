@@ -1205,6 +1205,69 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
 });
 
 // =============================================
+// GET /api/weekly-absence
+// Lightweight: returns Mon-Fri absent counts for the week containing `date`
+// in ONE call (replaces 5 heavy /dashboard-data calls from the mobile app).
+// =============================================
+const weeklyAbsenceCache = { data: null, timestamp: 0, key: '' };
+
+router.get('/weekly-absence', requireAuth, async (req, res) => {
+    try {
+        const baseDate = req.query.date || todayDate();
+        const schoolId = applySchoolFilter(req);
+
+        // Compute Monday→Friday of the week containing baseDate
+        const fmt = (dt) => {
+            const y = dt.getFullYear();
+            const m = String(dt.getMonth() + 1).padStart(2, '0');
+            const dd = String(dt.getDate()).padStart(2, '0');
+            return `${y}-${m}-${dd}`;
+        };
+        const d = new Date(baseDate + 'T00:00:00');
+        const dow = d.getDay(); // 0 = Sun
+        const mondayOffset = dow === 0 ? -6 : 1 - dow;
+        const monday = new Date(d);
+        monday.setDate(monday.getDate() + mondayOffset);
+
+        const days = [];
+        for (let i = 0; i < 5; i++) {
+            const day = new Date(monday);
+            day.setDate(day.getDate() + i);
+            days.push(fmt(day));
+        }
+
+        const cacheKey = `${days[0]}-${schoolId || 'all'}`;
+        // Cache for 60s — weekly data changes slowly
+        if (weeklyAbsenceCache.key === cacheKey && (Date.now() - weeklyAbsenceCache.timestamp) < 60000) {
+            return res.json(weeklyAbsenceCache.data);
+        }
+
+        const week = [];
+        for (const dayDate of days) {
+            const schoolDay = await checkSchoolDay(dayDate, schoolId);
+            const absent = schoolDay.isSchoolDay
+                ? await countStudentsWithoutTimeIn(dayDate, schoolId)
+                : 0;
+            week.push({
+                date: dayDate,
+                is_school_day: schoolDay.isSchoolDay,
+                students_absent: absent
+            });
+        }
+
+        const payload = { week };
+        weeklyAbsenceCache.data = payload;
+        weeklyAbsenceCache.timestamp = Date.now();
+        weeklyAbsenceCache.key = cacheKey;
+
+        return res.json(payload);
+    } catch (err) {
+        console.error('Weekly absence error:', err);
+        return res.status(500).json({ error: 'Failed to load weekly absence data.' });
+    }
+});
+
+// =============================================
 // GET /api/division-weekly-trend
 // =============================================
 router.get('/division-weekly-trend', requireAuth, async (req, res) => {

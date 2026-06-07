@@ -1091,8 +1091,9 @@ class _HomeShellState extends State<HomeShell>
       duration: const Duration(seconds: 9),
     )..repeat();
     load();
+    // Poll every 30s (was 6s) — 5× less data while still feeling live
     timer = Timer.periodic(
-      const Duration(seconds: 6),
+      const Duration(seconds: 30),
       (_) => load(silent: true),
     );
   }
@@ -3757,15 +3758,21 @@ class _WeeklyAbsenceAnalyticsState extends State<WeeklyAbsenceAnalytics> {
     }
     try {
       final days = weekdayDatesOfWeek(date());
-      final futures = days
-          .map((d) => widget.api.map('/api/dashboard-data?date=$d'))
-          .toList();
-      final results = await Future.wait(futures);
+      // Single lightweight call returns all 5 weekday absent counts
+      final data = await widget.api.map('/api/weekly-absence?date=${date()}');
+      final rawWeek = (data['week'] as List?) ?? const [];
+      // Index server results by date for safe lookup
+      final byDate = <String, Map<String, dynamic>>{};
+      for (final item in rawWeek) {
+        if (item is Map) {
+          byDate['${item['date']}'] = Map<String, dynamic>.from(item);
+        }
+      }
       final built = <Map<String, dynamic>>[];
       for (var i = 0; i < days.length; i++) {
-        final data = results[i];
-        final isSchoolDay = data['is_school_day'] == true;
-        final absent = isSchoolDay ? intValue(data['students_absent']) : 0;
+        final server = byDate[days[i]];
+        final isSchoolDay = server?['is_school_day'] == true;
+        final absent = isSchoolDay ? intValue(server?['students_absent']) : 0;
         built.add({
           'date': days[i],
           'label': weekdayShort(days[i]),
@@ -4688,7 +4695,7 @@ class SchoolLeaderboard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
               child: _TopSchoolCard(
-                name: '${(shown[0] as Map)['name'] ?? 'School'}',
+                school: shown[0] as Map,
                 rate: intValue((shown[0] as Map)['rate']),
               ),
             ),
@@ -4701,7 +4708,7 @@ class SchoolLeaderboard extends StatelessWidget {
                 for (var i = 1; i < shown.length; i++)
                   _SchoolRankRow(
                     rank: i + 1,
-                    name: '${(shown[i] as Map)['name'] ?? 'School'}',
+                    school: shown[i] as Map,
                     rate: intValue((shown[i] as Map)['rate']),
                     medalColor: i < 3 ? _medalColors[i] : null,
                   ),
@@ -4715,14 +4722,15 @@ class SchoolLeaderboard extends StatelessWidget {
 }
 
 class _TopSchoolCard extends StatelessWidget {
-  const _TopSchoolCard({required this.name, required this.rate});
-  final String name;
+  const _TopSchoolCard({required this.school, required this.rate});
+  final Map school;
   final int rate;
 
   @override
   Widget build(BuildContext context) {
     final clamped = clampPercent(rate);
     final accent = attendanceScoreColor(clamped);
+    final name = '${school['name'] ?? 'School'}';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
@@ -4739,15 +4747,49 @@ class _TopSchoolCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: const Color(0xFFD4A017).withValues(alpha: .15),
-              shape: BoxShape.circle,
-            ),
-            child: const Center(
-              child: Text('🏆', style: TextStyle(fontSize: 18)),
+          // School logo with a gold #1 rank badge
+          SizedBox(
+            width: 46,
+            height: 46,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFFD4A017),
+                      width: 2,
+                    ),
+                  ),
+                  child: SchoolLogoAvatar(school, size: 42),
+                ),
+                Positioned(
+                  bottom: -4,
+                  right: -4,
+                  child: Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD4A017),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFD4A017).withValues(alpha: .4),
+                          blurRadius: 4,
+                        ),
+                      ],
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.emoji_events_rounded,
+                      size: 12,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 12),
@@ -4826,12 +4868,12 @@ class _TopSchoolCard extends StatelessWidget {
 class _SchoolRankRow extends StatelessWidget {
   const _SchoolRankRow({
     required this.rank,
-    required this.name,
+    required this.school,
     required this.rate,
     this.medalColor,
   });
   final int rank;
-  final String name;
+  final Map school;
   final int rate;
   final Color? medalColor;
 
@@ -4839,30 +4881,47 @@ class _SchoolRankRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final clamped = clampPercent(rate);
     final accent = attendanceScoreColor(clamped);
+    final name = '${school['name'] ?? 'School'}';
+    final badgeColor = medalColor ?? const Color(0xFF64726B);
     return Padding(
       padding: const EdgeInsets.only(top: 10),
       child: Row(
         children: [
-          Container(
-            width: 26,
-            height: 26,
-            decoration: BoxDecoration(
-              color: (medalColor ?? const Color(0xFFE5EEE9))
-                  .withValues(alpha: .25),
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                '#$rank',
-                style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w900,
-                  color: medalColor ?? const Color(0xFF64726B),
+          // School logo with a small rank-number badge
+          SizedBox(
+            width: 38,
+            height: 38,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                SchoolLogoAvatar(school, size: 36),
+                Positioned(
+                  bottom: -3,
+                  right: -3,
+                  child: Container(
+                    width: 17,
+                    height: 17,
+                    decoration: BoxDecoration(
+                      color: badgeColor,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      '$rank',
+                      style: const TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        height: 1,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
