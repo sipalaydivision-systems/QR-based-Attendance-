@@ -1037,6 +1037,11 @@ function startUsbFocusLock() {
   clearUsbFocusLock();
   const keepFocused = () => {
     if ($('settingsDrawer')?.classList.contains('open')) return;
+    // Never steal focus while the admin login modal is open
+    if ($('adminAuthModal')?.classList.contains('visible')) return;
+    // Never steal focus while the user is typing in another field (admin, settings, etc.)
+    const active = document.activeElement;
+    if (isEditable(active) && active.id !== 'usbInput') return;
     const inp = $('usbInput');
     if (inp && document.activeElement !== inp) inp.focus();
   };
@@ -1271,6 +1276,9 @@ function scheduleUsbAutoSubmit() {
 
 function handleUsbKeydown(event) {
   if (state.scannerMode !== 'usb') return;
+  // Ignore scanner capture while the admin login modal or settings drawer is open
+  if ($('adminAuthModal')?.classList.contains('visible')) return;
+  if ($('settingsDrawer')?.classList.contains('open')) return;
   if (isEditable(event.target) && event.target.id !== 'usbInput') return;
 
   const now = Date.now();
