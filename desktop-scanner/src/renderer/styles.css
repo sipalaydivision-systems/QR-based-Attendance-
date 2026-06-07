@@ -1197,10 +1197,7 @@ body.settings-open .side-panel {
 .school-logo-img {
   width: 36px;
   height: 36px;
-  border-radius: 8px;
   object-fit: contain;
-  background: #fff;
-  border: 1px solid rgba(34,90,56,.15);
   flex-shrink: 0;
 }
 
