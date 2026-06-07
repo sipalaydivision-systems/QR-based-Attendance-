@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Edutrack Scanner desktop attendance application",
   "main": "src/main.js",
-  "author": "Schools Division of Sipalay City",
+  "author": "Wesley Hans Platil",
   "license": "UNLICENSED",
   "private": true,
   "scripts": {
@@ -35,7 +35,9 @@
     "win": {
       "target": "nsis",
       "icon": "src/assets/edutrack-scanner.ico",
-      "artifactName": "Edutrack-Scanner-Setup-${version}.${ext}"
+      "artifactName": "Edutrack-Scanner-Setup-${version}.${ext}",
+      "publisherName": "Wesley Hans Platil",
+      "legalTrademarks": "Wesley Hans Platil"
     },
     "nsis": {
       "oneClick": false,

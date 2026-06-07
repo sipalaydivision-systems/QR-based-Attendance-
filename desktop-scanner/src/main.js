@@ -1320,10 +1320,15 @@ if (!hasSingleInstanceLock) {
     createWindow();
     createTray();
 
-    refreshConnectionState({ trigger: 'startup', forceDirectory: true, syncIfPossible: true }).catch((err) => {
-      console.warn('Initial scanner connection check failed:', err.message);
-      broadcastScannerStatus();
-    });
+    // Defer the first connection/directory sync briefly so the window paints
+    // and stays responsive. Use version-checking (forceDirectory:false) so we
+    // skip the heavy full directory rewrite when nothing changed on the server.
+    setTimeout(() => {
+      refreshConnectionState({ trigger: 'startup', forceDirectory: false, syncIfPossible: true }).catch((err) => {
+        console.warn('Initial scanner connection check failed:', err.message);
+        broadcastScannerStatus();
+      });
+    }, 600);
 
     setInterval(() => {
       refreshConnectionState({ trigger: 'background', syncIfPossible: true }).catch(() => {});
