@@ -681,10 +681,8 @@ function schoolDayText(status) {
   }
 
   if (/saturday|sunday|weekend/.test(combined)) {
-    return {
-      title: 'Weekend',
-      message: 'Classes are not scheduled today. Attendance scanning is not required.'
-    };
+    // Regular weekend — don't show any notice banner
+    return null;
   }
 
   return {
