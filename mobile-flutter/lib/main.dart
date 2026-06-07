@@ -3100,7 +3100,11 @@ class DashboardPage extends StatelessWidget {
     final scoreColor = attendanceScoreColor(rate);
     final scoreLabel = attendanceScoreLabel(rate);
     final schools = (dashboard['schools'] as List?) ?? [];
-    final schoolRates = schools
+    // Sort schools highest attendance rate first
+    final sortedSchools = [...schools]
+      ..sort((a, b) => intValue((b as Map)['rate'])
+          .compareTo(intValue((a as Map)['rate'])));
+    final schoolRates = sortedSchools
         .map((item) => intValue((item as Map)['rate']))
         .toList();
 
@@ -3395,32 +3399,9 @@ class DashboardPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 DailyAttendanceCalendar(api: api),
-                if (schoolRates.isNotEmpty) ...[
+                if (sortedSchools.isNotEmpty) ...[
                   const SizedBox(height: 16),
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Attendance Trend by School',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 100,
-                    child: SchoolTrendChart(
-                      rates: schoolRates.take(10).toList(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  for (final item in schools.take(4))
-                    RateBar(
-                      '${(item as Map)['name'] ?? 'School'}',
-                      intValue(item['rate']),
-                    ),
+                  SchoolLeaderboard(schools: sortedSchools),
                 ],
               ],
             ),
@@ -3737,6 +3718,9 @@ class WeeklyAbsenceAnalytics extends StatefulWidget {
 }
 
 class _WeeklyAbsenceAnalyticsState extends State<WeeklyAbsenceAnalytics> {
+  // Static cache: persists across rebuilds so data shows instantly on re-visit
+  static final Map<String, List<Map<String, dynamic>>> _cache = {};
+
   bool loading = true;
   String? error;
   List<Map<String, dynamic>> week = [];
@@ -3745,7 +3729,13 @@ class _WeeklyAbsenceAnalyticsState extends State<WeeklyAbsenceAnalytics> {
   @override
   void initState() {
     super.initState();
-    load();
+    // Show cached data immediately (no spinner) if available
+    final cacheKey = weekdayDatesOfWeek(date()).first;
+    if (_cache.containsKey(cacheKey)) {
+      week = _cache[cacheKey]!;
+      loading = false;
+    }
+    load(silent: week.isNotEmpty);
     timer = Timer.periodic(
       const Duration(seconds: 90),
       (_) => load(silent: true),
@@ -3785,6 +3775,9 @@ class _WeeklyAbsenceAnalyticsState extends State<WeeklyAbsenceAnalytics> {
         });
       }
       if (!mounted) return;
+      // Save to cache keyed by Monday's date of this week
+      final cacheKey = days.first;
+      _cache[cacheKey] = built;
       setState(() {
         week = built;
         loading = false;
@@ -4628,6 +4621,303 @@ class _AbsentStudentsSheetState extends State<AbsentStudentsSheet> {
     ),
   );
 }
+
+// ── School Leaderboard ─────────────────────────────────────────────────────────
+
+class SchoolLeaderboard extends StatelessWidget {
+  const SchoolLeaderboard({super.key, required this.schools});
+  final List<dynamic> schools;
+
+  static const _medalColors = [
+    Color(0xFFD4A017), // gold
+    Color(0xFF9E9E9E), // silver
+    Color(0xFFCD7F32), // bronze
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = schools.take(6).toList();
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFDCE6E1)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF111827).withValues(alpha: .04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+            child: Row(
+              children: [
+                const Icon(Icons.workspace_premium_rounded,
+                    color: Color(0xFFD4A017), size: 20),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Attendance Rate by School',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14,
+                      color: Color(0xFF1F2937),
+                    ),
+                  ),
+                ),
+                Text(
+                  'Today',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF64726B),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 2),
+          // Top school highlight card
+          if (shown.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+              child: _TopSchoolCard(
+                name: '${(shown[0] as Map)['name'] ?? 'School'}',
+                rate: intValue((shown[0] as Map)['rate']),
+              ),
+            ),
+          ],
+          // Rest of the list
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+            child: Column(
+              children: [
+                for (var i = 1; i < shown.length; i++)
+                  _SchoolRankRow(
+                    rank: i + 1,
+                    name: '${(shown[i] as Map)['name'] ?? 'School'}',
+                    rate: intValue((shown[i] as Map)['rate']),
+                    medalColor: i < 3 ? _medalColors[i] : null,
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TopSchoolCard extends StatelessWidget {
+  const _TopSchoolCard({required this.name, required this.rate});
+  final String name;
+  final int rate;
+
+  @override
+  Widget build(BuildContext context) {
+    final clamped = clampPercent(rate);
+    final accent = attendanceScoreColor(clamped);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFFF0FDF4),
+            const Color(0xFFDCFCE7),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF86EFAC)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: const Color(0xFFD4A017).withValues(alpha: .15),
+              shape: BoxShape.circle,
+            ),
+            child: const Center(
+              child: Text('🏆', style: TextStyle(fontSize: 18)),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '#1 Top School',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF138A64),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                    color: Color(0xFF1F2937),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0, end: clamped / 100),
+                  duration: const Duration(milliseconds: 800),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, value, _) => ClipRRect(
+                    borderRadius: BorderRadius.circular(99),
+                    child: Stack(
+                      children: [
+                        Container(
+                          height: 7,
+                          width: double.infinity,
+                          color: const Color(0xFFBBF7D0),
+                        ),
+                        FractionallySizedBox(
+                          widthFactor: value,
+                          child: Container(
+                            height: 7,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [accent, accent.withValues(alpha: .8)],
+                              ),
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            '$clamped%',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: accent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SchoolRankRow extends StatelessWidget {
+  const _SchoolRankRow({
+    required this.rank,
+    required this.name,
+    required this.rate,
+    this.medalColor,
+  });
+  final int rank;
+  final String name;
+  final int rate;
+  final Color? medalColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final clamped = clampPercent(rate);
+    final accent = attendanceScoreColor(clamped);
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Row(
+        children: [
+          Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              color: (medalColor ?? const Color(0xFFE5EEE9))
+                  .withValues(alpha: .25),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                '#$rank',
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
+                  color: medalColor ?? const Color(0xFF64726B),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1F2937),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0, end: clamped / 100),
+                  duration: const Duration(milliseconds: 700),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, value, _) => ClipRRect(
+                    borderRadius: BorderRadius.circular(99),
+                    child: Stack(
+                      children: [
+                        Container(
+                          height: 6,
+                          width: double.infinity,
+                          color: const Color(0xFFE5EEE9),
+                        ),
+                        FractionallySizedBox(
+                          widthFactor: value,
+                          child: Container(height: 6, color: accent),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            '$clamped%',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              color: accent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 class SchoolTrendChart extends StatelessWidget {
   const SchoolTrendChart({super.key, required this.rates});

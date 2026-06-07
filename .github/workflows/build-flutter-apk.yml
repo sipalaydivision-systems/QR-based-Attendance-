@@ -1,0 +1,68 @@
+name: Build Flutter APK
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'mobile-flutter/lib/**'
+      - 'mobile-flutter/pubspec.yaml'
+      - 'mobile-flutter/pubspec.lock'
+      - 'mobile-flutter/android/**'
+  workflow_dispatch:
+
+concurrency:
+  group: build-flutter-apk
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: stable
+
+      - name: Install Flutter dependencies
+        working-directory: mobile-flutter
+        run: flutter pub get
+
+      - name: Build release APK
+        working-directory: mobile-flutter
+        run: flutter build apk --release
+
+      - name: Copy APK to public/downloads
+        run: |
+          cp mobile-flutter/build/app/outputs/flutter-apk/app-release.apk \
+             public/downloads/school-attendance-division.apk
+          echo "APK size: $(du -sh public/downloads/school-attendance-division.apk)"
+
+      - name: Commit and push updated APK
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/downloads/school-attendance-division.apk
+          if git diff --staged --quiet; then
+            echo "No changes to APK — skipping commit."
+          else
+            git commit -m "chore: auto-rebuild Flutter APK [skip ci]"
+            git push
+            echo "APK updated and pushed."
+          fi
