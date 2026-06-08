@@ -648,13 +648,24 @@ function showScanFeedback(title, message, tone = 'success', data = {}) {
   }
 }
 
+// Fingerprint of the last rendered scan list — prevents constant DOM thrashing
+// when the main process fires status events with identical data.
+let _lastScanFingerprint = '';
+
 function renderLocalScans(scans = []) {
   const rows = $('localScanRows');
   const empty = $('localScanEmpty');
-  rows.innerHTML = '';
 
   // Show only the 6 most recent scans from this device — newest first
   const localScans = Array.isArray(scans) ? scans.slice(0, 6) : [];
+
+  // Skip the full re-render if nothing has changed — stops the stutter/flash
+  // caused by status poll events that don't bring new scan data.
+  const fp = localScans.map((s) => `${s.name}|${s.eventAction}|${s.scanTime}`).join('\n');
+  if (fp === _lastScanFingerprint) return;
+  _lastScanFingerprint = fp;
+
+  rows.innerHTML = '';
   empty.classList.toggle('hidden', localScans.length > 0);
 
   localScans.forEach((scan) => {
