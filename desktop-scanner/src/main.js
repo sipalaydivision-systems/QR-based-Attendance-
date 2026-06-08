@@ -23,7 +23,7 @@ const {
   flushPendingSave
 } = require('./offlineStore');
 
-const APP_TITLE = 'Edutrack Scanner';
+const APP_TITLE = 'EduTrack Scanner';
 const APP_USER_MODEL_ID = 'ph.gov.sipalay.edutrack.scanner';
 const APP_ICON_PNG = path.join(__dirname, 'assets', 'edutrack-scanner.png');
 const DEFAULT_SERVER_URL = 'https://school-attendance-qrbased.up.railway.app';
@@ -94,7 +94,7 @@ function defaultSettings() {
     startFullscreen: false,
     minimizeToTray: true,
     kioskToken: '',
-    brandName: 'Edutrack',
+    brandName: 'EduTrack',
     divisionName: 'Schools Division of Sipalay City',
     systemLogo: '',
     timeInStart: '07:00',
@@ -375,7 +375,7 @@ function createTray() {
   tray = new Tray(icon);
   tray.setToolTip(APP_TITLE);
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open Edutrack Scanner', click: () => showWindow() },
+    { label: 'Open EduTrack Scanner', click: () => showWindow() },
     { label: 'Toggle Full Screen', click: () => mainWindow && mainWindow.setFullScreen(!mainWindow.isFullScreen()) },
     { type: 'separator' },
     { label: 'Sync Attendance Queue', click: () => syncOfflineQueue({ trigger: 'tray' }) },

@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Edutrack Scanner</title>
+  <title>EduTrack Scanner</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
       <div class="brand">
-        <div class="brand-logo" id="brandLogo"><img src="../assets/edutrack-scanner.png" alt="Edutrack logo"></div>
+        <div class="brand-logo" id="brandLogo"><img src="../assets/edutrack-scanner.png" alt="EduTrack logo"></div>
         <div class="brand-text">
           <span class="division-tag" id="divisionName">Schools Division of Sipalay City</span>
-          <h1>Edutrack Scanner</h1>
+          <h1>EduTrack Scanner</h1>
           <p id="brandName" class="visually-hidden"></p>
         </div>
       </div>
@@ -103,9 +103,17 @@
             Just scan your QR code — attendance records automatically.
           </div>
           <div class="usb-scan-feedback" id="usbScanFeedback">
-            <i class="fa-solid fa-qrcode usb-idle-icon"></i>
+            <svg class="usb-idle-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+              <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+              <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+              <path d="M14 14h3v3h-3zM18 18h3v3h-3z"></path>
+            </svg>
             <span class="usb-idle-text">Point your USB scanner at a QR code to scan</span>
-            <span class="usb-receiving-text"><i class="fa-solid fa-bolt"></i> Receiving scan...</span>
+            <span class="usb-receiving-text">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"></path></svg>
+              Receiving scan...
+            </span>
           </div>
           <input id="usbInput" type="text" autocomplete="off" spellcheck="false"
             style="opacity:0;position:absolute;top:-200px;pointer-events:none;" tabindex="-1">
@@ -117,7 +125,7 @@
 
         <div class="scan-hint">
           <span id="modeHint">Ready for attendance scanning.</span>
-          <strong id="statusLine">Launching Edutrack Scanner...</strong>
+          <strong id="statusLine">Launching EduTrack Scanner...</strong>
         </div>
       </section>
 
@@ -218,7 +226,7 @@
           </div>
           <div>
             <h2 id="adminAuthTitle">Admin Required</h2>
-            <p>Scanner settings are protected. Sign in with your Edutrack admin account.</p>
+            <p>Scanner settings are protected. Sign in with your EduTrack admin account.</p>
           </div>
         </div>
         <div id="adminAuthError" class="admin-auth-error" role="alert" aria-live="polite"></div>
@@ -237,7 +245,7 @@
             Verify &amp; Open Settings
           </button>
         </div>
-        <p class="admin-auth-note">Use the same credentials as the Edutrack Web Admin Dashboard. Only administrators can change scanner configuration.</p>
+        <p class="admin-auth-note">Use the same credentials as the EduTrack Web Admin Dashboard. Only administrators can change scanner configuration.</p>
       </div>
     </div>
 
@@ -246,7 +254,7 @@
       <section class="drawer-card">
         <div class="drawer-head">
           <div>
-            <span>Edutrack Scanner Settings</span>
+            <span>EduTrack Scanner Settings</span>
             <h2>Desktop configuration</h2>
           </div>
           <button class="icon-button" id="closeSettingsBtn" title="Close settings" aria-label="Close settings">&times;</button>

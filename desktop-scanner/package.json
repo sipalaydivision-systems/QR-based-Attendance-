@@ -1,7 +1,7 @@
 {
   "name": "edutrack-desktop-scanner",
   "version": "1.0.0",
-  "description": "Edutrack Scanner desktop attendance application",
+  "description": "EduTrack Scanner desktop attendance application",
   "main": "src/main.js",
   "author": "Wesley Hans Platil",
   "license": "UNLICENSED",
@@ -22,7 +22,7 @@
   },
   "build": {
     "appId": "ph.gov.sipalay.edutrack.scanner",
-    "productName": "Edutrack Scanner",
+    "productName": "EduTrack Scanner",
     "directories": {
       "output": "dist"
     },
@@ -45,7 +45,7 @@
       "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Edutrack Scanner",
+      "shortcutName": "EduTrack Scanner",
       "installerIcon": "src/assets/edutrack-scanner.ico",
       "uninstallerIcon": "src/assets/edutrack-scanner.ico",
       "installerHeaderIcon": "src/assets/edutrack-scanner.ico",

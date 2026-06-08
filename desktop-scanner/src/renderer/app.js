@@ -140,7 +140,7 @@ function setConnection(online, message) {
 }
 
 function initials(name) {
-  const parts = String(name || 'Edutrack').trim().split(/\s+/).filter(Boolean);
+  const parts = String(name || 'EduTrack').trim().split(/\s+/).filter(Boolean);
   if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   return String(name || 'ET').slice(0, 2).toUpperCase();
 }
@@ -303,14 +303,14 @@ function updateSyncProgress(payload) {
 function applyBrand(settings) {
   $('divisionName').textContent = settings.divisionName || 'Schools Division of Sipalay City';
   $('brandName').textContent = '';
-  document.title = 'Edutrack Scanner';
+  document.title = 'EduTrack Scanner';
 
   const logo = $('brandLogo');
   const logoUrl = resolveAssetUrl(settings.systemLogo);
   if (logoUrl) {
-    logo.innerHTML = `<img src="${escapeHtml(logoUrl)}" alt="Edutrack logo" onerror="this.onerror=null;this.src='${LOCAL_LOGO_URL}';">`;
+    logo.innerHTML = `<img src="${escapeHtml(logoUrl)}" alt="EduTrack logo" onerror="this.onerror=null;this.src='${LOCAL_LOGO_URL}';">`;
   } else {
-    logo.innerHTML = `<img src="${LOCAL_LOGO_URL}" alt="Edutrack logo">`;
+    logo.innerHTML = `<img src="${LOCAL_LOGO_URL}" alt="EduTrack logo">`;
   }
 }
 
@@ -1231,7 +1231,7 @@ async function saveSettingsFromForm() {
 
   applySettings(settings, { autoStartEnabled: settings.autoStart });
   await setMode(settings.scannerMode || state.scannerMode, false);
-  $('settingsNote').textContent = 'Edutrack Scanner settings saved successfully.';
+  $('settingsNote').textContent = 'EduTrack Scanner settings saved successfully.';
   closeSettings();
   await checkConnection({ silentNotifications: true });
 }
@@ -1412,7 +1412,7 @@ async function init() {
 
   await checkConnection({ silentNotifications: true, quietStatusLine: true });
   state.initialized = true;
-  setStatusLine('Edutrack Scanner is ready for attendance scanning.');
+  setStatusLine('EduTrack Scanner is ready for attendance scanning.');
 }
 
 init().catch((err) => {

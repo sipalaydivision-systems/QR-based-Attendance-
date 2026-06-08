@@ -313,11 +313,24 @@ svg {
 
 .scan-stage {
   position: relative;
-  min-height: 0;
+  /* Force the active stage into the flexible middle row. Both webcam- and
+     usb-stage are .scan-stage; only one is visible at a time, so sharing
+     grid-row: 2 is safe. Without this, a hidden webcam stage pushed the USB
+     stage into the `auto` row where its all-absolute content collapsed to 0. */
+  grid-row: 2;
+  min-height: 420px;
   overflow: hidden;
   border-radius: 24px;
   border: 1px solid rgba(16, 35, 28, 0.08);
   box-shadow: var(--shadow);
+}
+
+.day-notice {
+  grid-row: 1;
+}
+
+.scan-hint {
+  grid-row: 3;
 }
 
 .webcam-stage {
@@ -552,29 +565,37 @@ svg {
 }
 
 .usb-scan-feedback .usb-idle-icon {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.35);
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.4);
+  stroke-width: 1.6;
 }
 
 .usb-idle-text {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.45);
   transition: opacity 0.25s;
 }
 
 .usb-receiving-text {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
-  color: #4dffa6;
+  color: #6dffb6;
   letter-spacing: 0.03em;
   opacity: 0;
   transition: opacity 0.15s;
   display: none;
+  align-items: center;
+  gap: 5px;
 }
 
-.usb-receiving-text i {
-  margin-right: 4px;
+.usb-receiving-text svg {
+  width: 14px;
+  height: 14px;
+  fill: #6dffb6;
+  stroke: none;
 }
 
 /* "receiving" state: swap idle text for receiving text */
@@ -584,7 +605,7 @@ svg {
 }
 
 #usbScanFeedback.receiving .usb-receiving-text {
-  display: inline;
+  display: inline-flex;
   opacity: 1;
   animation: usb-receive-pulse 0.4s ease-out;
 }

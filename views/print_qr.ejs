@@ -376,7 +376,7 @@ function makeDiv(className, value) {
 
 function makeQrCard(person) {
     var card = makeDiv('qr-card');
-    var header = makeDiv('qr-card-header', person.school_name || 'Edutrack');
+    var header = makeDiv('qr-card-header', person.school_name || 'EduTrack');
     var body = makeDiv('qr-card-body');
     var img = document.createElement('img');
     img.src = person.qrDataUrl || '';
