@@ -527,6 +527,14 @@ const RES_ICONS = {
   'cloud':    `<svg style="width:22px;height:22px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`
 };
 
+/* SVG icons used inside the right-hand detail cells (desktop has no Font Awesome) */
+const CELL_ICONS = {
+  school: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-5h6v5"/><path d="M9 12h.01M15 12h.01"/></svg>`,
+  grade:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1 2.5 3 6 3s6-2 6-3v-5"/></svg>`,
+  id:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M14 9h4M14 13h4M6 16h6"/></svg>`,
+  date:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`
+};
+
 function resIconKey(data, tone) {
   if (tone === 'error') return 'error';
   if (data?.offline) return 'cloud';
@@ -535,7 +543,7 @@ function resIconKey(data, tone) {
   if (action === 'ALREADY_RECORDED') return 'check';
   if (action === 'PENDING_TIME_OUT' || action === 'CONFIRM_TIME_OUT') return 'pending';
   if (data?.status === 'late') return 'clock';
-  return 'time-in';
+  return 'check';
 }
 
 function resBannerVariant(data, tone) {
@@ -548,76 +556,159 @@ function resBannerVariant(data, tone) {
   return 'time-in';
 }
 
+// Big bold heading shown in the banner (e.g. "TIME IN RECORDED!")
+function bannerHeadingFor(data, tone, fallbackTitle) {
+  if (!data?.person) return String(fallbackTitle || 'Notice').toUpperCase();
+  if (tone === 'error') return 'Scan needs attention'.toUpperCase();
+  const action = String(data.action || '');
+  if (data.offline) return action === 'TIME_OUT' ? 'Time out saved offline'.toUpperCase() : 'Time in saved offline'.toUpperCase();
+  if (action === 'TIME_IN') return data.status === 'late' ? 'Late time in!'.toUpperCase() : 'Time in recorded!'.toUpperCase();
+  if (action === 'TIME_OUT') return 'Time out recorded!'.toUpperCase();
+  if (action === 'ALREADY_RECORDED') return 'Already recorded today'.toUpperCase();
+  if (action === 'PENDING_TIME_OUT') return 'Already timed in'.toUpperCase();
+  if (action === 'CONFIRM_TIME_OUT') return 'Confirm time out'.toUpperCase();
+  return 'Attendance recorded'.toUpperCase();
+}
+
+// Friendly one-line subtext under the heading
+function bannerSubFor(data, tone, fallbackMessage) {
+  if (!data?.person) return fallbackMessage || 'Attendance notice.';
+  if (tone === 'error') return fallbackMessage || 'Please try scanning again.';
+  const action = String(data.action || '');
+  if (data.offline) return 'Saved on this computer — it will sync automatically when internet returns.';
+  if (action === 'TIME_IN') return data.status === 'late' ? 'You have timed in, but you are marked late.' : 'You have successfully timed in.';
+  if (action === 'TIME_OUT') return 'You have successfully timed out for the day.';
+  if (action === 'ALREADY_RECORDED') return 'You are already marked present for today.';
+  if (action === 'PENDING_TIME_OUT') return 'You are timed in. Time out opens at the end of the school day.';
+  if (action === 'CONFIRM_TIME_OUT') return 'Confirm to record your end-of-day time out.';
+  return fallbackMessage || 'Attendance recorded.';
+}
+
+// Hero (left) time card configuration per result type
+function heroConfigFor(data) {
+  const action = String(data.action || '');
+  if (action === 'TIME_OUT') {
+    return { label: 'Time Out', value: data.time_out || data.time || '—', variant: 'out', pill: '&#10003; Complete', pillClass: 'out' };
+  }
+  if (action === 'PENDING_TIME_OUT') {
+    return { label: 'Time In', value: data.time_in || '—', variant: 'late', pill: 'Pending Out', pillClass: 'pending' };
+  }
+  if (action === 'CONFIRM_TIME_OUT') {
+    return { label: 'Time In', value: data.time_in || '—', variant: 'late', pill: 'Confirm Out', pillClass: 'pending' };
+  }
+  if (action === 'ALREADY_RECORDED') {
+    return { label: 'Time In', value: data.time_in || data.time || '—', variant: 'in', pill: '&#10003; Present Today', pillClass: 'in' };
+  }
+  // TIME_IN (and generic)
+  const late = data.status === 'late';
+  if (data.offline) {
+    return { label: 'Time In', value: data.time_in || data.time || '—', variant: 'offline', pill: 'Saved Offline', pillClass: 'offline' };
+  }
+  return {
+    label: 'Time In',
+    value: data.time_in || data.time || '—',
+    variant: late ? 'late' : 'in',
+    pill: late ? 'Late' : '&#10003; Present Today',
+    pillClass: late ? 'late' : 'in'
+  };
+}
+
+// Look up a school's logo URL from the synced settings by matching its name
+function schoolLogoFor(schoolName) {
+  const name = String(schoolName || '').trim().toLowerCase();
+  if (!name) return '';
+  const school = (state.settings.schools || []).find((s) => String(s.name || '').trim().toLowerCase() === name);
+  return school ? resolveAssetUrl(school.logo) : '';
+}
+
+// Long + weekday date parts for the modal
+function modalDateParts(data) {
+  const parsed = parseSqlDateTime(data?.scanTime);
+  const d = parsed || new Date();
+  return {
+    date: d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+    day:  d.toLocaleDateString('en-US', { weekday: 'long' })
+  };
+}
+
 function showScanFeedback(title, message, tone = 'success', data = {}) {
   const modal = $('scanModal');
   const card  = $('scanModalCard');
-  const person    = data?.person || null;
-  const isOffline = !!data?.offline;
-  const action    = String(data?.action || '');
+  const person = data?.person || null;
+  const action = String(data?.action || '');
 
-  /* ── Status banner ── */
-  const variant = resBannerVariant(data, tone);
-  $('modalBanner').className  = `res-status-banner ${variant}`;
-  $('modalIcon').innerHTML    = RES_ICONS[resIconKey(data, tone)];
-  $('modalLabel').textContent = title;
-  $('modalMessage').textContent = isOffline ? `Saved offline — ${message}` : message;
+  // Banner variant — no-person notices get amber unless they are errors
+  const variant = person ? resBannerVariant(data, tone) : (tone === 'error' ? 'error' : 'notice');
+  $('modalBanner').className    = `res-status-banner ${variant}`;
+  $('modalIcon').innerHTML      = RES_ICONS[resIconKey(data, tone)];
+  $('modalLabel').textContent   = bannerHeadingFor(data, tone, title);
+  $('modalMessage').textContent = bannerSubFor(data, tone, message);
 
-  /* ── Person row ── */
-  if (person) {
+  if (!person) {
+    // Simplified banner-only card (QR not recognized, holiday, suspension, etc.)
+    card.classList.add('banner-only');
+    $('modalPersonRow').style.display = 'none';
+    $('modalBody').style.display = 'none';
+  } else {
+    card.classList.remove('banner-only');
     $('modalPersonRow').style.display = '';
-    const parts   = String(person.name || '').trim().split(/\s+/);
+    $('modalBody').style.display = '';
+
+    /* ── Person row ── */
+    const parts = String(person.name || '').trim().split(/\s+/);
     const initials = parts.length >= 2
       ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
       : String(person.name || '??').substring(0, 2).toUpperCase();
     const avatarEl = $('modalAvatar');
     avatarEl.textContent = initials;
-    avatarEl.className   = `res-p-avatar ${person.type === 'teacher' ? 'teacher' : 'student'}`;
-    $('modalName').textContent   = person.name || '';
+    avatarEl.className    = `res-p-avatar ${person.type === 'teacher' ? 'teacher' : 'student'}`;
+    $('modalName').textContent = person.name || '';
     const badgeEl = $('modalBadge');
     badgeEl.textContent = person.type === 'teacher' ? 'Teacher' : 'Student';
-    badgeEl.className   = `res-p-badge ${person.type === 'teacher' ? 'teacher' : 'student'}`;
+    badgeEl.className    = `res-p-badge ${person.type === 'teacher' ? 'teacher' : 'student'}`;
 
-    /* ── Detail grid ── */
+    const dp = modalDateParts(data);
+
+    /* ── Hero time card (left) ── */
+    const hero = heroConfigFor(data);
+    $('modalHeroTime').className   = `res-hero-time ${hero.variant}`;
+    $('modalHeroIcon').innerHTML   = hero.variant === 'out' ? RES_ICONS['time-out'] : RES_ICONS['clock'];
+    $('modalHeroLabel').textContent = hero.label;
+    $('modalHeroValue').textContent = hero.value;
+    $('modalHeroDate').textContent  = dp.date;
+    $('modalHeroDay').textContent   = dp.day;
+    const pillEl = $('modalHeroPill');
+    pillEl.className = `res-hero-pill ${hero.pillClass}`;
+    pillEl.innerHTML = hero.pill;
+
+    /* ── Detail grid (right) ── */
     const isTeacher = person.type === 'teacher';
     const idLabel   = isTeacher ? 'Employee ID' : 'LRN';
     const idValue   = isTeacher ? (person.employee_id || 'N/A') : (person.lrn || 'N/A');
-    let grid = `<div class="res-detail-cell full"><div class="d-label">School</div><div class="d-value">${escapeHtml(person.school || 'N/A')}</div></div>`;
-    grid    += `<div class="res-detail-cell"><div class="d-label">${escapeHtml(idLabel)}</div><div class="d-value">${escapeHtml(idValue)}</div></div>`;
-    if (!isTeacher) {
-      grid  += `<div class="res-detail-cell"><div class="d-label">Grade &amp; Section</div><div class="d-value">${escapeHtml((person.grade || 'N/A') + ' — ' + (person.section || 'N/A'))}</div></div>`;
-    }
-    $('modalDetailGrid').innerHTML = grid;
-  } else {
-    $('modalPersonRow').style.display = 'none';
-    $('modalDetailGrid').innerHTML = '';
-  }
+    const gradeText = `${person.grade || 'N/A'}${person.section && person.section !== 'N/A' ? ' — ' + person.section : ''}`;
 
-  /* ── Time row ── */
-  let timeHTML = '';
-  if (action === 'TIME_IN') {
-    const t = data.time_in || data.time || '—';
-    timeHTML = `<div class="res-t-block t-in"><div class="rt-time">${escapeHtml(t)}</div><div class="rt-label">&#8594; Time In</div></div>`;
-  } else if (action === 'TIME_OUT') {
-    const tin  = data.time_in  || '—';
-    const tout = data.time_out || data.time || '—';
-    timeHTML = `<div class="res-t-block t-in"><div class="rt-time">${escapeHtml(tin)}</div><div class="rt-label">&#8594; Time In</div></div>` +
-               `<div class="res-t-block t-out"><div class="rt-time">${escapeHtml(tout)}</div><div class="rt-label">&#8592; Time Out</div></div>`;
-  } else if (action === 'ALREADY_RECORDED') {
-    const tin = data.time_in || data.time || '—';
-    timeHTML = `<div class="res-t-block t-in"><div class="rt-time">${escapeHtml(tin)}</div><div class="rt-label">&#10003; Present Today</div></div>`;
-  } else if (action === 'PENDING_TIME_OUT' || action === 'CONFIRM_TIME_OUT') {
-    const tin = data.time_in || '—';
-    timeHTML = `<div class="res-t-block t-in"><div class="rt-time">${escapeHtml(tin)}</div><div class="rt-label">&#8594; Time In</div></div>` +
-               `<div class="res-t-block t-pending"><div class="rt-time">Pending</div><div class="rt-label">End-of-day Out</div></div>`;
-  } else if (data?.time_in || data?.time_out) {
-    const tin  = data.time_in  || '—';
-    const tout = data.time_out || 'Pending';
-    timeHTML = `<div class="res-t-block t-in"><div class="rt-time">${escapeHtml(tin)}</div><div class="rt-label">Time In</div></div>` +
-               `<div class="res-t-block t-out"><div class="rt-time">${escapeHtml(tout)}</div><div class="rt-label">Time Out</div></div>`;
-  } else if (data?.time) {
-    timeHTML = `<div class="res-t-block t-in"><div class="rt-time">${escapeHtml(data.time)}</div><div class="rt-label">Recorded</div></div>`;
+    // School icon = real school logo when available, else a school SVG
+    const logoUrl = schoolLogoFor(person.school);
+    const schoolIcon = logoUrl
+      ? `<img class="res-cell-logo" src="${escapeHtml(logoUrl)}" alt="" onerror="this.onerror=null;this.src='${LOCAL_LOGO_URL}';">`
+      : CELL_ICONS.school;
+
+    const cells = [
+      { ic: schoolIcon,       tone: 'school', label: 'School',          value: person.school || 'N/A' },
+      { ic: CELL_ICONS.grade, tone: 'grade',  label: 'Grade & Section', value: gradeText },
+      { ic: CELL_ICONS.id,    tone: 'id',     label: idLabel,           value: idValue },
+      { ic: CELL_ICONS.date,  tone: 'date',   label: 'Date',            value: dp.date, sub: dp.day }
+    ];
+
+    $('modalDetailGrid').innerHTML = cells.map((c) => `
+      <div class="res-cell">
+        <div class="res-cell-ic ${c.tone}">${c.ic}</div>
+        <div class="res-cell-tx">
+          <div class="d-label">${escapeHtml(c.label)}</div>
+          <div class="d-value">${escapeHtml(c.value || 'N/A')}${c.sub ? `<span class="d-sub">${escapeHtml(c.sub)}</span>` : ''}</div>
+        </div>
+      </div>`).join('');
   }
-  $('modalTimeRow').innerHTML = timeHTML;
 
   /* ── Countdown bar ── */
   const fill = $('modalCountdownFill');
@@ -1400,7 +1491,8 @@ function bindEvents() {
   bindClick('syncNowBtn', syncQueue);
   bindClick('fullscreenBtn', () => api.toggleFullscreen());
   bindClick('minimizeBtn', () => api.minimize());
-  bindClick('closeScanModalBtn', closeScanModal);
+  // No close (X) button on the result card — it auto-dismisses. Clicking the
+  // dimmed backdrop still closes it for kiosk attendants.
   $('scanModal').addEventListener('click', (event) => {
     if (event.target.id === 'scanModal') closeScanModal();
   });
