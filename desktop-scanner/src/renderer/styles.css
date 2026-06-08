@@ -975,7 +975,7 @@ body.settings-open .side-panel {
   background: #ffffff;
   border-radius: 28px;
   width: 100%;
-  max-width: 620px;
+  max-width: 824px;
   overflow: hidden;
   box-shadow:
     0 32px 100px rgba(0, 0, 0, 0.22),
@@ -1103,10 +1103,10 @@ body.settings-open .side-panel {
 
 /* ── Body: hero time + details ── */
 .res-body {
-  padding: 4px 28px 22px;
+  padding: 4px 30px 24px;
   display: grid;
-  grid-template-columns: 0.92fr 1.08fr;
-  gap: 14px;
+  grid-template-columns: 0.66fr 1.34fr;
+  gap: 18px;
   align-items: stretch;
 }
 
@@ -1237,31 +1237,31 @@ body.settings-open .side-panel {
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-auto-rows: 1fr;
-  gap: 10px;
+  gap: 12px;
 }
 
 .res-cell {
   background: #ffffff;
   border: 1.5px solid #eef2f6;
   border-radius: 16px;
-  padding: 13px 13px;
+  padding: 15px 16px;
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 13px;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
 }
 
 .res-cell-ic {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   overflow: hidden;
 }
-.res-cell-ic svg { width: 22px; height: 22px; }
+.res-cell-ic svg { width: 24px; height: 24px; }
 .res-cell-ic.school { background: #e0edff; color: #2563eb; }
 .res-cell-ic.grade  { background: #ede9fe; color: #7c3aed; }
 .res-cell-ic.id     { background: #fef3c7; color: #d97706; }
@@ -1270,28 +1270,28 @@ body.settings-open .side-panel {
 
 .res-cell-tx { min-width: 0; }
 .res-cell-tx .d-label {
-  font-size: 0.6rem;
+  font-size: 0.63rem;
   text-transform: uppercase;
   letter-spacing: 0.7px;
   color: #94a3b8;
   font-weight: 700;
-  margin-bottom: 3px;
+  margin-bottom: 4px;
 }
 .res-cell-tx .d-value {
-  font-size: 0.86rem;
+  font-size: 0.97rem;
   font-weight: 800;
   color: #1e293b;
-  line-height: 1.25;
+  line-height: 1.28;
   overflow-wrap: break-word;
   word-break: normal;
   hyphens: none;
 }
 .res-cell-tx .d-sub {
   display: block;
-  font-size: 0.72rem;
+  font-size: 0.76rem;
   font-weight: 600;
   color: #94a3b8;
-  margin-top: 1px;
+  margin-top: 2px;
 }
 
 /* No-person (error/notice) — center the banner only */
