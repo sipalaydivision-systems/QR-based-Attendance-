@@ -512,7 +512,7 @@ async function refreshDesktopConfig() {
   const settings = loadSettings();
   const serverUrl = normalizeServerUrl(settings.serverUrl);
   const schoolSuffix = selectedSchoolQueryValue(settings.selectedSchoolId);
-  const res = await fetchWithTimeout(`${serverUrl}/api/scanner-desktop-config${schoolSuffix}`, { cache: 'no-store' }, 8000);
+  const res = await fetchWithTimeout(`${serverUrl}/api/scanner-desktop-config${schoolSuffix}`, { cache: 'no-store' }, 15000);
   const text = await res.text();
   let data;
   try {
@@ -651,7 +651,7 @@ async function refreshSchoolDayStatus(dateKey = localDateString()) {
   return runtimeState.schoolDayStatus;
 }
 
-async function postScan(payload) {
+async function postScan(payload, timeoutMs = 6000) {
   const settings = await ensureKioskToken();
   const serverUrl = normalizeServerUrl(settings.serverUrl);
   const assignedSchoolId = String(settings.selectedSchoolId || '').trim();
@@ -670,7 +670,7 @@ async function postScan(payload) {
       'X-Scanner-Kiosk-Token': settings.kioskToken
     },
     body: JSON.stringify(body)
-  }, 12000);
+  }, timeoutMs);
 
   const text = await res.text();
   let data;
@@ -959,43 +959,72 @@ function updateRuntimeConnectionState(online, message) {
   runtimeState.lastConnectionCheckAt = toLocalSqlDateTime();
 }
 
+function buildOfflineScanResponse(qrCode, scanTime, payload) {
+  const localResult = resolveOfflineAttendance(qrCode, scanTime, {
+    requireTimeOutConfirmation: payload?.requireTimeOutConfirmation !== false,
+    confirmTimeOut: !!payload?.confirmTimeOut
+  });
+  const response = {
+    ...localResult,
+    error: localResult.error || 'Offline Mode: Saved Locally',
+    message: localResult.success ? OFFLINE_MODE_MESSAGE : (localResult.error || NO_INTERNET_MESSAGE),
+    ...currentDashboard()
+  };
+  broadcastScannerStatus();
+  return response;
+}
+
+// Debounced, non-blocking reconnect probe. Lets the app flip back to "online"
+// quickly after an offline scan without making the scan itself wait.
+let _reconnectTimer = null;
+function scheduleBackgroundReconnect() {
+  if (_reconnectTimer) return;
+  _reconnectTimer = setTimeout(() => {
+    _reconnectTimer = null;
+    refreshConnectionState({ trigger: 'post-offline-scan', forceDirectory: false, syncIfPossible: true })
+      .catch(() => {});
+  }, 1500);
+}
+
 async function submitScan(payload) {
   const qrCode = cleanScannedQrValue(payload?.qrCode);
   if (!qrCode) return { success: false, error: 'Invalid QR Code', ...currentDashboard() };
 
   const scanTime = payload?.scanTime || toLocalSqlDateTime();
+  const settings = loadSettings();
 
-  if (runtimeState.online && loadSettings().offlineSync && getDashboard({ today: localDateString() }).queuedCount > 0 && !runtimeState.syncInProgress) {
+  if (runtimeState.online && settings.offlineSync && getDashboard({ today: localDateString() }).queuedCount > 0 && !runtimeState.syncInProgress) {
     await syncOfflineQueue({ trigger: 'pre-submit', silent: true });
   }
 
+  // If we already know we're offline (or have no kiosk token), resolve the
+  // scan from the local directory INSTANTLY and probe for reconnection in the
+  // background. The user never waits on a dead/slow network. Once the probe
+  // restores the connection, subsequent scans go straight to the server.
+  const canTryServer = !!settings.kioskToken && runtimeState.online;
+  if (settings.offlineSync && !canTryServer && payload?.allowQueue !== false) {
+    scheduleBackgroundReconnect();
+    return buildOfflineScanResponse(qrCode, scanTime, payload);
+  }
+
   try {
+    // Capped wait so a freshly-dropped connection can't stall the modal.
     const data = await postScan({
       qrCode,
       scanTime,
       requireTimeOutConfirmation: payload?.requireTimeOutConfirmation !== false,
       confirmTimeOut: !!payload?.confirmTimeOut
-    });
+    }, 6000);
     updateRuntimeConnectionState(true, 'Connected to Server.');
     persistServerScanResult(qrCode, scanTime, data);
     const result = { ...data, online: true, ...currentDashboard() };
     broadcastScannerStatus();
     return result;
   } catch (err) {
-    if (isNetworkError(err) && loadSettings().offlineSync && payload?.allowQueue !== false) {
+    if (isNetworkError(err) && settings.offlineSync && payload?.allowQueue !== false) {
       updateRuntimeConnectionState(false, NO_INTERNET_MESSAGE);
-      const localResult = resolveOfflineAttendance(qrCode, scanTime, {
-        requireTimeOutConfirmation: payload?.requireTimeOutConfirmation !== false,
-        confirmTimeOut: !!payload?.confirmTimeOut
-      });
-      const response = {
-        ...localResult,
-        error: localResult.error || 'Offline Mode: Saved Locally',
-        message: localResult.success ? OFFLINE_MODE_MESSAGE : (localResult.error || NO_INTERNET_MESSAGE),
-        ...currentDashboard()
-      };
-      broadcastScannerStatus();
-      return response;
+      scheduleBackgroundReconnect();
+      return buildOfflineScanResponse(qrCode, scanTime, payload);
     }
 
     return { success: false, error: err.message || 'Scanner request failed.', ...currentDashboard() };
