@@ -1292,7 +1292,17 @@ ipcMain.handle('settings:save', async (_event, nextSettings) => {
 });
 
 ipcMain.handle('connection:check', async () => refreshConnectionState({ trigger: 'manual-check', forceDirectory: true, syncIfPossible: true }));
-ipcMain.handle('scan:submit', async (_event, payload) => submitScan(payload));
+ipcMain.handle('scan:submit', async (_event, payload) => {
+  // Guard the IPC boundary: an unexpected throw here would reject in the
+  // renderer and (without renderer-side recovery) freeze the scanner. Always
+  // resolve with a usable object.
+  try {
+    return await submitScan(payload);
+  } catch (err) {
+    console.error('submitScan failed unexpectedly:', err);
+    return { success: false, error: 'The scan could not be processed. Please try again.', ...currentDashboard() };
+  }
+});
 ipcMain.handle('admin:login', async (_event, { username, password }) => {
   try {
     const settings = loadSettings();

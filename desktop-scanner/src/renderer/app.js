@@ -912,48 +912,63 @@ async function submitQrCode(qrCode, options = {}) {
   setStatusLine('Processing attendance scan...');
   updateScannerStatus('Processing scan', 'Preparing the attendance record for server or offline storage.', 'warning');
 
-  const result = await api.submitScan({
-    qrCode: trimmed,
-    scanTime: formatLocalSqlDateTime(),
-    allowQueue: options.allowQueue !== false,
-    requireTimeOutConfirmation: options.requireTimeOutConfirmation !== false,
-    confirmTimeOut: !!options.confirmTimeOut
-  });
+  try {
+    const result = (await api.submitScan({
+      qrCode: trimmed,
+      scanTime: formatLocalSqlDateTime(),
+      allowQueue: options.allowQueue !== false,
+      requireTimeOutConfirmation: options.requireTimeOutConfirmation !== false,
+      confirmTimeOut: !!options.confirmTimeOut
+    })) || {};
 
-  result.qrCode = trimmed;
-  renderResult(result);
-  applyScannerStatusPayload(result, { quietStatusLine: true });
+    result.qrCode = trimmed;
+    renderResult(result);
+    applyScannerStatusPayload(result, { quietStatusLine: true });
 
-  if (result.offline) {
-    if (result.success && ['TIME_IN', 'TIME_OUT'].includes(result.action)) {
-      updateScannerStatus('Offline record saved', 'Attendance has been saved locally and will upload automatically.', 'warning');
-      setStatusLine(OFFLINE_NOTIFICATION);
+    if (result.offline) {
+      if (result.success && ['TIME_IN', 'TIME_OUT'].includes(result.action)) {
+        updateScannerStatus('Offline record saved', 'Attendance has been saved locally and will upload automatically.', 'warning');
+        setStatusLine(OFFLINE_NOTIFICATION);
+      } else {
+        updateScannerStatus('Offline review', result.error || 'Please review the latest offline attendance response.', result.success ? 'warning' : 'danger');
+        setStatusLine(result.message || OFFLINE_NOTIFICATION);
+      }
+    } else if (result.action === 'TIME_IN' || result.action === 'TIME_OUT') {
+      state.lastSyncAt = new Date();
+      updateLastSyncFromPayload(formatLocalSqlDateTime(state.lastSyncAt), 'Latest attendance update reached the server successfully.');
+      updateScannerStatus('Ready for next scan', 'Student and teacher QR codes can be scanned again.', 'success');
+      setStatusLine(result.message || 'Attendance recorded successfully.');
+    } else if (result.action === 'CONFIRM_TIME_OUT') {
+      updateScannerStatus('Awaiting confirmation', 'Confirm this end-of-day time out to finish the attendance record.', 'warning');
+      setStatusLine(result.message || 'Please confirm before recording time out.');
+    } else if (result.action === 'PENDING_TIME_OUT') {
+      updateScannerStatus('Already timed in', 'Time out will be available at the scheduled end-of-day time.', 'warning');
+      setStatusLine(result.message || 'This person is already timed in for today.');
+    } else if (!result.success) {
+      updateScannerStatus('Scan needs attention', result.error || 'Please review the latest attendance response.', 'danger');
+      setStatusLine(result.error || 'The scan needs attention.');
     } else {
-      updateScannerStatus('Offline review', result.error || 'Please review the latest offline attendance response.', result.success ? 'warning' : 'danger');
-      setStatusLine(result.message || OFFLINE_NOTIFICATION);
+      updateScannerStatus('Ready for next scan', 'The scanner is connected and ready for another QR code.', 'success');
+      setStatusLine(result.message || 'Attendance request completed.');
     }
-  } else if (result.action === 'TIME_IN' || result.action === 'TIME_OUT') {
-    state.lastSyncAt = new Date();
-    updateLastSyncFromPayload(formatLocalSqlDateTime(state.lastSyncAt), 'Latest attendance update reached the server successfully.');
-    updateScannerStatus('Ready for next scan', 'Student and teacher QR codes can be scanned again.', 'success');
-    setStatusLine(result.message || 'Attendance recorded successfully.');
-  } else if (result.action === 'CONFIRM_TIME_OUT') {
-    updateScannerStatus('Awaiting confirmation', 'Confirm this end-of-day time out to finish the attendance record.', 'warning');
-    setStatusLine(result.message || 'Please confirm before recording time out.');
-  } else if (result.action === 'PENDING_TIME_OUT') {
-    updateScannerStatus('Already timed in', 'Time out will be available at the scheduled end-of-day time.', 'warning');
-    setStatusLine(result.message || 'This person is already timed in for today.');
-  } else if (!result.success) {
-    updateScannerStatus('Scan needs attention', result.error || 'Please review the latest attendance response.', 'danger');
-    setStatusLine(result.error || 'The scan needs attention.');
-  } else {
-    updateScannerStatus('Ready for next scan', 'The scanner is connected and ready for another QR code.', 'success');
-    setStatusLine(result.message || 'Attendance request completed.');
-  }
 
-  updateTodayScansCard();
-  state.busy = false;
-  $('usbInput').value = '';
+    updateTodayScansCard();
+  } catch (err) {
+    // Never let one failed scan freeze the kiosk. Always surface feedback
+    // and recover so the next scan works.
+    console.error('Scan processing failed:', err);
+    try {
+      renderResult({ success: false, qrCode: trimmed, error: 'The scan could not be processed. Please try again.' });
+    } catch (_renderErr) { /* ignore secondary render failure */ }
+    updateScannerStatus('Scan needs attention', 'The scan could not be processed. Please try scanning again.', 'danger');
+    setStatusLine('The scan could not be processed. Please try scanning again.');
+  } finally {
+    // ALWAYS release the lock and clear the buffer, no matter what happened.
+    state.busy = false;
+    state.usbBuffer = '';
+    const usbInput = $('usbInput');
+    if (usbInput) usbInput.value = '';
+  }
 }
 
 async function confirmTimeout() {
