@@ -1296,6 +1296,15 @@ function scheduleUsbAutoSubmit() {
   state.usbSubmitTimer = setTimeout(submitUsbScanInput, 220);
 }
 
+let _usbActivityTimer = null;
+function flashUsbActivity() {
+  const el = $('usbScanFeedback');
+  if (!el) return;
+  el.classList.add('receiving');
+  clearTimeout(_usbActivityTimer);
+  _usbActivityTimer = setTimeout(() => el.classList.remove('receiving'), 800);
+}
+
 function handleUsbKeydown(event) {
   if (state.scannerMode !== 'usb') return;
   // Ignore scanner capture while the admin login modal or settings drawer is open
@@ -1304,7 +1313,9 @@ function handleUsbKeydown(event) {
   if (isEditable(event.target) && event.target.id !== 'usbInput') return;
 
   const now = Date.now();
-  if (now - state.lastUsbKeyAt > 120) state.usbBuffer = '';
+  // 600ms gap resets the buffer — generous enough for slower HID scanners (was 120ms,
+  // which caused mid-scan resets on USB scanners with >120ms inter-char latency).
+  if (now - state.lastUsbKeyAt > 600) state.usbBuffer = '';
   state.lastUsbKeyAt = now;
 
   if (event.key === 'Enter' || event.key === 'Tab') {
@@ -1315,6 +1326,7 @@ function handleUsbKeydown(event) {
 
   if (event.key && event.key.length === 1) {
     state.usbBuffer += event.key;
+    flashUsbActivity();
     scheduleUsbAutoSubmit();
   }
 }
@@ -1336,6 +1348,10 @@ function bindEvents() {
   bindClick('focusUsbBtn', async () => {
     await setMode('usb');
     $('usbInput').focus();
+  });
+  // Clicking anywhere on the USB stage ensures the window has focus for keyboard capture.
+  $('usbStage').addEventListener('click', () => {
+    if (state.scannerMode === 'usb') $('usbInput').focus();
   });
   bindClick('settingsBtn', openSettings);
   bindClick('closeSettingsBtn', closeSettings);

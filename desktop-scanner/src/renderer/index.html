@@ -102,6 +102,11 @@
           <div class="usb-kiosk-label">
             Just scan your QR code — attendance records automatically.
           </div>
+          <div class="usb-scan-feedback" id="usbScanFeedback">
+            <i class="fa-solid fa-qrcode usb-idle-icon"></i>
+            <span class="usb-idle-text">Point your USB scanner at a QR code to scan</span>
+            <span class="usb-receiving-text"><i class="fa-solid fa-bolt"></i> Receiving scan...</span>
+          </div>
           <input id="usbInput" type="text" autocomplete="off" spellcheck="false"
             style="opacity:0;position:absolute;top:-200px;pointer-events:none;" tabindex="-1">
           <div style="display:none;">

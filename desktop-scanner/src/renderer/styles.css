@@ -539,6 +539,61 @@ svg {
   pointer-events: none;
 }
 
+/* USB scan activity feedback strip — sits above the kiosk label */
+.usb-scan-feedback {
+  position: absolute;
+  inset: auto 0 62px 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  pointer-events: none;
+}
+
+.usb-scan-feedback .usb-idle-icon {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.usb-idle-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.35);
+  transition: opacity 0.25s;
+}
+
+.usb-receiving-text {
+  font-size: 12px;
+  font-weight: 800;
+  color: #4dffa6;
+  letter-spacing: 0.03em;
+  opacity: 0;
+  transition: opacity 0.15s;
+  display: none;
+}
+
+.usb-receiving-text i {
+  margin-right: 4px;
+}
+
+/* "receiving" state: swap idle text for receiving text */
+#usbScanFeedback.receiving .usb-idle-text,
+#usbScanFeedback.receiving .usb-idle-icon {
+  display: none;
+}
+
+#usbScanFeedback.receiving .usb-receiving-text {
+  display: inline;
+  opacity: 1;
+  animation: usb-receive-pulse 0.4s ease-out;
+}
+
+@keyframes usb-receive-pulse {
+  0% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
 .usb-actions {
   justify-content: center;
   gap: 10px;
