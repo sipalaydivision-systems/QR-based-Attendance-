@@ -512,7 +512,10 @@ function closeScanModal() {
   modal.classList.remove('visible');
   // Wait for the 0.25 s CSS fade before hiding from layout
   setTimeout(() => {
-    if (!modal.classList.contains('visible')) modal.classList.add('hidden');
+    if (!modal.classList.contains('visible')) {
+      modal.classList.add('hidden');
+      $('modalConfirmActions').classList.add('hidden');
+    }
   }, 280);
 }
 
@@ -844,9 +847,14 @@ function renderResult(data) {
   const tone = resultTone(data);
   const friendly = friendlyKioskMessage(data);
   showScanFeedback(friendly.title, friendly.message, tone, data);
-  $('confirmBox').classList.toggle('hidden', data.action !== 'CONFIRM_TIME_OUT');
 
-  if (data.action === 'CONFIRM_TIME_OUT') state.pendingTimeoutQr = data.qrCode || state.pendingTimeoutQr;
+  // Show confirm actions INSIDE the modal for CONFIRM_TIME_OUT;
+  // keep the legacy confirmBox hidden (it was behind the overlay and invisible to users).
+  const isConfirm = data.action === 'CONFIRM_TIME_OUT';
+  $('modalConfirmActions').classList.toggle('hidden', !isConfirm);
+  $('confirmBox').classList.add('hidden');
+
+  if (isConfirm) state.pendingTimeoutQr = data.qrCode || state.pendingTimeoutQr;
   state.hasLiveResult = true;
 }
 
@@ -1496,6 +1504,14 @@ function bindEvents() {
   $('scanModal').addEventListener('click', (event) => {
     if (event.target.id === 'scanModal') closeScanModal();
   });
+  // In-modal confirm / cancel buttons (shown inside the result card for CONFIRM_TIME_OUT)
+  bindClick('modalConfirmTimeoutBtn', confirmTimeout);
+  bindClick('modalCancelTimeoutBtn', () => {
+    closeScanModal();
+    setStatusLine('Time out was not recorded. The scanner is ready for the next attendance scan.');
+    updateScannerStatus('Ready for next scan', 'The previous time out request was cancelled.', 'success');
+  });
+  // Legacy off-card confirm box (kept in DOM but always hidden now)
   bindClick('confirmTimeoutBtn', confirmTimeout);
   bindClick('cancelTimeoutBtn', () => {
     $('confirmBox').classList.add('hidden');

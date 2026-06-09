@@ -1297,6 +1297,49 @@ body.settings-open .side-panel {
 /* No-person (error/notice) — center the banner only */
 .result-card.banner-only .res-status-banner { border-bottom: none; }
 
+/* ── In-modal confirm actions (CONFIRM_TIME_OUT) ── */
+.res-confirm-actions {
+  display: flex;
+  gap: 12px;
+  padding: 14px 28px 16px;
+  border-top: 1px solid #f1f5f9;
+}
+.res-confirm-actions.hidden { display: none; }
+
+.res-confirm-cancel {
+  flex: 1;
+  min-height: 46px;
+  border: 1.5px solid #cbd5e1;
+  background: #fff;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.res-confirm-cancel:hover { background: #f8fafc; border-color: #94a3b8; }
+
+.res-confirm-ok {
+  flex: 2;
+  min-height: 46px;
+  background: linear-gradient(135deg, #f97316, #fb923c);
+  border: none;
+  border-radius: 10px;
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(249,115,22,0.35);
+  transition: opacity 0.15s, box-shadow 0.15s;
+}
+.res-confirm-ok:hover { opacity: 0.92; box-shadow: 0 4px 14px rgba(249,115,22,0.45); }
+.res-confirm-ok svg { width: 18px; height: 18px; flex-shrink: 0; }
+
 /* ── Countdown bar ── */
 .res-countdown-bar {
   height: 5px;
