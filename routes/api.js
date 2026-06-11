@@ -325,6 +325,8 @@ router.get('/scanner-desktop-config', async (req, res) => {
                 'system_logo',
                 'am_time_in_end',
                 'pm_time_out_end',
+                'lunch_break_start',
+                'pm_time_in_start',
                 'late_threshold',
                 'teacher_duty_start_time',
                 'teacher_duty_end_time',
@@ -529,6 +531,55 @@ async function getSchoolDayEndDateTime(dateStr) {
     const [rows] = await db.query("SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('absence_cutoff_time', 'pm_time_out_end')");
     const settings = Object.fromEntries(rows.map(row => [row.setting_key, row.setting_value]));
     return sqlDateTime(dateStr, normalizeTimeSetting(settings.absence_cutoff_time || settings.pm_time_out_end, '17:00:00'));
+}
+
+// Daily attendance schedule boundaries used to label time-in/time-out transactions.
+async function getAttendanceScheduleTimes(dateStr) {
+    const [rows] = await db.query(
+        `SELECT setting_key, setting_value
+         FROM settings
+         WHERE setting_key IN ('lunch_break_start', 'pm_time_in_start', 'pm_time_out_end')`
+    );
+    const settings = Object.fromEntries(rows.map(row => [row.setting_key, row.setting_value]));
+    return {
+        lunchStart: sqlDateTime(dateStr, normalizeTimeSetting(settings.lunch_break_start, '11:30:00')),
+        pmInStart: sqlDateTime(dateStr, normalizeTimeSetting(settings.pm_time_in_start, '13:00:00')),
+        pmOutStart: sqlDateTime(dateStr, normalizeTimeSetting(settings.pm_time_out_end, '16:00:00'))
+    };
+}
+
+// Statuses that mean the person is currently OUTSIDE the school after a time-out scan.
+const OUTSIDE_MONITORING_STATUSES = ['OUT', 'LUNCH OUT', 'COMPLETED'];
+
+function isCurrentlyInside(attendanceRow) {
+    const monitoring = String(attendanceRow.monitoring_status || '').toUpperCase();
+    if (monitoring) return !OUTSIDE_MONITORING_STATUSES.includes(monitoring);
+    // Legacy rows without monitoring_status: inside unless a time_out was recorded.
+    return !attendanceRow.time_out;
+}
+
+function timeOutLabelFor(now, schedule) {
+    if (compareDateTime(now, schedule.pmOutStart) >= 0) return 'COMPLETED';
+    if (compareDateTime(now, schedule.lunchStart) >= 0 && compareDateTime(now, schedule.pmInStart) < 0) return 'LUNCH OUT';
+    return 'OUT';
+}
+
+function timeInLabelFor(now, schedule) {
+    return compareDateTime(now, schedule.pmInStart) >= 0 ? 'PM PRESENT' : 'RETURNED';
+}
+
+async function logAttendanceEvent(attendanceId, personType, personId, schoolId, dateStr, event, label, eventTime) {
+    try {
+        await db.query(
+            `INSERT INTO attendance_events
+                (attendance_id, person_type, person_id, school_id, date, event, event_label, event_time)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [attendanceId, personType, personId, schoolId, dateStr, event, label, eventTime]
+        );
+    } catch (err) {
+        // The audit log must never block attendance recording itself.
+        console.error('Attendance event log error:', err);
+    }
 }
 
 async function hasSchoolDayEnded(dateStr) {
@@ -953,68 +1004,115 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
         );
 
         if (existing.length === 0) {
+            // ── First scan of the day = AM Time In (PRESENT on/before cutoff, LATE after) ──
             const lateThreshold = await getAttendanceLateThreshold(personType, today);
             const attendanceStatus = compareDateTime(now, lateThreshold) >= 0 ? 'late' : 'present';
+            const displayStatus = attendanceStatus === 'late' ? 'LATE' : 'PRESENT';
 
-            // Record time-in
-            await db.query(
-                'INSERT INTO attendance (person_type, person_id, school_id, date, time_in, status) VALUES (?, ?, ?, ?, ?, ?)',
-                [personType, person.id, person.school_id, today, now, attendanceStatus]
+            const [insertResult] = await db.query(
+                'INSERT INTO attendance (person_type, person_id, school_id, date, time_in, last_time_in, status, monitoring_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                [personType, person.id, person.school_id, today, now, now, attendanceStatus, displayStatus]
             );
+            await logAttendanceEvent(insertResult.insertId, personType, person.id, person.school_id, today, 'time_in', displayStatus, now);
+
             return res.json({
                 success: true,
                 action: 'TIME_IN',
                 status: attendanceStatus,
+                display_status: displayStatus,
+                monitoring_status: displayStatus,
                 message: attendanceStatus === 'late' ? 'Attendance recorded - marked as LATE' : 'Attendance recorded successfully',
                 person: personInfo,
-                time: formatTime12(now)
+                time: formatTime12(now),
+                time_in: formatTime12(now)
             });
-        } else if (!existing[0].time_out) {
-            // Anti-cheat: reject time_out if scanned too quickly after time_in (< 60 seconds)
-            const elapsedSec = secondsBetween(existing[0].time_in, now);
-            if (elapsedSec < 60) {
-                return res.json({
-                    success: false,
-                    error: 'Time out rejected - scanned too quickly after time in (' + Math.round(elapsedSec) + 's). Please wait at least 1 minute.',
-                    person: personInfo
-                });
-            }
+        }
+
+        // ── Subsequent scans toggle between Time Out and Time In (multiple allowed per day) ──
+        const attendanceRow = existing[0];
+        const transactionTimes = [attendanceRow.last_time_in || attendanceRow.time_in, attendanceRow.time_out].filter(Boolean);
+        let lastTransactionAt = transactionTimes[0];
+        transactionTimes.forEach(value => {
+            if (compareDateTime(value, lastTransactionAt) > 0) lastTransactionAt = value;
+        });
+
+        // Anti-cheat: block scans made less than 60 seconds after the previous transaction.
+        const elapsedSec = secondsBetween(lastTransactionAt, now);
+        if (elapsedSec < 60) {
+            return res.json({
+                success: false,
+                error: 'Scan rejected - too soon after the previous scan (' + Math.round(elapsedSec) + 's). Please wait at least 1 minute.',
+                person: personInfo
+            });
+        }
+
+        const schedule = await getAttendanceScheduleTimes(today);
+
+        if (isCurrentlyInside(attendanceRow)) {
+            // ── Time Out (leave premises / lunch out / end of day) ──
+            const label = timeOutLabelFor(now, schedule);
+
             if (requireTimeOutConfirmation && !confirmedTimeOut) {
                 return res.json({
                     success: true,
                     action: 'CONFIRM_TIME_OUT',
-                    status: existing[0].status,
-                    message: 'Already timed in. Please confirm before recording end-of-day Time Out.',
+                    status: attendanceRow.status,
+                    message: 'Already timed in. Please confirm before recording Time Out.',
                     person: personInfo,
-                    time_in: formatTime12(existing[0].time_in),
+                    time_in: formatTime12(attendanceRow.last_time_in || attendanceRow.time_in),
                     time_out: 'Pending Time Out',
                     monitoring_status: 'Pending Time Out'
                 });
             }
-            // Record time-out
+
             await db.query(
-                'UPDATE attendance SET time_out = ?, updated_at = ? WHERE id = ?',
-                [now, now, existing[0].id]
+                'UPDATE attendance SET time_out = ?, monitoring_status = ?, updated_at = ? WHERE id = ?',
+                [now, label, now, attendanceRow.id]
             );
+            await logAttendanceEvent(attendanceRow.id, personType, person.id, person.school_id, today, 'time_out', label, now);
+
+            const outMessages = {
+                'COMPLETED': 'Time out recorded - attendance for today is complete.',
+                'LUNCH OUT': 'Lunch time out recorded. Scan again when you return.',
+                'OUT': 'Time out recorded. Scan again when you return to school.'
+            };
             return res.json({
                 success: true,
                 action: 'TIME_OUT',
-                message: 'Time out recorded successfully',
+                status: attendanceRow.status,
+                display_status: label,
+                monitoring_status: label,
+                completed: label === 'COMPLETED',
+                message: outMessages[label],
                 person: personInfo,
                 time: formatTime12(now),
-                time_in: formatTime12(existing[0].time_in),
+                time_in: formatTime12(attendanceRow.last_time_in || attendanceRow.time_in),
                 time_out: formatTime12(now)
             });
-        } else {
-            return res.json({
-                success: false,
-                error: person.firstname + ' ' + person.lastname + ' already has complete attendance for today.',
-                person: personInfo,
-                completed: true,
-                time_in: formatTime12(existing[0].time_in),
-                time_out: formatTime12(existing[0].time_out)
-            });
         }
+
+        // ── Time In again after a Time Out (return from outside / PM session) ──
+        const label = timeInLabelFor(now, schedule);
+        await db.query(
+            'UPDATE attendance SET last_time_in = ?, monitoring_status = ?, updated_at = ? WHERE id = ?',
+            [now, label, now, attendanceRow.id]
+        );
+        await logAttendanceEvent(attendanceRow.id, personType, person.id, person.school_id, today, 'time_in', label, now);
+
+        return res.json({
+            success: true,
+            action: 'TIME_IN',
+            status: attendanceRow.status,
+            display_status: label,
+            monitoring_status: label,
+            message: label === 'PM PRESENT'
+                ? 'PM time in recorded. Welcome back!'
+                : 'Return time in recorded. Welcome back!',
+            person: personInfo,
+            time: formatTime12(now),
+            time_in: formatTime12(now),
+            time_out: attendanceRow.time_out ? formatTime12(attendanceRow.time_out) : null
+        });
     } catch (err) {
         console.error('Scan attendance error:', err);
         return res.status(500).json({ success: false, error: 'Server error processing scan.' });

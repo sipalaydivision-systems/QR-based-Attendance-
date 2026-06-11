@@ -72,25 +72,31 @@
   var DEMO_ACTIONS = [
     function () {
       var now = _time();
-      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_IN', status: 'present', message: 'Time in recorded successfully.', person: STUDENT, time: now, time_in: now });
+      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_IN', status: 'present', display_status: 'PRESENT', message: 'Attendance recorded successfully.', person: STUDENT, time: now, time_in: now });
     },
     function () {
-      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_IN', status: 'late', message: 'Time in recorded — student arrived late.', person: STUDENT, time: _time(), time_in: _time() });
+      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_IN', status: 'late', display_status: 'LATE', message: 'Attendance recorded - marked as LATE.', person: STUDENT, time: _time(), time_in: _time() });
     },
     function () {
-      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_OUT', message: 'Time out recorded.', person: TEACHER, time: _time(), time_in: '07:30 AM', time_out: _time() });
+      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_OUT', status: 'present', display_status: 'OUT', message: 'Time out recorded. Scan again when you return to school.', person: STUDENT, time: _time(), time_in: '07:30 AM', time_out: _time() });
     },
     function () {
-      return Object.assign({}, BASE_STATUS, { success: true, action: 'ALREADY_RECORDED', message: 'Already recorded for today.', person: STUDENT, time_in: '07:28 AM' });
+      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_IN', status: 'present', display_status: 'RETURNED', message: 'Return time in recorded. Welcome back!', person: STUDENT, time: _time(), time_in: _time(), time_out: '09:15 AM' });
     },
     function () {
-      return Object.assign({}, BASE_STATUS, { success: true, action: 'PENDING_TIME_OUT', message: 'Already timed in. End-of-day time out opens at 05:00:00 PM.', person: STUDENT, time_in: '07:30 AM' });
+      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_OUT', status: 'present', display_status: 'LUNCH OUT', message: 'Lunch time out recorded. Scan again when you return.', person: STUDENT, time: _time(), time_in: '07:30 AM', time_out: _time() });
+    },
+    function () {
+      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_IN', status: 'present', display_status: 'PM PRESENT', message: 'PM time in recorded. Welcome back!', person: TEACHER, time: _time(), time_in: _time(), time_out: '11:35 AM' });
+    },
+    function () {
+      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_OUT', status: 'present', display_status: 'COMPLETED', completed: true, message: 'Time out recorded - attendance for today is complete.', person: TEACHER, time: _time(), time_in: '01:00 PM', time_out: _time() });
     },
     function () {
       return Object.assign({}, BASE_STATUS, { success: false, error: 'QR code not found in the system. Make sure the student or teacher record is active.', person: null });
     },
     function () {
-      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_IN', offline: true, message: 'Saved offline — will sync when connected.', person: STUDENT, time: _time(), time_in: _time() });
+      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_IN', offline: true, status: 'present', display_status: 'PRESENT', message: 'Saved offline — will sync when connected.', person: STUDENT, time: _time(), time_in: _time() });
     }
   ];
 

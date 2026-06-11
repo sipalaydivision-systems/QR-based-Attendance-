@@ -132,14 +132,34 @@ CREATE TABLE IF NOT EXISTS attendance (
     school_id INT NOT NULL,
     date DATE NOT NULL,
     time_in DATETIME,
+    last_time_in DATETIME,
     time_out DATETIME,
     status ENUM('present','late','absent') DEFAULT 'present',
+    monitoring_status VARCHAR(20) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE,
     UNIQUE KEY unique_attendance (person_type, person_id, date),
     INDEX idx_attendance_date (date),
     INDEX idx_attendance_school_date (school_id, date)
+) ENGINE=InnoDB;
+
+-- -----------------------------------------------------------
+-- Attendance Events (full time-in/time-out transaction log)
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS attendance_events (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    attendance_id INT NOT NULL,
+    person_type ENUM('student','teacher') NOT NULL,
+    person_id INT NOT NULL,
+    school_id INT NOT NULL,
+    date DATE NOT NULL,
+    event ENUM('time_in','time_out') NOT NULL,
+    event_label VARCHAR(20) NOT NULL DEFAULT '',
+    event_time DATETIME NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_att_events_attendance (attendance_id),
+    INDEX idx_att_events_person_date (person_type, person_id, date)
 ) ENGINE=InnoDB;
 
 -- -----------------------------------------------------------

@@ -161,6 +161,52 @@ async function ensureRuntimeSchema() {
     if (inactiveTeachersResult.affectedRows) {
         console.log(`Marked ${inactiveTeachersResult.affectedRows} teacher(s) without attendance history as inactive.`);
     }
+
+    // Multi time-in/time-out support: latest time-in + monitoring status on the daily row.
+    const [attendanceColumns] = await db.query(
+        `SELECT COLUMN_NAME
+         FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'attendance'
+           AND COLUMN_NAME IN ('last_time_in', 'monitoring_status')`
+    );
+    const attendanceColumnNames = attendanceColumns.map(col => col.COLUMN_NAME);
+    if (!attendanceColumnNames.includes('last_time_in')) {
+        await db.query('ALTER TABLE attendance ADD COLUMN last_time_in DATETIME NULL AFTER time_in');
+        await db.query('UPDATE attendance SET last_time_in = time_in WHERE last_time_in IS NULL');
+        console.log('Added missing attendance.last_time_in column.');
+    }
+    if (!attendanceColumnNames.includes('monitoring_status')) {
+        await db.query("ALTER TABLE attendance ADD COLUMN monitoring_status VARCHAR(20) NULL AFTER status");
+        console.log('Added missing attendance.monitoring_status column.');
+    }
+
+    // Full transaction audit trail — every time-in/time-out scan is stored here.
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS attendance_events (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            attendance_id INT NOT NULL,
+            person_type ENUM('student','teacher') NOT NULL,
+            person_id INT NOT NULL,
+            school_id INT NOT NULL,
+            date DATE NOT NULL,
+            event ENUM('time_in','time_out') NOT NULL,
+            event_label VARCHAR(20) NOT NULL DEFAULT '',
+            event_time DATETIME NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_att_events_attendance (attendance_id),
+            INDEX idx_att_events_person_date (person_type, person_id, date)
+        ) ENGINE=InnoDB
+    `);
+
+    // Attendance schedule defaults (existing production values are preserved by INSERT IGNORE).
+    await db.query(`
+        INSERT IGNORE INTO settings (setting_key, setting_value) VALUES
+        ('am_time_in_end', '07:30:00'),
+        ('lunch_break_start', '11:30:00'),
+        ('pm_time_in_start', '13:00:00'),
+        ('pm_time_out_end', '16:00:00')
+    `);
 }
 
 // Root redirect

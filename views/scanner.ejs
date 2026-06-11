@@ -521,11 +521,22 @@
             return;
         }
 
-        if (data.action === 'TIME_IN' && data.status === 'late') {
+        var ds = String(data.display_status || '').toUpperCase();
+        if (data.action === 'TIME_IN' && (ds === 'LATE' || (!ds && data.status === 'late'))) {
             banner.className = 'status-banner late';
             icon.innerHTML = '<i class="fas fa-clock"></i>';
-            label.textContent = 'LATE';
+            label.textContent = 'LATE TIME IN';
             fill.className = 'fill orange';
+        } else if (data.action === 'TIME_IN' && ds === 'RETURNED') {
+            banner.className = 'status-banner time-in';
+            icon.innerHTML = '<i class="fas fa-arrow-right-to-bracket"></i>';
+            label.textContent = 'WELCOME BACK';
+            fill.className = 'fill green';
+        } else if (data.action === 'TIME_IN' && ds === 'PM PRESENT') {
+            banner.className = 'status-banner time-in';
+            icon.innerHTML = '<i class="fas fa-arrow-right-to-bracket"></i>';
+            label.textContent = 'PM TIME IN';
+            fill.className = 'fill green';
         } else if (data.action === 'TIME_IN') {
             banner.className = 'status-banner time-in';
             icon.innerHTML = '<i class="fas fa-arrow-right-to-bracket"></i>';
@@ -540,6 +551,16 @@
             banner.className = 'status-banner late';
             icon.innerHTML = '<i class="fas fa-utensils"></i>';
             label.textContent = 'PENDING TIME OUT';
+            fill.className = 'fill orange';
+        } else if (data.action === 'TIME_OUT' && ds === 'LUNCH OUT') {
+            banner.className = 'status-banner time-out';
+            icon.innerHTML = '<i class="fas fa-utensils"></i>';
+            label.textContent = 'LUNCH OUT';
+            fill.className = 'fill orange';
+        } else if (data.action === 'TIME_OUT' && ds === 'COMPLETED') {
+            banner.className = 'status-banner time-out';
+            icon.innerHTML = '<i class="fas fa-flag-checkered"></i>';
+            label.textContent = 'COMPLETED';
             fill.className = 'fill orange';
         } else {
             banner.className = 'status-banner time-out';

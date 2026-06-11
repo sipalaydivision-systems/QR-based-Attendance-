@@ -40,6 +40,8 @@ const ADMIN_SYNCED_SETTING_KEYS = new Set([
   'systemLogo',
   'timeInStart',
   'timeOutOpen',
+  'lunchBreakStart',
+  'pmTimeInStart',
   'lateGraceMinutes',
   'teacherDutyStart',
   'teacherDutyEnd',
@@ -99,6 +101,8 @@ function defaultSettings() {
     systemLogo: '',
     timeInStart: '07:00',
     timeOutOpen: '17:00',
+    lunchBreakStart: '11:30',
+    pmTimeInStart: '13:00',
     lateGraceMinutes: 0,
     teacherDutyStart: '07:00',
     teacherDutyEnd: '17:00',
@@ -535,6 +539,8 @@ async function refreshDesktopConfig() {
     systemLogo: data.settings?.system_logo || settings.systemLogo,
     timeInStart: String(data.settings?.am_time_in_end || settings.timeInStart || '07:00').slice(0, 5),
     timeOutOpen: String(data.settings?.pm_time_out_end || settings.timeOutOpen || '17:00').slice(0, 5),
+    lunchBreakStart: String(data.settings?.lunch_break_start || settings.lunchBreakStart || '11:30').slice(0, 5),
+    pmTimeInStart: String(data.settings?.pm_time_in_start || settings.pmTimeInStart || '13:00').slice(0, 5),
     lateGraceMinutes: Number(data.settings?.late_threshold || settings.lateGraceMinutes || 0) || 0,
     teacherDutyStart: String(data.settings?.teacher_duty_start_time || data.settings?.am_time_in_end || settings.teacherDutyStart || '07:00').slice(0, 5),
     teacherDutyEnd: String(data.settings?.teacher_duty_end_time || data.settings?.pm_time_out_end || settings.teacherDutyEnd || '17:00').slice(0, 5),
@@ -806,10 +812,13 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
   }
 
   const events = getAttendanceEventsForPersonDate(person.personType, person.serverPersonId, attendanceDate);
-  const existingTimeIn = events.find((item) => item.eventAction === 'TIME_IN');
-  const existingTimeOut = events.find((item) => item.eventAction === 'TIME_OUT');
+  let lastEvent = null;
+  events.forEach((item) => {
+    if (!['TIME_IN', 'TIME_OUT'].includes(item.eventAction)) return;
+    if (!lastEvent || compareSqlDateTimes(item.scanTime, lastEvent.scanTime) > 0) lastEvent = item;
+  });
 
-  if (!existingTimeIn) {
+  if (!lastEvent) {
     const settings = loadSettings();
     const isTeacher = person.personType === 'teacher';
     const lateThreshold = combineDateAndTime(
@@ -824,6 +833,7 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
     const lateBoundary = parseSqlDateTime(lateThreshold);
     const lateCutoff = lateBoundary ? toLocalSqlDateTime(new Date(lateBoundary.getTime() + graceMinutes * 60000)) : lateThreshold;
     const attendanceStatus = compareSqlDateTimes(scanTime, lateCutoff) >= 0 ? 'late' : 'present';
+    const displayStatus = attendanceStatus === 'late' ? 'LATE' : 'PRESENT';
 
     insertAttendanceEvent({
       localEventId: createId(),
@@ -856,51 +866,39 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
       queued: true,
       action: 'TIME_IN',
       status: attendanceStatus,
+      display_status: displayStatus,
+      monitoring_status: displayStatus,
       message: attendanceStatus === 'late'
         ? 'Attendance recorded offline - marked as LATE.'
         : 'Attendance recorded offline.',
       person: personResponseFromCache(person),
-      time: formatTime12(scanTime)
+      time: formatTime12(scanTime),
+      time_in: formatTime12(scanTime)
     };
   }
 
-  if (person.personType === 'student') {
+  // ── Subsequent scans toggle Time Out / Time In (multiple allowed per day) ──
+  const elapsedSec = secondsBetween(lastEvent.scanTime, scanTime);
+  if (elapsedSec < 60) {
     return {
-      success: true,
+      success: false,
       offline: true,
-      action: 'ALREADY_RECORDED',
-      status: existingTimeIn.attendanceStatus || 'present',
-      message: 'Already recorded today. Student remains PRESENT for the school day.',
-      person: personResponseFromCache(person),
-      time_in: formatTime12(existingTimeIn.timeIn || existingTimeIn.scanTime),
-      monitoring_status: 'Inside School'
+      error: `Scan rejected - too soon after the previous scan (${Math.round(elapsedSec)}s). Please wait at least 1 minute.`,
+      person: personResponseFromCache(person)
     };
   }
 
-  if (!existingTimeOut) {
-    const elapsedSec = secondsBetween(existingTimeIn.scanTime, scanTime);
-    if (elapsedSec < 60) {
-      return {
-        success: false,
-        offline: true,
-        error: `Time out rejected - scanned too quickly after time in (${Math.round(elapsedSec)}s). Please wait at least 1 minute.`,
-        person: personResponseFromCache(person)
-      };
-    }
+  const scheduleSettings = loadSettings();
+  const lunchStart = combineDateAndTime(attendanceDate, scheduleSettings.lunchBreakStart, '11:30');
+  const pmInStart = combineDateAndTime(attendanceDate, scheduleSettings.pmTimeInStart, '13:00');
+  const pmOutStart = combineDateAndTime(attendanceDate, scheduleSettings.timeOutOpen, '16:00');
+  const dailyStatus = lastEvent.attendanceStatus || 'present';
 
-    if (options.requireTimeOutConfirmation !== false && !options.confirmTimeOut) {
-      return {
-        success: true,
-        offline: true,
-        action: 'CONFIRM_TIME_OUT',
-        status: existingTimeIn.attendanceStatus || 'present',
-        message: 'Already timed in. Please confirm before recording end-of-day Time Out.',
-        person: personResponseFromCache(person),
-        time_in: formatTime12(existingTimeIn.timeIn || existingTimeIn.scanTime),
-        time_out: 'Pending Time Out',
-        monitoring_status: 'Pending Time Out'
-      };
-    }
+  if (lastEvent.eventAction === 'TIME_IN') {
+    // ── Time Out (leave premises / lunch out / end of day) ──
+    let label = 'OUT';
+    if (compareSqlDateTimes(scanTime, pmOutStart) >= 0) label = 'COMPLETED';
+    else if (compareSqlDateTimes(scanTime, lunchStart) >= 0 && compareSqlDateTimes(scanTime, pmInStart) < 0) label = 'LUNCH OUT';
 
     insertAttendanceEvent({
       localEventId: createId(),
@@ -917,7 +915,7 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
       attendanceDate,
       scanTime,
       eventAction: 'TIME_OUT',
-      attendanceStatus: existingTimeIn.attendanceStatus || 'present',
+      attendanceStatus: dailyStatus,
       timeOut: scanTime,
       syncStatus: 'pending',
       serverMessage: OFFLINE_MODE_MESSAGE,
@@ -927,27 +925,71 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
       updatedAt: toLocalSqlDateTime()
     });
 
+    const outMessages = {
+      'COMPLETED': 'Time out recorded offline - attendance for today is complete.',
+      'LUNCH OUT': 'Lunch time out recorded offline. Scan again when you return.',
+      'OUT': 'Time out recorded offline. Scan again when you return to school.'
+    };
     return {
       success: true,
       offline: true,
       queued: true,
       action: 'TIME_OUT',
-      message: 'Time out recorded offline.',
+      status: dailyStatus,
+      display_status: label,
+      monitoring_status: label,
+      completed: label === 'COMPLETED',
+      message: outMessages[label],
       person: personResponseFromCache(person),
       time: formatTime12(scanTime),
-      time_in: formatTime12(existingTimeIn.timeIn || existingTimeIn.scanTime),
+      time_in: formatTime12(lastEvent.timeIn || lastEvent.scanTime),
       time_out: formatTime12(scanTime)
     };
   }
 
+  // ── Time In again after a Time Out (return from outside / PM session) ──
+  const label = compareSqlDateTimes(scanTime, pmInStart) >= 0 ? 'PM PRESENT' : 'RETURNED';
+
+  insertAttendanceEvent({
+    localEventId: createId(),
+    syncEventId: createId(),
+    qrCode: matchedQrCode,
+    serverPersonId: person.serverPersonId,
+    personType: person.personType,
+    personCode: person.personCode,
+    name: person.name,
+    schoolId: person.schoolId,
+    schoolName: person.schoolName,
+    gradeLevel: person.gradeLevel,
+    sectionName: person.sectionName,
+    attendanceDate,
+    scanTime,
+    eventAction: 'TIME_IN',
+    attendanceStatus: dailyStatus,
+    timeIn: scanTime,
+    syncStatus: 'pending',
+    serverMessage: OFFLINE_MODE_MESSAGE,
+    lastError: null,
+    syncAttempts: 0,
+    createdAt: toLocalSqlDateTime(),
+    updatedAt: toLocalSqlDateTime()
+  });
+
   return {
-    success: false,
+    success: true,
     offline: true,
-    error: `${person.name} already has complete attendance for today.`,
+    queued: true,
+    action: 'TIME_IN',
+    status: dailyStatus,
+    display_status: label,
+    monitoring_status: label,
+    message: label === 'PM PRESENT'
+      ? 'PM time in recorded offline. Welcome back!'
+      : 'Return time in recorded offline. Welcome back!',
     person: personResponseFromCache(person),
-    completed: true,
-    time_in: formatTime12(existingTimeIn.timeIn || existingTimeIn.scanTime),
-    time_out: formatTime12(existingTimeOut.timeOut || existingTimeOut.scanTime)
+    time: formatTime12(scanTime),
+    time_in: formatTime12(scanTime),
+    time_out: formatTime12(lastEvent.timeOut || lastEvent.scanTime)
   };
 }
 
