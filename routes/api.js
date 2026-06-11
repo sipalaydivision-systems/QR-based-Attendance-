@@ -969,16 +969,6 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
                 person: personInfo,
                 time: formatTime12(now)
             });
-        } else if (personType === 'student') {
-            return res.json({
-                success: true,
-                action: 'ALREADY_RECORDED',
-                status: existing[0].status,
-                message: 'Already recorded today. Student remains PRESENT for the school day.',
-                person: personInfo,
-                time_in: formatTime12(existing[0].time_in),
-                monitoring_status: 'Inside School'
-            });
         } else if (!existing[0].time_out) {
             // Anti-cheat: reject time_out if scanned too quickly after time_in (< 60 seconds)
             const elapsedSec = secondsBetween(existing[0].time_in, now);
