@@ -3026,6 +3026,68 @@ router.get('/section-kpi/:id', requireAuth, async (req, res) => {
     }
 });
 
+// ---- Adviser Dashboard API ----
+router.get('/adviser-dashboard', requireAuth, async (req, res) => {
+    const user = req.session.user;
+    if (user.role !== 'adviser' || !user.teacher_id) {
+        return res.status(403).json({ error: 'Access denied' });
+    }
+    const date = req.query.date || todayDate();
+    try {
+        const [teacher] = await db.query(
+            `SELECT t.section_id, t.school_id, sec.name as section_name, gl.name as grade_name, sc.name as school_name
+             FROM teachers t
+             LEFT JOIN sections sec ON t.section_id = sec.id
+             LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
+             LEFT JOIN schools sc ON t.school_id = sc.id
+             WHERE t.id = ?`, [user.teacher_id]
+        );
+        if (teacher.length === 0) return res.status(404).json({ error: 'Teacher not found' });
+        const sectionId = teacher[0].section_id;
+        if (!sectionId) return res.json({ teacher: teacher[0], students: [], kpi: { total: 0, present: 0, late: 0, absent: 0 } });
+
+        const [students] = await db.query(
+            `SELECT s.id, s.lrn, s.firstname, s.lastname, s.middlename, s.guardian_contact, s.category, s.status,
+                    a.time_in, a.time_out, a.last_time_in, a.status as att_status, a.monitoring_status
+             FROM students s
+             LEFT JOIN attendance a ON a.person_type = 'student' AND a.person_id = s.id AND a.date = ?
+             WHERE s.section_id = ? AND s.status != 'deleted'
+             ORDER BY s.lastname, s.firstname`, [date, sectionId]
+        );
+
+        const activeStudents = students.filter(s => s.status === 'active');
+        const present = activeStudents.filter(s => s.att_status === 'present' || s.att_status === 'late');
+        const late = activeStudents.filter(s => s.att_status === 'late');
+        const absent = activeStudents.filter(s => !s.att_status);
+
+        return res.json({
+            teacher: teacher[0],
+            students: students.map(s => ({
+                id: s.id,
+                lrn: s.lrn,
+                name: (s.lastname && s.firstname) ? s.lastname + ', ' + s.firstname + (s.middlename ? ' ' + s.middlename.charAt(0) + '.' : '') : s.firstname || s.lastname,
+                guardian_contact: s.guardian_contact,
+                category: s.category,
+                student_status: s.status,
+                time_in: s.time_in ? formatTime12(s.time_in) : null,
+                time_out: s.time_out ? formatTime12(s.time_out) : null,
+                last_time_in: s.last_time_in ? formatTime12(s.last_time_in) : null,
+                att_status: s.att_status,
+                monitoring_status: s.monitoring_status
+            })),
+            kpi: {
+                total: activeStudents.length,
+                present: present.length,
+                late: late.length,
+                absent: absent.length
+            }
+        });
+    } catch (err) {
+        console.error('Adviser dashboard error:', err);
+        return res.status(500).json({ error: 'Failed to load dashboard data.' });
+    }
+});
+
 // ---- School Logo Upload ----
 router.post('/schools/:id/logo', requireAuth, function(req, res) {
     logoUpload.single('logo')(req, res, async function(err) {

@@ -1,0 +1,293 @@
+<%- include('partials/header') %>
+
+<style>
+.ad-wrap { max-width: 1200px; }
+
+.ad-welcome {
+    display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(135deg, var(--primary), #16a34a);
+    border-radius: var(--radius-lg); padding: 24px 28px;
+    color: #fff; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+}
+.ad-welcome-left h2 { font-size: 1.375rem; font-weight: 800; margin: 0; }
+.ad-welcome-left p { font-size: 0.8125rem; opacity: 0.9; margin: 4px 0 0; }
+.ad-welcome-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ad-date-input {
+    padding: 8px 12px; border: 1.5px solid rgba(255,255,255,0.45);
+    border-radius: 9px; font-size: 0.8125rem;
+    background: rgba(255,255,255,0.18); color: #fff; cursor: pointer;
+}
+.ad-date-input::-webkit-calendar-picker-indicator { filter: invert(1); }
+
+.ad-section-info {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    background: #fff; border-radius: var(--radius-lg);
+    border: 1px solid var(--gray-200); box-shadow: var(--shadow);
+    padding: 16px 20px; margin-bottom: 20px;
+}
+.ad-section-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 14px; border-radius: 20px;
+    font-size: 0.8125rem; font-weight: 600;
+}
+.ad-section-badge.school { background: #eef2ff; color: #4f46e5; }
+.ad-section-badge.grade  { background: #fef3c7; color: #92400e; }
+.ad-section-badge.section { background: #dcfce7; color: #16a34a; }
+
+.ad-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px; margin-bottom: 20px;
+}
+.ad-kpi-card {
+    background: #fff; border-radius: var(--radius-lg);
+    padding: 18px 20px; border: 1px solid var(--gray-200);
+    box-shadow: var(--shadow); display: flex; align-items: center; gap: 14px;
+    transition: box-shadow 0.2s, transform 0.2s;
+}
+.ad-kpi-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.ad-kpi-icon {
+    width: 46px; height: 46px; border-radius: var(--radius-lg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.125rem; flex-shrink: 0;
+}
+.ad-kpi-val { font-size: 1.75rem; font-weight: 800; color: var(--gray-900); line-height: 1.1; }
+.ad-kpi-lbl { font-size: 0.6875rem; font-weight: 600; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+.ad-table-card {
+    background: #fff; border-radius: var(--radius-lg);
+    border: 1px solid var(--gray-200); box-shadow: var(--shadow); overflow: hidden;
+}
+.ad-table-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--gray-100);
+}
+.ad-table-header h3 {
+    font-size: 0.9375rem; font-weight: 700; color: var(--gray-800);
+    margin: 0; display: flex; align-items: center; gap: 8px;
+}
+.ad-table-header h3 i { color: var(--primary); }
+.ad-search {
+    padding: 7px 12px; border: 1px solid var(--gray-300);
+    border-radius: var(--radius); font-size: 0.8125rem; width: 220px;
+}
+
+.ad-student-table {
+    width: 100%; border-collapse: collapse; font-size: 0.8125rem;
+}
+.ad-student-table th {
+    text-align: left; padding: 10px 16px;
+    font-size: 0.6875rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--gray-500);
+    background: var(--gray-50); border-bottom: 1px solid var(--gray-200);
+}
+.ad-student-table td {
+    padding: 12px 16px; border-bottom: 1px solid var(--gray-100);
+    color: var(--gray-700); vertical-align: middle;
+}
+.ad-student-table tr:hover td { background: var(--gray-50); }
+.ad-student-name { font-weight: 600; color: var(--gray-900); }
+.ad-student-lrn { font-size: 0.75rem; color: var(--gray-400); margin-top: 1px; }
+
+.ad-status-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 10px; border-radius: 12px;
+    font-size: 0.6875rem; font-weight: 700; text-transform: uppercase;
+}
+.ad-status-pill.present { background: #dcfce7; color: #16a34a; }
+.ad-status-pill.late    { background: #fef3c7; color: #d97706; }
+.ad-status-pill.absent  { background: #fee2e2; color: #dc2626; }
+.ad-status-pill.inside  { background: #dbeafe; color: #2563eb; }
+.ad-status-pill.outside { background: #fce7f3; color: #db2777; }
+.ad-status-pill.inactive { background: var(--gray-100); color: var(--gray-400); }
+
+.ad-time { font-family: 'Inter', monospace; font-size: 0.8125rem; font-weight: 500; }
+.ad-time.none { color: var(--gray-300); }
+
+.ad-empty {
+    text-align: center; padding: 40px 20px; color: var(--gray-400);
+    font-size: 0.875rem;
+}
+.ad-empty i { font-size: 2rem; display: block; margin-bottom: 8px; }
+
+@media (max-width: 640px) {
+    .ad-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .ad-search { width: 140px; }
+}
+</style>
+
+<div class="ad-wrap">
+    <div class="ad-welcome">
+        <div class="ad-welcome-left">
+            <h2><i class="fa-solid fa-chalkboard-user"></i> Good morning, <%= user.fullname %></h2>
+            <p><i class="fa-solid fa-calendar-day"></i> <span id="adDateLabel"></span></p>
+        </div>
+        <div class="ad-welcome-right">
+            <input type="date" id="adDate" class="ad-date-input" value="">
+        </div>
+    </div>
+
+    <div class="ad-section-info">
+        <span class="ad-section-badge school"><i class="fa-solid fa-school"></i> <%= teacher.school_name || 'N/A' %></span>
+        <span class="ad-section-badge grade"><i class="fa-solid fa-layer-group"></i> <%= teacher.grade_name || 'N/A' %></span>
+        <span class="ad-section-badge section"><i class="fa-solid fa-users"></i> <%= teacher.section_name || 'N/A' %></span>
+    </div>
+
+    <div class="ad-kpi-grid">
+        <div class="ad-kpi-card">
+            <div class="ad-kpi-icon" style="background:#eef2ff;color:#4f46e5;"><i class="fa-solid fa-users"></i></div>
+            <div><span class="ad-kpi-val" id="adTotal">--</span><div class="ad-kpi-lbl">Total Students</div></div>
+        </div>
+        <div class="ad-kpi-card">
+            <div class="ad-kpi-icon" style="background:#dcfce7;color:#16a34a;"><i class="fa-solid fa-circle-check"></i></div>
+            <div><span class="ad-kpi-val" id="adPresent">--</span><div class="ad-kpi-lbl">Present</div></div>
+        </div>
+        <div class="ad-kpi-card">
+            <div class="ad-kpi-icon" style="background:#fef3c7;color:#d97706;"><i class="fa-solid fa-clock"></i></div>
+            <div><span class="ad-kpi-val" id="adLate">--</span><div class="ad-kpi-lbl">Late</div></div>
+        </div>
+        <div class="ad-kpi-card">
+            <div class="ad-kpi-icon" style="background:#fee2e2;color:#dc2626;"><i class="fa-solid fa-circle-xmark"></i></div>
+            <div><span class="ad-kpi-val" id="adAbsent">--</span><div class="ad-kpi-lbl">Absent</div></div>
+        </div>
+    </div>
+
+    <div class="ad-table-card">
+        <div class="ad-table-header">
+            <h3><i class="fa-solid fa-list-check"></i> Student Attendance</h3>
+            <input type="text" id="adSearch" class="ad-search" placeholder="Search student...">
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="ad-student-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Student</th>
+                        <th>Status</th>
+                        <th>Time In</th>
+                        <th>Time Out</th>
+                        <th>Location</th>
+                        <th>Guardian</th>
+                    </tr>
+                </thead>
+                <tbody id="adStudentBody">
+                    <tr><td colspan="7" class="ad-empty"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var allStudents = [];
+
+    function localDateString() {
+        var d = new Date();
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    function formatDateLabel(dateStr) {
+        var d = new Date(dateStr + 'T00:00:00');
+        return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    }
+
+    function greetingFor() {
+        var h = new Date().getHours();
+        if (h < 12) return 'Good morning';
+        if (h < 17) return 'Good afternoon';
+        return 'Good evening';
+    }
+
+    var dateInput = document.getElementById('adDate');
+    dateInput.value = localDateString();
+    document.getElementById('adDateLabel').textContent = formatDateLabel(localDateString());
+
+    var greetEl = document.querySelector('.ad-welcome-left h2');
+    if (greetEl) greetEl.innerHTML = '<i class="fa-solid fa-chalkboard-user"></i> ' + greetingFor() + ', <%= user.fullname %>';
+
+    dateInput.addEventListener('change', function() {
+        document.getElementById('adDateLabel').textContent = formatDateLabel(this.value);
+        loadDashboard(this.value);
+    });
+
+    document.getElementById('adSearch').addEventListener('input', function() {
+        renderStudents(this.value.trim().toLowerCase());
+    });
+
+    function statusPill(attStatus) {
+        if (!attStatus) return '<span class="ad-status-pill absent"><i class="fa-solid fa-circle-xmark"></i> Absent</span>';
+        if (attStatus === 'late') return '<span class="ad-status-pill late"><i class="fa-solid fa-clock"></i> Late</span>';
+        return '<span class="ad-status-pill present"><i class="fa-solid fa-circle-check"></i> Present</span>';
+    }
+
+    function locationPill(s) {
+        if (!s.att_status) return '<span class="ad-status-pill absent">--</span>';
+        if (!s.monitoring_status) return '<span class="ad-status-pill inside"><i class="fa-solid fa-school"></i> Inside</span>';
+        var ms = s.monitoring_status.toUpperCase();
+        if (ms === 'OUT' || ms === 'LUNCH OUT' || ms === 'COMPLETED') {
+            var label = ms === 'LUNCH OUT' ? 'Lunch' : ms === 'COMPLETED' ? 'Completed' : 'Outside';
+            return '<span class="ad-status-pill outside"><i class="fa-solid fa-right-from-bracket"></i> ' + label + '</span>';
+        }
+        return '<span class="ad-status-pill inside"><i class="fa-solid fa-school"></i> Inside</span>';
+    }
+
+    function timeCell(val) {
+        if (!val) return '<span class="ad-time none">--:--</span>';
+        return '<span class="ad-time">' + val + '</span>';
+    }
+
+    function renderStudents(filter) {
+        var tbody = document.getElementById('adStudentBody');
+        var filtered = allStudents;
+        if (filter) {
+            filtered = allStudents.filter(function(s) {
+                return s.name.toLowerCase().indexOf(filter) !== -1 ||
+                       (s.lrn && s.lrn.toLowerCase().indexOf(filter) !== -1);
+            });
+        }
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="ad-empty"><i class="fa-solid fa-user-slash"></i> No students found</td></tr>';
+            return;
+        }
+        var html = '';
+        filtered.forEach(function(s, i) {
+            var inactive = s.student_status !== 'active';
+            html += '<tr' + (inactive ? ' style="opacity:0.5;"' : '') + '>';
+            html += '<td>' + (i + 1) + '</td>';
+            html += '<td><div class="ad-student-name">' + s.name + (inactive ? ' <span class="ad-status-pill inactive">Inactive</span>' : '') + '</div><div class="ad-student-lrn">LRN: ' + (s.lrn || 'N/A') + '</div></td>';
+            html += '<td>' + (inactive ? '<span class="ad-status-pill inactive">--</span>' : statusPill(s.att_status)) + '</td>';
+            html += '<td>' + timeCell(s.time_in) + '</td>';
+            html += '<td>' + timeCell(s.time_out) + '</td>';
+            html += '<td>' + (inactive ? '--' : locationPill(s)) + '</td>';
+            html += '<td style="font-size:0.8125rem;color:var(--gray-500);">' + (s.guardian_contact || '--') + '</td>';
+            html += '</tr>';
+        });
+        tbody.innerHTML = html;
+    }
+
+    async function loadDashboard(date) {
+        try {
+            var res = await fetch('/api/adviser-dashboard?date=' + encodeURIComponent(date));
+            var data = await res.json();
+            if (data.error) {
+                document.getElementById('adStudentBody').innerHTML = '<tr><td colspan="7" class="ad-empty"><i class="fa-solid fa-triangle-exclamation"></i> ' + data.error + '</td></tr>';
+                return;
+            }
+            document.getElementById('adTotal').textContent = data.kpi.total;
+            document.getElementById('adPresent').textContent = data.kpi.present;
+            document.getElementById('adLate').textContent = data.kpi.late;
+            document.getElementById('adAbsent').textContent = data.kpi.absent;
+            allStudents = data.students;
+            var searchVal = document.getElementById('adSearch').value.trim().toLowerCase();
+            renderStudents(searchVal);
+        } catch (err) {
+            document.getElementById('adStudentBody').innerHTML = '<tr><td colspan="7" class="ad-empty"><i class="fa-solid fa-triangle-exclamation"></i> Failed to load data</td></tr>';
+        }
+    }
+
+    loadDashboard(dateInput.value);
+})();
+</script>
+
+<%- include('partials/footer') %>

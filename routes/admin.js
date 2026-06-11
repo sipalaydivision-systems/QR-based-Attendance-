@@ -31,6 +31,7 @@ function getDashboardUrl(role) {
         case 'superintendent': return '/admin/sds-dashboard';
         case 'asst_superintendent': return '/admin/asds-dashboard';
         case 'principal': return '/admin/principal-dashboard';
+        case 'adviser': return '/admin/adviser-dashboard';
         default: return '/admin/dashboard';
     }
 }
@@ -354,6 +355,29 @@ router.get('/asds-dashboard', async (req, res) => {
         return res.redirect(getDashboardUrl(role));
     }
     res.render('division_dashboard', { title: 'Dashboard', page: 'asds_dashboard' });
+});
+
+router.get('/adviser-dashboard', async (req, res) => {
+    const role = req.session.user.role;
+    if (role !== 'adviser') {
+        return res.redirect(getDashboardUrl(role));
+    }
+    const teacherId = req.session.user.teacher_id;
+    if (!teacherId) {
+        return res.render('error', { title: 'Setup Required', message: 'Your account is not linked to a teacher record. Please contact the administrator.', user: req.session.user });
+    }
+    const [teacher] = await db.query(
+        `SELECT t.*, sc.name as school_name, gl.name as grade_name, sec.name as section_name, sec.id as section_id
+         FROM teachers t
+         LEFT JOIN schools sc ON t.school_id = sc.id
+         LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
+         LEFT JOIN sections sec ON t.section_id = sec.id
+         WHERE t.id = ?`, [teacherId]
+    );
+    if (teacher.length === 0) {
+        return res.render('error', { title: 'Teacher Not Found', message: 'The linked teacher record was not found.', user: req.session.user });
+    }
+    res.render('adviser_dashboard', { title: 'Adviser Dashboard', page: 'adviser_dashboard', teacher: teacher[0] });
 });
 
 // ---- Attendance ----

@@ -82,6 +82,7 @@ function getDashboardUrl(role) {
     if (role === 'principal') return '/admin/principal-dashboard';
     if (role === 'superintendent') return '/admin/sds-dashboard';
     if (role === 'asst_superintendent') return '/admin/asds-dashboard';
+    if (role === 'adviser') return '/admin/adviser-dashboard';
     return '/admin/dashboard';
 }
 
@@ -207,6 +208,17 @@ async function ensureRuntimeSchema() {
         ('pm_time_in_start', '13:00:00'),
         ('pm_time_out_end', '16:00:00')
     `);
+
+    // Adviser role support: expand users.role ENUM + add teacher_id link column.
+    await db.query("ALTER TABLE users MODIFY COLUMN role ENUM('super_admin','principal','superintendent','asst_superintendent','adviser') NOT NULL DEFAULT 'principal'");
+    const [teacherIdCol] = await db.query(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'teacher_id'`
+    );
+    if (teacherIdCol.length === 0) {
+        await db.query('ALTER TABLE users ADD COLUMN teacher_id INT NULL AFTER school_id');
+        console.log('Added missing users.teacher_id column for adviser role.');
+    }
 }
 
 // Root redirect

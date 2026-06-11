@@ -36,7 +36,8 @@ router.post('/login', async (req, res) => {
             fullname: user.fullname,
             email: user.email,
             role: user.role,
-            school_id: user.school_id
+            school_id: user.school_id,
+            teacher_id: user.teacher_id || null
         };
         // Update last login
         await db.query('UPDATE users SET last_login = ? WHERE id = ?', [nowDateTime(), user.id]);
@@ -50,6 +51,7 @@ router.post('/login', async (req, res) => {
         if (role === 'principal') return res.redirect('/admin/principal-dashboard');
         if (role === 'superintendent') return res.redirect('/admin/sds-dashboard');
         if (role === 'asst_superintendent') return res.redirect('/admin/asds-dashboard');
+        if (role === 'adviser') return res.redirect('/admin/adviser-dashboard');
         return res.redirect('/admin/dashboard');
     } catch (err) {
         console.error('Login error:', err);

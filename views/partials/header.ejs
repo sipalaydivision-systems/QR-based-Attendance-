@@ -42,8 +42,8 @@
         <ul class="nav-links">
             <li class="nav-section"><span class="nav-section-label">Overview</span></li>
             <li>
-                <a href="<%= user.role === 'principal' ? '/admin/principal-dashboard' : user.role === 'superintendent' ? '/admin/sds-dashboard' : user.role === 'asst_superintendent' ? '/admin/asds-dashboard' : '/admin/dashboard' %>"
-                   class="<%= ['dashboard','principal_dashboard','sds_dashboard','asds_dashboard'].includes(page) ? 'active' : '' %>">
+                <a href="<%= user.role === 'principal' ? '/admin/principal-dashboard' : user.role === 'superintendent' ? '/admin/sds-dashboard' : user.role === 'asst_superintendent' ? '/admin/asds-dashboard' : user.role === 'adviser' ? '/admin/adviser-dashboard' : '/admin/dashboard' %>"
+                   class="<%= ['dashboard','principal_dashboard','sds_dashboard','asds_dashboard','adviser_dashboard'].includes(page) ? 'active' : '' %>">
                     <i class="nav-icon fa-solid fa-chart-pie"></i> Dashboard
                 </a>
             </li>
@@ -55,7 +55,7 @@
             </li>
             <% } %>
 
-            <% if (user.role !== 'superintendent' && user.role !== 'asst_superintendent') { %>
+            <% if (user.role !== 'superintendent' && user.role !== 'asst_superintendent' && user.role !== 'adviser') { %>
             <li class="nav-section"><span class="nav-section-label">Management</span></li>
             <% if (user.role === 'super_admin') { %>
             <li>
@@ -110,6 +110,7 @@
                 </a>
             </li>
 
+            <% if (user.role !== 'adviser') { %>
             <li class="nav-section"><span class="nav-section-label">Communication</span></li>
             <li>
                 <a href="/admin/notifications" class="<%= page === 'notifications' ? 'active' : '' %>">
@@ -143,6 +144,7 @@
                     <i class="nav-icon fa-solid fa-camera"></i> QR Scanner
                 </a>
             </li>
+            <% } %>
             <% } %>
         </ul>
 
