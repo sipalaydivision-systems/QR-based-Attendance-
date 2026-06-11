@@ -209,7 +209,8 @@ function showPreview(data) {
     document.getElementById('previewStep').style.display = 'block';
 
     var isTeacher = data.category === 'teacher';
-    var catLabel = data.category === 'teacher' ? 'Teachers' : data.category === 'shs_student' ? 'SHS Students' : 'Students';
+    var isShs = data.category === 'shs_student';
+    var catLabel = isTeacher ? 'Teachers' : isShs ? 'SHS Students' : 'Students';
     document.getElementById('previewTitle').innerHTML = 'Preview Import Data &mdash; ' + catLabel;
 
     // Tags
@@ -231,6 +232,8 @@ function showPreview(data) {
     headHtml += '<th>ROW</th>';
     if (isTeacher) {
         headHtml += '<th>EMP ID</th><th>NAME</th><th>SCHOOL</th><th>GRADE</th><th>SECTION</th><th>CONTACT</th><th>QR CODE</th><th>STATUS</th>';
+    } else if (isShs) {
+        headHtml += '<th>LRN</th><th>NAME</th><th>SCHOOL</th><th>GRADE</th><th>TRACK/STRAND</th><th>SECTION</th><th>GUARDIAN</th><th>QR CODE</th><th>STATUS</th>';
     } else {
         headHtml += '<th>LRN</th><th>NAME</th><th>SCHOOL</th><th>GRADE</th><th>SECTION</th><th>GUARDIAN</th><th>QR CODE</th><th>STATUS</th>';
     }
@@ -255,6 +258,15 @@ function showPreview(data) {
             bodyHtml += '<td>' + (p.grade || '') + '</td>';
             bodyHtml += '<td>' + (p.section || '') + '</td>';
             bodyHtml += '<td>' + (p.contact || '') + '</td>';
+            bodyHtml += '<td style="color:var(--primary);font-size:0.8125rem;">' + (p.qr_code || '') + '</td>';
+        } else if (isShs) {
+            bodyHtml += '<td>' + (p.lrn || '') + '</td>';
+            bodyHtml += '<td>' + (p.name || '') + '</td>';
+            bodyHtml += '<td>' + (p.school || '') + '</td>';
+            bodyHtml += '<td>' + (p.grade || '') + '</td>';
+            bodyHtml += '<td>' + (p.track || '') + '</td>';
+            bodyHtml += '<td>' + (p.section || '') + '</td>';
+            bodyHtml += '<td>' + (p.guardian || '') + '</td>';
             bodyHtml += '<td style="color:var(--primary);font-size:0.8125rem;">' + (p.qr_code || '') + '</td>';
         } else {
             bodyHtml += '<td>' + (p.lrn || '') + '</td>';

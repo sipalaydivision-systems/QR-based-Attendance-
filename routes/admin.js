@@ -696,7 +696,12 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
                 const gradeErr = validateGradeForSchool(gradeStr, school.name || schoolName);
                 if (gradeErr) { entry.status = 'error'; entry.error = gradeErr; }
                 const grade = gradeStr ? await checkGrade(gradeStr) : { id: null, name: '' };
-                const sectionName = row['Section'] || row['section'] || '';
+                const trackStrand = String(row['Track/Strand'] || row['Track'] || row['Strand'] || '').trim();
+                if (category === 'shs_student' && !trackStrand) { entry.status = 'error'; entry.error = 'Track/Strand is required for SHS'; }
+                const rawSection = String(row['Section'] || row['section'] || '').trim();
+                const sectionName = (category === 'shs_student' && trackStrand && rawSection)
+                    ? trackStrand + ' - ' + rawSection
+                    : rawSection;
                 const section = sectionName ? await checkSection(sectionName, school.id, grade.id) : { id: null, name: '' };
                 const guardianContact = row['Guardian Contact'] || row['guardian_contact'] || '';
                 const qr_code = lrn ? 'STU-' + lrn : 'STU-auto';
@@ -713,6 +718,7 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
                 entry.name = ln && fn ? ln + ', ' + fn : fn || ln;
                 entry.school = school.name || '';
                 entry.grade = grade.name || '';
+                entry.track = trackStrand;
                 entry.section = section.name || '';
                 entry.guardian = guardianContact;
                 entry.qr_code = qr_code;
@@ -984,7 +990,13 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                     const gradeErr = validateGradeForSchool(gradeStr, schoolName);
                     if (gradeErr) { errors.push({ row: rn, message: gradeErr }); continue; }
                     const gradeId = await resolveGrade(gradeStr, schoolId);
-                    const sectionId = await resolveSection(row['Section'] || row['section'], schoolId, gradeId);
+                    const trackStrand = String(row['Track/Strand'] || row['Track'] || row['Strand'] || '').trim();
+                    if (category === 'shs_student' && !trackStrand) { errors.push({ row: rn, message: 'Track/Strand is required for SHS' }); continue; }
+                    const rawSection = String(row['Section'] || row['section'] || '').trim();
+                    const composedSection = (category === 'shs_student' && trackStrand && rawSection)
+                        ? trackStrand + ' - ' + rawSection
+                        : rawSection;
+                    const sectionId = await resolveSection(composedSection, schoolId, gradeId);
                     const guardianContact = row['Guardian Contact'] || row['guardian_contact'] || null;
 
                     if (lrn) {
