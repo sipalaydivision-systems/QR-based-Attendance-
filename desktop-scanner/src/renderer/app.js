@@ -1027,8 +1027,8 @@ async function submitQrCode(qrCode, options = {}) {
       qrCode: trimmed,
       scanTime: formatLocalSqlDateTime(),
       allowQueue: options.allowQueue !== false,
-      requireTimeOutConfirmation: options.requireTimeOutConfirmation !== false,
-      confirmTimeOut: !!options.confirmTimeOut
+      requireTimeOutConfirmation: false,
+      confirmTimeOut: false
     })) || {};
 
     result.qrCode = trimmed;
