@@ -190,6 +190,8 @@
                 setPasswordSection(true);
                 setTimeout(function() { document.getElementById('advPassword').focus(); }, 50);
             }
+            // store hasPassword for submit guard
+            window._advHasPassword = data.hasPassword;
         } catch (e) {
             setEmailStatus('empty', '');
         }

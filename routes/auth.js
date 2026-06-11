@@ -115,11 +115,13 @@ router.get('/adviser-check-email', async (req, res) => {
     if (!email) return res.json({ exists: false, hasPassword: false });
     try {
         const [rows] = await db.query(
-            "SELECT id, password FROM teachers WHERE email = ? AND status = 'active'",
+            "SELECT id, password, status FROM teachers WHERE email = ? AND status != 'deleted'",
             [email]
         );
         if (rows.length === 0) return res.json({ exists: false, hasPassword: false });
-        return res.json({ exists: true, hasPassword: !!rows[0].password });
+        const teacher = rows[0];
+        if (teacher.status === 'inactive') return res.json({ exists: true, inactive: true, hasPassword: !!teacher.password });
+        return res.json({ exists: true, inactive: false, hasPassword: !!teacher.password });
     } catch (err) {
         return res.json({ exists: false, hasPassword: false });
     }
@@ -143,7 +145,7 @@ router.post('/adviser-login', async (req, res) => {
              LEFT JOIN schools sc ON t.school_id = sc.id
              LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
              LEFT JOIN sections sec ON t.section_id = sec.id
-             WHERE t.email = ? AND t.status = 'active'`,
+             WHERE t.email = ? AND t.status != 'deleted'`,
             [email.trim().toLowerCase()]
         );
         if (rows.length === 0) {
@@ -205,7 +207,7 @@ router.post('/adviser-setup-password', async (req, res) => {
         return res.render('adviser_setup_password', { title: 'Set Your Password', error: 'Passwords do not match.', email });
     }
     try {
-        const [check] = await db.query('SELECT id, password FROM teachers WHERE id = ? AND status = ?', [teacherId, 'active']);
+        const [check] = await db.query("SELECT id, password FROM teachers WHERE id = ? AND status != 'deleted'", [teacherId]);
         if (check.length === 0) {
             return res.render('adviser_setup_password', { title: 'Set Your Password', error: 'Teacher record not found.', email });
         }
