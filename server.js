@@ -145,12 +145,14 @@ async function ensureRuntimeSchema() {
         console.log(`Marked ${inactiveResult.affectedRows} student(s) without attendance history as inactive.`);
     }
 
-    // Imported teachers/advisers follow the same attendance eligibility rule.
+    // Reset imported teachers that were never manually activated and have no attendance.
+    // active_from IS NULL means they were never explicitly activated by an admin — safe to reset.
     const [inactiveTeachersResult] = await db.query(`
         UPDATE teachers t
         SET t.status = 'inactive',
             t.active_from = NULL
         WHERE t.status = 'active'
+          AND t.active_from IS NULL
           AND NOT EXISTS (
               SELECT 1
               FROM attendance a
