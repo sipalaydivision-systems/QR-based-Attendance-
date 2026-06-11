@@ -23,59 +23,6 @@
     </div>
 </div>
 
-<!-- Landing Page Platform Logos -->
-<div class="settings-section">
-    <h3><i class="fa-solid fa-store"></i> Landing Page App Logos</h3>
-    <p class="section-desc">Upload official platform logos for the public mobile app download page. These replace the temporary Android, Apple/iOS, Windows, and Mac icon placeholders.</p>
-    <div class="settings-grid">
-        <div class="form-group">
-            <label>Android App Logo</label>
-            <div style="display:flex;align-items:center;gap:1rem;">
-                <div class="logo-preview" id="androidLogoPreview"><i class="fa-brands fa-android" style="font-size:2rem;color:var(--gray-300);"></i></div>
-                <div>
-                    <input type="file" id="androidLogoFile" accept="image/*" style="display:none">
-                    <button class="btn btn-primary btn-sm" onclick="document.getElementById('androidLogoFile').click()"><i class="fa-solid fa-upload"></i> Upload Android Logo</button>
-                    <button class="btn btn-secondary btn-sm" onclick="removePlatformLogo('android')">Remove</button>
-                </div>
-            </div>
-        </div>
-        <div class="form-group">
-            <label>IOS / Apple App Logo</label>
-            <div style="display:flex;align-items:center;gap:1rem;">
-                <div class="logo-preview" id="iosLogoPreview"><i class="fa-brands fa-apple" style="font-size:2rem;color:var(--gray-300);"></i></div>
-                <div>
-                    <input type="file" id="iosLogoFile" accept="image/*" style="display:none">
-                    <button class="btn btn-primary btn-sm" onclick="document.getElementById('iosLogoFile').click()"><i class="fa-solid fa-upload"></i> Upload IOS Logo</button>
-                    <button class="btn btn-secondary btn-sm" onclick="removePlatformLogo('ios')">Remove</button>
-                </div>
-            </div>
-        </div>
-        <div class="form-group">
-            <label>Windows App Logo</label>
-            <div style="display:flex;align-items:center;gap:1rem;">
-                <div class="logo-preview" id="windowsLogoPreview"><i class="fa-brands fa-windows" style="font-size:2rem;color:var(--gray-300);"></i></div>
-                <div>
-                    <input type="file" id="windowsLogoFile" accept="image/*" style="display:none">
-                    <button class="btn btn-primary btn-sm" onclick="document.getElementById('windowsLogoFile').click()"><i class="fa-solid fa-upload"></i> Upload Windows Logo</button>
-                    <button class="btn btn-secondary btn-sm" onclick="removePlatformLogo('windows')">Remove</button>
-                </div>
-            </div>
-        </div>
-        <div class="form-group">
-            <label>Mac App Logo</label>
-            <div style="display:flex;align-items:center;gap:1rem;">
-                <div class="logo-preview" id="macLogoPreview"><i class="fa-brands fa-apple" style="font-size:2rem;color:var(--gray-300);"></i></div>
-                <div>
-                    <input type="file" id="macLogoFile" accept="image/*" style="display:none">
-                    <button class="btn btn-primary btn-sm" onclick="document.getElementById('macLogoFile').click()"><i class="fa-solid fa-upload"></i> Upload Mac Logo</button>
-                    <button class="btn btn-secondary btn-sm" onclick="removePlatformLogo('mac')">Remove</button>
-                </div>
-            </div>
-        </div>
-    </div>
-    <p style="margin-top:0.75rem;font-size:0.75rem;color:var(--gray-400);">Recommended: transparent PNG/SVG-style image exported as PNG, max 2MB.</p>
-</div>
-
 <!-- Student Attendance Rules -->
 <div class="settings-section">
     <h3><i class="fa-solid fa-user-graduate"></i> Student Attendance Settings</h3>
@@ -337,13 +284,6 @@ var settingKeys = [
     'sms_enabled',
     'auto_activate_on_scan'
 ];
-var platformLogoConfig = {
-    android: { key: 'platform_android_logo', input: 'androidLogoFile', preview: 'androidLogoPreview', fallback: '<i class="fa-brands fa-android" style="font-size:2rem;color:var(--gray-300);"></i>' },
-    ios: { key: 'platform_ios_logo', input: 'iosLogoFile', preview: 'iosLogoPreview', fallback: '<i class="fa-brands fa-apple" style="font-size:2rem;color:var(--gray-300);"></i>' },
-    windows: { key: 'platform_windows_logo', input: 'windowsLogoFile', preview: 'windowsLogoPreview', fallback: '<i class="fa-brands fa-windows" style="font-size:2rem;color:var(--gray-300);"></i>' },
-    mac: { key: 'platform_mac_logo', input: 'macLogoFile', preview: 'macLogoPreview', fallback: '<i class="fa-brands fa-apple" style="font-size:2rem;color:var(--gray-300);"></i>' }
-};
-
 async function loadSettings() {
     try {
         var res = await fetch('/api/settings');
@@ -445,18 +385,6 @@ function loadLogo() {
             var src = logo.indexOf('data:image/') === 0 ? logo : (logo + '?' + Date.now());
             document.getElementById('logoPreview').innerHTML = '<img src="' + src + '" alt="System Logo">';
         }
-        Object.keys(platformLogoConfig).forEach(function(platform) {
-            var cfg = platformLogoConfig[platform];
-            var preview = document.getElementById(cfg.preview);
-            if (!preview) return;
-            var platformLogo = data[cfg.key] || null;
-            if (platformLogo) {
-                var logoSrc = platformLogo.indexOf('data:image/') === 0 ? platformLogo : (platformLogo + '?' + Date.now());
-                preview.innerHTML = '<img src="' + logoSrc + '" alt="' + platform + ' logo">';
-            } else {
-                preview.innerHTML = cfg.fallback;
-            }
-        });
     });
 }
 
@@ -474,46 +402,6 @@ document.getElementById('logoFile').addEventListener('change', function() {
         }
     }).catch(function(e){ alert('Upload failed'); });
     this.value = '';
-});
-
-function uploadPlatformLogo(platform) {
-    var cfg = platformLogoConfig[platform];
-    if (!cfg) return;
-    var input = document.getElementById(cfg.input);
-    var file = input && input.files ? input.files[0] : null;
-    if (!file) return;
-    var fd = new FormData();
-    fd.append('logo', file);
-    fetch('/api/settings/platform-logo/' + platform, { method: 'POST', body: fd }).then(function(r){ return r.json(); }).then(function(data){
-        if (data.success) {
-            var src = data.logo.indexOf('data:image/') === 0 ? data.logo : (data.logo + '?' + Date.now());
-            document.getElementById(cfg.preview).innerHTML = '<img src="' + src + '" alt="' + platform + ' logo">';
-        } else {
-            alert(data.error || 'Upload failed');
-        }
-    }).catch(function(){ alert('Upload failed'); });
-    input.value = '';
-}
-
-function removePlatformLogo(platform) {
-    var cfg = platformLogoConfig[platform];
-    if (!cfg) return;
-    if (!confirm('Remove this platform logo?')) return;
-    fetch('/api/settings/platform-logo/' + platform, { method: 'DELETE' }).then(function(r){ return r.json(); }).then(function(data){
-        if (data.success) {
-            document.getElementById(cfg.preview).innerHTML = cfg.fallback;
-        } else {
-            alert(data.error || 'Failed to remove logo');
-        }
-    }).catch(function(){ alert('Failed to remove logo'); });
-}
-
-Object.keys(platformLogoConfig).forEach(function(platform) {
-    var cfg = platformLogoConfig[platform];
-    var input = document.getElementById(cfg.input);
-    if (input) {
-        input.addEventListener('change', function(){ uploadPlatformLogo(platform); });
-    }
 });
 
 async function loadStatusCounts() {
