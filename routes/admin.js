@@ -366,18 +366,23 @@ router.get('/adviser-dashboard', async (req, res) => {
     if (!teacherId) {
         return res.render('error', { title: 'Setup Required', message: 'Your account is not linked to a teacher record. Please contact the administrator.', user: req.session.user });
     }
-    const [teacher] = await db.query(
-        `SELECT t.*, sc.name as school_name, gl.name as grade_name, sec.name as section_name, sec.id as section_id
-         FROM teachers t
-         LEFT JOIN schools sc ON t.school_id = sc.id
-         LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
-         LEFT JOIN sections sec ON t.section_id = sec.id
-         WHERE t.id = ?`, [teacherId]
-    );
-    if (teacher.length === 0) {
-        return res.render('error', { title: 'Teacher Not Found', message: 'The linked teacher record was not found.', user: req.session.user });
+    try {
+        const [teacher] = await db.query(
+            `SELECT t.*, sc.name as school_name, gl.name as grade_name, sec.name as section_name, sec.id as section_id
+             FROM teachers t
+             LEFT JOIN schools sc ON t.school_id = sc.id
+             LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
+             LEFT JOIN sections sec ON t.section_id = sec.id
+             WHERE t.id = ?`, [teacherId]
+        );
+        if (teacher.length === 0) {
+            return res.render('error', { title: 'Teacher Not Found', message: 'The linked teacher record was not found.', user: req.session.user });
+        }
+        res.render('adviser_dashboard', { title: 'Adviser Dashboard', page: 'adviser_dashboard', teacher: teacher[0] });
+    } catch (err) {
+        console.error('Adviser dashboard error:', err);
+        return res.render('error', { title: 'Error', message: 'Failed to load adviser dashboard.', user: req.session.user });
     }
-    res.render('adviser_dashboard', { title: 'Adviser Dashboard', page: 'adviser_dashboard', teacher: teacher[0] });
 });
 
 // ---- Attendance ----

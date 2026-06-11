@@ -109,6 +109,122 @@ router.post('/change-password', async (req, res) => {
     }
 });
 
+// ---- Adviser Login (email-based, separate from admin login) ----
+router.get('/adviser-login', (req, res) => {
+    if (req.session.user) return res.redirect('/');
+    res.render('adviser_login', { title: 'Adviser Login', step: 'email', error: null, email: '' });
+});
+
+router.post('/adviser-login', async (req, res) => {
+    const { email, password } = req.body;
+    if (!email) {
+        return res.render('adviser_login', { title: 'Adviser Login', step: 'email', error: 'Please enter your email address.', email: '' });
+    }
+    try {
+        const [rows] = await db.query(
+            `SELECT t.*, sc.name as school_name, gl.name as grade_name, sec.name as section_name
+             FROM teachers t
+             LEFT JOIN schools sc ON t.school_id = sc.id
+             LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
+             LEFT JOIN sections sec ON t.section_id = sec.id
+             WHERE t.email = ? AND t.status = 'active'`,
+            [email.trim().toLowerCase()]
+        );
+        if (rows.length === 0) {
+            return res.render('adviser_login', { title: 'Adviser Login', step: 'email', error: 'Email not found in teacher records. Please contact your administrator.', email });
+        }
+        const teacher = rows[0];
+
+        if (!teacher.password) {
+            req.session.adviser_setup_id = teacher.id;
+            req.session.adviser_setup_email = email.trim().toLowerCase();
+            return res.redirect('/adviser-setup-password');
+        }
+
+        if (!password) {
+            return res.render('adviser_login', { title: 'Adviser Login', step: 'password', error: null, email });
+        }
+
+        const match = await bcrypt.compare(password, teacher.password);
+        if (!match) {
+            return res.render('adviser_login', { title: 'Adviser Login', step: 'password', error: 'Incorrect password.', email });
+        }
+
+        req.session.user = {
+            id: teacher.id,
+            username: teacher.email,
+            fullname: (teacher.firstname + ' ' + teacher.lastname).trim(),
+            email: teacher.email,
+            role: 'adviser',
+            school_id: teacher.school_id,
+            teacher_id: teacher.id
+        };
+        return res.redirect('/admin/adviser-dashboard');
+    } catch (err) {
+        console.error('Adviser login error:', err);
+        return res.render('adviser_login', { title: 'Adviser Login', step: 'email', error: 'A server error occurred. Please try again.', email: '' });
+    }
+});
+
+router.get('/adviser-setup-password', (req, res) => {
+    if (!req.session.adviser_setup_id) return res.redirect('/adviser-login');
+    res.render('adviser_setup_password', { title: 'Set Your Password', error: null, email: req.session.adviser_setup_email || '' });
+});
+
+router.post('/adviser-setup-password', async (req, res) => {
+    const teacherId = req.session.adviser_setup_id;
+    const email = req.session.adviser_setup_email;
+    if (!teacherId) return res.redirect('/adviser-login');
+
+    const { password, confirm_password } = req.body;
+    if (!password || !confirm_password) {
+        return res.render('adviser_setup_password', { title: 'Set Your Password', error: 'Both fields are required.', email });
+    }
+    if (password.length < 6) {
+        return res.render('adviser_setup_password', { title: 'Set Your Password', error: 'Password must be at least 6 characters.', email });
+    }
+    if (password !== confirm_password) {
+        return res.render('adviser_setup_password', { title: 'Set Your Password', error: 'Passwords do not match.', email });
+    }
+    try {
+        const [check] = await db.query('SELECT id, password FROM teachers WHERE id = ? AND status = ?', [teacherId, 'active']);
+        if (check.length === 0) {
+            return res.render('adviser_setup_password', { title: 'Set Your Password', error: 'Teacher record not found.', email });
+        }
+        if (check[0].password) {
+            delete req.session.adviser_setup_id;
+            delete req.session.adviser_setup_email;
+            return res.redirect('/adviser-login');
+        }
+        const hashed = await bcrypt.hash(password, 10);
+        await db.query('UPDATE teachers SET password = ? WHERE id = ?', [hashed, teacherId]);
+
+        delete req.session.adviser_setup_id;
+        delete req.session.adviser_setup_email;
+
+        req.session.user = {
+            id: teacherId,
+            username: email,
+            fullname: (check.length > 0 ? '' : ''),
+            email: email,
+            role: 'adviser',
+            school_id: null,
+            teacher_id: teacherId
+        };
+
+        const [teacher] = await db.query('SELECT firstname, lastname, school_id FROM teachers WHERE id = ?', [teacherId]);
+        if (teacher.length > 0) {
+            req.session.user.fullname = (teacher[0].firstname + ' ' + teacher[0].lastname).trim();
+            req.session.user.school_id = teacher[0].school_id;
+        }
+
+        return res.redirect('/admin/adviser-dashboard');
+    } catch (err) {
+        console.error('Adviser setup password error:', err);
+        return res.render('adviser_setup_password', { title: 'Set Your Password', error: 'A server error occurred.', email });
+    }
+});
+
 // Mobile app login (JSON)
 router.post('/app-login', async (req, res) => {
     const { username, password } = req.body;

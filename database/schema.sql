@@ -107,6 +107,7 @@ CREATE TABLE IF NOT EXISTS teachers (
     subject VARCHAR(255),
     contact VARCHAR(100),
     email VARCHAR(255),
+    password VARCHAR(255),
     grade_level_id INT,
     section_id INT,
     school_id INT NOT NULL,

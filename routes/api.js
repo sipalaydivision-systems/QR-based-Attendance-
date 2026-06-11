@@ -3060,6 +3060,22 @@ router.get('/adviser-dashboard', requireAuth, async (req, res) => {
         const late = activeStudents.filter(s => s.att_status === 'late');
         const absent = activeStudents.filter(s => !s.att_status);
 
+        // 2-day consecutive absence flagging
+        const activeIds = activeStudents.map(s => s.id);
+        let flaggedIds = [];
+        if (activeIds.length > 0) {
+            const yesterday = new Date(date);
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yStr = yesterday.getFullYear() + '-' + String(yesterday.getMonth() + 1).padStart(2, '0') + '-' + String(yesterday.getDate()).padStart(2, '0');
+            const [yAttendance] = await db.query(
+                `SELECT person_id FROM attendance WHERE person_type = 'student' AND date = ? AND person_id IN (?)`,
+                [yStr, activeIds]
+            );
+            const presentYesterday = new Set(yAttendance.map(r => r.person_id));
+            const absentToday = new Set(absent.map(s => s.id));
+            flaggedIds = activeIds.filter(id => !presentYesterday.has(id) && absentToday.has(id));
+        }
+
         return res.json({
             teacher: teacher[0],
             students: students.map(s => ({
@@ -3073,13 +3089,15 @@ router.get('/adviser-dashboard', requireAuth, async (req, res) => {
                 time_out: s.time_out ? formatTime12(s.time_out) : null,
                 last_time_in: s.last_time_in ? formatTime12(s.last_time_in) : null,
                 att_status: s.att_status,
-                monitoring_status: s.monitoring_status
+                monitoring_status: s.monitoring_status,
+                flagged: flaggedIds.includes(s.id)
             })),
             kpi: {
                 total: activeStudents.length,
                 present: present.length,
                 late: late.length,
-                absent: absent.length
+                absent: absent.length,
+                flagged: flaggedIds.length
             }
         });
     } catch (err) {

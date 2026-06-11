@@ -219,6 +219,16 @@ async function ensureRuntimeSchema() {
         await db.query('ALTER TABLE users ADD COLUMN teacher_id INT NULL AFTER school_id');
         console.log('Added missing users.teacher_id column for adviser role.');
     }
+
+    // Adviser direct-login: add password column to teachers table for email-based auth.
+    const [teacherPwdCol] = await db.query(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'teachers' AND COLUMN_NAME = 'password'`
+    );
+    if (teacherPwdCol.length === 0) {
+        await db.query('ALTER TABLE teachers ADD COLUMN password VARCHAR(255) NULL AFTER email');
+        console.log('Added teachers.password column for adviser login.');
+    }
 }
 
 // Root redirect

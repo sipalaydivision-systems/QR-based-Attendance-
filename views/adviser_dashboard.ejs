@@ -36,7 +36,7 @@
 
 .ad-kpi-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 14px; margin-bottom: 20px;
 }
 .ad-kpi-card {
@@ -57,20 +57,29 @@
 .ad-table-card {
     background: #fff; border-radius: var(--radius-lg);
     border: 1px solid var(--gray-200); box-shadow: var(--shadow); overflow: hidden;
+    margin-bottom: 20px;
 }
 .ad-table-header {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 16px 20px; border-bottom: 1px solid var(--gray-100);
+    padding: 16px 20px; border-bottom: 1px solid var(--gray-100); flex-wrap: wrap; gap: 10px;
 }
 .ad-table-header h3 {
     font-size: 0.9375rem; font-weight: 700; color: var(--gray-800);
     margin: 0; display: flex; align-items: center; gap: 8px;
 }
 .ad-table-header h3 i { color: var(--primary); }
+.ad-table-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ad-search {
     padding: 7px 12px; border: 1px solid var(--gray-300);
-    border-radius: var(--radius); font-size: 0.8125rem; width: 220px;
+    border-radius: var(--radius); font-size: 0.8125rem; width: 200px;
 }
+.ad-filter-btn {
+    padding: 7px 12px; border: 1px solid var(--gray-300); border-radius: var(--radius);
+    font-size: 0.75rem; font-weight: 600; background: #fff; cursor: pointer;
+    transition: all 0.15s; color: var(--gray-600);
+}
+.ad-filter-btn:hover { background: var(--gray-50); }
+.ad-filter-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 
 .ad-student-table {
     width: 100%; border-collapse: collapse; font-size: 0.8125rem;
@@ -100,6 +109,14 @@
 .ad-status-pill.inside  { background: #dbeafe; color: #2563eb; }
 .ad-status-pill.outside { background: #fce7f3; color: #db2777; }
 .ad-status-pill.inactive { background: var(--gray-100); color: var(--gray-400); }
+.ad-status-pill.flagged { background: #fef2f2; color: #b91c1c; }
+
+.ad-flag-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    background: #fef2f2; color: #dc2626; border: 1px solid #fecaca;
+    padding: 2px 8px; border-radius: 8px; font-size: 0.625rem;
+    font-weight: 700; margin-left: 6px;
+}
 
 .ad-time { font-family: 'Inter', monospace; font-size: 0.8125rem; font-weight: 500; }
 .ad-time.none { color: var(--gray-300); }
@@ -110,16 +127,33 @@
 }
 .ad-empty i { font-size: 2rem; display: block; margin-bottom: 8px; }
 
+.ad-no-section {
+    background: #fef3c7; border: 1px solid #fde68a; border-radius: var(--radius-lg);
+    padding: 32px; text-align: center; color: #92400e;
+}
+.ad-no-section i { font-size: 2.5rem; display: block; margin-bottom: 12px; }
+.ad-no-section h3 { margin: 0 0 8px; font-size: 1.125rem; }
+.ad-no-section p { margin: 0; font-size: 0.875rem; }
+
 @media (max-width: 640px) {
     .ad-kpi-grid { grid-template-columns: repeat(2, 1fr); }
     .ad-search { width: 140px; }
+    .ad-welcome { padding: 18px 20px; }
 }
 </style>
 
 <div class="ad-wrap">
+    <% if (!teacher.section_id) { %>
+    <div class="ad-no-section">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <h3>No Assigned Grade Level and Section Yet</h3>
+        <p>Please contact the administrator to assign your grade level and section.</p>
+    </div>
+    <% } else { %>
+
     <div class="ad-welcome">
         <div class="ad-welcome-left">
-            <h2><i class="fa-solid fa-chalkboard-user"></i> Good morning, <%= user.fullname %></h2>
+            <h2><i class="fa-solid fa-chalkboard-user"></i> Good morning, <%= teacher.firstname %></h2>
             <p><i class="fa-solid fa-calendar-day"></i> <span id="adDateLabel"></span></p>
         </div>
         <div class="ad-welcome-right">
@@ -150,12 +184,23 @@
             <div class="ad-kpi-icon" style="background:#fee2e2;color:#dc2626;"><i class="fa-solid fa-circle-xmark"></i></div>
             <div><span class="ad-kpi-val" id="adAbsent">--</span><div class="ad-kpi-lbl">Absent</div></div>
         </div>
+        <div class="ad-kpi-card">
+            <div class="ad-kpi-icon" style="background:#fef2f2;color:#b91c1c;"><i class="fa-solid fa-flag"></i></div>
+            <div><span class="ad-kpi-val" id="adFlagged">--</span><div class="ad-kpi-lbl">2-Day Absent</div></div>
+        </div>
     </div>
 
     <div class="ad-table-card">
         <div class="ad-table-header">
             <h3><i class="fa-solid fa-list-check"></i> Student Attendance</h3>
-            <input type="text" id="adSearch" class="ad-search" placeholder="Search student...">
+            <div class="ad-table-controls">
+                <button class="ad-filter-btn active" data-filter="all" onclick="setFilter('all')">All</button>
+                <button class="ad-filter-btn" data-filter="present" onclick="setFilter('present')">Present</button>
+                <button class="ad-filter-btn" data-filter="late" onclick="setFilter('late')">Late</button>
+                <button class="ad-filter-btn" data-filter="absent" onclick="setFilter('absent')">Absent</button>
+                <button class="ad-filter-btn" data-filter="flagged" onclick="setFilter('flagged')">Flagged</button>
+                <input type="text" id="adSearch" class="ad-search" placeholder="Search student...">
+            </div>
         </div>
         <div style="overflow-x:auto;">
             <table class="ad-student-table">
@@ -167,7 +212,7 @@
                         <th>Time In</th>
                         <th>Time Out</th>
                         <th>Location</th>
-                        <th>Guardian</th>
+                        <th>Guardian Contact</th>
                     </tr>
                 </thead>
                 <tbody id="adStudentBody">
@@ -176,11 +221,15 @@
             </table>
         </div>
     </div>
+
+    <% } %>
 </div>
 
+<% if (teacher.section_id) { %>
 <script>
 (function() {
     var allStudents = [];
+    var currentFilter = 'all';
 
     function localDateString() {
         var d = new Date();
@@ -204,7 +253,7 @@
     document.getElementById('adDateLabel').textContent = formatDateLabel(localDateString());
 
     var greetEl = document.querySelector('.ad-welcome-left h2');
-    if (greetEl) greetEl.innerHTML = '<i class="fa-solid fa-chalkboard-user"></i> ' + greetingFor() + ', <%= user.fullname %>';
+    if (greetEl) greetEl.innerHTML = '<i class="fa-solid fa-chalkboard-user"></i> ' + greetingFor() + ', <%= teacher.firstname %>';
 
     dateInput.addEventListener('change', function() {
         document.getElementById('adDateLabel').textContent = formatDateLabel(this.value);
@@ -212,8 +261,16 @@
     });
 
     document.getElementById('adSearch').addEventListener('input', function() {
-        renderStudents(this.value.trim().toLowerCase());
+        renderStudents();
     });
+
+    window.setFilter = function(f) {
+        currentFilter = f;
+        document.querySelectorAll('.ad-filter-btn').forEach(function(btn) {
+            btn.classList.toggle('active', btn.getAttribute('data-filter') === f);
+        });
+        renderStudents();
+    };
 
     function statusPill(attStatus) {
         if (!attStatus) return '<span class="ad-status-pill absent"><i class="fa-solid fa-circle-xmark"></i> Absent</span>';
@@ -237,13 +294,20 @@
         return '<span class="ad-time">' + val + '</span>';
     }
 
-    function renderStudents(filter) {
+    function renderStudents() {
         var tbody = document.getElementById('adStudentBody');
+        var search = (document.getElementById('adSearch').value || '').trim().toLowerCase();
         var filtered = allStudents;
-        if (filter) {
-            filtered = allStudents.filter(function(s) {
-                return s.name.toLowerCase().indexOf(filter) !== -1 ||
-                       (s.lrn && s.lrn.toLowerCase().indexOf(filter) !== -1);
+
+        if (currentFilter === 'present') filtered = filtered.filter(function(s) { return s.att_status === 'present'; });
+        else if (currentFilter === 'late') filtered = filtered.filter(function(s) { return s.att_status === 'late'; });
+        else if (currentFilter === 'absent') filtered = filtered.filter(function(s) { return !s.att_status && s.student_status === 'active'; });
+        else if (currentFilter === 'flagged') filtered = filtered.filter(function(s) { return s.flagged; });
+
+        if (search) {
+            filtered = filtered.filter(function(s) {
+                return s.name.toLowerCase().indexOf(search) !== -1 ||
+                       (s.lrn && s.lrn.toLowerCase().indexOf(search) !== -1);
             });
         }
         if (filtered.length === 0) {
@@ -255,7 +319,10 @@
             var inactive = s.student_status !== 'active';
             html += '<tr' + (inactive ? ' style="opacity:0.5;"' : '') + '>';
             html += '<td>' + (i + 1) + '</td>';
-            html += '<td><div class="ad-student-name">' + s.name + (inactive ? ' <span class="ad-status-pill inactive">Inactive</span>' : '') + '</div><div class="ad-student-lrn">LRN: ' + (s.lrn || 'N/A') + '</div></td>';
+            html += '<td><div class="ad-student-name">' + s.name;
+            if (inactive) html += ' <span class="ad-status-pill inactive">Inactive</span>';
+            if (s.flagged) html += ' <span class="ad-flag-badge"><i class="fa-solid fa-flag"></i> 2-Day</span>';
+            html += '</div><div class="ad-student-lrn">LRN: ' + (s.lrn || 'N/A') + '</div></td>';
             html += '<td>' + (inactive ? '<span class="ad-status-pill inactive">--</span>' : statusPill(s.att_status)) + '</td>';
             html += '<td>' + timeCell(s.time_in) + '</td>';
             html += '<td>' + timeCell(s.time_out) + '</td>';
@@ -278,9 +345,9 @@
             document.getElementById('adPresent').textContent = data.kpi.present;
             document.getElementById('adLate').textContent = data.kpi.late;
             document.getElementById('adAbsent').textContent = data.kpi.absent;
+            document.getElementById('adFlagged').textContent = data.kpi.flagged || 0;
             allStudents = data.students;
-            var searchVal = document.getElementById('adSearch').value.trim().toLowerCase();
-            renderStudents(searchVal);
+            renderStudents();
         } catch (err) {
             document.getElementById('adStudentBody').innerHTML = '<tr><td colspan="7" class="ad-empty"><i class="fa-solid fa-triangle-exclamation"></i> Failed to load data</td></tr>';
         }
@@ -289,5 +356,6 @@
     loadDashboard(dateInput.value);
 })();
 </script>
+<% } %>
 
 <%- include('partials/footer') %>

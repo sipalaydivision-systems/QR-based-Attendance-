@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#16a34a">
+    <title>Adviser Login - <%= (typeof settings !== 'undefined' && settings && settings.system_name) || 'EduTrack' %></title>
+    <link rel="icon" type="image/png" href="/uploads/logos/system-logo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+    .adv-login-page {
+        min-height: 100vh; display: flex; align-items: center; justify-content: center;
+        background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #f0f9ff 100%);
+        padding: 20px;
+    }
+    .adv-login-card {
+        background: #fff; border-radius: 20px; box-shadow: 0 8px 40px rgba(0,0,0,0.08);
+        width: 100%; max-width: 420px; padding: 40px 32px; text-align: center;
+    }
+    .adv-login-icon {
+        width: 72px; height: 72px; border-radius: 18px;
+        background: linear-gradient(135deg, #16a34a, #15803d);
+        display: flex; align-items: center; justify-content: center;
+        margin: 0 auto 16px; color: #fff; font-size: 1.75rem;
+    }
+    .adv-login-icon img { width: 48px; height: 48px; object-fit: contain; border-radius: 8px; }
+    .adv-login-card h1 { font-size: 1.375rem; font-weight: 800; color: var(--gray-900); margin: 0 0 4px; }
+    .adv-login-card .subtitle { font-size: 0.8125rem; color: var(--gray-500); margin: 0 0 24px; }
+
+    .adv-alert {
+        background: #fef2f2; border: 1px solid #fecaca; color: #dc2626;
+        border-radius: 10px; padding: 10px 14px; font-size: 0.8125rem;
+        margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+    }
+
+    .adv-form-group { margin-bottom: 16px; text-align: left; }
+    .adv-form-group label {
+        display: block; font-size: 0.75rem; font-weight: 700;
+        color: var(--gray-600); margin-bottom: 6px; text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .adv-form-group label i { margin-right: 4px; }
+    .adv-form-group input {
+        width: 100%; padding: 11px 14px; border: 1.5px solid var(--gray-300);
+        border-radius: 10px; font-size: 0.875rem; font-family: inherit;
+        transition: border-color 0.2s, box-shadow 0.2s;
+        box-sizing: border-box;
+    }
+    .adv-form-group input:focus {
+        outline: none; border-color: #16a34a;
+        box-shadow: 0 0 0 3px rgba(22,163,74,0.12);
+    }
+    .adv-pwd-wrap { position: relative; }
+    .adv-pwd-wrap input { padding-right: 42px; }
+    .adv-pwd-toggle {
+        position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+        background: none; border: none; cursor: pointer; color: var(--gray-400); font-size: 0.875rem;
+    }
+
+    .adv-btn {
+        width: 100%; padding: 12px; border: none; border-radius: 10px;
+        font-size: 0.9375rem; font-weight: 700; cursor: pointer;
+        font-family: inherit; display: flex; align-items: center;
+        justify-content: center; gap: 8px; transition: all 0.2s;
+        margin-top: 4px;
+    }
+    .adv-btn-primary {
+        background: linear-gradient(135deg, #16a34a, #15803d);
+        color: #fff; box-shadow: 0 2px 8px rgba(22,163,74,0.25);
+    }
+    .adv-btn-primary:hover { box-shadow: 0 4px 16px rgba(22,163,74,0.35); transform: translateY(-1px); }
+
+    .adv-footer { margin-top: 20px; font-size: 0.75rem; color: var(--gray-400); }
+    .adv-footer a { color: var(--primary); text-decoration: none; font-weight: 600; }
+    .adv-footer a:hover { text-decoration: underline; }
+
+    .adv-step-indicator {
+        display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 20px;
+    }
+    .adv-step-dot {
+        width: 8px; height: 8px; border-radius: 50%; background: var(--gray-200);
+    }
+    .adv-step-dot.active { background: #16a34a; width: 24px; border-radius: 4px; }
+    </style>
+</head>
+<body class="adv-login-page">
+    <div class="adv-login-card">
+        <div class="adv-login-icon">
+            <% if (typeof settings !== 'undefined' && settings && settings.system_logo) { %>
+            <img src="<%= settings.system_logo %>" alt="Logo" onerror="this.parentElement.innerHTML='<i class=\'fa-solid fa-chalkboard-user\'></i>'">
+            <% } else { %>
+            <i class="fa-solid fa-chalkboard-user"></i>
+            <% } %>
+        </div>
+        <h1><%= (typeof settings !== 'undefined' && settings && settings.system_name) || 'EduTrack' %></h1>
+        <p class="subtitle"><i class="fa-solid fa-chalkboard-user"></i> Adviser Portal</p>
+
+        <div class="adv-step-indicator">
+            <div class="adv-step-dot active"></div>
+            <div class="adv-step-dot <%= step === 'password' ? 'active' : '' %>"></div>
+        </div>
+
+        <% if (error) { %>
+        <div class="adv-alert"><i class="fa-solid fa-circle-exclamation"></i> <%= error %></div>
+        <% } %>
+
+        <form method="POST" action="/adviser-login">
+            <% if (step === 'email') { %>
+            <div class="adv-form-group">
+                <label for="advEmail"><i class="fa-solid fa-envelope"></i> Email Address</label>
+                <input type="email" id="advEmail" name="email" required autofocus
+                       autocomplete="email" placeholder="Enter your registered email"
+                       value="<%= email %>">
+            </div>
+            <button type="submit" class="adv-btn adv-btn-primary">
+                <i class="fa-solid fa-arrow-right"></i> Continue
+            </button>
+            <% } else { %>
+            <input type="hidden" name="email" value="<%= email %>">
+            <div class="adv-form-group">
+                <label><i class="fa-solid fa-envelope"></i> Email</label>
+                <input type="email" value="<%= email %>" disabled style="background:var(--gray-50);color:var(--gray-500);">
+            </div>
+            <div class="adv-form-group">
+                <label for="advPassword"><i class="fa-solid fa-lock"></i> Password</label>
+                <div class="adv-pwd-wrap">
+                    <input type="password" id="advPassword" name="password" required autofocus
+                           autocomplete="current-password" placeholder="Enter your password">
+                    <button type="button" class="adv-pwd-toggle" onclick="toggleAdvPwd()">
+                        <i class="fa-regular fa-eye" id="advPwdIcon"></i>
+                    </button>
+                </div>
+            </div>
+            <button type="submit" class="adv-btn adv-btn-primary">
+                <i class="fa-solid fa-right-to-bracket"></i> Sign In
+            </button>
+            <p style="margin-top:12px;">
+                <a href="/adviser-login" style="font-size:0.8125rem;color:var(--gray-500);text-decoration:none;">
+                    <i class="fa-solid fa-arrow-left"></i> Use a different email
+                </a>
+            </p>
+            <% } %>
+        </form>
+
+        <div class="adv-footer">
+            <p><i class="fa-solid fa-shield-halved"></i> For registered teachers/advisers only</p>
+            <p style="margin-top:8px;"><a href="/login"><i class="fa-solid fa-arrow-left"></i> Admin Login</a></p>
+        </div>
+    </div>
+    <script>
+    function toggleAdvPwd() {
+        var inp = document.getElementById('advPassword');
+        var ico = document.getElementById('advPwdIcon');
+        if (inp.type === 'password') { inp.type = 'text'; ico.className = 'fa-regular fa-eye-slash'; }
+        else { inp.type = 'password'; ico.className = 'fa-regular fa-eye'; }
+    }
+    </script>
+</body>
+</html>
