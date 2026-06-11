@@ -180,7 +180,9 @@
             <button class="menu-btn" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">
                 <i class="fa-solid fa-bars"></i>
             </button>
+            <% if (!['dashboard','principal_dashboard','sds_dashboard','asds_dashboard','adviser_dashboard'].includes(page)) { %>
             <h1><%= title %></h1>
+            <% } %>
             <div class="topbar-user">
                 <div class="topbar-user-avatar"><%= user.fullname ? user.fullname.charAt(0).toUpperCase() : 'U' %></div>
                 <div class="topbar-user-details">
