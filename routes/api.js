@@ -3035,7 +3035,7 @@ router.get('/adviser-dashboard', requireAuth, async (req, res) => {
     const date = req.query.date || todayDate();
     try {
         const [teacher] = await db.query(
-            `SELECT t.section_id, t.school_id, sec.name as section_name, gl.name as grade_name, sc.name as school_name
+            `SELECT t.section_id, t.school_id, sec.name as section_name, gl.name as grade_name, sc.name as school_name, sc.logo as school_logo
              FROM teachers t
              LEFT JOIN sections sec ON t.section_id = sec.id
              LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
