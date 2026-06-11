@@ -36,7 +36,7 @@
 
 .ad-kpi-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: repeat(5, 1fr);
     gap: 14px; margin-bottom: 20px;
 }
 .ad-kpi-card {
@@ -135,6 +135,9 @@
 .ad-no-section h3 { margin: 0 0 8px; font-size: 1.125rem; }
 .ad-no-section p { margin: 0; font-size: 0.875rem; }
 
+@media (max-width: 900px) {
+    .ad-kpi-grid { grid-template-columns: repeat(3, 1fr); }
+}
 @media (max-width: 640px) {
     .ad-kpi-grid { grid-template-columns: repeat(2, 1fr); }
     .ad-search { width: 140px; }
