@@ -30,30 +30,27 @@
     .adv-login-card .subtitle { font-size: 0.8125rem; color: var(--gray-500); margin: 0 0 24px; }
 
     .adv-alert {
-        background: #fef2f2; border: 1px solid #fecaca; color: #dc2626;
         border-radius: 10px; padding: 10px 14px; font-size: 0.8125rem;
-        margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+        margin-bottom: 16px; display: flex; align-items: center; gap: 8px; text-align: left;
     }
+    .adv-alert.error { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; }
+    .adv-alert.success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #16a34a; }
 
     .adv-form-group { margin-bottom: 16px; text-align: left; }
     .adv-form-group label {
         display: block; font-size: 0.75rem; font-weight: 700;
-        color: var(--gray-600); margin-bottom: 6px; text-transform: uppercase;
-        letter-spacing: 0.04em;
+        color: var(--gray-600); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em;
     }
     .adv-form-group label i { margin-right: 4px; }
     .adv-form-group input {
         width: 100%; padding: 11px 14px; border: 1.5px solid var(--gray-300);
         border-radius: 10px; font-size: 0.875rem; font-family: inherit;
-        transition: border-color 0.2s, box-shadow 0.2s;
-        box-sizing: border-box;
+        transition: border-color 0.2s, box-shadow 0.2s; box-sizing: border-box;
     }
     .adv-form-group input::-ms-reveal,
     .adv-form-group input::-webkit-credentials-auto-fill-button { display: none; }
-    .adv-form-group input:focus {
-        outline: none; border-color: #16a34a;
-        box-shadow: 0 0 0 3px rgba(22,163,74,0.12);
-    }
+    .adv-form-group input:focus { outline: none; border-color: #16a34a; box-shadow: 0 0 0 3px rgba(22,163,74,0.12); }
+    .adv-form-group input:disabled { background: var(--gray-50); color: var(--gray-500); }
     .adv-pwd-wrap { position: relative; }
     .adv-pwd-wrap input { padding-right: 42px; }
     .adv-pwd-toggle {
@@ -65,26 +62,26 @@
         width: 100%; padding: 12px; border: none; border-radius: 10px;
         font-size: 0.9375rem; font-weight: 700; cursor: pointer;
         font-family: inherit; display: flex; align-items: center;
-        justify-content: center; gap: 8px; transition: all 0.2s;
-        margin-top: 4px;
+        justify-content: center; gap: 8px; transition: all 0.2s; margin-top: 4px;
     }
-    .adv-btn-primary {
-        background: linear-gradient(135deg, #16a34a, #15803d);
-        color: #fff; box-shadow: 0 2px 8px rgba(22,163,74,0.25);
-    }
+    .adv-btn-primary { background: linear-gradient(135deg, #16a34a, #15803d); color: #fff; box-shadow: 0 2px 8px rgba(22,163,74,0.25); }
     .adv-btn-primary:hover { box-shadow: 0 4px 16px rgba(22,163,74,0.35); transform: translateY(-1px); }
+    .adv-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+    .adv-email-status {
+        display: flex; align-items: center; gap: 6px; font-size: 0.75rem;
+        margin-top: 5px; min-height: 18px;
+    }
+    .adv-email-status.checking { color: var(--gray-400); }
+    .adv-email-status.found { color: #16a34a; }
+    .adv-email-status.not-found { color: #dc2626; }
+
+    #adv-password-section { display: none; }
+    #adv-password-section.visible { display: block; animation: slideDown 0.2s ease; }
+    @keyframes slideDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 
     .adv-footer { margin-top: 20px; font-size: 0.75rem; color: var(--gray-400); }
     .adv-footer a { color: var(--primary); text-decoration: none; font-weight: 600; }
-    .adv-footer a:hover { text-decoration: underline; }
-
-    .adv-step-indicator {
-        display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 20px;
-    }
-    .adv-step-dot {
-        width: 8px; height: 8px; border-radius: 50%; background: var(--gray-200);
-    }
-    .adv-step-dot.active { background: #16a34a; width: 24px; border-radius: 4px; }
     </style>
 </head>
 <body class="adv-login-page">
@@ -99,51 +96,36 @@
         <h1><%= (typeof settings !== 'undefined' && settings && settings.system_name) || 'EduTrack' %></h1>
         <p class="subtitle"><i class="fa-solid fa-chalkboard-user"></i> Adviser Portal</p>
 
-        <div class="adv-step-indicator">
-            <div class="adv-step-dot active"></div>
-            <div class="adv-step-dot <%= step === 'password' ? 'active' : '' %>"></div>
-        </div>
-
-        <% if (error) { %>
-        <div class="adv-alert"><i class="fa-solid fa-circle-exclamation"></i> <%= error %></div>
+        <% if (typeof error !== 'undefined' && error) { %>
+        <div class="adv-alert error"><i class="fa-solid fa-circle-exclamation"></i> <%= error %></div>
         <% } %>
 
-        <form method="POST" action="/adviser-login">
-            <% if (step === 'email') { %>
+        <form method="POST" action="/adviser-login" id="advForm">
             <div class="adv-form-group">
                 <label for="advEmail"><i class="fa-solid fa-envelope"></i> Email Address</label>
                 <input type="email" id="advEmail" name="email" required autofocus
                        autocomplete="email" placeholder="Enter your registered email"
-                       value="<%= email %>">
+                       value="<%= typeof email !== 'undefined' ? email : '' %>">
+                <div class="adv-email-status" id="advEmailStatus"></div>
             </div>
-            <button type="submit" class="adv-btn adv-btn-primary">
-                <i class="fa-solid fa-arrow-right"></i> Continue
-            </button>
-            <% } else { %>
-            <input type="hidden" name="email" value="<%= email %>">
-            <div class="adv-form-group">
-                <label><i class="fa-solid fa-envelope"></i> Email</label>
-                <input type="email" value="<%= email %>" disabled style="background:var(--gray-50);color:var(--gray-500);">
-            </div>
-            <div class="adv-form-group">
-                <label for="advPassword"><i class="fa-solid fa-lock"></i> Password</label>
-                <div class="adv-pwd-wrap">
-                    <input type="password" id="advPassword" name="password" required autofocus
-                           autocomplete="current-password" placeholder="Enter your password">
-                    <button type="button" class="adv-pwd-toggle" onclick="toggleAdvPwd()">
-                        <i class="fa-regular fa-eye" id="advPwdIcon"></i>
-                    </button>
+
+            <div id="adv-password-section">
+                <div class="adv-form-group">
+                    <label for="advPassword"><i class="fa-solid fa-lock"></i> Password</label>
+                    <div class="adv-pwd-wrap">
+                        <input type="password" id="advPassword" name="password"
+                               autocomplete="current-password" placeholder="Enter your password">
+                        <button type="button" class="adv-pwd-toggle" onclick="toggleAdvPwd()">
+                            <i class="fa-regular fa-eye" id="advPwdIcon"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
-            <button type="submit" class="adv-btn adv-btn-primary">
-                <i class="fa-solid fa-right-to-bracket"></i> Sign In
+
+            <button type="submit" class="adv-btn adv-btn-primary" id="advSubmitBtn">
+                <i class="fa-solid fa-arrow-right" id="advBtnIcon"></i>
+                <span id="advBtnText">Continue</span>
             </button>
-            <p style="margin-top:12px;">
-                <a href="/adviser-login" style="font-size:0.8125rem;color:var(--gray-500);text-decoration:none;">
-                    <i class="fa-solid fa-arrow-left"></i> Use a different email
-                </a>
-            </p>
-            <% } %>
         </form>
 
         <div class="adv-footer">
@@ -151,13 +133,84 @@
             <p style="margin-top:8px;"><a href="/login"><i class="fa-solid fa-arrow-left"></i> Admin Login</a></p>
         </div>
     </div>
+
     <script>
+    var emailCheckTimer = null;
+    var currentEmailState = 'empty'; // empty | checking | found | not-found
+
     function toggleAdvPwd() {
         var inp = document.getElementById('advPassword');
         var ico = document.getElementById('advPwdIcon');
         if (inp.type === 'password') { inp.type = 'text'; ico.className = 'fa-regular fa-eye-slash'; }
         else { inp.type = 'password'; ico.className = 'fa-regular fa-eye'; }
     }
+
+    function setPasswordSection(visible) {
+        var section = document.getElementById('adv-password-section');
+        var pwdInput = document.getElementById('advPassword');
+        if (visible) {
+            section.classList.add('visible');
+            pwdInput.required = true;
+            document.getElementById('advBtnIcon').className = 'fa-solid fa-right-to-bracket';
+            document.getElementById('advBtnText').textContent = 'Sign In';
+        } else {
+            section.classList.remove('visible');
+            pwdInput.required = false;
+            pwdInput.value = '';
+            document.getElementById('advBtnIcon').className = 'fa-solid fa-arrow-right';
+            document.getElementById('advBtnText').textContent = 'Continue';
+        }
+    }
+
+    function setEmailStatus(state, message) {
+        var el = document.getElementById('advEmailStatus');
+        el.className = 'adv-email-status ' + state;
+        el.innerHTML = message;
+        currentEmailState = state;
+    }
+
+    async function checkEmail(email) {
+        if (!email || !email.includes('@')) {
+            setEmailStatus('empty', '');
+            setPasswordSection(false);
+            return;
+        }
+        setEmailStatus('checking', '<i class="fa-solid fa-spinner fa-spin"></i> Checking...');
+        try {
+            var res = await fetch('/adviser-check-email?email=' + encodeURIComponent(email));
+            var data = await res.json();
+            if (!data.exists) {
+                setEmailStatus('not-found', '<i class="fa-solid fa-circle-xmark"></i> Email not found in teacher records');
+                setPasswordSection(false);
+            } else if (!data.hasPassword) {
+                setEmailStatus('found', '<i class="fa-solid fa-circle-check"></i> Email found — you will set your password next');
+                setPasswordSection(false);
+            } else {
+                setEmailStatus('found', '<i class="fa-solid fa-circle-check"></i> Email found — enter your password');
+                setPasswordSection(true);
+                setTimeout(function() { document.getElementById('advPassword').focus(); }, 50);
+            }
+        } catch (e) {
+            setEmailStatus('empty', '');
+        }
+    }
+
+    document.getElementById('advEmail').addEventListener('input', function() {
+        clearTimeout(emailCheckTimer);
+        var val = this.value.trim();
+        if (!val) { setEmailStatus('empty', ''); setPasswordSection(false); return; }
+        emailCheckTimer = setTimeout(function() { checkEmail(val); }, 500);
+    });
+
+    document.getElementById('advForm').addEventListener('submit', function(e) {
+        if (currentEmailState === 'not-found') { e.preventDefault(); return; }
+    });
+
+    // On page load, if email is pre-filled (after error), check it immediately
+    (function() {
+        var email = document.getElementById('advEmail').value.trim();
+        if (email) checkEmail(email);
+    })();
     </script>
 </body>
 </html>
