@@ -754,7 +754,7 @@ async function getRecentSchoolDates(baseDate, schoolId, limit) {
     return dates;
 }
 
-async function getConsecutiveAbsenceFlags({ baseDate, schoolId, days = 2, includeTeachers = true, maxScanDays = 45 }) {
+async function getConsecutiveAbsenceFlags({ baseDate, schoolId, days = 2, includeTeachers = true, maxScanDays = 45, includeTodayAbsences = true }) {
     const threshold = Math.max(1, Number(days) || 2);
     const scanLimit = Math.max(threshold, Math.min(Number(maxScanDays) || 45, 120));
     const today = todayDate();
@@ -762,7 +762,14 @@ async function getConsecutiveAbsenceFlags({ baseDate, schoolId, days = 2, includ
     const recentSchoolDates = await getRecentSchoolDates(cappedBaseDate, schoolId, scanLimit);
     const schoolDates = [];
     for (const d of recentSchoolDates) {
-        if (await shouldCountComputedAbsences(d, schoolId)) schoolDates.push(d);
+        // When includeTodayAbsences is true, count today even if the school day hasn't ended yet —
+        // a student with no scan is already absent mid-day and should be flagged immediately.
+        if (includeTodayAbsences && d === today) {
+            const schoolDay = await checkSchoolDay(d, schoolId);
+            if (schoolDay.isSchoolDay) schoolDates.push(d);
+        } else if (await shouldCountComputedAbsences(d, schoolId)) {
+            schoolDates.push(d);
+        }
     }
     if (schoolDates.length < threshold) return [];
 
