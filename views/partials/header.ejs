@@ -182,6 +182,8 @@
             </button>
             <% if (!['dashboard','principal_dashboard','sds_dashboard','asds_dashboard','adviser_dashboard'].includes(page)) { %>
             <h1><%= title %></h1>
+            <% } else { %>
+            <div style="flex: 1;"></div>
             <% } %>
             <div class="topbar-user">
                 <div class="topbar-user-avatar"><%= user.fullname ? user.fullname.charAt(0).toUpperCase() : 'U' %></div>
