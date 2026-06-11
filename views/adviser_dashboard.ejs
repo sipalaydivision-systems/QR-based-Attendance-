@@ -34,25 +34,6 @@
 .ad-section-badge.grade  { background: #fef3c7; color: #92400e; }
 .ad-section-badge.section { background: #dcfce7; color: #16a34a; }
 
-.ad-kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 14px; margin-bottom: 20px;
-}
-.ad-kpi-card {
-    background: #fff; border-radius: var(--radius-lg);
-    padding: 18px 20px; border: 1px solid var(--gray-200);
-    box-shadow: var(--shadow); display: flex; align-items: center; gap: 14px;
-    transition: box-shadow 0.2s, transform 0.2s;
-}
-.ad-kpi-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
-.ad-kpi-icon {
-    width: 46px; height: 46px; border-radius: var(--radius-lg);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.125rem; flex-shrink: 0;
-}
-.ad-kpi-val { font-size: 1.75rem; font-weight: 800; color: var(--gray-900); line-height: 1.1; }
-.ad-kpi-lbl { font-size: 0.6875rem; font-weight: 600; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
 
 .ad-table-card {
     background: #fff; border-radius: var(--radius-lg);
@@ -135,11 +116,7 @@
 .ad-no-section h3 { margin: 0 0 8px; font-size: 1.125rem; }
 .ad-no-section p { margin: 0; font-size: 0.875rem; }
 
-@media (max-width: 900px) {
-    .ad-kpi-grid { grid-template-columns: repeat(3, 1fr); }
-}
 @media (max-width: 640px) {
-    .ad-kpi-grid { grid-template-columns: repeat(2, 1fr); }
     .ad-search { width: 140px; }
     .ad-welcome { padding: 18px 20px; }
 }
@@ -170,26 +147,41 @@
         <span class="ad-section-badge section"><i class="fa-solid fa-users"></i> <%= teacher.section_name || 'N/A' %></span>
     </div>
 
-    <div class="ad-kpi-grid">
-        <div class="ad-kpi-card">
-            <div class="ad-kpi-icon" style="background:#eef2ff;color:#4f46e5;"><i class="fa-solid fa-users"></i></div>
-            <div><span class="ad-kpi-val" id="adTotal">--</span><div class="ad-kpi-lbl">Total Students</div></div>
+    <div class="stats-grid">
+        <div class="stat-card stat-students">
+            <div class="stat-icon-wrap blue"><i class="fa-solid fa-users"></i></div>
+            <div class="stat-info">
+                <span class="stat-number" id="adTotal">--</span>
+                <span class="stat-label">Total Students</span>
+            </div>
         </div>
-        <div class="ad-kpi-card">
-            <div class="ad-kpi-icon" style="background:#dcfce7;color:#16a34a;"><i class="fa-solid fa-circle-check"></i></div>
-            <div><span class="ad-kpi-val" id="adPresent">--</span><div class="ad-kpi-lbl">Present</div></div>
+        <div class="stat-card stat-present">
+            <div class="stat-icon-wrap green"><i class="fa-solid fa-circle-check"></i></div>
+            <div class="stat-info">
+                <span class="stat-number" id="adPresent">--</span>
+                <span class="stat-label">Present</span>
+            </div>
         </div>
-        <div class="ad-kpi-card">
-            <div class="ad-kpi-icon" style="background:#fef3c7;color:#d97706;"><i class="fa-solid fa-clock"></i></div>
-            <div><span class="ad-kpi-val" id="adLate">--</span><div class="ad-kpi-lbl">Late</div></div>
+        <div class="stat-card stat-rate">
+            <div class="stat-icon-wrap amber"><i class="fa-solid fa-clock"></i></div>
+            <div class="stat-info">
+                <span class="stat-number" id="adLate">--</span>
+                <span class="stat-label">Late</span>
+            </div>
         </div>
-        <div class="ad-kpi-card">
-            <div class="ad-kpi-icon" style="background:#fee2e2;color:#dc2626;"><i class="fa-solid fa-circle-xmark"></i></div>
-            <div><span class="ad-kpi-val" id="adAbsent">--</span><div class="ad-kpi-lbl">Absent</div></div>
+        <div class="stat-card stat-absent">
+            <div class="stat-icon-wrap red"><i class="fa-solid fa-circle-xmark"></i></div>
+            <div class="stat-info">
+                <span class="stat-number" id="adAbsent">--</span>
+                <span class="stat-label">Absent</span>
+            </div>
         </div>
-        <div class="ad-kpi-card">
-            <div class="ad-kpi-icon" style="background:#fef2f2;color:#b91c1c;"><i class="fa-solid fa-flag"></i></div>
-            <div><span class="ad-kpi-val" id="adFlagged">--</span><div class="ad-kpi-lbl">2-Day Absent</div></div>
+        <div class="stat-card" style="border-left:3px solid #dc2626;">
+            <div class="stat-icon-wrap rose"><i class="fa-solid fa-flag"></i></div>
+            <div class="stat-info">
+                <span class="stat-number" id="adFlagged">--</span>
+                <span class="stat-label">2-Day Absent</span>
+            </div>
         </div>
     </div>
 
