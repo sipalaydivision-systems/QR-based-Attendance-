@@ -1127,6 +1127,19 @@ async function getPrintQrPeople(filters) {
 
 router.get('/print-qr/data', async (req, res) => {
     try {
+        const user = req.session.user;
+        if (user.role === 'adviser' && user.teacher_id) {
+            const [t] = await db.query(
+                'SELECT school_id, grade_level_id, section_id FROM teachers WHERE id = ?',
+                [user.teacher_id]
+            );
+            if (t.length > 0 && t[0].section_id) {
+                req.query.type = 'student';
+                req.query.school_id = String(t[0].school_id);
+                req.query.grade_level_id = String(t[0].grade_level_id);
+                req.query.section_id = String(t[0].section_id);
+            }
+        }
         const filters = getPrintQrFilters(req.query);
         const people = await getPrintQrPeople(filters);
         return res.json({ success: true, people, filters: filters.viewFilters });
@@ -1138,6 +1151,23 @@ router.get('/print-qr/data', async (req, res) => {
 
 router.get('/print-qr', async (req, res) => {
     try {
+        const user = req.session.user;
+        let adviserScope = null;
+
+        if (user.role === 'adviser' && user.teacher_id) {
+            const [t] = await db.query(
+                'SELECT school_id, grade_level_id, section_id FROM teachers WHERE id = ?',
+                [user.teacher_id]
+            );
+            if (t.length > 0 && t[0].section_id) {
+                adviserScope = { school_id: t[0].school_id, grade_level_id: t[0].grade_level_id, section_id: t[0].section_id };
+                req.query.type = 'student';
+                req.query.school_id = String(t[0].school_id);
+                req.query.grade_level_id = String(t[0].grade_level_id);
+                req.query.section_id = String(t[0].section_id);
+            }
+        }
+
         const filters = getPrintQrFilters(req.query);
         const peopleWithQR = await getPrintQrPeople(filters);
 
@@ -1148,7 +1178,8 @@ router.get('/print-qr', async (req, res) => {
             people: peopleWithQR,
             type: filters.type,
             schools,
-            filters: filters.viewFilters
+            filters: filters.viewFilters,
+            adviserScope: adviserScope
         });
     } catch (err) {
         console.error('Print QR error:', err);

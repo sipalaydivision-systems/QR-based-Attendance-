@@ -1,5 +1,6 @@
 <%- include('partials/header') %>
 <% const qrFilters = typeof filters !== 'undefined' ? filters : { type: type || 'student', school_id: '', grade_level_id: '', section_id: '', layout: '4' }; %>
+<% const isAdviser = typeof adviserScope !== 'undefined' && adviserScope !== null; %>
 
 <div class="page-header">
     <div class="page-header-left">
@@ -11,6 +12,7 @@
 </div>
 
 <div class="filter-bar no-print">
+    <% if (!isAdviser) { %>
     <div class="filter-item">
         <label>Type</label>
         <select id="qrType">
@@ -36,6 +38,12 @@
             <option value="">All Sections</option>
         </select>
     </div>
+    <% } else { %>
+    <input type="hidden" id="qrType" value="student">
+    <input type="hidden" id="qrSchool" value="<%= qrFilters.school_id %>">
+    <input type="hidden" id="qrGrade" value="<%= qrFilters.grade_level_id %>">
+    <input type="hidden" id="qrSection" value="<%= qrFilters.section_id %>">
+    <% } %>
     <div class="filter-item">
         <label>Layout</label>
         <select id="qrLayout">
@@ -261,6 +269,7 @@
 
 <script>
 var initialQrFilters = <%- JSON.stringify(qrFilters).replace(/</g, '\\u003c') %>;
+var isAdviserMode = <%= typeof adviserScope !== 'undefined' && adviserScope !== null ? 'true' : 'false' %>;
 var dropdownsReady = false;
 var reloadTimer = null;
 var allQrGrades = [];
@@ -320,6 +329,16 @@ function renderSectionOptions(sections, selectedValue) {
 }
 
 async function loadDropdowns() {
+    if (isAdviserMode) {
+        setSelectValue('qrLayout', initialQrFilters.layout || '4');
+        var layoutEl = document.getElementById('qrLayout');
+        if (layoutEl) layoutEl.addEventListener('change', function() {
+            applyLayout(this.value || '4');
+            syncQrUrl(buildQrParams());
+        });
+        dropdownsReady = true;
+        return;
+    }
     var [schools, grades, sections] = await Promise.all([
         fetch('/api/schools').then(function(r){return r.json();}),
         fetch('/api/grade-levels').then(function(r){return r.json();}),
