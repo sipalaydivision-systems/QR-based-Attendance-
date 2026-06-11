@@ -368,7 +368,7 @@ router.get('/adviser-dashboard', async (req, res) => {
     }
     try {
         const [teacher] = await db.query(
-            `SELECT t.*, sc.name as school_name, gl.name as grade_name, sec.name as section_name, sec.id as section_id
+            `SELECT t.*, sc.name as school_name, sc.logo as school_logo, gl.name as grade_name, sec.name as section_name, sec.id as section_id
              FROM teachers t
              LEFT JOIN schools sc ON t.school_id = sc.id
              LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
