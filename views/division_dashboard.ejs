@@ -289,8 +289,11 @@
         grid.innerHTML = schools.map(function(s) {
             var rate = s.enrollment > 0 ? Math.round((s.present / s.enrollment) * 100) : 0;
             var rc = rateColor(rate);
+            var logoHtml = s.logo
+                ? '<img src="' + s.logo + '" alt="" style="width:28px;height:28px;object-fit:contain;border-radius:4px;" onerror="this.outerHTML=\'<i class=\\\'fa-solid fa-building-columns\\\' style=\\\'color:var(--primary);font-size:1rem;\\\'></i>\'">'
+                : '<i class="fa-solid fa-building-columns" style="color:var(--primary);font-size:1rem;"></i>';
             return '<a href="/admin/school/' + s.id + '" class="school-card-v2" style="text-decoration:none;display:block">' +
-                '<div class="sc-header"><span class="sc-icon"><i class="fa-solid fa-building-columns" style="color:var(--primary);font-size:1rem;"></i></span></div>' +
+                '<div class="sc-header"><span class="sc-icon">' + logoHtml + '</span></div>' +
                 '<div class="sc-body"><div class="sc-name">' + s.name + '</div></div>' +
                 '<div class="sc-stats">' +
                     '<div class="sc-stat"><span class="sc-stat-val">' + (s.enrollment||0) + '</span><span class="sc-stat-lbl">Students</span></div>' +
