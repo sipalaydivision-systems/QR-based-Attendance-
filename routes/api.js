@@ -3048,6 +3048,7 @@ router.get('/adviser-dashboard', requireAuth, async (req, res) => {
 
         const [students] = await db.query(
             `SELECT s.id, s.lrn, s.firstname, s.lastname, s.middlename, s.guardian_contact, s.category, s.status,
+                    s.active_from, s.created_at,
                     a.time_in, a.time_out, a.last_time_in, a.status as att_status, a.monitoring_status
              FROM students s
              LEFT JOIN attendance a ON a.person_type = 'student' AND a.person_id = s.id AND a.date = ?
@@ -3060,20 +3061,40 @@ router.get('/adviser-dashboard', requireAuth, async (req, res) => {
         const late = activeStudents.filter(s => s.att_status === 'late');
         const absent = activeStudents.filter(s => !s.att_status);
 
-        // 2-day consecutive absence flagging
+        // 2-day consecutive absence flagging — use the same school-day logic as getConsecutiveAbsenceFlags
         const activeIds = activeStudents.map(s => s.id);
         let flaggedIds = [];
-        if (activeIds.length > 0) {
-            const yesterday = new Date(date);
-            yesterday.setDate(yesterday.getDate() - 1);
-            const yStr = yesterday.getFullYear() + '-' + String(yesterday.getMonth() + 1).padStart(2, '0') + '-' + String(yesterday.getDate()).padStart(2, '0');
-            const [yAttendance] = await db.query(
-                `SELECT person_id FROM attendance WHERE person_type = 'student' AND date = ? AND person_id IN (?)`,
-                [yStr, activeIds]
-            );
-            const presentYesterday = new Set(yAttendance.map(r => r.person_id));
-            const absentToday = new Set(absent.map(s => s.id));
-            flaggedIds = activeIds.filter(id => !presentYesterday.has(id) && absentToday.has(id));
+        if (activeIds.length > 0 && absent.length > 0) {
+            const schoolId = teacher[0].school_id;
+            const schoolDates = await getRecentSchoolDates(date, schoolId, 10);
+            // Find the most recent school day before today that has ended
+            let prevSchoolDay = null;
+            for (const d of schoolDates) {
+                if (d < date && await shouldCountComputedAbsences(d, schoolId)) {
+                    prevSchoolDay = d;
+                    break;
+                }
+            }
+            if (prevSchoolDay) {
+                const [yAttendance] = await db.query(
+                    `SELECT person_id FROM attendance WHERE person_type = 'student' AND date = ? AND person_id IN (?) AND time_in IS NOT NULL`,
+                    [prevSchoolDay, activeIds]
+                );
+                const presentPrevDay = new Set(yAttendance.map(r => r.person_id));
+                const absentToday = new Set(absent.map(s => s.id));
+                const studentMap = Object.fromEntries(activeStudents.map(s => [s.id, s]));
+                flaggedIds = activeIds.filter(id => {
+                    if (!absentToday.has(id)) return false;
+                    if (presentPrevDay.has(id)) return false;
+                    // Skip if student was enrolled on or after the previous school day
+                    const s = studentMap[id];
+                    const effectiveDate = s.active_from
+                        ? (s.active_from instanceof Date ? s.active_from.toISOString().slice(0, 10) : String(s.active_from).slice(0, 10))
+                        : (s.created_at instanceof Date ? s.created_at.toISOString().slice(0, 10) : String(s.created_at).slice(0, 10));
+                    if (effectiveDate >= prevSchoolDay) return false;
+                    return true;
+                });
+            }
         }
 
         return res.json({
