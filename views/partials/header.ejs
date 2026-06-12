@@ -232,19 +232,9 @@
 
                 <!-- Editable fields -->
                 <div style="width:100%;display:flex;flex-direction:column;gap:.7rem;">
-                    <div style="display:flex;gap:.65rem;">
-                        <div style="flex:1;">
-                            <label style="font-size:.76rem;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px;">Last Name</label>
-                            <input type="text" id="pmLastName" class="form-control" placeholder="Last name">
-                        </div>
-                        <div style="flex:1;">
-                            <label style="font-size:.76rem;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px;">First Name</label>
-                            <input type="text" id="pmFirstName" class="form-control" placeholder="First name">
-                        </div>
-                    </div>
                     <div>
-                        <label style="font-size:.76rem;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px;">Middle Name</label>
-                        <input type="text" id="pmMiddleName" class="form-control" placeholder="Middle name">
+                        <label style="font-size:.76rem;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px;">Name</label>
+                        <input type="text" id="pmFullNameInput" class="form-control" placeholder="Full name">
                     </div>
                     <div>
                         <label style="font-size:.76rem;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px;">Email</label>
@@ -346,24 +336,21 @@
                     '<img src="' + t.profile_photo + '" alt="Photo" style="width:100%;height:100%;object-fit:cover;">';
             }
             // populate editable fields
-            document.getElementById('pmLastName').value  = t.lastname   || '';
-            document.getElementById('pmFirstName').value = t.firstname  || '';
-            document.getElementById('pmMiddleName').value= t.middlename || '';
-            document.getElementById('pmEmail').value     = t.email      || '';
-            document.getElementById('pmContact').value   = t.contact    || '';
+            var parts = [t.firstname, t.middlename, t.lastname].filter(function(p){ return p && p.trim(); });
+            document.getElementById('pmFullNameInput').value = parts.join(' ');
+            document.getElementById('pmEmail').value   = t.email   || '';
+            document.getElementById('pmContact').value = t.contact || '';
         } catch(e) {}
     }
 
     async function pmSaveProfile() {
         var btn = document.getElementById('pmProfileSaveBtn');
         var alertEl = document.getElementById('pmProfileAlert');
-        var firstname = document.getElementById('pmFirstName').value.trim();
-        var lastname  = document.getElementById('pmLastName').value.trim();
-        var middlename= document.getElementById('pmMiddleName').value.trim();
-        var email     = document.getElementById('pmEmail').value.trim();
-        var contact   = document.getElementById('pmContact').value.trim();
-        if (!firstname || !lastname) {
-            alertEl.textContent = 'First name and last name are required.';
+        var fullname = document.getElementById('pmFullNameInput').value.trim();
+        var email    = document.getElementById('pmEmail').value.trim();
+        var contact  = document.getElementById('pmContact').value.trim();
+        if (!fullname) {
+            alertEl.textContent = 'Name is required.';
             alertEl.style.display = 'block';
             alertEl.style.background = '#fef2f2';
             alertEl.style.color = '#dc2626';
@@ -376,7 +363,7 @@
             var res = await fetch('/admin/adviser-update-profile', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ firstname, lastname, middlename, email, contact })
+                body: JSON.stringify({ fullname, email, contact })
             });
             var data = await res.json();
             if (data.success) {

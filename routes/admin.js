@@ -844,17 +844,15 @@ router.get('/adviser-profile-data', async (req, res) => {
 router.post('/adviser-update-profile', express.json(), async (req, res) => {
     if (!req.session.user || req.session.user.role !== 'adviser') return res.status(403).json({ error: 'Unauthorized' });
     const teacherId = req.session.user.teacher_id;
-    const { firstname, lastname, middlename, email, contact } = req.body;
-    if (!firstname || !firstname.trim()) return res.status(400).json({ error: 'First name is required.' });
-    if (!lastname || !lastname.trim()) return res.status(400).json({ error: 'Last name is required.' });
+    const { fullname, email, contact } = req.body;
+    if (!fullname || !fullname.trim()) return res.status(400).json({ error: 'Name is required.' });
     try {
         await db.query(
-            `UPDATE teachers SET firstname=?, lastname=?, middlename=?, email=?, contact=? WHERE id=?`,
-            [firstname.trim(), lastname.trim(), (middlename||'').trim(), (email||'').trim(), (contact||'').trim(), teacherId]
+            `UPDATE teachers SET firstname=?, lastname='', middlename='', email=?, contact=? WHERE id=?`,
+            [fullname.trim(), (email||'').trim(), (contact||'').trim(), teacherId]
         );
-        // refresh fullname in session
-        req.session.user.fullname = (firstname.trim() + ' ' + lastname.trim()).trim();
-        res.json({ success: true, fullname: req.session.user.fullname });
+        req.session.user.fullname = fullname.trim();
+        res.json({ success: true, fullname: fullname.trim() });
     } catch (err) {
         res.status(500).json({ error: 'Failed to update profile.' });
     }
