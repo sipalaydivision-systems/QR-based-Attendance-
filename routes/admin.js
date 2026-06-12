@@ -835,6 +835,8 @@ router.get('/adviser-profile-data', async (req, res) => {
             [teacherId]
         );
         if (!t) return res.status(404).json({ error: 'Not found' });
+        // include session fullname as fallback when DB name fields are empty
+        t.session_fullname = req.session.user.fullname || '';
         res.json(t);
     } catch (err) {
         res.status(500).json({ error: 'Server error' });

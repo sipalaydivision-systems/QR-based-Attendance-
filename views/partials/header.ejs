@@ -337,7 +337,9 @@
             }
             // populate editable fields
             var parts = [t.firstname, t.middlename, t.lastname].filter(function(p){ return p && p.trim(); });
-            document.getElementById('pmFullNameInput').value = parts.join(' ');
+            var combinedName = parts.join(' ').trim();
+            // fall back to session fullname if DB fields are blank
+            document.getElementById('pmFullNameInput').value = combinedName || '<%= user.fullname %>';
             document.getElementById('pmEmail').value   = t.email   || '';
             document.getElementById('pmContact').value = t.contact || '';
         } catch(e) {}
