@@ -10,6 +10,7 @@
 </div>
 
 <div class="filter-bar">
+    <% if (user.role !== 'adviser') { %>
     <div class="filter-item">
         <label>Type</label>
         <select id="attType">
@@ -17,10 +18,12 @@
             <option value="teacher">Teachers</option>
         </select>
     </div>
+    <% } %>
     <div class="filter-item">
         <label>Date</label>
         <input type="date" id="attDate" value="<%= todayDate %>">
     </div>
+    <% if (user.role !== 'adviser') { %>
     <div class="filter-item">
         <label>School</label>
         <select id="attSchool">
@@ -36,6 +39,7 @@
             <option value="">All Grades</option>
         </select>
     </div>
+    <% } %>
     <div class="filter-item">
         <label>Search</label>
         <input type="text" id="attSearch" placeholder="Search by name...">
@@ -67,13 +71,20 @@
 </div>
 
 <script>
+var isAdviser = <%= user.role === 'adviser' ? 'true' : 'false' %>;
+
 async function loadAttendance() {
     var date = document.getElementById('attDate').value;
-    var type = document.getElementById('attType').value;
-    var school = document.getElementById('attSchool').value;
+    var typeEl = document.getElementById('attType');
+    var schoolEl = document.getElementById('attSchool');
+    var type = typeEl ? typeEl.value : 'student';
+    var school = schoolEl ? schoolEl.value : '';
     var search = document.getElementById('attSearch').value;
-    var params = new URLSearchParams({ date: date, type: type });
-    if (school) params.append('school', school);
+    var params = new URLSearchParams({ date: date });
+    if (!isAdviser) {
+        params.append('type', type);
+        if (school) params.append('school', school);
+    }
 
     var res = await fetch('/api/attendance?' + params);
     var data = await res.json();
@@ -101,7 +112,7 @@ async function loadAttendance() {
     }).join('') || '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon"><i class="fa-solid fa-clipboard-list" style="font-size:2.5rem;color:var(--gray-300);"></i></div><h4>No attendance records found</h4><p>No records for the selected date and filters.</p></div></td></tr>';
 
     var exportParams = new URLSearchParams({ date: date, end_date: date, type: type });
-    if (school) exportParams.append('school', school);
+    if (!isAdviser && school) exportParams.append('school', school);
     document.getElementById('exportAttBtn').href = '/export/report?' + exportParams;
 }
 
@@ -109,8 +120,10 @@ loadAttendance();
 setInterval(loadAttendance, 3000);
 
 document.getElementById('attDate').addEventListener('change', loadAttendance);
-document.getElementById('attType').addEventListener('change', loadAttendance);
-document.getElementById('attSchool').addEventListener('change', loadAttendance);
+var attTypeEl = document.getElementById('attType');
+if (attTypeEl) attTypeEl.addEventListener('change', loadAttendance);
+var attSchoolEl = document.getElementById('attSchool');
+if (attSchoolEl) attSchoolEl.addEventListener('change', loadAttendance);
 </script>
 
 <div class="live-indicator"><div class="live-dot"></div> Live</div>

@@ -1971,7 +1971,6 @@ router.get('/users', requireRole('super_admin'), async (req, res) => {
 router.get('/attendance', requireAuth, async (req, res) => {
     try {
         const date = req.query.date || todayDate();
-        const schoolId = applySchoolFilter(req);
         let query = `SELECT a.*,
             CASE WHEN a.person_type = 'student' THEN TRIM(CONCAT_WS(' ', s.firstname, s.lastname))
                  ELSE TRIM(CONCAT_WS(' ', t.firstname, t.lastname))
@@ -1995,8 +1994,20 @@ router.get('/attendance', requireAuth, async (req, res) => {
             LEFT JOIN sections sec ON s.section_id = sec.id
             WHERE a.date = ?`;
         const params = [date];
-        if (schoolId) { query += ' AND a.school_id = ?'; params.push(schoolId); }
-        if (req.query.type) { query += ' AND a.person_type = ?'; params.push(req.query.type); }
+
+        if (req.session.user.role === 'adviser') {
+            // Advisers see only their own section's students — enforce server-side
+            const tid = req.session.user.teacher_id;
+            const [[tc]] = await db.query(`SELECT section_id, school_id FROM teachers WHERE id = ?`, [tid]).catch(() => [[null]]);
+            if (!tc || !tc.section_id) return res.json([]);
+            query += " AND a.person_type = 'student' AND s.section_id = ? AND a.school_id = ?";
+            params.push(tc.section_id, tc.school_id);
+        } else {
+            const schoolId = applySchoolFilter(req);
+            if (schoolId) { query += ' AND a.school_id = ?'; params.push(schoolId); }
+            if (req.query.type) { query += ' AND a.person_type = ?'; params.push(req.query.type); }
+        }
+
         query += ' ORDER BY a.time_in DESC';
         const [rows] = await db.query(query, params);
         return res.json(rows);
