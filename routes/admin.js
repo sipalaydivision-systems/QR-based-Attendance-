@@ -555,6 +555,17 @@ router.get('/sf2-report', async (req, res) => {
             if (r.student_id === 0) summaryMap[r.remark_key] = r.remark_value;
             else remarksMap[r.student_id] = r.remark_value;
         });
+        // Persist school_head across months: if not saved for this month, use most recent saved value
+        if (!summaryMap.school_head) {
+            const [[prev]] = await db.query(
+                `SELECT remark_value FROM sf2_remarks
+                 WHERE teacher_id = ? AND student_id = 0 AND remark_key = 'school_head'
+                   AND remark_value != '' AND remark_value IS NOT NULL
+                 ORDER BY month_year DESC LIMIT 1`,
+                [teacherId]
+            ).catch(() => [[null]]);
+            if (prev && prev.remark_value) summaryMap.school_head = prev.remark_value;
+        }
 
         // SF2 attendance overrides (teacher can toggle absent/present per cell)
         await db.query(`
