@@ -94,12 +94,11 @@
            value="<%= year %>-<%= String(month).padStart(2,'0') %>"
            style="padding:8px 12px;border:1.5px solid var(--gray-300);border-radius:8px;font-size:0.8125rem;"
            onchange="if(this.value) window.location.href='/admin/sf2-report?month=' + this.value;">
-    <button class="btn btn-secondary" id="sf2EditBtn" onclick="sf2EnterEdit()"><i class="fa-solid fa-pen-to-square"></i> Edit Remarks</button>
+    <button class="btn btn-secondary" id="sf2EditBtn" onclick="sf2EnterEdit()"><i class="fa-solid fa-pen-to-square"></i> Edit</button>
     <button class="btn btn-primary" id="sf2SaveBtn" onclick="sf2Save()"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
     <button class="btn btn-secondary" id="sf2CancelBtn" onclick="sf2CancelEdit()"><i class="fa-solid fa-xmark"></i> Cancel</button>
     <span class="edit-hint" id="sf2EditHint"></span>
     <button class="btn btn-primary" onclick="window.print()"><i class="fa-solid fa-print"></i> Print / Export PDF</button>
-    <a href="/admin/adviser-dashboard" class="btn btn-secondary"><i class="fa-solid fa-arrow-left"></i> Back</a>
 </div>
 
 <%
