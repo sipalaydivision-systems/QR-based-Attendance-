@@ -64,6 +64,7 @@
 .sf2-paper .summary-input  { display: none; width: 100%; box-sizing: border-box; font-size: 8pt; text-align: center; border: 1.5px solid var(--primary, #059669); border-radius: 3px; padding: 2px 3px; background: #f0fdf4; color: #111; }
 .sf2-paper.edit-mode .summary-display { display: none; }
 .sf2-paper.edit-mode .summary-input  { display: block; }
+.sf2-paper.edit-mode #schoolHeadInput { display: inline-block; }
 /* Attendance cell editing */
 .sf2-paper.edit-mode .att-cell { cursor: pointer; transition: background 0.1s; }
 .sf2-paper.edit-mode .att-cell:hover { background: #fef9c3 !important; }
@@ -538,7 +539,7 @@ function cellHtml(s, d) {
             <div style="margin-top:8px;font-size:7pt;">Attested by:</div>
             <div class="sf2-sign" style="margin-top:16px;">
                 <span class="nm summary-display"><%= summaryMap.school_head || principal || '' %></span>
-                <input class="summary-input" type="text" data-key="school_head"
+                <input class="summary-input" id="schoolHeadInput" type="text" data-key="school_head"
                        value="<%= summaryMap.school_head || principal || '' %>"
                        placeholder="Type school head name…"
                        style="text-align:center;font-weight:bold;text-transform:uppercase;width:220px;">
