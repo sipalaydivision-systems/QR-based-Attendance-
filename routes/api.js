@@ -3078,6 +3078,10 @@ router.get('/adviser-dashboard', requireAuth, async (req, res) => {
             students: students.map(s => ({
                 id: s.id,
                 lrn: s.lrn,
+                firstname: s.firstname,
+                lastname: s.lastname,
+                middlename: s.middlename || '',
+                gender: s.gender || '',
                 name: (s.lastname && s.firstname) ? s.lastname + ', ' + s.firstname + (s.middlename ? ' ' + s.middlename.charAt(0) + '.' : '') : s.firstname || s.lastname,
                 guardian_contact: s.guardian_contact,
                 category: s.category,

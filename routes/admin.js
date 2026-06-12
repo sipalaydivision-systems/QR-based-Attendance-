@@ -549,12 +549,38 @@ router.get('/sf2-report', async (req, res) => {
              WHERE teacher_id = ? AND month_year = ?`,
             [teacherId, monthParam]
         ).catch(() => [[]]);
-        const remarksMap = {};    // student_id (number) → remark text
-        const summaryMap = {};    // remark_key string → value
+        const remarksMap = {};
+        const summaryMap = {};
         remarkRows.forEach(r => {
             if (r.student_id === 0) summaryMap[r.remark_key] = r.remark_value;
             else remarksMap[r.student_id] = r.remark_value;
         });
+
+        // SF2 attendance overrides (teacher can toggle absent/present per cell)
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS sf2_attendance_overrides (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                teacher_id INT NOT NULL,
+                student_id INT NOT NULL,
+                date_str CHAR(10) NOT NULL,
+                is_present TINYINT(1) NOT NULL DEFAULT 1,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_sf2_ov (teacher_id, student_id, date_str)
+            )
+        `).catch(() => {});
+        const [attOvRows] = await db.query(
+            `SELECT student_id, date_str, is_present FROM sf2_attendance_overrides
+             WHERE teacher_id = ? AND date_str BETWEEN ? AND ?`,
+            [teacherId, startDate, endDate]
+        ).catch(() => [[]]);
+        // Apply overrides on top of scanner data — teacher override takes precedence
+        attOvRows.forEach(r => {
+            const key = `${r.student_id}-${r.date_str}`;
+            if (r.is_present) presentSet.add(key);
+            else presentSet.delete(key);
+        });
+        const overridesData = {};
+        attOvRows.forEach(r => { overridesData[`${r.student_id}-${r.date_str}`] = r.is_present ? 1 : 0; });
 
         res.render('sf2_report', {
             title: 'SF2 Report',
@@ -575,6 +601,7 @@ router.get('/sf2-report', async (req, res) => {
             endDate,
             remarksMap,
             summaryMap,
+            overridesData,
             monthParam
         });
     } catch (err) {
@@ -589,15 +616,15 @@ router.post('/sf2-save-remarks', express.json(), async (req, res) => {
     const teacherId = req.session.user.teacher_id;
     if (!teacherId) return res.status(400).json({ error: 'No teacher record' });
 
-    const { month, remarks, summary } = req.body;
+    const { month, remarks, summary, overrides } = req.body;
     if (!month || !/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: 'Invalid month' });
 
-    const rows = [];
+    const remarkRows = [];
     if (remarks && typeof remarks === 'object') {
         Object.entries(remarks).forEach(([sid, text]) => {
             const studentId = parseInt(sid, 10);
             if (!isNaN(studentId) && studentId > 0) {
-                rows.push([teacherId, month, studentId, 'remark', String(text).slice(0, 500)]);
+                remarkRows.push([teacherId, month, studentId, 'remark', String(text).slice(0, 500)]);
             }
         });
     }
@@ -605,22 +632,84 @@ router.post('/sf2-save-remarks', express.json(), async (req, res) => {
     if (summary && typeof summary === 'object') {
         SUMMARY_KEYS.forEach(key => {
             const val = summary[key] !== undefined ? String(summary[key]).slice(0, 100) : '';
-            rows.push([teacherId, month, 0, key, val]);
+            remarkRows.push([teacherId, month, 0, key, val]);
         });
     }
 
     try {
-        if (rows.length) {
+        if (remarkRows.length) {
             await db.query(
                 `INSERT INTO sf2_remarks (teacher_id, month_year, student_id, remark_key, remark_value)
                  VALUES ? ON DUPLICATE KEY UPDATE remark_value = VALUES(remark_value), updated_at = CURRENT_TIMESTAMP`,
-                [rows]
+                [remarkRows]
             );
+        }
+        // Save attendance overrides (teacher-toggled cells)
+        if (Array.isArray(overrides) && overrides.length) {
+            const validDate = /^\d{4}-\d{2}-\d{2}$/;
+            for (const ov of overrides) {
+                const sid = parseInt(ov.student_id, 10);
+                if (isNaN(sid) || sid <= 0) continue;
+                if (!validDate.test(ov.date)) continue;
+                const isPresent = ov.is_present ? 1 : 0;
+                await db.query(
+                    `INSERT INTO sf2_attendance_overrides (teacher_id, student_id, date_str, is_present)
+                     VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE is_present = VALUES(is_present), updated_at = CURRENT_TIMESTAMP`,
+                    [teacherId, sid, ov.date, isPresent]
+                );
+            }
         }
         res.json({ success: true });
     } catch (err) {
         console.error('SF2 save remarks error:', err);
         res.status(500).json({ error: 'Save failed' });
+    }
+});
+
+// ---- Adviser: Edit Student ----
+router.post('/adviser-edit-student', express.json(), async (req, res) => {
+    if (!req.session.user || req.session.user.role !== 'adviser') return res.status(403).json({ error: 'Unauthorized' });
+    const teacherId = req.session.user.teacher_id;
+    if (!teacherId) return res.status(400).json({ error: 'No teacher record' });
+
+    const { student_id, firstname, lastname, middlename, lrn, gender, guardian_contact } = req.body;
+    const sid = parseInt(student_id, 10);
+    if (!sid || sid <= 0) return res.status(400).json({ error: 'Invalid student' });
+
+    // Validate required fields
+    const fn = String(firstname || '').trim();
+    const ln = String(lastname || '').trim();
+    const mn = String(middlename || '').trim() || null;
+    const lrnVal = String(lrn || '').trim();
+    const gc = String(guardian_contact || '').trim() || null;
+    if (!fn || !ln) return res.status(400).json({ error: 'First name and last name are required' });
+
+    // Normalize gender
+    const gMap = { male: 'Male', female: 'Female', other: 'Other', m: 'Male', f: 'Female' };
+    const gNorm = gMap[(String(gender || '').trim().toLowerCase())] || null;
+
+    try {
+        // Security: ensure the student belongs to this teacher's section
+        const [[t]] = await db.query(`SELECT section_id FROM teachers WHERE id = ?`, [teacherId]);
+        if (!t) return res.status(403).json({ error: 'Teacher not found' });
+
+        const [[s]] = await db.query(`SELECT id FROM students WHERE id = ? AND section_id = ? AND status != 'deleted'`, [sid, t.section_id]);
+        if (!s) return res.status(403).json({ error: 'Student not in your section' });
+
+        // Check LRN uniqueness if changed
+        if (lrnVal) {
+            const [dup] = await db.query(`SELECT id FROM students WHERE lrn = ? AND id != ?`, [lrnVal, sid]);
+            if (dup.length > 0) return res.status(400).json({ error: 'LRN already used by another student' });
+        }
+
+        await db.query(
+            `UPDATE students SET firstname=?, lastname=?, middlename=?, lrn=?, gender=?, guardian_contact=? WHERE id=?`,
+            [fn, ln, mn, lrnVal || null, gNorm, gc, sid]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Adviser edit student error:', err);
+        res.status(500).json({ error: 'Update failed' });
     }
 });
 

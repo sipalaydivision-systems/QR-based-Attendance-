@@ -64,6 +64,12 @@
 .sf2-paper .summary-input  { display: none; width: 28px; font-size: 6pt; text-align: center; border: 1px solid #888; }
 .sf2-paper.edit-mode .summary-display { display: none; }
 .sf2-paper.edit-mode .summary-input  { display: inline; }
+/* Attendance cell editing */
+.sf2-paper.edit-mode .att-cell { cursor: pointer; transition: background 0.1s; }
+.sf2-paper.edit-mode .att-cell:hover { background: #fef9c3 !important; }
+.att-cell.ov-absent  { background: #fff1f2; }
+.att-cell.ov-present { background: #f0fdf4; }
+.sf2-paper.edit-mode .att-cell.pending-change { outline: 2px solid #f59e0b; outline-offset: -1px; }
 .edit-hint { font-size: 0.75rem; color: var(--gray-500); }
 #sf2SaveBtn, #sf2CancelBtn { display: none; }
 
@@ -75,6 +81,7 @@
     .sf2-paper { padding: 2mm; font-size: 7pt; overflow: visible; }
     .remark-input, .summary-input { display: none !important; }
     .remark-display, .summary-display { display: inline !important; }
+    .att-cell { outline: none !important; cursor: default !important; }
     body { background: #fff !important; }
     @page { size: legal landscape; margin: 5mm; }
 }
@@ -179,6 +186,21 @@ function pctAtt(present, registered) {
 }
 
 var adviserName = [teacher.firstname, teacher.middlename ? teacher.middlename.charAt(0) + '.' : '', teacher.lastname].filter(Boolean).join(' ');
+
+// Render one attendance cell. Returns full <td> HTML string.
+function cellHtml(s, d) {
+    if (!d) return '<td class="day-cell"></td>';
+    var canEdit = d >= s.enrolled_from && d <= lastCountable;
+    var isAbs = isAbsentOn(s, d);
+    var state = canEdit ? (isAbs ? 'absent' : 'present') : 'locked';
+    var ovKey = s.id + '-' + d;
+    var isOv = overridesData.hasOwnProperty(ovKey);
+    var ovClass = isOv ? (' ' + (overridesData[ovKey] ? 'ov-present' : 'ov-absent')) : '';
+    var attrs = canEdit
+        ? ' att-cell' + ovClass + '" data-sid="' + s.id + '" data-date="' + d + '" data-state="' + state + '" data-original="' + state + '"'
+        : '"';
+    return '<td class="day-cell' + attrs + '><span class="att-text">' + (isAbs ? 'x' : '') + '</span></td>';
+}
 %>
 
 <div class="sf2-paper" id="sf2Paper">
@@ -241,9 +263,7 @@ var adviserName = [teacher.firstname, teacher.middlename ? teacher.middlename.ch
     <tr>
         <td class="num-cell"><%= idx + 1 %>.</td>
         <td class="name-cell"><%= fmtName(s) %></td>
-        <% slots.forEach(function(d) { %>
-        <td class="day-cell"><%= (d && isAbsentOn(s, d)) ? 'x' : '' %></td>
-        <% }); %>
+        <% slots.forEach(function(d) { %><%-cellHtml(s,d)%><% }); %>
         <td class="day-cell" style="font-weight:bold;"><%= t.absent || '' %></td>
         <td class="day-cell"><%= t.present || '' %></td>
         <td class="remark-cell">
@@ -268,9 +288,7 @@ var adviserName = [teacher.firstname, teacher.middlename ? teacher.middlename.ch
     <tr>
         <td class="num-cell"><%= idx + 1 %>.</td>
         <td class="name-cell"><%= fmtName(s) %></td>
-        <% slots.forEach(function(d) { %>
-        <td class="day-cell"><%= (d && isAbsentOn(s, d)) ? 'x' : '' %></td>
-        <% }); %>
+        <% slots.forEach(function(d) { %><%-cellHtml(s,d)%><% }); %>
         <td class="day-cell" style="font-weight:bold;"><%= t.absent || '' %></td>
         <td class="day-cell"><%= t.present || '' %></td>
         <td class="remark-cell">
@@ -295,9 +313,7 @@ var adviserName = [teacher.firstname, teacher.middlename ? teacher.middlename.ch
     <tr>
         <td class="num-cell"><%= idx + 1 %>.</td>
         <td class="name-cell"><%= fmtName(s) %></td>
-        <% slots.forEach(function(d) { %>
-        <td class="day-cell"><%= (d && isAbsentOn(s, d)) ? 'x' : '' %></td>
-        <% }); %>
+        <% slots.forEach(function(d) { %><%-cellHtml(s,d)%><% }); %>
         <td class="day-cell" style="font-weight:bold;"><%= t.absent || '' %></td>
         <td class="day-cell"><%= t.present || '' %></td>
         <td class="remark-cell">
@@ -538,10 +554,18 @@ function sf2EnterEdit() {
     document.getElementById('sf2EditBtn').style.display = 'none';
     document.getElementById('sf2SaveBtn').style.display = '';
     document.getElementById('sf2CancelBtn').style.display = '';
-    document.getElementById('sf2EditHint').textContent = 'Edit remarks and counts, then click Save Changes.';
+    document.getElementById('sf2EditHint').textContent = 'Click any cell to toggle absent/present. Edit remarks below each name.';
 }
 
 function sf2CancelEdit() {
+    // Revert any pending cell changes
+    document.querySelectorAll('.att-cell.pending-change').forEach(function(cell) {
+        var orig = cell.getAttribute('data-original');
+        cell.setAttribute('data-state', orig);
+        var txt = cell.querySelector('.att-text');
+        if (txt) txt.textContent = orig === 'absent' ? 'x' : '';
+        cell.classList.remove('pending-change');
+    });
     document.getElementById('sf2Paper').classList.remove('edit-mode');
     document.getElementById('sf2EditBtn').style.display = '';
     document.getElementById('sf2SaveBtn').style.display = 'none';
@@ -549,16 +573,44 @@ function sf2CancelEdit() {
     document.getElementById('sf2EditHint').textContent = '';
 }
 
+// Cell click — toggle absent ↔ present
+document.addEventListener('click', function(e) {
+    if (!document.getElementById('sf2Paper').classList.contains('edit-mode')) return;
+    var cell = e.target.closest('.att-cell');
+    if (!cell) return;
+    var curr = cell.getAttribute('data-state');
+    if (curr === 'locked') return;
+    var next = curr === 'absent' ? 'present' : 'absent';
+    cell.setAttribute('data-state', next);
+    var txt = cell.querySelector('.att-text');
+    if (txt) txt.textContent = next === 'absent' ? 'x' : '';
+    var orig = cell.getAttribute('data-original');
+    cell.classList.toggle('pending-change', next !== orig);
+});
+
 function sf2Save() {
     var remarks = {};
     document.querySelectorAll('.remark-input[data-student-id]').forEach(function(inp) {
-        var sid = inp.getAttribute('data-student-id');
-        remarks[sid] = inp.value;
+        remarks[inp.getAttribute('data-student-id')] = inp.value;
     });
 
     var summary = {};
     document.querySelectorAll('.summary-input[data-key]').forEach(function(inp) {
         summary[inp.getAttribute('data-key')] = inp.value;
+    });
+
+    // Collect attendance overrides (only changed cells)
+    var overrides = [];
+    document.querySelectorAll('.att-cell[data-original]').forEach(function(cell) {
+        var orig = cell.getAttribute('data-original');
+        var curr = cell.getAttribute('data-state');
+        if (curr !== orig) {
+            overrides.push({
+                student_id: parseInt(cell.getAttribute('data-sid')),
+                date: cell.getAttribute('data-date'),
+                is_present: curr === 'present' ? 1 : 0
+            });
+        }
     });
 
     var btn = document.getElementById('sf2SaveBtn');
@@ -568,12 +620,17 @@ function sf2Save() {
     fetch('/admin/sf2-save-remarks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ month: sf2Month, remarks: remarks, summary: summary })
+        body: JSON.stringify({ month: sf2Month, remarks: remarks, summary: summary, overrides: overrides })
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.success) {
-            // Update display spans so they reflect new values without a full reload
+            // Reload to get updated totals (overrides affect absent/present counts)
+            if (overrides.length > 0) {
+                window.location.reload();
+                return;
+            }
+            // No attendance changes — just update display spans in-place
             document.querySelectorAll('.remark-input[data-student-id]').forEach(function(inp) {
                 var span = inp.previousElementSibling;
                 if (span) span.textContent = inp.value;
@@ -582,7 +639,6 @@ function sf2Save() {
                 var span = inp.previousElementSibling;
                 if (span) span.textContent = inp.value;
             });
-            // Recalculate totals
             function sumTwo(km, kf, elId) {
                 var m = parseInt(document.querySelector('.summary-input[data-key="' + km + '"]').value) || 0;
                 var f = parseInt(document.querySelector('.summary-input[data-key="' + kf + '"]').value) || 0;
@@ -592,7 +648,6 @@ function sf2Save() {
             sumTwo('dropped_out_m', 'dropped_out_f', 'dropped_total');
             sumTwo('transferred_out_m', 'transferred_out_f', 'xout_total');
             sumTwo('transferred_in_m', 'transferred_in_f', 'xin_total');
-
             sf2CancelEdit();
             document.getElementById('sf2EditHint').textContent = 'Saved.';
             setTimeout(function() { document.getElementById('sf2EditHint').textContent = ''; }, 3000);

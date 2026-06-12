@@ -219,10 +219,11 @@
                         <th>Time Out</th>
                         <th>Location</th>
                         <th>Guardian Contact</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody id="adStudentBody">
-                    <tr><td colspan="7" class="ad-empty"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</td></tr>
+                    <tr><td colspan="8" class="ad-empty"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -317,12 +318,16 @@
             });
         }
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="ad-empty"><i class="fa-solid fa-user-slash"></i> No students found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="ad-empty"><i class="fa-solid fa-user-slash"></i> No students found</td></tr>';
             return;
         }
         var html = '';
         filtered.forEach(function(s, i) {
             var inactive = s.student_status !== 'active';
+            var editData = encodeURIComponent(JSON.stringify({
+                id: s.id, lrn: s.lrn || '', firstname: s.firstname || '', lastname: s.lastname || '',
+                middlename: s.middlename || '', gender: s.gender || '', guardian_contact: s.guardian_contact || ''
+            }));
             html += '<tr' + (inactive ? ' style="opacity:0.5;"' : '') + '>';
             html += '<td>' + (i + 1) + '</td>';
             html += '<td><div class="ad-student-name">' + s.name;
@@ -334,6 +339,7 @@
             html += '<td>' + timeCell(s.time_out) + '</td>';
             html += '<td>' + (inactive ? '--' : locationPill(s)) + '</td>';
             html += '<td style="font-size:0.8125rem;color:var(--gray-500);">' + (s.guardian_contact || '--') + '</td>';
+            html += '<td><button class="btn btn-secondary" style="font-size:0.75rem;padding:5px 10px;" onclick="openEditStudent(\'' + editData + '\')"><i class="fa-solid fa-pen-to-square"></i> Edit</button></td>';
             html += '</tr>';
         });
         tbody.innerHTML = html;
@@ -362,6 +368,71 @@
     loadDashboard(dateInput.value);
 })();
 
+window.openEditStudent = function(encoded) {
+    var s = JSON.parse(decodeURIComponent(encoded));
+    document.getElementById('esStudentId').value = s.id;
+    document.getElementById('esLastname').value = s.lastname;
+    document.getElementById('esFirstname').value = s.firstname;
+    document.getElementById('esMiddlename').value = s.middlename;
+    document.getElementById('esLrn').value = s.lrn;
+    document.getElementById('esGender').value = s.gender || '';
+    document.getElementById('esGuardian').value = s.guardian_contact;
+    document.getElementById('esError').style.display = 'none';
+    document.getElementById('esError').textContent = '';
+    document.getElementById('editStudentModal').style.display = 'flex';
+    document.getElementById('esLastname').focus();
+};
+
+window.closeEditStudent = function() {
+    document.getElementById('editStudentModal').style.display = 'none';
+};
+
+window.submitEditStudent = function() {
+    var fn = document.getElementById('esFirstname').value.trim();
+    var ln = document.getElementById('esLastname').value.trim();
+    var errEl = document.getElementById('esError');
+    if (!fn || !ln) {
+        errEl.textContent = 'First name and last name are required.';
+        errEl.style.display = '';
+        return;
+    }
+    var btn = document.getElementById('esSaveBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+
+    fetch('/admin/adviser-edit-student', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            student_id: document.getElementById('esStudentId').value,
+            firstname: fn,
+            lastname: ln,
+            middlename: document.getElementById('esMiddlename').value.trim(),
+            lrn: document.getElementById('esLrn').value.trim(),
+            gender: document.getElementById('esGender').value,
+            guardian_contact: document.getElementById('esGuardian').value.trim()
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            closeEditStudent();
+            loadDashboard(dateInput.value);
+        } else {
+            errEl.textContent = data.error || 'Save failed.';
+            errEl.style.display = '';
+        }
+    })
+    .catch(function() {
+        errEl.textContent = 'Network error — try again.';
+        errEl.style.display = '';
+    })
+    .finally(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Changes';
+    });
+};
+
 function openSF2Modal() {
     document.getElementById('sf2Modal').style.display = 'flex';
     var now = new Date();
@@ -375,6 +446,58 @@ function generateSF2() {
     closeSF2Modal();
 }
 </script>
+
+<!-- Student Edit Modal -->
+<div class="modal-overlay" id="editStudentModal" style="display:none;">
+    <div class="modal" style="max-width:480px;">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-user-pen"></i> Edit Student Information</h3>
+            <button class="modal-close" onclick="closeEditStudent()">&times;</button>
+        </div>
+        <div style="padding:24px;">
+            <input type="hidden" id="esStudentId">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                <div class="form-group">
+                    <label style="font-size:0.75rem;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px;">Last Name *</label>
+                    <input type="text" id="esLastname" class="form-control" placeholder="e.g. Dela Cruz" style="width:100%;box-sizing:border-box;">
+                </div>
+                <div class="form-group">
+                    <label style="font-size:0.75rem;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px;">First Name *</label>
+                    <input type="text" id="esFirstname" class="form-control" placeholder="e.g. Juan" style="width:100%;box-sizing:border-box;">
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                <div class="form-group">
+                    <label style="font-size:0.75rem;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px;">Middle Name</label>
+                    <input type="text" id="esMiddlename" class="form-control" placeholder="Optional" style="width:100%;box-sizing:border-box;">
+                </div>
+                <div class="form-group">
+                    <label style="font-size:0.75rem;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px;">LRN</label>
+                    <input type="text" id="esLrn" class="form-control" maxlength="12" placeholder="12-digit LRN" style="width:100%;box-sizing:border-box;">
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                <div class="form-group">
+                    <label style="font-size:0.75rem;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px;">Sex</label>
+                    <select id="esGender" class="form-control" style="width:100%;box-sizing:border-box;">
+                        <option value="">— Select —</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label style="font-size:0.75rem;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px;">Guardian Contact</label>
+                    <input type="text" id="esGuardian" class="form-control" placeholder="09XXXXXXXXX" style="width:100%;box-sizing:border-box;">
+                </div>
+            </div>
+            <div id="esError" style="color:#dc2626;font-size:0.8125rem;margin-bottom:10px;display:none;"></div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeEditStudent()">Cancel</button>
+                <button class="btn btn-primary" id="esSaveBtn" onclick="submitEditStudent()"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- SF2 Month Picker Modal -->
 <div class="modal-overlay" id="sf2Modal" style="display:none;">
