@@ -172,6 +172,17 @@
 
         <!-- Sidebar Footer -->
         <div class="sidebar-footer">
+            <% if (user.role === 'adviser') { %>
+            <a href="/admin/adviser-profile" style="text-decoration:none;display:block;" title="View Profile">
+                <div class="user-info" style="cursor:pointer;">
+                    <div class="user-avatar" id="sidebarAvatar"><%= user.fullname ? user.fullname.charAt(0).toUpperCase() : 'U' %></div>
+                    <div class="user-details">
+                        <strong><%= user.fullname %></strong>
+                        <small>Adviser</small>
+                    </div>
+                </div>
+            </a>
+            <% } else { %>
             <div class="user-info">
                 <div class="user-avatar"><%= user.fullname ? user.fullname.charAt(0).toUpperCase() : 'U' %></div>
                 <div class="user-details">
@@ -179,8 +190,13 @@
                     <small><%= user.role.replace(/_/g, ' ') %></small>
                 </div>
             </div>
+            <% } %>
             <div class="sidebar-footer-links">
+                <% if (user.role === 'adviser') { %>
+                <a href="/admin/adviser-profile"><i class="fa-solid fa-key"></i> Password</a>
+                <% } else { %>
                 <a href="/change-password"><i class="fa-solid fa-key"></i> Password</a>
+                <% } %>
                 <a href="/logout" class="logout-btn"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
             </div>
         </div>

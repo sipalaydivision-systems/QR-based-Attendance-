@@ -818,6 +818,67 @@ router.post('/adviser-delete-student', express.json(), async (req, res) => {
     }
 });
 
+// ---- Adviser: Profile ----
+router.get('/adviser-profile', async (req, res) => {
+    if (!req.session.user || req.session.user.role !== 'adviser') return res.redirect('/adviser-login');
+    const teacherId = req.session.user.teacher_id;
+    try {
+        // ensure profile_photo column exists
+        await db.query(`ALTER TABLE teachers ADD COLUMN IF NOT EXISTS profile_photo MEDIUMTEXT DEFAULT NULL`).catch(() => {});
+        const [[t]] = await db.query(
+            `SELECT t.*, sc.name as school_name, gl.name as grade_name, sec.name as section_name
+             FROM teachers t
+             LEFT JOIN schools sc ON t.school_id = sc.id
+             LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
+             LEFT JOIN sections sec ON t.section_id = sec.id
+             WHERE t.id = ?`,
+            [teacherId]
+        );
+        if (!t) return res.redirect('/adviser-login');
+        res.render('adviser_profile', { title: 'My Profile', page: 'adviser_profile', teacher: t, error: null, success: null });
+    } catch (err) {
+        console.error('Adviser profile error:', err);
+        res.redirect('/admin/adviser-dashboard');
+    }
+});
+
+router.post('/adviser-upload-photo', upload.single('photo'), async (req, res) => {
+    if (!req.session.user || req.session.user.role !== 'adviser') return res.status(403).json({ error: 'Unauthorized' });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowed.includes(req.file.mimetype)) return res.status(400).json({ error: 'Only image files are allowed.' });
+    const teacherId = req.session.user.teacher_id;
+    try {
+        const dataUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+        await db.query(`UPDATE teachers SET profile_photo = ? WHERE id = ?`, [dataUrl, teacherId]);
+        res.json({ success: true, photo: dataUrl });
+    } catch (err) {
+        console.error('Adviser photo upload error:', err);
+        res.status(500).json({ error: 'Upload failed.' });
+    }
+});
+
+router.post('/adviser-change-password', express.json(), async (req, res) => {
+    if (!req.session.user || req.session.user.role !== 'adviser') return res.status(403).json({ error: 'Unauthorized' });
+    const { current_password, new_password, confirm_password } = req.body;
+    if (!current_password || !new_password || !confirm_password) return res.status(400).json({ error: 'All fields are required.' });
+    if (new_password !== confirm_password) return res.status(400).json({ error: 'New passwords do not match.' });
+    if (new_password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    const teacherId = req.session.user.teacher_id;
+    try {
+        const [[t]] = await db.query(`SELECT password FROM teachers WHERE id = ?`, [teacherId]);
+        if (!t) return res.status(404).json({ error: 'Teacher record not found.' });
+        const match = await bcrypt.compare(current_password, t.password);
+        if (!match) return res.status(400).json({ error: 'Current password is incorrect.' });
+        const hashed = await bcrypt.hash(new_password, 10);
+        await db.query(`UPDATE teachers SET password = ? WHERE id = ?`, [hashed, teacherId]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Adviser change password error:', err);
+        res.status(500).json({ error: 'A server error occurred.' });
+    }
+});
+
 // ---- Attendance ----
 router.get('/attendance', async (req, res) => {
     const [schools] = await db.query("SELECT * FROM schools WHERE status = 'active' ORDER BY name");

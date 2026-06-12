@@ -1,0 +1,196 @@
+<%- include('partials/header') %>
+
+<div class="page-header">
+    <div class="page-header-left">
+        <h1><i class="fa-solid fa-user-circle"></i> My Profile</h1>
+    </div>
+</div>
+
+<div style="display:flex;gap:1.5rem;flex-wrap:wrap;align-items:flex-start;">
+
+    <!-- Left: Photo + Info -->
+    <div class="card" style="flex:0 0 280px;min-width:240px;">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:1rem;padding:1rem 0;">
+            <div id="profileAvatarWrap" style="position:relative;width:110px;height:110px;cursor:pointer;" onclick="document.getElementById('photoInput').click()" title="Click to change photo">
+                <% if (teacher.profile_photo) { %>
+                <img id="profileImg" src="<%= teacher.profile_photo %>" alt="Profile" style="width:110px;height:110px;border-radius:50%;object-fit:cover;border:3px solid var(--primary);">
+                <% } else { %>
+                <div id="profileInitial" style="width:110px;height:110px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:2.5rem;font-weight:700;color:#fff;border:3px solid var(--primary);">
+                    <%= teacher.firstname ? teacher.firstname.charAt(0).toUpperCase() : 'T' %>
+                </div>
+                <% } %>
+                <div style="position:absolute;bottom:4px;right:4px;background:var(--primary);width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;">
+                    <i class="fa-solid fa-camera" style="color:#fff;font-size:0.75rem;"></i>
+                </div>
+            </div>
+            <input type="file" id="photoInput" accept="image/*" style="display:none;" onchange="uploadPhoto(this)">
+            <div style="text-align:center;">
+                <div style="font-size:1.1rem;font-weight:700;color:var(--gray-900);">
+                    <%= teacher.firstname %> <%= teacher.middlename ? teacher.middlename.charAt(0).toUpperCase() + '. ' : '' %><%= teacher.lastname %>
+                </div>
+                <div style="font-size:0.85rem;color:var(--gray-500);margin-top:2px;">Adviser</div>
+            </div>
+            <div id="photoMsg" style="font-size:0.82rem;display:none;text-align:center;"></div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid var(--gray-200);margin:0.5rem 0;">
+
+        <div style="display:flex;flex-direction:column;gap:0.75rem;padding:0.5rem 0;">
+            <div>
+                <div style="font-size:0.75rem;color:var(--gray-500);text-transform:uppercase;letter-spacing:.04em;">Email</div>
+                <div style="font-size:0.9rem;color:var(--gray-800);font-weight:500;word-break:break-all;"><%= teacher.email || '—' %></div>
+            </div>
+            <div>
+                <div style="font-size:0.75rem;color:var(--gray-500);text-transform:uppercase;letter-spacing:.04em;">School</div>
+                <div style="font-size:0.9rem;color:var(--gray-800);font-weight:500;"><%= teacher.school_name || '—' %></div>
+            </div>
+            <div>
+                <div style="font-size:0.75rem;color:var(--gray-500);text-transform:uppercase;letter-spacing:.04em;">Grade Level</div>
+                <div style="font-size:0.9rem;color:var(--gray-800);font-weight:500;"><%= teacher.grade_name || '—' %></div>
+            </div>
+            <div>
+                <div style="font-size:0.75rem;color:var(--gray-500);text-transform:uppercase;letter-spacing:.04em;">Section / Advisory</div>
+                <div style="font-size:0.9rem;color:var(--gray-800);font-weight:500;"><%= teacher.section_name || '—' %></div>
+            </div>
+            <% if (teacher.contact) { %>
+            <div>
+                <div style="font-size:0.75rem;color:var(--gray-500);text-transform:uppercase;letter-spacing:.04em;">Contact</div>
+                <div style="font-size:0.9rem;color:var(--gray-800);font-weight:500;"><%= teacher.contact %></div>
+            </div>
+            <% } %>
+        </div>
+    </div>
+
+    <!-- Right: Change Password -->
+    <div class="card" style="flex:1;min-width:280px;max-width:480px;">
+        <h3 style="margin-top:0;margin-bottom:1.25rem;font-size:1.05rem;"><i class="fa-solid fa-lock" style="color:var(--primary);margin-right:6px;"></i>Change Password</h3>
+
+        <div id="pwAlert" style="display:none;padding:0.75rem 1rem;border-radius:8px;margin-bottom:1rem;font-size:0.9rem;"></div>
+
+        <div class="form-group" style="margin-bottom:1rem;">
+            <label style="font-size:0.85rem;font-weight:600;color:var(--gray-700);display:block;margin-bottom:4px;">Current Password</label>
+            <div style="position:relative;">
+                <input type="password" id="currentPw" class="form-control" placeholder="Enter current password" style="padding-right:2.5rem;">
+                <button type="button" onclick="togglePw('currentPw','eyeCurrent')" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--gray-400);padding:0;">
+                    <i class="fa-solid fa-eye" id="eyeCurrent"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:1rem;">
+            <label style="font-size:0.85rem;font-weight:600;color:var(--gray-700);display:block;margin-bottom:4px;">New Password</label>
+            <div style="position:relative;">
+                <input type="password" id="newPw" class="form-control" placeholder="At least 6 characters" style="padding-right:2.5rem;">
+                <button type="button" onclick="togglePw('newPw','eyeNew')" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--gray-400);padding:0;">
+                    <i class="fa-solid fa-eye" id="eyeNew"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:1.25rem;">
+            <label style="font-size:0.85rem;font-weight:600;color:var(--gray-700);display:block;margin-bottom:4px;">Confirm New Password</label>
+            <div style="position:relative;">
+                <input type="password" id="confirmPw" class="form-control" placeholder="Repeat new password" style="padding-right:2.5rem;">
+                <button type="button" onclick="togglePw('confirmPw','eyeConfirm')" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--gray-400);padding:0;">
+                    <i class="fa-solid fa-eye" id="eyeConfirm"></i>
+                </button>
+            </div>
+        </div>
+
+        <button class="btn btn-primary" onclick="changePassword()" id="savePwBtn">
+            <i class="fa-solid fa-key"></i> Update Password
+        </button>
+    </div>
+</div>
+
+<script>
+function togglePw(inputId, iconId) {
+    var inp = document.getElementById(inputId);
+    var ico = document.getElementById(iconId);
+    if (inp.type === 'password') {
+        inp.type = 'text';
+        ico.classList.replace('fa-eye', 'fa-eye-slash');
+    } else {
+        inp.type = 'password';
+        ico.classList.replace('fa-eye-slash', 'fa-eye');
+    }
+}
+
+function showPwAlert(msg, isError) {
+    var el = document.getElementById('pwAlert');
+    el.textContent = msg;
+    el.style.display = 'block';
+    el.style.background = isError ? 'var(--danger-bg, #fef2f2)' : 'var(--success-bg, #f0fdf4)';
+    el.style.color = isError ? 'var(--danger, #dc2626)' : 'var(--success, #16a34a)';
+    el.style.border = '1px solid ' + (isError ? 'var(--danger, #dc2626)' : 'var(--success, #16a34a)');
+}
+
+async function changePassword() {
+    var cur = document.getElementById('currentPw').value.trim();
+    var nw = document.getElementById('newPw').value;
+    var conf = document.getElementById('confirmPw').value;
+    if (!cur || !nw || !conf) return showPwAlert('All fields are required.', true);
+    var btn = document.getElementById('savePwBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+    try {
+        var res = await fetch('/admin/adviser-change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ current_password: cur, new_password: nw, confirm_password: conf })
+        });
+        var data = await res.json();
+        if (data.success) {
+            showPwAlert('Password updated successfully.', false);
+            document.getElementById('currentPw').value = '';
+            document.getElementById('newPw').value = '';
+            document.getElementById('confirmPw').value = '';
+        } else {
+            showPwAlert(data.error || 'Failed to update password.', true);
+        }
+    } catch (e) {
+        showPwAlert('Network error. Please try again.', true);
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-key"></i> Update Password';
+}
+
+async function uploadPhoto(input) {
+    var file = input.files[0];
+    if (!file) return;
+    var msgEl = document.getElementById('photoMsg');
+    msgEl.style.display = 'block';
+    msgEl.style.color = 'var(--gray-500)';
+    msgEl.textContent = 'Uploading...';
+
+    var form = new FormData();
+    form.append('photo', file);
+    try {
+        var res = await fetch('/admin/adviser-upload-photo', { method: 'POST', body: form });
+        var data = await res.json();
+        if (data.success) {
+            // replace avatar with uploaded photo
+            var wrap = document.getElementById('profileAvatarWrap');
+            var existing = document.getElementById('profileImg') || document.getElementById('profileInitial');
+            var img = document.createElement('img');
+            img.id = 'profileImg';
+            img.src = data.photo;
+            img.alt = 'Profile';
+            img.style.cssText = 'width:110px;height:110px;border-radius:50%;object-fit:cover;border:3px solid var(--primary);';
+            if (existing) wrap.replaceChild(img, existing);
+            msgEl.style.color = 'var(--success, #16a34a)';
+            msgEl.textContent = 'Photo updated!';
+            setTimeout(() => { msgEl.style.display = 'none'; }, 2500);
+        } else {
+            msgEl.style.color = 'var(--danger, #dc2626)';
+            msgEl.textContent = data.error || 'Upload failed.';
+        }
+    } catch (e) {
+        msgEl.style.color = 'var(--danger, #dc2626)';
+        msgEl.textContent = 'Network error.';
+    }
+    input.value = '';
+}
+</script>
+
+<%- include('partials/footer') %>
