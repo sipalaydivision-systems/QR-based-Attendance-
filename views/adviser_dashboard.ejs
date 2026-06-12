@@ -214,12 +214,11 @@
                         <th>Status</th>
                         <th>Time In</th>
                         <th>Time Out</th>
-                        <th>Location</th>
                         <th>Guardian Contact</th>
                     </tr>
                 </thead>
                 <tbody id="adStudentBody">
-                    <tr><td colspan="7" class="ad-empty"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</td></tr>
+                    <tr><td colspan="6" class="ad-empty"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -315,7 +314,7 @@
             });
         }
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="ad-empty"><i class="fa-solid fa-user-slash"></i> No students found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="ad-empty"><i class="fa-solid fa-user-slash"></i> No students found</td></tr>';
             return;
         }
         var html = '';
@@ -330,7 +329,6 @@
             html += '<td>' + (inactive ? '<span class="ad-status-pill inactive">--</span>' : statusPill(s.att_status)) + '</td>';
             html += '<td>' + timeCell(s.time_in) + '</td>';
             html += '<td>' + timeCell(s.time_out) + '</td>';
-            html += '<td>' + (inactive ? '--' : locationPill(s)) + '</td>';
             html += '<td style="font-size:0.8125rem;color:var(--gray-500);">' + (s.guardian_contact || '--') + '</td>';
             html += '</tr>';
         });
@@ -342,7 +340,7 @@
             var res = await fetch('/api/adviser-dashboard?date=' + encodeURIComponent(date));
             var data = await res.json();
             if (data.error) {
-                document.getElementById('adStudentBody').innerHTML = '<tr><td colspan="7" class="ad-empty"><i class="fa-solid fa-triangle-exclamation"></i> ' + data.error + '</td></tr>';
+                document.getElementById('adStudentBody').innerHTML = '<tr><td colspan="6" class="ad-empty"><i class="fa-solid fa-triangle-exclamation"></i> ' + data.error + '</td></tr>';
                 return;
             }
             document.getElementById('adTotal').textContent = data.kpi.total;
@@ -353,7 +351,7 @@
             allStudents = data.students;
             renderStudents();
         } catch (err) {
-            document.getElementById('adStudentBody').innerHTML = '<tr><td colspan="7" class="ad-empty"><i class="fa-solid fa-triangle-exclamation"></i> Failed to load data</td></tr>';
+            document.getElementById('adStudentBody').innerHTML = '<tr><td colspan="6" class="ad-empty"><i class="fa-solid fa-triangle-exclamation"></i> Failed to load data</td></tr>';
         }
     }
 
