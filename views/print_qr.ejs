@@ -11,20 +11,6 @@
     </div>
 </div>
 
-<% if (isAdviser && typeof teacherQr !== 'undefined' && teacherQr) { %>
-<div id="teacherQrSection" style="margin-bottom:24px;">
-    <div class="qr-card">
-        <div class="qr-card-header"><%= teacherQr.school_name || 'School Attendance System' %></div>
-        <div class="qr-card-body">
-            <img src="<%= teacherQr.qrDataUrl %>" alt="QR" class="qr-image">
-            <div class="qr-name"><%= [teacherQr.lastname, teacherQr.firstname].filter(function(n){ return n && n.trim(); }).join(', ') %></div>
-            <% if (teacherQr.employee_id) { %><div class="qr-detail">ID: <%= teacherQr.employee_id %></div><% } %>
-            <div class="qr-detail qr-grade-section"><%= [teacherQr.grade_name, teacherQr.section_name].filter(Boolean).join(' - ') || '' %></div>
-        </div>
-        <div class="qr-code-text">TEACHER</div>
-    </div>
-</div>
-<% } %>
 <div class="filter-bar no-print">
     <% if (!isAdviser) { %>
     <div class="filter-item">
@@ -78,12 +64,23 @@
     </div>
 </div>
 
-<div id="studentQrSection">
 <div class="qr-grid" id="qrGrid" style="--qr-columns: <%= qrFilters.layout %>;">
+    <% if (isAdviser && typeof teacherQr !== 'undefined' && teacherQr) { %>
+    <div class="qr-card" id="teacherQrCard">
+        <div class="qr-card-header"><%= teacherQr.school_name || 'School Attendance System' %></div>
+        <div class="qr-card-body">
+            <img src="<%= teacherQr.qrDataUrl %>" alt="QR" class="qr-image">
+            <div class="qr-name"><%= [teacherQr.lastname, teacherQr.firstname].filter(function(n){ return n && n.trim(); }).join(', ') %></div>
+            <% if (teacherQr.employee_id) { %><div class="qr-detail">ID: <%= teacherQr.employee_id %></div><% } %>
+            <div class="qr-detail qr-grade-section"><%= [teacherQr.grade_name, teacherQr.section_name].filter(Boolean).join(' - ') || '&nbsp;' %></div>
+        </div>
+        <div class="qr-code-text">TEACHER</div>
+    </div>
+    <% } %>
     <% if (typeof people !== 'undefined' && people.length) { %>
         <% people.forEach(function(p) { %>
             <% const gradeSectionText = [p.grade_name, p.section_name].filter(Boolean).join(' - '); %>
-            <div class="qr-card">
+            <div class="qr-card student-qr-card">
                 <div class="qr-card-header"><%= p.school_name || 'School Attendance System' %></div>
                 <div class="qr-card-body">
                     <img src="<%= p.qrDataUrl %>" alt="QR" class="qr-image">
@@ -95,14 +92,13 @@
                 <div class="qr-code-text"><%= p.lrn ? 'STUDENT' : (p.employee_id ? 'TEACHER' : (p.qr_code && p.qr_code.startsWith('TCH-') ? 'TEACHER' : 'STUDENT')) %></div>
             </div>
         <% }); %>
-    <% } else { %>
+    <% } else if (!isAdviser || !(typeof teacherQr !== 'undefined' && teacherQr)) { %>
         <div class="empty-state" style="grid-column:1/-1;">
             <div class="empty-icon"><i class="fa-solid fa-qrcode" style="font-size:2.5rem;color:var(--gray-300);"></i></div>
             <h4>No QR codes to display</h4>
             <p>Choose a type, school, grade, or section above to show matching QR codes automatically.</p>
         </div>
     <% } %>
-</div>
 </div>
 
 <style>
@@ -420,7 +416,7 @@ function makeDiv(className, value) {
 }
 
 function makeQrCard(person) {
-    var card = makeDiv('qr-card');
+    var card = makeDiv('qr-card student-qr-card');
     var header = makeDiv('qr-card-header', person.school_name || 'EduTrack');
     var body = makeDiv('qr-card-body');
     var img = document.createElement('img');
@@ -462,7 +458,8 @@ function renderEmptyQr(message) {
 
 function renderQrCards(people) {
     var grid = document.getElementById('qrGrid');
-    grid.replaceChildren();
+    // remove only student cards, keep the teacher card
+    grid.querySelectorAll('.student-qr-card, .empty-state').forEach(function(el){ el.remove(); });
     if (!people || !people.length) {
         grid.appendChild(renderEmptyQr());
         return;
@@ -470,6 +467,9 @@ function renderQrCards(people) {
     people.forEach(function(person) {
         grid.appendChild(makeQrCard(person));
     });
+    // re-apply show filter if active
+    var showEl = document.getElementById('qrShow');
+    if (showEl) applyQrShow(showEl.value);
 }
 
 async function fetchQrCards() {
@@ -535,19 +535,10 @@ function bindAutoReload() {
 }
 
 function applyQrShow(value) {
-    var teacherSec = document.getElementById('teacherQrSection');
-    var studentSec = document.getElementById('studentQrSection');
-    if (!teacherSec || !studentSec) return;
-    if (value === 'mine') {
-        teacherSec.style.display = '';
-        studentSec.style.display = 'none';
-    } else if (value === 'students') {
-        teacherSec.style.display = 'none';
-        studentSec.style.display = '';
-    } else {
-        teacherSec.style.display = '';
-        studentSec.style.display = '';
-    }
+    var teacherCard = document.getElementById('teacherQrCard');
+    var studentCards = document.querySelectorAll('.student-qr-card');
+    if (teacherCard) teacherCard.style.display = (value === 'students') ? 'none' : '';
+    studentCards.forEach(function(c) { c.style.display = (value === 'mine') ? 'none' : ''; });
 }
 </script>
 <%- include('partials/footer') %>
