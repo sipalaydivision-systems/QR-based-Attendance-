@@ -156,7 +156,7 @@ function hasFiveConsecutiveAbsences(s) {
 
 function fmtName(s) {
     var n = s.lastname.toUpperCase() + ',' + s.firstname.toUpperCase();
-    if (s.middlename) n += ', ' + s.middlename.toUpperCase();
+    if (s.middlename) n += ', ' + s.middlename.charAt(0).toUpperCase() + '.';
     return n;
 }
 

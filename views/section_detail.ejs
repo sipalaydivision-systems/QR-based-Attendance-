@@ -520,7 +520,7 @@ function renderStudents() {
         var isAbsent = (status === 'absent');
         var rowClass = isStudentInactive ? ' class="row-inactive"' : (isAbsent ? ' class="row-absent"' : '');
         var initial = s.firstname ? s.firstname[0].toUpperCase() : '?';
-        var fullName = s.lastname + ', ' + s.firstname + (s.middlename ? ' ' + s.middlename : '');
+        var fullName = s.lastname + ', ' + s.firstname + (s.middlename ? ' ' + s.middlename.charAt(0).toUpperCase() + '.' : '');
         var avatarClass = isAbsent ? 'student-avatar absent' : 'student-avatar';
 
         var timeInHtml = '---';
