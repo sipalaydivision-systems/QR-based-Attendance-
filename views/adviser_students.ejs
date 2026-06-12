@@ -1,0 +1,399 @@
+<%- include('partials/header') %>
+
+<style>
+.as-wrap { width: 100%; }
+
+.as-header-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(135deg, var(--primary), #16a34a);
+    border-radius: var(--radius-lg); padding: 20px 24px;
+    color: #fff; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+}
+.as-header-bar h2 { font-size: 1.125rem; font-weight: 800; margin: 0; }
+.as-header-bar p  { font-size: 0.8125rem; opacity: 0.85; margin: 4px 0 0; }
+
+.as-section-badges { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+.as-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 14px; border-radius: 20px; font-size: 0.8125rem; font-weight: 600;
+}
+.as-badge.school  { background: #eef2ff; color: #4f46e5; }
+.as-badge.grade   { background: #fef3c7; color: #92400e; }
+.as-badge.section { background: #dcfce7; color: #16a34a; }
+
+.as-card {
+    background: #fff; border-radius: var(--radius-lg);
+    border: 1px solid var(--gray-200); box-shadow: var(--shadow); overflow: hidden;
+}
+.as-card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--gray-100); flex-wrap: wrap; gap: 10px;
+}
+.as-card-header h3 { font-size: 0.9375rem; font-weight: 700; color: var(--gray-800); margin: 0; display: flex; align-items: center; gap: 8px; }
+.as-card-header h3 i { color: var(--primary); }
+.as-search { padding: 7px 12px; border: 1px solid var(--gray-300); border-radius: var(--radius); font-size: 0.8125rem; width: 220px; }
+
+.as-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+.as-table th {
+    text-align: left; padding: 10px 16px;
+    font-size: 0.6875rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--gray-500);
+    background: var(--gray-50); border-bottom: 1px solid var(--gray-200);
+}
+.as-table td { padding: 11px 16px; border-bottom: 1px solid var(--gray-100); color: var(--gray-700); vertical-align: middle; }
+.as-table tr:hover td { background: var(--gray-50); }
+.as-name { font-weight: 600; color: var(--gray-900); }
+.as-lrn  { font-size: 0.75rem; color: var(--gray-400); margin-top: 2px; }
+
+.as-status-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 10px; border-radius: 12px; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase;
+}
+.as-status-pill.active   { background: #dcfce7; color: #16a34a; }
+.as-status-pill.inactive { background: var(--gray-100); color: var(--gray-400); }
+
+.as-empty { text-align: center; padding: 48px 20px; color: var(--gray-400); font-size: 0.875rem; }
+.as-empty i { font-size: 2.5rem; display: block; margin-bottom: 10px; color: var(--gray-300); }
+
+.as-no-section {
+    background: #fef3c7; border: 1px solid #fde68a; border-radius: var(--radius-lg);
+    padding: 32px; text-align: center; color: #92400e;
+}
+.as-no-section i { font-size: 2.5rem; display: block; margin-bottom: 12px; }
+.as-no-section h3 { margin: 0 0 8px; font-size: 1.125rem; }
+</style>
+
+<div class="as-wrap">
+
+<% if (!teacher.section_id) { %>
+<div class="as-no-section">
+    <i class="fa-solid fa-triangle-exclamation"></i>
+    <h3>No Section Assigned</h3>
+    <p>Please contact the administrator to assign your grade level and section before managing students.</p>
+</div>
+<% } else { %>
+
+<div class="as-header-bar">
+    <div>
+        <h2><i class="fa-solid fa-users"></i> My Students</h2>
+        <p>Manage students enrolled in your section</p>
+    </div>
+    <button class="btn" style="background:#fff;color:var(--primary);font-weight:700;padding:9px 18px;" onclick="openAddModal()">
+        <i class="fa-solid fa-user-plus"></i> Add Student
+    </button>
+</div>
+
+<div class="as-section-badges">
+    <span class="as-badge school"><i class="fa-solid fa-school"></i> <%= teacher.school_name || 'N/A' %></span>
+    <span class="as-badge grade"><i class="fa-solid fa-layer-group"></i> <%= teacher.grade_name || 'N/A' %></span>
+    <span class="as-badge section"><i class="fa-solid fa-users"></i> <%= teacher.section_name || 'N/A' %></span>
+    <span class="as-badge" style="background:#f0f9ff;color:#0369a1;">
+        <i class="fa-solid fa-graduation-cap"></i>
+        <span id="totalCount"><%= students.length %></span> student<%= students.length !== 1 ? 's' : '' %>
+    </span>
+</div>
+
+<div class="as-card">
+    <div class="as-card-header">
+        <h3><i class="fa-solid fa-list-check"></i> Student List</h3>
+        <input type="text" id="asSearch" class="as-search" placeholder="Search by name or LRN…" oninput="filterTable()">
+    </div>
+    <div style="overflow-x:auto;">
+        <table class="as-table" id="asTable">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Student</th>
+                    <th>Sex</th>
+                    <th>Guardian Contact</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="asBody">
+            <% if (students.length === 0) { %>
+                <tr><td colspan="6" class="as-empty"><i class="fa-solid fa-user-slash"></i> No students yet. Click <strong>Add Student</strong> to enroll one.</td></tr>
+            <% } else { students.forEach(function(s, idx) { %>
+                <tr data-search="<%= (s.lastname + ' ' + s.firstname + ' ' + (s.middlename||'') + ' ' + (s.lrn||'')).toLowerCase() %>">
+                    <td><%= idx + 1 %></td>
+                    <td>
+                        <div class="as-name"><%= s.lastname.toUpperCase() %>, <%= s.firstname %><%= s.middlename ? ' ' + s.middlename.charAt(0).toUpperCase() + '.' : '' %></div>
+                        <div class="as-lrn">LRN: <%= s.lrn || '—' %></div>
+                    </td>
+                    <td><%= s.gender || '—' %></td>
+                    <td><%= s.guardian_contact || '—' %></td>
+                    <td>
+                        <span class="as-status-pill <%= s.status === 'active' ? 'active' : 'inactive' %>">
+                            <i class="fa-solid fa-circle" style="font-size:0.5rem;"></i>
+                            <%= s.status === 'active' ? 'Active' : 'Inactive' %>
+                        </span>
+                    </td>
+                    <td>
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                            <button class="btn btn-secondary" style="font-size:0.75rem;padding:5px 10px;"
+                                onclick='openEditModal(<%- JSON.stringify({id:s.id,lrn:s.lrn||"",firstname:s.firstname,lastname:s.lastname,middlename:s.middlename||"",gender:s.gender||"",guardian_contact:s.guardian_contact||""}) %>)'>
+                                <i class="fa-solid fa-pen-to-square"></i> Edit
+                            </button>
+                            <button class="btn" style="font-size:0.75rem;padding:5px 10px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;"
+                                onclick="confirmDelete(<%= s.id %>, '<%= (s.lastname + ', ' + s.firstname).replace(/'/g,"\\'"  ) %>')">
+                                <i class="fa-solid fa-trash"></i> Delete
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            <% }); } %>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<% } %>
+</div>
+
+<!-- ── Add Student Modal ── -->
+<div class="modal-overlay" id="addModal" style="display:none;">
+    <div class="modal" style="max-width:500px;">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-user-plus"></i> Add Student</h3>
+            <button class="modal-close" onclick="closeAddModal()">&times;</button>
+        </div>
+        <div style="padding:24px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                <div class="form-group">
+                    <label class="form-label">Last Name *</label>
+                    <input type="text" id="addLastname" class="form-control" placeholder="e.g. Dela Cruz" style="width:100%;box-sizing:border-box;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">First Name *</label>
+                    <input type="text" id="addFirstname" class="form-control" placeholder="e.g. Juan" style="width:100%;box-sizing:border-box;">
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                <div class="form-group">
+                    <label class="form-label">Middle Name</label>
+                    <input type="text" id="addMiddlename" class="form-control" placeholder="Optional" style="width:100%;box-sizing:border-box;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">LRN <span style="font-weight:400;color:var(--gray-400);">(12 digits)</span></label>
+                    <input type="text" id="addLrn" class="form-control" maxlength="12" placeholder="Optional" style="width:100%;box-sizing:border-box;">
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;">
+                <div class="form-group">
+                    <label class="form-label">Sex</label>
+                    <select id="addGender" class="form-control" style="width:100%;box-sizing:border-box;">
+                        <option value="">— Select —</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Guardian Contact</label>
+                    <input type="text" id="addGuardian" class="form-control" placeholder="09XXXXXXXXX" style="width:100%;box-sizing:border-box;">
+                </div>
+            </div>
+            <div id="addError" style="color:#dc2626;font-size:0.8125rem;margin-bottom:12px;display:none;"></div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeAddModal()">Cancel</button>
+                <button class="btn btn-primary" id="addSaveBtn" onclick="submitAdd()"><i class="fa-solid fa-user-plus"></i> Add Student</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Edit Student Modal ── -->
+<div class="modal-overlay" id="editModal" style="display:none;">
+    <div class="modal" style="max-width:500px;">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-user-pen"></i> Edit Student</h3>
+            <button class="modal-close" onclick="closeEditModal()">&times;</button>
+        </div>
+        <div style="padding:24px;">
+            <input type="hidden" id="editId">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                <div class="form-group">
+                    <label class="form-label">Last Name *</label>
+                    <input type="text" id="editLastname" class="form-control" style="width:100%;box-sizing:border-box;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">First Name *</label>
+                    <input type="text" id="editFirstname" class="form-control" style="width:100%;box-sizing:border-box;">
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                <div class="form-group">
+                    <label class="form-label">Middle Name</label>
+                    <input type="text" id="editMiddlename" class="form-control" style="width:100%;box-sizing:border-box;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">LRN</label>
+                    <input type="text" id="editLrn" class="form-control" maxlength="12" style="width:100%;box-sizing:border-box;">
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;">
+                <div class="form-group">
+                    <label class="form-label">Sex</label>
+                    <select id="editGender" class="form-control" style="width:100%;box-sizing:border-box;">
+                        <option value="">— Select —</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Guardian Contact</label>
+                    <input type="text" id="editGuardian" class="form-control" style="width:100%;box-sizing:border-box;">
+                </div>
+            </div>
+            <div id="editError" style="color:#dc2626;font-size:0.8125rem;margin-bottom:12px;display:none;"></div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                <button class="btn btn-primary" id="editSaveBtn" onclick="submitEdit()"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Delete Confirmation Modal ── -->
+<div class="modal-overlay" id="deleteModal" style="display:none;">
+    <div class="modal" style="max-width:380px;">
+        <div class="modal-header">
+            <h3 style="color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i> Remove Student</h3>
+            <button class="modal-close" onclick="closeDeleteModal()">&times;</button>
+        </div>
+        <div style="padding:24px;">
+            <p style="font-size:0.875rem;color:var(--gray-700);margin:0 0 8px;">Are you sure you want to remove:</p>
+            <p style="font-size:1rem;font-weight:700;color:var(--gray-900);margin:0 0 16px;" id="deleteNameLabel"></p>
+            <p style="font-size:0.8125rem;color:var(--gray-500);margin:0 0 20px;">This student will be removed from your class list. Their attendance records are kept.</p>
+            <input type="hidden" id="deleteId">
+            <div id="deleteError" style="color:#dc2626;font-size:0.8125rem;margin-bottom:12px;display:none;"></div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+                <button class="btn" style="background:#dc2626;color:#fff;" id="deleteConfirmBtn" onclick="submitDelete()"><i class="fa-solid fa-trash"></i> Remove</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ── Search ──
+function filterTable() {
+    var q = document.getElementById('asSearch').value.toLowerCase();
+    var rows = document.querySelectorAll('#asBody tr[data-search]');
+    rows.forEach(function(r) {
+        r.style.display = r.getAttribute('data-search').indexOf(q) !== -1 ? '' : 'none';
+    });
+}
+
+// ── Add Modal ──
+function openAddModal() {
+    ['addLastname','addFirstname','addMiddlename','addLrn','addGuardian'].forEach(function(id) {
+        document.getElementById(id).value = '';
+    });
+    document.getElementById('addGender').value = '';
+    document.getElementById('addError').style.display = 'none';
+    document.getElementById('addModal').style.display = 'flex';
+    document.getElementById('addLastname').focus();
+}
+function closeAddModal() { document.getElementById('addModal').style.display = 'none'; }
+
+function submitAdd() {
+    var fn = document.getElementById('addFirstname').value.trim();
+    var ln = document.getElementById('addLastname').value.trim();
+    var errEl = document.getElementById('addError');
+    if (!fn || !ln) { errEl.textContent = 'First name and last name are required.'; errEl.style.display = ''; return; }
+
+    var btn = document.getElementById('addSaveBtn');
+    btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Adding…';
+
+    fetch('/admin/adviser-add-student', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            firstname: fn, lastname: ln,
+            middlename: document.getElementById('addMiddlename').value.trim(),
+            lrn: document.getElementById('addLrn').value.trim(),
+            gender: document.getElementById('addGender').value,
+            guardian_contact: document.getElementById('addGuardian').value.trim()
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) { window.location.reload(); }
+        else { errEl.textContent = data.error || 'Add failed.'; errEl.style.display = ''; }
+    })
+    .catch(function() { errEl.textContent = 'Network error — try again.'; errEl.style.display = ''; })
+    .finally(function() { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Add Student'; });
+}
+
+// ── Edit Modal ──
+function openEditModal(s) {
+    document.getElementById('editId').value = s.id;
+    document.getElementById('editLastname').value = s.lastname;
+    document.getElementById('editFirstname').value = s.firstname;
+    document.getElementById('editMiddlename').value = s.middlename;
+    document.getElementById('editLrn').value = s.lrn;
+    document.getElementById('editGender').value = s.gender || '';
+    document.getElementById('editGuardian').value = s.guardian_contact;
+    document.getElementById('editError').style.display = 'none';
+    document.getElementById('editModal').style.display = 'flex';
+    document.getElementById('editLastname').focus();
+}
+function closeEditModal() { document.getElementById('editModal').style.display = 'none'; }
+
+function submitEdit() {
+    var fn = document.getElementById('editFirstname').value.trim();
+    var ln = document.getElementById('editLastname').value.trim();
+    var errEl = document.getElementById('editError');
+    if (!fn || !ln) { errEl.textContent = 'First name and last name are required.'; errEl.style.display = ''; return; }
+
+    var btn = document.getElementById('editSaveBtn');
+    btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+
+    fetch('/admin/adviser-edit-student', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            student_id: document.getElementById('editId').value,
+            firstname: fn, lastname: ln,
+            middlename: document.getElementById('editMiddlename').value.trim(),
+            lrn: document.getElementById('editLrn').value.trim(),
+            gender: document.getElementById('editGender').value,
+            guardian_contact: document.getElementById('editGuardian').value.trim()
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) { window.location.reload(); }
+        else { errEl.textContent = data.error || 'Save failed.'; errEl.style.display = ''; }
+    })
+    .catch(function() { errEl.textContent = 'Network error — try again.'; errEl.style.display = ''; })
+    .finally(function() { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Changes'; });
+}
+
+// ── Delete Modal ──
+function confirmDelete(id, name) {
+    document.getElementById('deleteId').value = id;
+    document.getElementById('deleteNameLabel').textContent = name;
+    document.getElementById('deleteError').style.display = 'none';
+    document.getElementById('deleteModal').style.display = 'flex';
+}
+function closeDeleteModal() { document.getElementById('deleteModal').style.display = 'none'; }
+
+function submitDelete() {
+    var btn = document.getElementById('deleteConfirmBtn');
+    btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Removing…';
+    var errEl = document.getElementById('deleteError');
+
+    fetch('/admin/adviser-delete-student', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: document.getElementById('deleteId').value })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) { window.location.reload(); }
+        else { errEl.textContent = data.error || 'Remove failed.'; errEl.style.display = ''; }
+    })
+    .catch(function() { errEl.textContent = 'Network error — try again.'; errEl.style.display = ''; })
+    .finally(function() { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-trash"></i> Remove'; });
+}
+</script>
+
+<%- include('partials/footer') %>

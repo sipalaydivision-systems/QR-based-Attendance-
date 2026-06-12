@@ -713,6 +713,111 @@ router.post('/adviser-edit-student', express.json(), async (req, res) => {
     }
 });
 
+// ---- Adviser: Student List ----
+router.get('/adviser-students', async (req, res) => {
+    if (!req.session.user || req.session.user.role !== 'adviser') return res.redirect('/adviser-login');
+    const teacherId = req.session.user.teacher_id;
+    if (!teacherId) return res.render('error', { title: 'Error', message: 'No teacher record linked.', user: req.session.user });
+    try {
+        const [[teacher]] = await db.query(
+            `SELECT t.firstname, t.lastname, t.section_id, t.school_id, t.grade_level_id,
+                    sc.name as school_name, gl.name as grade_name, sec.name as section_name
+             FROM teachers t
+             LEFT JOIN schools sc ON t.school_id = sc.id
+             LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
+             LEFT JOIN sections sec ON t.section_id = sec.id
+             WHERE t.id = ?`, [teacherId]
+        );
+        if (!teacher) return res.render('error', { title: 'Error', message: 'Teacher not found.', user: req.session.user });
+
+        let students = [];
+        if (teacher.section_id) {
+            [students] = await db.query(
+                `SELECT id, lrn, firstname, lastname, middlename, gender, guardian_contact, status, active_from, created_at
+                 FROM students
+                 WHERE section_id = ? AND status != 'deleted'
+                 ORDER BY lastname, firstname`,
+                [teacher.section_id]
+            );
+        }
+        res.render('adviser_students', {
+            title: 'My Students',
+            page: 'adviser_students',
+            teacher,
+            students
+        });
+    } catch (err) {
+        console.error('Adviser students error:', err);
+        res.render('error', { title: 'Error', message: 'Failed to load students.', user: req.session.user });
+    }
+});
+
+// ---- Adviser: Add Student ----
+router.post('/adviser-add-student', express.json(), async (req, res) => {
+    if (!req.session.user || req.session.user.role !== 'adviser') return res.status(403).json({ error: 'Unauthorized' });
+    const teacherId = req.session.user.teacher_id;
+    if (!teacherId) return res.status(400).json({ error: 'No teacher record' });
+
+    const { lrn, firstname, lastname, middlename, gender, guardian_contact } = req.body;
+    const fn = String(firstname || '').trim();
+    const ln = String(lastname || '').trim();
+    const mn = String(middlename || '').trim() || null;
+    const lrnVal = String(lrn || '').trim() || null;
+    const gc = String(guardian_contact || '').trim() || null;
+    if (!fn || !ln) return res.status(400).json({ error: 'First name and last name are required' });
+
+    const gMap = { male: 'Male', female: 'Female', m: 'Male', f: 'Female' };
+    const gNorm = gMap[(String(gender || '').trim().toLowerCase())] || null;
+
+    try {
+        const [[t]] = await db.query(
+            `SELECT section_id, school_id, grade_level_id FROM teachers WHERE id = ?`, [teacherId]
+        );
+        if (!t || !t.section_id) return res.status(400).json({ error: 'No section assigned to your account' });
+
+        if (lrnVal) {
+            const [dup] = await db.query(`SELECT id FROM students WHERE lrn = ?`, [lrnVal]);
+            if (dup.length > 0) return res.status(409).json({ error: 'LRN already exists in the system' });
+        }
+
+        const qr_code = lrnVal ? 'STU-' + lrnVal : 'STU-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);
+        const [result] = await db.query(
+            `INSERT INTO students (lrn, firstname, lastname, middlename, gender, school_id, grade_level_id, section_id, guardian_contact, qr_code, category, active_from, status)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,CURDATE(),'active')`,
+            [lrnVal, fn, ln, mn, gNorm, t.school_id, t.grade_level_id, t.section_id, gc, qr_code, 'student']
+        );
+        res.json({ success: true, id: result.insertId });
+    } catch (err) {
+        if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'LRN already exists in the system' });
+        console.error('Adviser add student error:', err);
+        res.status(500).json({ error: 'Failed to add student' });
+    }
+});
+
+// ---- Adviser: Delete Student ----
+router.post('/adviser-delete-student', express.json(), async (req, res) => {
+    if (!req.session.user || req.session.user.role !== 'adviser') return res.status(403).json({ error: 'Unauthorized' });
+    const teacherId = req.session.user.teacher_id;
+    if (!teacherId) return res.status(400).json({ error: 'No teacher record' });
+
+    const sid = parseInt(req.body.student_id, 10);
+    if (!sid || sid <= 0) return res.status(400).json({ error: 'Invalid student' });
+
+    try {
+        const [[t]] = await db.query(`SELECT section_id FROM teachers WHERE id = ?`, [teacherId]);
+        if (!t) return res.status(403).json({ error: 'Teacher not found' });
+
+        const [[s]] = await db.query(`SELECT id FROM students WHERE id = ? AND section_id = ? AND status != 'deleted'`, [sid, t.section_id]);
+        if (!s) return res.status(403).json({ error: 'Student not in your section' });
+
+        await db.query(`UPDATE students SET status = 'deleted' WHERE id = ?`, [sid]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Adviser delete student error:', err);
+        res.status(500).json({ error: 'Delete failed' });
+    }
+});
+
 // ---- Attendance ----
 router.get('/attendance', async (req, res) => {
     const [schools] = await db.query("SELECT * FROM schools WHERE status = 'active' ORDER BY name");
