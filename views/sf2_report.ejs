@@ -624,38 +624,15 @@ function sf2Save() {
     .then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.success) {
-            // Reload to get updated totals (overrides affect absent/present counts)
-            if (overrides.length > 0) {
-                window.location.reload();
-                return;
-            }
-            // No attendance changes — just update display spans in-place
-            document.querySelectorAll('.remark-input[data-student-id]').forEach(function(inp) {
-                var span = inp.previousElementSibling;
-                if (span) span.textContent = inp.value;
-            });
-            document.querySelectorAll('.summary-input[data-key]').forEach(function(inp) {
-                var span = inp.previousElementSibling;
-                if (span) span.textContent = inp.value;
-            });
-            function sumTwo(km, kf, elId) {
-                var m = parseInt(document.querySelector('.summary-input[data-key="' + km + '"]').value) || 0;
-                var f = parseInt(document.querySelector('.summary-input[data-key="' + kf + '"]').value) || 0;
-                var el = document.getElementById(elId);
-                if (el) el.textContent = (m + f) || '';
-            }
-            sumTwo('dropped_out_m', 'dropped_out_f', 'dropped_total');
-            sumTwo('transferred_out_m', 'transferred_out_f', 'xout_total');
-            sumTwo('transferred_in_m', 'transferred_in_f', 'xin_total');
-            sf2CancelEdit();
-            document.getElementById('sf2EditHint').textContent = 'Saved.';
-            setTimeout(function() { document.getElementById('sf2EditHint').textContent = ''; }, 3000);
+            window.location.reload();
         } else {
             alert('Save failed: ' + (data.error || 'unknown error'));
+            var btn2 = document.getElementById('sf2SaveBtn');
+            if (btn2) { btn2.disabled = false; btn2.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save'; }
         }
     })
-    .catch(function() { alert('Network error — changes not saved.'); })
-    .finally(function() {
+    .catch(function() {
+        alert('Network error — changes not saved.');
         btn.disabled = false;
         btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Changes';
     });
