@@ -721,7 +721,7 @@ router.get('/adviser-students', async (req, res) => {
     try {
         const [[teacher]] = await db.query(
             `SELECT t.firstname, t.lastname, t.section_id, t.school_id, t.grade_level_id,
-                    sc.name as school_name, gl.name as grade_name, sec.name as section_name
+                    sc.name as school_name, sc.logo as school_logo, gl.name as grade_name, sec.name as section_name
              FROM teachers t
              LEFT JOIN schools sc ON t.school_id = sc.id
              LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id

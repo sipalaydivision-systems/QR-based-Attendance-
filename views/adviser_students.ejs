@@ -84,7 +84,14 @@
 </div>
 
 <div class="as-section-badges">
-    <span class="as-badge school"><i class="fa-solid fa-school"></i> <%= teacher.school_name || 'N/A' %></span>
+    <span class="as-badge school">
+        <% if (teacher.school_logo) { %>
+        <img src="<%= teacher.school_logo %>" alt="" style="width:18px;height:18px;object-fit:contain;border-radius:3px;" onerror="this.outerHTML='<i class=\'fa-solid fa-school\'></i>'">
+        <% } else { %>
+        <i class="fa-solid fa-school"></i>
+        <% } %>
+        <%= teacher.school_name || 'N/A' %>
+    </span>
     <span class="as-badge grade"><i class="fa-solid fa-layer-group"></i> <%= teacher.grade_name || 'N/A' %></span>
     <span class="as-badge section"><i class="fa-solid fa-users"></i> <%= teacher.section_name || 'N/A' %></span>
     <span class="as-badge" style="background:#f0f9ff;color:#0369a1;">
