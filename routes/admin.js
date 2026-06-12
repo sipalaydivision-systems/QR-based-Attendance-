@@ -867,6 +867,7 @@ router.post('/adviser-upload-photo', upload.single('photo'), async (req, res) =>
     if (!allowed.includes(req.file.mimetype)) return res.status(400).json({ error: 'Only image files are allowed.' });
     const teacherId = req.session.user.teacher_id;
     try {
+        await db.query(`ALTER TABLE teachers ADD COLUMN IF NOT EXISTS profile_photo MEDIUMTEXT DEFAULT NULL`).catch(() => {});
         const dataUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
         await db.query(`UPDATE teachers SET profile_photo = ? WHERE id = ?`, [dataUrl, teacherId]);
         res.json({ success: true, photo: dataUrl });
