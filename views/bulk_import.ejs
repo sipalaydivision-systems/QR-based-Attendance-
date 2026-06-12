@@ -62,9 +62,10 @@
         <div>
             <div class="info-card" id="infoStudents">
                 <h4><i class="fa-solid fa-file-lines"></i> Student File Format</h4>
-                <div class="code-preview">LRN, Student Name, School, Grade, Section, Guardian Contact</div>
+                <div class="code-preview">LRN, Student Name, Sex, School, Grade, Section, Guardian Contact</div>
                 <ul class="info-list">
                     <li><span class="dot" style="background:var(--success);"></span> First row is treated as header (skipped)</li>
+                    <li><span class="dot" style="background:var(--primary);"></span> Sex: Male or Female (required for SF2 report)</li>
                     <li><span class="dot" style="background:var(--primary);"></span> Duplicate LRNs update existing records</li>
                     <li><span class="dot" style="background:var(--primary);"></span> QR codes auto-generated as STU-{LRN}</li>
                     <li><span class="dot" style="background:var(--primary);"></span> School & Grade from file or dropdown default</li>
@@ -75,9 +76,10 @@
             </div>
             <div class="info-card" id="infoShs" style="display:none;">
                 <h4><i class="fa-solid fa-file-lines"></i> SHS Student File Format</h4>
-                <div class="code-preview">LRN, Student Name, School, Grade, Track/Strand, Section, Guardian Contact</div>
+                <div class="code-preview">LRN, Student Name, Sex, School, Grade, Track/Strand, Section, Guardian Contact</div>
                 <ul class="info-list">
                     <li><span class="dot" style="background:var(--success);"></span> First row is treated as header (skipped)</li>
+                    <li><span class="dot" style="background:var(--primary);"></span> Sex: Male or Female (required for SF2 report)</li>
                     <li><span class="dot" style="background:var(--primary);"></span> Track/Strand is required for SHS</li>
                     <li><span class="dot" style="background:var(--primary);"></span> Duplicate LRNs update existing records</li>
                     <li><span class="dot" style="background:var(--primary);"></span> Section is auto-created with track if not found</li>
@@ -233,9 +235,9 @@ function showPreview(data) {
     if (isTeacher) {
         headHtml += '<th>EMP ID</th><th>NAME</th><th>SCHOOL</th><th>GRADE</th><th>SECTION</th><th>CONTACT</th><th>QR CODE</th><th>STATUS</th>';
     } else if (isShs) {
-        headHtml += '<th>LRN</th><th>NAME</th><th>SCHOOL</th><th>GRADE</th><th>TRACK/STRAND</th><th>SECTION</th><th>GUARDIAN</th><th>QR CODE</th><th>STATUS</th>';
+        headHtml += '<th>LRN</th><th>NAME</th><th>SEX</th><th>SCHOOL</th><th>GRADE</th><th>TRACK/STRAND</th><th>SECTION</th><th>GUARDIAN</th><th>QR CODE</th><th>STATUS</th>';
     } else {
-        headHtml += '<th>LRN</th><th>NAME</th><th>SCHOOL</th><th>GRADE</th><th>SECTION</th><th>GUARDIAN</th><th>QR CODE</th><th>STATUS</th>';
+        headHtml += '<th>LRN</th><th>NAME</th><th>SEX</th><th>SCHOOL</th><th>GRADE</th><th>SECTION</th><th>GUARDIAN</th><th>QR CODE</th><th>STATUS</th>';
     }
     headHtml += '</tr>';
     document.getElementById('previewHead').innerHTML = headHtml;
@@ -262,6 +264,7 @@ function showPreview(data) {
         } else if (isShs) {
             bodyHtml += '<td>' + (p.lrn || '') + '</td>';
             bodyHtml += '<td>' + (p.name || '') + '</td>';
+            bodyHtml += '<td>' + (p.sex || '<span style="color:var(--gray-400);">—</span>') + '</td>';
             bodyHtml += '<td>' + (p.school || '') + '</td>';
             bodyHtml += '<td>' + (p.grade || '') + '</td>';
             bodyHtml += '<td>' + (p.track || '') + '</td>';
@@ -271,6 +274,7 @@ function showPreview(data) {
         } else {
             bodyHtml += '<td>' + (p.lrn || '') + '</td>';
             bodyHtml += '<td>' + (p.name || '') + '</td>';
+            bodyHtml += '<td>' + (p.sex || '<span style="color:var(--gray-400);">—</span>') + '</td>';
             bodyHtml += '<td>' + (p.school || '') + '</td>';
             bodyHtml += '<td>' + (p.grade || '') + '</td>';
             bodyHtml += '<td>' + (p.section || '') + '</td>';

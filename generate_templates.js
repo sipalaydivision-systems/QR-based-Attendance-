@@ -24,6 +24,7 @@ const gradeList = ['1','2','3','4','5','6','7','8','9','10','11','12'];
 const gradeElementary = ['1','2','3','4','5','6'];
 const gradeHighSchool = ['7','8','9','10','11','12'];
 const trackList = ['STEM','ABM','HUMSS','GAS','TVL-HE','TVL-ICT','TVL-IA','TVL-AFA','Sports','Arts & Design'];
+const sexList = ['Male','Female'];
 
 const headerStyle = {
     fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4834D4' } },
@@ -57,6 +58,7 @@ function addDropdowns(choicesSheet) {
     hsSchools.forEach((name, idx) => { choicesSheet.getCell('E' + (idx + 1)).value = name; });
     gradeElementary.forEach((g, idx) => { choicesSheet.getCell('F' + (idx + 1)).value = g; });
     gradeHighSchool.forEach((g, idx) => { choicesSheet.getCell('G' + (idx + 1)).value = g; });
+    sexList.forEach((s, idx) => { choicesSheet.getCell('H' + (idx + 1)).value = s; });
 }
 
 function applyValidation(sheet, col, range, title, rows) {
@@ -75,18 +77,20 @@ async function generateStudent() {
     const dd = workbook.addWorksheet('Dropdowns', { state: 'veryHidden' });
     addDropdowns(dd);
 
-    sheet.columns = [{ width: 22 }, { width: 32 }, { width: 38 }, { width: 18 }, { width: 28 }, { width: 22 }];
+    sheet.columns = [{ width: 22 }, { width: 32 }, { width: 14 }, { width: 38 }, { width: 18 }, { width: 28 }, { width: 22 }];
     const row = sheet.getRow(1);
     setHeaderCell(row.getCell(1), 'LRN', '(e.g. 123456789012)');
     setHeaderCell(row.getCell(2), 'Student Name', '(Last Name, First Name, Middle Name)');
-    setHeaderCell(row.getCell(3), 'School', '((Select from dropdown))');
-    setHeaderCell(row.getCell(4), 'Grade', '((Select from dropdown))');
-    setHeaderCell(row.getCell(5), 'Section', '(Capital first letter (e.g. Banana))');
-    setHeaderCell(row.getCell(6), 'Guardian Contact', '(09XXXXXXXXX)');
+    setHeaderCell(row.getCell(3), 'Sex', '((Select from dropdown))');
+    setHeaderCell(row.getCell(4), 'School', '((Select from dropdown))');
+    setHeaderCell(row.getCell(5), 'Grade', '((Select from dropdown))');
+    setHeaderCell(row.getCell(6), 'Section', '(Capital first letter (e.g. Banana))');
+    setHeaderCell(row.getCell(7), 'Guardian Contact', '(09XXXXXXXXX)');
     row.height = 40;
 
-    applyValidation(sheet, 'C', 'Dropdowns!$A$1:$A$' + schoolList.length, 'Select School', 101);
-    applyValidation(sheet, 'D', 'Dropdowns!$B$1:$B$' + gradeList.length, 'Select Grade', 101);
+    applyValidation(sheet, 'C', 'Dropdowns!$H$1:$H$' + sexList.length, 'Select Sex', 101);
+    applyValidation(sheet, 'D', 'Dropdowns!$A$1:$A$' + schoolList.length, 'Select School', 101);
+    applyValidation(sheet, 'E', 'Dropdowns!$B$1:$B$' + gradeList.length, 'Select Grade', 101);
 
     await workbook.xlsx.writeFile(path.join(__dirname, 'public/templates/student_import_template.xlsx'));
     console.log('DONE: student_import_template.xlsx');
@@ -98,20 +102,22 @@ async function generateSHS() {
     const dd = workbook.addWorksheet('Dropdowns', { state: 'veryHidden' });
     addDropdowns(dd);
 
-    sheet.columns = [{ width: 22 }, { width: 32 }, { width: 38 }, { width: 18 }, { width: 24 }, { width: 28 }, { width: 22 }];
+    sheet.columns = [{ width: 22 }, { width: 32 }, { width: 14 }, { width: 38 }, { width: 18 }, { width: 24 }, { width: 28 }, { width: 22 }];
     const row = sheet.getRow(1);
     setHeaderCell(row.getCell(1), 'LRN', '(e.g. 123456789012)');
     setHeaderCell(row.getCell(2), 'Student Name', '(Last Name, First Name, Middle Name)');
-    setHeaderCell(row.getCell(3), 'School', '((Select from dropdown))');
-    setHeaderCell(row.getCell(4), 'Grade', '((Select from dropdown))');
-    setHeaderCell(row.getCell(5), 'Track/Strand', '((Select from dropdown))');
-    setHeaderCell(row.getCell(6), 'Section', '(Capital first letter (e.g. Banana))');
-    setHeaderCell(row.getCell(7), 'Guardian Contact', '(09XXXXXXXXX)');
+    setHeaderCell(row.getCell(3), 'Sex', '((Select from dropdown))');
+    setHeaderCell(row.getCell(4), 'School', '((Select from dropdown))');
+    setHeaderCell(row.getCell(5), 'Grade', '((Select from dropdown))');
+    setHeaderCell(row.getCell(6), 'Track/Strand', '((Select from dropdown))');
+    setHeaderCell(row.getCell(7), 'Section', '(Capital first letter (e.g. Banana))');
+    setHeaderCell(row.getCell(8), 'Guardian Contact', '(09XXXXXXXXX)');
     row.height = 40;
 
-    applyValidation(sheet, 'C', 'Dropdowns!$A$1:$A$' + schoolList.length, 'Select School', 101);
-    applyValidation(sheet, 'D', 'Dropdowns!$B$1:$B$' + gradeList.length, 'Select Grade', 101);
-    applyValidation(sheet, 'E', 'Dropdowns!$C$1:$C$' + trackList.length, 'Select Track', 101);
+    applyValidation(sheet, 'C', 'Dropdowns!$H$1:$H$' + sexList.length, 'Select Sex', 101);
+    applyValidation(sheet, 'D', 'Dropdowns!$A$1:$A$' + schoolList.length, 'Select School', 101);
+    applyValidation(sheet, 'E', 'Dropdowns!$B$1:$B$' + gradeList.length, 'Select Grade', 101);
+    applyValidation(sheet, 'F', 'Dropdowns!$C$1:$C$' + trackList.length, 'Select Track', 101);
 
     await workbook.xlsx.writeFile(path.join(__dirname, 'public/templates/shs_student_import_template.xlsx'));
     console.log('DONE: shs_student_import_template.xlsx');

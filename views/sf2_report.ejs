@@ -39,6 +39,7 @@
 .sf2-grid .day-cell { font-size: 6.5pt; padding: 1px 0; }
 .sf2-grid .total-row td { font-weight: bold; }
 .sf2-grid .remarks-hdr { font-size: 5.5pt; font-weight: bold; text-align: center; }
+.sf2-grid .remark-cell { text-align: left; font-size: 6pt; padding: 1px 3px; }
 
 /* bottom section */
 .sf2-bottom td { vertical-align: top; font-size: 6.5pt; text-align: left; }
@@ -77,43 +78,55 @@
 </div>
 
 <%
-// ── Build weekday-aligned slots (M T W TH F per week, like the official grid) ──
-var slots = [];
-if (schoolDays.length) {
-    var firstDow = new Date(schoolDays[0] + 'T00:00:00').getDay(); // 1=Mon..5=Fri
-    for (var p = 1; p < firstDow; p++) slots.push(null);           // pad so day 1 lands on its weekday
-}
-schoolDays.forEach(function(d) { slots.push(d); });
-while (slots.length < 25 || slots.length % 5 !== 0) slots.push(null); // official form shows 5 weeks
 var DAY_ABBR = ['M','T','W','TH','F'];
-
 var pSet = new Set(presentSet);
 function isPresent(studentId, dateStr) { return pSet.has(studentId + '-' + dateStr); }
 
-function effDate(s) {
-    var v = s.active_from || s.created_at;
-    return v instanceof Date ? v.toISOString().slice(0,10) : String(v).slice(0,10);
+// Absences only count for school days that have already ended (lastCountable from server)
+var countableDays = schoolDays.filter(function(d) { return d <= lastCountable; });
+var numDays = countableDays.length;
+
+// Normalize gender so M/m/Male/MALE all group correctly
+function sexOf(s) {
+    var g = String(s.gender || '').trim().toLowerCase();
+    if (g === 'm' || g.indexOf('mal') === 0) return 'M';
+    if (g === 'f' || g.indexOf('fem') === 0) return 'F';
+    return '?';
+}
+var males       = students.filter(function(s) { return sexOf(s) === 'M'; });
+var females     = students.filter(function(s) { return sexOf(s) === 'F'; });
+var unspecified = students.filter(function(s) { return sexOf(s) === '?'; });
+
+function isAbsentOn(s, d) {
+    return d >= s.enrolled_from && d <= lastCountable && !isPresent(s.id, d);
 }
 
-var males   = students.filter(function(s){ return s.gender === 'Male'; });
-var females = students.filter(function(s){ return s.gender !== 'Male'; });
-
 function studentTotals(s) {
-    var absent = 0, present = 0, eff = effDate(s);
-    schoolDays.forEach(function(d) {
-        if (d < eff) return;
+    var absent = 0, present = 0;
+    countableDays.forEach(function(d) {
+        if (d < s.enrolled_from) return;
         if (isPresent(s.id, d)) present++; else absent++;
     });
     return { absent: absent, present: present };
 }
 
 function dayAbsent(group, dateStr) {
+    if (dateStr > lastCountable) return 0;
     var count = 0;
-    group.forEach(function(s) {
-        if (dateStr < effDate(s)) return;
-        if (!isPresent(s.id, dateStr)) count++;
-    });
+    group.forEach(function(s) { if (isAbsentOn(s, dateStr)) count++; });
     return count;
+}
+
+function hasFiveConsecutiveAbsences(s) {
+    var run = 0;
+    for (var i = 0; i < countableDays.length; i++) {
+        var d = countableDays[i];
+        if (d < s.enrolled_from) { run = 0; continue; }
+        if (isPresent(s.id, d)) { run = 0; continue; }
+        run++;
+        if (run >= 5) return true;
+    }
+    return false;
 }
 
 function fmtName(s) {
@@ -122,21 +135,32 @@ function fmtName(s) {
     return n;
 }
 
-var adviserName = [teacher.firstname, teacher.middlename ? teacher.middlename.charAt(0)+'.' : '', teacher.lastname].filter(Boolean).join(' ');
-
-var mEnroll = males.length, fEnroll = females.length, totalEnroll = students.length;
-var mTotAbs = 0, fTotAbs = 0, mTotPres = 0, fTotPres = 0;
-males.forEach(function(s){ var t = studentTotals(s); mTotAbs += t.absent; mTotPres += t.present; });
-females.forEach(function(s){ var t = studentTotals(s); fTotAbs += t.absent; fTotPres += t.present; });
-var numDays = schoolDays.length;
-
-function avgDaily(pres) { return numDays > 0 ? (pres / numDays).toFixed(1) : '0'; }
-function pctAtt(pres, enroll) {
-    return (enroll > 0 && numDays > 0) ? Math.round((pres / numDays / enroll) * 100) + '%' : '';
+function groupStats(group) {
+    var absent = 0, present = 0, late = 0, fiveDay = 0;
+    group.forEach(function(s) {
+        var t = studentTotals(s);
+        absent += t.absent; present += t.present;
+        if (s.enrolled_from > firstFriday && s.enrolled_from <= endDate) late++;
+        if (hasFiveConsecutiveAbsences(s)) fiveDay++;
+    });
+    return { absent: absent, present: present, late: late, fiveDay: fiveDay };
 }
 
-// total columns: No + Name + slots + Absent + Present + Remarks
-var nCols = 2 + slots.length + 3;
+var mStats = groupStats(males);
+var fStats = groupStats(females);
+var allStats = groupStats(students);
+
+var mEnroll = males.length, fEnroll = females.length, totalEnroll = students.length;
+var mAsOf = mEnroll - mStats.late, fAsOf = fEnroll - fStats.late, totalAsOf = totalEnroll - allStats.late;
+
+function fmt1(v) { return (Math.round(v * 10) / 10).toFixed(1); }
+function avgDaily(present) { return numDays > 0 ? fmt1(present / numDays) : '0.0'; }
+function pctEnrol(registered, asOf) { return asOf > 0 ? Math.round(registered / asOf * 100) + '%' : ''; }
+function pctAtt(present, registered) {
+    return (registered > 0 && numDays > 0) ? Math.round(present / numDays / registered * 100) + '%' : '';
+}
+
+var adviserName = [teacher.firstname, teacher.middlename ? teacher.middlename.charAt(0) + '.' : '', teacher.lastname].filter(Boolean).join(' ');
 %>
 
 <div class="sf2-paper">
@@ -180,7 +204,7 @@ var nCols = 2 + slots.length + 3;
     <!-- Header row B: dates -->
     <tr>
         <% slots.forEach(function(d) { %>
-        <td class="day-cell hdr" style="font-size:6pt;"><%= d ? new Date(d+'T00:00:00').getDate() : '' %></td>
+        <td class="day-cell hdr" style="font-size:6pt;"><%= d ? Number(d.slice(8,10)) : '' %></td>
         <% }); %>
         <td class="hdr" style="font-size:6pt;width:30px;">ABSENT</td>
         <td class="hdr" style="font-size:6pt;width:30px;">PRESENT</td>
@@ -195,62 +219,88 @@ var nCols = 2 + slots.length + 3;
     </tr>
 
     <!-- ═══ MALE ═══ -->
-    <% males.forEach(function(s, idx) { var t = studentTotals(s); var eff = effDate(s); %>
+    <% males.forEach(function(s, idx) { var t = studentTotals(s); %>
     <tr>
         <td class="num-cell"><%= idx + 1 %>.</td>
         <td class="name-cell"><%= fmtName(s) %></td>
         <% slots.forEach(function(d) { %>
-        <td class="day-cell"><%= (d && d >= eff && !isPresent(s.id, d)) ? 'x' : '' %></td>
+        <td class="day-cell"><%= (d && isAbsentOn(s, d)) ? 'x' : '' %></td>
         <% }); %>
         <td class="day-cell" style="font-weight:bold;"><%= t.absent || '' %></td>
         <td class="day-cell"><%= t.present || '' %></td>
-        <td></td>
+        <td class="remark-cell"><%= (s.enrolled_from > firstFriday && s.enrolled_from <= endDate) ? 'Late enrolled (' + s.enrolled_from + ')' : '' %></td>
     </tr>
     <% }); %>
     <tr class="total-row">
         <td class="num-cell"><%= males.length %>.</td>
         <td class="name-cell" style="text-align:center;">&lt;=== MALE | TOTAL Per Day ===&gt;</td>
         <% slots.forEach(function(d) { var a = d ? dayAbsent(males, d) : 0; %>
-        <td class="day-cell"><%= (d && a > 0) ? a : '' %></td>
+        <td class="day-cell"><%= a > 0 ? a : '' %></td>
         <% }); %>
-        <td class="day-cell"><%= mTotAbs || '' %></td>
-        <td class="day-cell"><%= mTotPres || '' %></td>
+        <td class="day-cell"><%= mStats.absent || '' %></td>
+        <td class="day-cell"><%= mStats.present || '' %></td>
         <td></td>
     </tr>
 
     <!-- ═══ FEMALE ═══ -->
-    <% females.forEach(function(s, idx) { var t = studentTotals(s); var eff = effDate(s); %>
+    <% females.forEach(function(s, idx) { var t = studentTotals(s); %>
     <tr>
         <td class="num-cell"><%= idx + 1 %>.</td>
         <td class="name-cell"><%= fmtName(s) %></td>
         <% slots.forEach(function(d) { %>
-        <td class="day-cell"><%= (d && d >= eff && !isPresent(s.id, d)) ? 'x' : '' %></td>
+        <td class="day-cell"><%= (d && isAbsentOn(s, d)) ? 'x' : '' %></td>
         <% }); %>
         <td class="day-cell" style="font-weight:bold;"><%= t.absent || '' %></td>
         <td class="day-cell"><%= t.present || '' %></td>
-        <td></td>
+        <td class="remark-cell"><%= (s.enrolled_from > firstFriday && s.enrolled_from <= endDate) ? 'Late enrolled (' + s.enrolled_from + ')' : '' %></td>
     </tr>
     <% }); %>
     <tr class="total-row">
         <td class="num-cell"><%= females.length %>.</td>
         <td class="name-cell" style="text-align:center;">&lt;=== FEMALE | TOTAL Per Day ===&gt;</td>
         <% slots.forEach(function(d) { var a = d ? dayAbsent(females, d) : 0; %>
-        <td class="day-cell"><%= (d && a > 0) ? a : '' %></td>
+        <td class="day-cell"><%= a > 0 ? a : '' %></td>
         <% }); %>
-        <td class="day-cell"><%= fTotAbs || '' %></td>
-        <td class="day-cell"><%= fTotPres || '' %></td>
+        <td class="day-cell"><%= fStats.absent || '' %></td>
+        <td class="day-cell"><%= fStats.present || '' %></td>
         <td></td>
     </tr>
+
+    <!-- ═══ SEX NOT SET (data fix needed) ═══ -->
+    <% unspecified.forEach(function(s, idx) { var t = studentTotals(s); %>
+    <tr>
+        <td class="num-cell"><%= idx + 1 %>.</td>
+        <td class="name-cell"><%= fmtName(s) %></td>
+        <% slots.forEach(function(d) { %>
+        <td class="day-cell"><%= (d && isAbsentOn(s, d)) ? 'x' : '' %></td>
+        <% }); %>
+        <td class="day-cell" style="font-weight:bold;"><%= t.absent || '' %></td>
+        <td class="day-cell"><%= t.present || '' %></td>
+        <td class="remark-cell">SEX NOT SET — update student record</td>
+    </tr>
+    <% }); %>
+    <% if (unspecified.length) { %>
+    <tr class="total-row">
+        <td class="num-cell"><%= unspecified.length %>.</td>
+        <td class="name-cell" style="text-align:center;">&lt;=== SEX NOT SET | TOTAL Per Day ===&gt;</td>
+        <% slots.forEach(function(d) { var a = d ? dayAbsent(unspecified, d) : 0; %>
+        <td class="day-cell"><%= a > 0 ? a : '' %></td>
+        <% }); %>
+        <td class="day-cell"></td>
+        <td class="day-cell"></td>
+        <td></td>
+    </tr>
+    <% } %>
 
     <!-- ═══ COMBINED ═══ -->
     <tr class="total-row">
         <td class="num-cell"><%= totalEnroll %>.</td>
         <td class="name-cell" style="text-align:center;">Combined TOTAL Per Day</td>
         <% slots.forEach(function(d) { var a = d ? dayAbsent(students, d) : 0; %>
-        <td class="day-cell"><%= (d && a > 0) ? a : '' %></td>
+        <td class="day-cell"><%= a > 0 ? a : '' %></td>
         <% }); %>
-        <td class="day-cell"><%= (mTotAbs + fTotAbs) || '' %></td>
-        <td class="day-cell"><%= (mTotPres + fTotPres) || '' %></td>
+        <td class="day-cell"><%= allStats.absent || '' %></td>
+        <td class="day-cell"><%= allStats.present || '' %></td>
         <td></td>
     </tr>
 </table>
@@ -352,16 +402,16 @@ var nCols = 2 + slots.length + 3;
                     <td class="sv" style="border:none;font-weight:bold;">TOTAL</td>
                 </tr>
                 <tr>
-                    <td class="sl">* Enrolment as of (1st Friday of June)</td>
-                    <td class="sv"><%= mEnroll %></td>
-                    <td class="sv"><%= fEnroll %></td>
-                    <td class="sv"><%= totalEnroll %></td>
+                    <td class="sl">* Enrolment as of (1st Friday of <%= monthName %>)</td>
+                    <td class="sv"><%= mAsOf %></td>
+                    <td class="sv"><%= fAsOf %></td>
+                    <td class="sv"><%= totalAsOf %></td>
                 </tr>
                 <tr>
                     <td class="sl">Late enrolment during the month (beyond cut-off)</td>
-                    <td class="sv">0</td>
-                    <td class="sv">0</td>
-                    <td class="sv">0</td>
+                    <td class="sv"><%= mStats.late %></td>
+                    <td class="sv"><%= fStats.late %></td>
+                    <td class="sv"><%= allStats.late %></td>
                 </tr>
                 <tr>
                     <td class="sl">Registered Learners as of end of month</td>
@@ -371,25 +421,27 @@ var nCols = 2 + slots.length + 3;
                 </tr>
                 <tr>
                     <td class="sl">Percentage of Enrolment as of end of month</td>
-                    <td class="sv">100%</td>
-                    <td class="sv">100%</td>
-                    <td class="sv">100%</td>
+                    <td class="sv"><%= pctEnrol(mEnroll, mAsOf) %></td>
+                    <td class="sv"><%= pctEnrol(fEnroll, fAsOf) %></td>
+                    <td class="sv"><%= pctEnrol(totalEnroll, totalAsOf) %></td>
                 </tr>
                 <tr>
                     <td class="sl">Average Daily Attendance</td>
-                    <td class="sv"><%= avgDaily(mTotPres) %></td>
-                    <td class="sv"><%= avgDaily(fTotPres) %></td>
-                    <td class="sv"><%= avgDaily(mTotPres + fTotPres) %></td>
+                    <td class="sv"><%= avgDaily(mStats.present) %></td>
+                    <td class="sv"><%= avgDaily(fStats.present) %></td>
+                    <td class="sv"><%= avgDaily(allStats.present) %></td>
                 </tr>
                 <tr>
                     <td class="sl">Percentage of Attendance for the month</td>
-                    <td class="sv"><%= pctAtt(mTotPres, mEnroll) %></td>
-                    <td class="sv"><%= pctAtt(fTotPres, fEnroll) %></td>
-                    <td class="sv"><%= pctAtt(mTotPres + fTotPres, totalEnroll) %></td>
+                    <td class="sv"><%= pctAtt(mStats.present, mEnroll) %></td>
+                    <td class="sv"><%= pctAtt(fStats.present, fEnroll) %></td>
+                    <td class="sv"><%= pctAtt(allStats.present, totalEnroll) %></td>
                 </tr>
                 <tr>
                     <td class="sl">Number of students absent for 5 consecutive days</td>
-                    <td class="sv"></td><td class="sv"></td><td class="sv"></td>
+                    <td class="sv"><%= mStats.fiveDay || '' %></td>
+                    <td class="sv"><%= fStats.fiveDay || '' %></td>
+                    <td class="sv"><%= allStats.fiveDay || '' %></td>
                 </tr>
                 <tr>
                     <td class="sl">Dropped out</td>

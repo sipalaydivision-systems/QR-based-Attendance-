@@ -8,7 +8,7 @@ const router = express.Router();
 const db = require('../config/database');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { getScannerKioskToken } = require('../utils/scannerKiosk');
-const { todayDate } = require('../utils/appTime');
+const { todayDate, currentMonth, nowDateTime, normalizeTime, sqlDateTime, compareDateTime } = require('../utils/appTime');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -87,6 +87,16 @@ function fullName(firstname, lastname, middlename) {
 
 function displayName(firstname, lastname, middlename) {
     return [firstname, middlename ? middlename.charAt(0) + '.' : '', lastname].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+}
+
+// Normalize Sex/Gender values from import files to the students.gender enum.
+function parseSexValue(raw) {
+    const v = String(raw || '').trim().toLowerCase();
+    if (!v) return null;
+    if (v === 'm' || v.startsWith('mal')) return 'Male';
+    if (v === 'f' || v.startsWith('fem')) return 'Female';
+    if (v.startsWith('o')) return 'Other';
+    return null;
 }
 
 function getRowValue(row, keys) {
@@ -391,13 +401,13 @@ router.get('/sf2-report', async (req, res) => {
     const teacherId = req.session.user.teacher_id;
     if (!teacherId) return res.render('error', { title: 'SF2 Error', message: 'No teacher record linked.', user: req.session.user });
 
-    // Month param optional — defaults to the current month so the sidebar link works directly
+    // Month param optional — defaults to the current month (app timezone) so the sidebar link works directly
     let monthParam = req.query.month; // e.g. "2026-06"
     if (!monthParam || !/^\d{4}-\d{2}$/.test(monthParam)) {
-        const now = new Date();
-        monthParam = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        monthParam = currentMonth();
     }
     const [year, month] = monthParam.split('-').map(Number);
+    const pad2 = n => String(n).padStart(2, '0');
 
     try {
         // Teacher + school + section info
@@ -421,16 +431,20 @@ router.get('/sf2-report', async (req, res) => {
 
         // Students in section, ordered by gender then lastname
         const [students] = await db.query(
-            `SELECT id, lrn, firstname, lastname, middlename, gender, active_from, created_at
+            `SELECT id, lrn, firstname, lastname, middlename, gender,
+                    DATE_FORMAT(COALESCE(active_from, created_at), '%Y-%m-%d') as enrolled_from
              FROM students
              WHERE section_id = ? AND status = 'active'
              ORDER BY FIELD(gender,'Male','Female','Other'), lastname, firstname`,
             [teacher.section_id]
         );
 
-        // All attendance for this section in the given month
-        const startDate = `${year}-${String(month).padStart(2,'0')}-01`;
-        const endDate   = new Date(year, month, 0).toISOString().slice(0,10); // last day
+        // Month boundaries built from plain strings — no Date/UTC conversion that can shift days
+        const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+        const startDate = `${year}-${pad2(month)}-01`;
+        const endDate = `${year}-${pad2(month)}-${pad2(daysInMonth)}`;
+
+        // Attendance for the month (time_in = present)
         const [attendance] = await db.query(
             `SELECT person_id, DATE_FORMAT(date,'%Y-%m-%d') as date_str, time_in
              FROM attendance
@@ -439,24 +453,83 @@ router.get('/sf2-report', async (req, res) => {
                AND date BETWEEN ? AND ?`,
             [teacher.school_id, startDate, endDate]
         );
-
-        // Build a Set of "studentId-date" for present days
         const presentSet = new Set(attendance.filter(r => r.time_in).map(r => `${r.person_id}-${r.date_str}`));
+
+        // Holidays (national + this school) and manual school-day overrides — same rules
+        // the scanner and dashboards use via checkSchoolDay()
+        const [holidayRows] = await db.query(
+            `SELECT DATE_FORMAT(holiday_date,'%Y-%m-%d') as d
+             FROM holidays
+             WHERE holiday_date BETWEEN ? AND ? AND (school_id IS NULL OR school_id = ?)`,
+            [startDate, endDate, teacher.school_id]
+        );
+        const holidaySet = new Set(holidayRows.map(r => r.d));
+        const [overrideRows] = await db.query(
+            `SELECT DATE_FORMAT(date,'%Y-%m-%d') as d, is_school_day
+             FROM school_days WHERE date BETWEEN ? AND ?`,
+            [startDate, endDate]
+        ).catch(() => [[]]);
+        const overrides = new Map(overrideRows.map(r => [r.d, !!r.is_school_day]));
+
+        // School days = weekdays minus holidays, respecting manual overrides.
+        // The SF2 grid only has M-F columns, so weekend class days are excluded.
+        const schoolDays = [];
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dstr = `${year}-${pad2(month)}-${pad2(day)}`;
+            const dow = new Date(dstr + 'T00:00:00Z').getUTCDay(); // string-derived, TZ-safe
+            if (dow === 0 || dow === 6) continue;
+            const isSchool = overrides.has(dstr) ? overrides.get(dstr) : !holidaySet.has(dstr);
+            if (isSchool) schoolDays.push(dstr);
+        }
+
+        // Weekday-aligned grid slots (M T W TH F per week), holidays left blank in place
+        const firstDow = new Date(startDate + 'T00:00:00Z').getUTCDay(); // 0=Sun..6=Sat
+        const mondayOffset = (firstDow + 6) % 7; // days since Monday of the 1st's week
+        const slotIndex = d => {
+            const day = Number(d.slice(8, 10));
+            const pos = mondayOffset + day - 1;
+            return Math.floor(pos / 7) * 5 + (pos % 7); // pos%7 is 0-4 for weekdays
+        };
+        const slotCount = Math.max(25, Math.ceil((mondayOffset + daysInMonth) / 7) * 5);
+        const slots = new Array(slotCount).fill(null);
+        schoolDays.forEach(d => { slots[slotIndex(d)] = d; });
+
+        // Absences only count for past school days, or today once the school day has
+        // ended (absence_cutoff_time / pm_time_out_end setting) — same rule as
+        // shouldCountComputedAbsences() in the attendance API.
+        const today = todayDate();
+        let lastCountable;
+        if (endDate < today) {
+            lastCountable = endDate;
+        } else {
+            const [cutRows] = await db.query(
+                `SELECT setting_key, setting_value FROM settings
+                 WHERE setting_key IN ('absence_cutoff_time','pm_time_out_end')`
+            );
+            const cut = Object.fromEntries(cutRows.map(r => [r.setting_key, r.setting_value]));
+            const cutoffTime = normalizeTime(cut.absence_cutoff_time || cut.pm_time_out_end, '17:00:00');
+            const dayEnded = compareDateTime(nowDateTime(), sqlDateTime(today, cutoffTime)) >= 0;
+            if (dayEnded) {
+                lastCountable = today;
+            } else {
+                const t = new Date(today + 'T00:00:00Z');
+                t.setUTCDate(t.getUTCDate() - 1);
+                lastCountable = t.toISOString().slice(0, 10);
+            }
+        }
+
+        // Enrollment cut-off: first Friday of the report month
+        let firstFriday = endDate;
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dstr = `${year}-${pad2(month)}-${pad2(day)}`;
+            if (new Date(dstr + 'T00:00:00Z').getUTCDay() === 5) { firstFriday = dstr; break; }
+        }
 
         // School year from settings
         const [[syRow]] = await db.query(`SELECT setting_value FROM settings WHERE setting_key = 'school_year'`).catch(() => [[null]]);
-        const schoolYear = syRow ? syRow.setting_value : `${year}-${year+1}`;
+        const schoolYear = syRow ? syRow.setting_value : `${year}-${year + 1}`;
 
-        // Build school day list for the month (Mon-Fri only)
-        const schoolDays = [];
-        const dt = new Date(year, month - 1, 1);
-        while (dt.getMonth() === month - 1) {
-            const dow = dt.getDay();
-            if (dow >= 1 && dow <= 5) {
-                schoolDays.push(dt.toISOString().slice(0,10));
-            }
-            dt.setDate(dt.getDate() + 1);
-        }
+        const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
         res.render('sf2_report', {
             title: 'SF2 Report',
@@ -466,9 +539,12 @@ router.get('/sf2-report', async (req, res) => {
             students,
             presentSet: [...presentSet],
             schoolDays,
+            slots,
+            lastCountable,
+            firstFriday,
             year,
             month,
-            monthName: new Date(year, month-1, 1).toLocaleString('en-US', { month: 'long' }),
+            monthName: MONTH_NAMES[month - 1],
             schoolYear,
             startDate,
             endDate
@@ -813,6 +889,13 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
                 const ln = lastname || row.lastname || '';
                 if (!fn && !ln) { entry.status = 'error'; entry.error = 'Missing student name'; }
 
+                const sexRaw = getRowValue(row, ['Sex', 'Gender', 'sex', 'gender']);
+                const sex = parseSexValue(sexRaw);
+                if (sexRaw && !sex && entry.status !== 'error') {
+                    entry.status = 'error';
+                    entry.error = 'Invalid Sex value "' + sexRaw + '" (use Male or Female)';
+                }
+
                 const schoolName = row['School'] || row['school'] || '';
                 const school = await resolveSchoolPreview(schoolName);
                 const gradeStr = row['Grade'] || row['grade'];
@@ -839,6 +922,7 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
 
                 entry.lrn = lrn;
                 entry.name = ln && fn ? ln + ', ' + fn : fn || ln;
+                entry.sex = sex || '';
                 entry.school = school.name || '';
                 entry.grade = grade.name || '';
                 entry.track = trackStrand;
@@ -1121,18 +1205,21 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                         : rawSection;
                     const sectionId = await resolveSection(composedSection, schoolId, gradeId);
                     const guardianContact = row['Guardian Contact'] || row['guardian_contact'] || null;
+                    const sex = parseSexValue(getRowValue(row, ['Sex', 'Gender', 'sex', 'gender']));
 
                     if (lrn) {
-                        const [existing] = await db.query('SELECT id, status, active_from FROM students WHERE lrn = ?', [lrn]);
+                        const [existing] = await db.query('SELECT id, status, active_from, gender FROM students WHERE lrn = ?', [lrn]);
                         if (existing.length > 0) {
                             const existingStatus = existing[0].status || defaultImportedStudentStatus;
                             const nextStatus = existingStatus === 'deleted' ? defaultImportedStudentStatus : existingStatus;
                             const nextActiveFrom = nextStatus === 'active'
                                 ? (existing[0].active_from || importActiveFrom)
                                 : null;
+                            // Keep the existing gender when the file omits Sex
+                            const nextGender = sex || existing[0].gender || null;
                             await db.query(
-                                'UPDATE students SET firstname=?, lastname=?, middlename=?, school_id=?, grade_level_id=?, section_id=?, guardian_contact=?, category=?, active_from=?, status=? WHERE id=?',
-                                [fn, ln, mn || null, schoolId || null, gradeId || null, sectionId || null, guardianContact, category, nextActiveFrom, nextStatus, existing[0].id]
+                                'UPDATE students SET firstname=?, lastname=?, middlename=?, gender=?, school_id=?, grade_level_id=?, section_id=?, guardian_contact=?, category=?, active_from=?, status=? WHERE id=?',
+                                [fn, ln, mn || null, nextGender, schoolId || null, gradeId || null, sectionId || null, guardianContact, category, nextActiveFrom, nextStatus, existing[0].id]
                             );
                             updated++;
                             continue;
@@ -1140,8 +1227,8 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                     }
                     const qr_code = lrn ? 'STU-' + lrn : 'STU-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);
                     await db.query(
-                        'INSERT INTO students (lrn, firstname, lastname, middlename, school_id, grade_level_id, section_id, guardian_contact, qr_code, category, active_from, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-                        [lrn, fn, ln, mn || null, schoolId || null, gradeId || null, sectionId || null, guardianContact, qr_code, category, null, defaultImportedStudentStatus]
+                        'INSERT INTO students (lrn, firstname, lastname, middlename, gender, school_id, grade_level_id, section_id, guardian_contact, qr_code, category, active_from, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                        [lrn, fn, ln, mn || null, sex, schoolId || null, gradeId || null, sectionId || null, guardianContact, qr_code, category, null, defaultImportedStudentStatus]
                     );
                     imported++;
                 }
