@@ -202,72 +202,85 @@
 
     <% if (typeof user !== 'undefined' && user && user.role === 'adviser') { %>
     <!-- Adviser Profile Modal -->
-    <div id="adviserProfileModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);align-items:center;justify-content:center;">
-        <div style="background:#fff;border-radius:14px;width:min(96vw,700px);max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);position:relative;">
-            <!-- Header bar -->
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:1.1rem 1.4rem;border-bottom:1px solid var(--gray-200,#e5e7eb);">
-                <span style="font-weight:700;font-size:1.05rem;color:var(--gray-900,#111);">
-                    <i class="fa-solid fa-user-circle" style="color:var(--primary,#059669);margin-right:7px;"></i>My Profile
+    <div id="adviserProfileModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:1rem;">
+        <div style="background:#fff;border-radius:14px;width:min(98vw,680px);max-height:92vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.3);position:relative;">
+
+            <!-- Modal header -->
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;border-bottom:1px solid #e5e7eb;background:#f9fafb;border-radius:14px 14px 0 0;">
+                <span style="font-weight:700;font-size:1rem;color:#111;">
+                    <i class="fa-solid fa-user-circle" style="color:var(--primary,#059669);margin-right:8px;"></i>My Profile
                 </span>
-                <button onclick="closeAdviserProfileModal()" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--gray-400,#9ca3af);line-height:1;padding:4px;">
+                <button onclick="closeAdviserProfileModal()" style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:#9ca3af;padding:4px 6px;border-radius:6px;line-height:1;">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
 
-            <div style="display:flex;gap:1.25rem;padding:1.4rem;flex-wrap:wrap;align-items:flex-start;">
-                <!-- Left: Photo + Info -->
-                <div style="flex:0 0 220px;min-width:200px;display:flex;flex-direction:column;align-items:center;gap:.9rem;">
-                    <div id="pmAvatarWrap" style="position:relative;width:100px;height:100px;cursor:pointer;" onclick="document.getElementById('pmPhotoInput').click()" title="Click to change photo">
-                        <div id="pmAvatarInner" style="width:100px;height:100px;border-radius:50%;background:var(--primary,#059669);display:flex;align-items:center;justify-content:center;font-size:2.2rem;font-weight:700;color:#fff;border:3px solid var(--primary,#059669);overflow:hidden;">
-                            <span id="pmAvatarLetter"><%= user.fullname ? user.fullname.charAt(0).toUpperCase() : 'T' %></span>
+            <div style="display:flex;gap:0;flex-wrap:wrap;">
+
+                <!-- Left panel: Photo + Info -->
+                <div style="flex:0 0 200px;min-width:180px;border-right:1px solid #e5e7eb;padding:1.25rem;display:flex;flex-direction:column;align-items:center;gap:.75rem;background:#fafafa;border-radius:0 0 0 14px;">
+                    <!-- Avatar -->
+                    <div style="position:relative;width:88px;height:88px;cursor:pointer;flex-shrink:0;" onclick="document.getElementById('pmPhotoInput').click()" title="Click to change photo">
+                        <div id="pmAvatarInner" style="width:88px;height:88px;border-radius:50%;background:var(--primary,#059669);display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:700;color:#fff;border:3px solid var(--primary,#059669);overflow:hidden;">
+                            <%= user.fullname ? user.fullname.charAt(0).toUpperCase() : 'T' %>
                         </div>
-                        <div style="position:absolute;bottom:3px;right:3px;background:var(--primary,#059669);width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;">
-                            <i class="fa-solid fa-camera" style="color:#fff;font-size:.7rem;"></i>
+                        <div style="position:absolute;bottom:2px;right:2px;background:var(--primary,#059669);width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;">
+                            <i class="fa-solid fa-camera" style="color:#fff;font-size:.65rem;"></i>
                         </div>
                     </div>
                     <input type="file" id="pmPhotoInput" accept="image/*" style="display:none;" onchange="pmUploadPhoto(this)">
-                    <div id="pmPhotoMsg" style="font-size:.8rem;display:none;text-align:center;"></div>
+                    <div id="pmPhotoMsg" style="font-size:.78rem;display:none;text-align:center;"></div>
+
+                    <!-- Name — from session, instant -->
                     <div style="text-align:center;">
-                        <div id="pmFullName" style="font-size:1rem;font-weight:700;color:var(--gray-900,#111);"></div>
-                        <div style="font-size:.82rem;color:var(--gray-500,#6b7280);margin-top:2px;">Adviser</div>
+                        <div style="font-size:.95rem;font-weight:700;color:#111;line-height:1.3;"><%= user.fullname %></div>
+                        <div style="font-size:.78rem;color:#6b7280;margin-top:2px;text-transform:uppercase;letter-spacing:.05em;">Adviser</div>
                     </div>
-                    <div id="pmInfoBlock" style="width:100%;display:flex;flex-direction:column;gap:.6rem;border-top:1px solid var(--gray-200,#e5e7eb);padding-top:.8rem;">
-                        <!-- filled by JS -->
+
+                    <!-- Info rows — loaded via AJAX -->
+                    <div id="pmInfoBlock" style="width:100%;display:flex;flex-direction:column;gap:.55rem;border-top:1px solid #e5e7eb;padding-top:.75rem;">
+                        <div style="color:#9ca3af;font-size:.8rem;text-align:center;">Loading info…</div>
                     </div>
                 </div>
 
-                <!-- Right: Change Password -->
-                <div style="flex:1;min-width:230px;">
-                    <div style="font-weight:700;font-size:.97rem;margin-bottom:1rem;color:var(--gray-900,#111);">
+                <!-- Right panel: Change Password -->
+                <div style="flex:1;min-width:240px;padding:1.25rem;">
+                    <!-- Adviser name above form -->
+                    <div style="margin-bottom:1rem;padding:.65rem .9rem;background:#f0fdf4;border-radius:8px;border:1px solid #bbf7d0;">
+                        <div style="font-size:.75rem;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;">Signed in as</div>
+                        <div style="font-size:.93rem;font-weight:700;color:#111;"><%= user.fullname %></div>
+                    </div>
+
+                    <div style="font-weight:700;font-size:.95rem;margin-bottom:.9rem;color:#111;">
                         <i class="fa-solid fa-lock" style="color:var(--primary,#059669);margin-right:6px;"></i>Change Password
                     </div>
-                    <div id="pmPwAlert" style="display:none;padding:.65rem .9rem;border-radius:8px;margin-bottom:.9rem;font-size:.87rem;"></div>
+                    <div id="pmPwAlert" style="display:none;padding:.6rem .85rem;border-radius:8px;margin-bottom:.85rem;font-size:.85rem;"></div>
 
-                    <div style="margin-bottom:.85rem;">
-                        <label style="font-size:.82rem;font-weight:600;color:var(--gray-700,#374151);display:block;margin-bottom:3px;">Current Password</label>
+                    <div style="margin-bottom:.75rem;">
+                        <label style="font-size:.81rem;font-weight:600;color:#374151;display:block;margin-bottom:3px;">Current Password</label>
                         <div style="position:relative;">
                             <input type="password" id="pmCurPw" class="form-control" placeholder="Enter current password" style="padding-right:2.5rem;">
-                            <button type="button" onclick="pmToggle('pmCurPw','pmEye1')" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--gray-400,#9ca3af);padding:0;font-size:.9rem;">
+                            <button type="button" onclick="pmToggle('pmCurPw','pmEye1')" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9ca3af;padding:0;font-size:.88rem;">
                                 <i class="fa-solid fa-eye" id="pmEye1"></i>
                             </button>
                         </div>
                     </div>
 
-                    <div style="margin-bottom:.85rem;">
-                        <label style="font-size:.82rem;font-weight:600;color:var(--gray-700,#374151);display:block;margin-bottom:3px;">New Password</label>
+                    <div style="margin-bottom:.75rem;">
+                        <label style="font-size:.81rem;font-weight:600;color:#374151;display:block;margin-bottom:3px;">New Password</label>
                         <div style="position:relative;">
                             <input type="password" id="pmNewPw" class="form-control" placeholder="At least 6 characters" style="padding-right:2.5rem;">
-                            <button type="button" onclick="pmToggle('pmNewPw','pmEye2')" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--gray-400,#9ca3af);padding:0;font-size:.9rem;">
+                            <button type="button" onclick="pmToggle('pmNewPw','pmEye2')" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9ca3af;padding:0;font-size:.88rem;">
                                 <i class="fa-solid fa-eye" id="pmEye2"></i>
                             </button>
                         </div>
                     </div>
 
-                    <div style="margin-bottom:1.1rem;">
-                        <label style="font-size:.82rem;font-weight:600;color:var(--gray-700,#374151);display:block;margin-bottom:3px;">Confirm New Password</label>
+                    <div style="margin-bottom:1rem;">
+                        <label style="font-size:.81rem;font-weight:600;color:#374151;display:block;margin-bottom:3px;">Confirm New Password</label>
                         <div style="position:relative;">
                             <input type="password" id="pmConfPw" class="form-control" placeholder="Repeat new password" style="padding-right:2.5rem;">
-                            <button type="button" onclick="pmToggle('pmConfPw','pmEye3')" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--gray-400,#9ca3af);padding:0;font-size:.9rem;">
+                            <button type="button" onclick="pmToggle('pmConfPw','pmEye3')" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9ca3af;padding:0;font-size:.88rem;">
                                 <i class="fa-solid fa-eye" id="pmEye3"></i>
                             </button>
                         </div>
@@ -305,15 +318,11 @@
             var res = await fetch('/admin/adviser-profile-data');
             var t = await res.json();
             if (t.error) return;
-            var mn = t.middlename ? t.middlename.charAt(0).toUpperCase() + '. ' : '';
-            document.getElementById('pmFullName').textContent = t.firstname + ' ' + mn + t.lastname;
 
-            // avatar
-            var inner = document.getElementById('pmAvatarInner');
+            // show profile photo if uploaded
             if (t.profile_photo) {
-                inner.innerHTML = '<img src="' + t.profile_photo + '" alt="Photo" style="width:100%;height:100%;object-fit:cover;">';
-            } else {
-                inner.innerHTML = '<span id="pmAvatarLetter">' + (t.firstname ? t.firstname.charAt(0).toUpperCase() : 'T') + '</span>';
+                document.getElementById('pmAvatarInner').innerHTML =
+                    '<img src="' + t.profile_photo + '" alt="Photo" style="width:100%;height:100%;object-fit:cover;">';
             }
 
             // info rows
@@ -321,14 +330,18 @@
                 { label: 'Email', val: t.email || '—' },
                 { label: 'School', val: t.school_name || '—' },
                 { label: 'Grade Level', val: t.grade_name || '—' },
-                { label: 'Section / Advisory', val: t.section_name || '—' }
+                { label: 'Section', val: t.section_name || '—' }
             ];
             if (t.contact) rows.push({ label: 'Contact', val: t.contact });
             document.getElementById('pmInfoBlock').innerHTML = rows.map(function(r) {
-                return '<div><div style="font-size:.72rem;color:var(--gray-500,#6b7280);text-transform:uppercase;letter-spacing:.04em;">' + r.label + '</div>' +
-                       '<div style="font-size:.88rem;color:var(--gray-800,#1f2937);font-weight:500;word-break:break-all;">' + r.val + '</div></div>';
+                return '<div style="width:100%;">' +
+                    '<div style="font-size:.71rem;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em;">' + r.label + '</div>' +
+                    '<div style="font-size:.84rem;color:#1f2937;font-weight:500;word-break:break-all;">' + r.val + '</div>' +
+                    '</div>';
             }).join('');
-        } catch(e) {}
+        } catch(e) {
+            document.getElementById('pmInfoBlock').innerHTML = '<div style="color:#9ca3af;font-size:.8rem;">Could not load info.</div>';
+        }
     }
 
     function pmToggle(inputId, iconId) {
