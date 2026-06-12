@@ -391,9 +391,11 @@ router.get('/sf2-report', async (req, res) => {
     const teacherId = req.session.user.teacher_id;
     if (!teacherId) return res.render('error', { title: 'SF2 Error', message: 'No teacher record linked.', user: req.session.user });
 
-    const monthParam = req.query.month; // e.g. "2026-06"
+    // Month param optional — defaults to the current month so the sidebar link works directly
+    let monthParam = req.query.month; // e.g. "2026-06"
     if (!monthParam || !/^\d{4}-\d{2}$/.test(monthParam)) {
-        return res.render('error', { title: 'SF2 Error', message: 'Invalid month parameter.', user: req.session.user });
+        const now = new Date();
+        monthParam = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     }
     const [year, month] = monthParam.split('-').map(Number);
 

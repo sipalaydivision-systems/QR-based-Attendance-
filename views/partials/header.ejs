@@ -111,6 +111,11 @@
             </li>
 
             <% if (user.role === 'adviser') { %>
+            <li>
+                <a href="/admin/sf2-report" class="<%= page === 'sf2_report' ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-file-lines"></i> SF2 Report
+                </a>
+            </li>
             <li class="nav-section"><span class="nav-section-label">Tools</span></li>
             <li>
                 <a href="/admin/print-qr" class="<%= page === 'print_qr' ? 'active' : '' %>">

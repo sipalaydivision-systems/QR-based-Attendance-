@@ -66,6 +66,11 @@
 
 <div class="sf2-controls no-print">
     <h2><i class="fa-solid fa-file-lines"></i> SF2 — Daily Attendance Report &nbsp;|&nbsp; <%= monthName %> <%= year %></h2>
+    <label for="sf2MonthPicker" style="font-size:0.8125rem;font-weight:600;color:var(--gray-600);">Month:</label>
+    <input type="month" id="sf2MonthPicker"
+           value="<%= year %>-<%= String(month).padStart(2,'0') %>"
+           style="padding:8px 12px;border:1.5px solid var(--gray-300);border-radius:8px;font-size:0.8125rem;"
+           onchange="if(this.value) window.location.href='/admin/sf2-report?month=' + this.value;">
     <button class="btn btn-primary" onclick="window.print()"><i class="fa-solid fa-print"></i> Print / Export PDF</button>
     <a href="/admin/adviser-dashboard" class="btn btn-secondary"><i class="fa-solid fa-arrow-left"></i> Back</a>
 </div>
