@@ -55,6 +55,10 @@
     <% } %>
     <% } %>
     <div class="filter-item">
+        <label>Search</label>
+        <input type="text" id="qrSearch" placeholder="Name or LRN…" oninput="filterQrBySearch(this.value)" autocomplete="off" style="min-width:160px;">
+    </div>
+    <div class="filter-item">
         <label>Layout</label>
         <select id="qrLayout">
             <option value="3" <%= qrFilters.layout === '3' ? 'selected' : '' %>>3 per row</option>
@@ -467,9 +471,11 @@ function renderQrCards(people) {
     people.forEach(function(person) {
         grid.appendChild(makeQrCard(person));
     });
-    // re-apply show filter if active
+    // re-apply show + search filters
     var showEl = document.getElementById('qrShow');
     if (showEl) applyQrShow(showEl.value);
+    var searchEl = document.getElementById('qrSearch');
+    if (searchEl && searchEl.value.trim()) filterQrBySearch(searchEl.value);
 }
 
 async function fetchQrCards() {
@@ -539,6 +545,34 @@ function applyQrShow(value) {
     var studentCards = document.querySelectorAll('.student-qr-card');
     if (teacherCard) teacherCard.style.display = (value === 'students') ? 'none' : '';
     studentCards.forEach(function(c) { c.style.display = (value === 'mine') ? 'none' : ''; });
+    // re-apply search so toggling show doesn't break the search filter
+    var searchEl = document.getElementById('qrSearch');
+    if (searchEl && searchEl.value.trim()) filterQrBySearch(searchEl.value);
+}
+
+function filterQrBySearch(query) {
+    var q = query.trim().toLowerCase();
+    var showSel = document.getElementById('qrShow');
+    var showVal = showSel ? showSel.value : 'both';
+
+    // teacher card
+    var teacherCard = document.getElementById('teacherQrCard');
+    if (teacherCard && showVal !== 'students') {
+        if (!q) {
+            teacherCard.style.display = '';
+        } else {
+            var tText = teacherCard.textContent.toLowerCase();
+            teacherCard.style.display = tText.indexOf(q) !== -1 ? '' : 'none';
+        }
+    }
+
+    // student cards
+    document.querySelectorAll('.student-qr-card').forEach(function(card) {
+        if (showVal === 'mine') { card.style.display = 'none'; return; }
+        if (!q) { card.style.display = ''; return; }
+        var text = card.textContent.toLowerCase();
+        card.style.display = text.indexOf(q) !== -1 ? '' : 'none';
+    });
 }
 </script>
 <%- include('partials/footer') %>
