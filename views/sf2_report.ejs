@@ -552,8 +552,8 @@ var sf2Month = '<%= monthParam %>';
 function sf2EnterEdit() {
     document.getElementById('sf2Paper').classList.add('edit-mode');
     document.getElementById('sf2EditBtn').style.display = 'none';
-    document.getElementById('sf2SaveBtn').style.display = '';
-    document.getElementById('sf2CancelBtn').style.display = '';
+    document.getElementById('sf2SaveBtn').style.display = 'inline-flex';
+    document.getElementById('sf2CancelBtn').style.display = 'inline-flex';
     document.getElementById('sf2EditHint').textContent = 'Click any cell to toggle absent/present. Edit remarks below each name.';
 }
 
@@ -567,7 +567,7 @@ function sf2CancelEdit() {
         cell.classList.remove('pending-change');
     });
     document.getElementById('sf2Paper').classList.remove('edit-mode');
-    document.getElementById('sf2EditBtn').style.display = '';
+    document.getElementById('sf2EditBtn').style.display = 'inline-flex';
     document.getElementById('sf2SaveBtn').style.display = 'none';
     document.getElementById('sf2CancelBtn').style.display = 'none';
     document.getElementById('sf2EditHint').textContent = '';
