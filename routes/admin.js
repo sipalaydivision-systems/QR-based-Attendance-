@@ -385,6 +385,98 @@ router.get('/adviser-dashboard', async (req, res) => {
     }
 });
 
+// ---- SF2 Report ----
+router.get('/sf2-report', async (req, res) => {
+    if (!req.session.user || req.session.user.role !== 'adviser') return res.redirect('/adviser-login');
+    const teacherId = req.session.user.teacher_id;
+    if (!teacherId) return res.render('error', { title: 'SF2 Error', message: 'No teacher record linked.', user: req.session.user });
+
+    const monthParam = req.query.month; // e.g. "2026-06"
+    if (!monthParam || !/^\d{4}-\d{2}$/.test(monthParam)) {
+        return res.render('error', { title: 'SF2 Error', message: 'Invalid month parameter.', user: req.session.user });
+    }
+    const [year, month] = monthParam.split('-').map(Number);
+
+    try {
+        // Teacher + school + section info
+        const [[teacher]] = await db.query(
+            `SELECT t.firstname, t.lastname, t.middlename, t.school_id, t.section_id,
+                    sc.name as school_name, sc.school_id_code,
+                    gl.name as grade_name, sec.name as section_name
+             FROM teachers t
+             LEFT JOIN schools sc ON t.school_id = sc.id
+             LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
+             LEFT JOIN sections sec ON t.section_id = sec.id
+             WHERE t.id = ?`, [teacherId]
+        );
+        if (!teacher) return res.render('error', { title: 'SF2 Error', message: 'Teacher not found.', user: req.session.user });
+
+        // School head (principal user for this school)
+        const [[principal]] = await db.query(
+            `SELECT fullname FROM users WHERE role = 'principal' AND school_id = ? AND status = 'active' LIMIT 1`,
+            [teacher.school_id]
+        ).catch(() => [[null]]);
+
+        // Students in section, ordered by gender then lastname
+        const [students] = await db.query(
+            `SELECT id, lrn, firstname, lastname, middlename, gender, active_from, created_at
+             FROM students
+             WHERE section_id = ? AND status = 'active'
+             ORDER BY FIELD(gender,'Male','Female','Other'), lastname, firstname`,
+            [teacher.section_id]
+        );
+
+        // All attendance for this section in the given month
+        const startDate = `${year}-${String(month).padStart(2,'0')}-01`;
+        const endDate   = new Date(year, month, 0).toISOString().slice(0,10); // last day
+        const [attendance] = await db.query(
+            `SELECT person_id, DATE_FORMAT(date,'%Y-%m-%d') as date_str, time_in
+             FROM attendance
+             WHERE person_type = 'student'
+               AND school_id = ?
+               AND date BETWEEN ? AND ?`,
+            [teacher.school_id, startDate, endDate]
+        );
+
+        // Build a Set of "studentId-date" for present days
+        const presentSet = new Set(attendance.filter(r => r.time_in).map(r => `${r.person_id}-${r.date_str}`));
+
+        // School year from settings
+        const [[syRow]] = await db.query(`SELECT setting_value FROM settings WHERE setting_key = 'school_year'`).catch(() => [[null]]);
+        const schoolYear = syRow ? syRow.setting_value : `${year}-${year+1}`;
+
+        // Build school day list for the month (Mon-Fri only)
+        const schoolDays = [];
+        const dt = new Date(year, month - 1, 1);
+        while (dt.getMonth() === month - 1) {
+            const dow = dt.getDay();
+            if (dow >= 1 && dow <= 5) {
+                schoolDays.push(dt.toISOString().slice(0,10));
+            }
+            dt.setDate(dt.getDate() + 1);
+        }
+
+        res.render('sf2_report', {
+            title: 'SF2 Report',
+            page: 'sf2_report',
+            teacher,
+            principal: principal ? principal.fullname : '',
+            students,
+            presentSet: [...presentSet],
+            schoolDays,
+            year,
+            month,
+            monthName: new Date(year, month-1, 1).toLocaleString('en-US', { month: 'long' }),
+            schoolYear,
+            startDate,
+            endDate
+        });
+    } catch (err) {
+        console.error('SF2 report error:', err);
+        return res.render('error', { title: 'SF2 Error', message: 'Failed to generate SF2.', user: req.session.user });
+    }
+});
+
 // ---- Attendance ----
 router.get('/attendance', async (req, res) => {
     const [schools] = await db.query("SELECT * FROM schools WHERE status = 'active' ORDER BY name");

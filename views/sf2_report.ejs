@@ -1,0 +1,409 @@
+<%- include('partials/header') %>
+<style>
+/* ── Screen controls ── */
+.sf2-controls {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    background: #fff; border: 1px solid var(--gray-200); border-radius: 10px;
+    padding: 14px 18px; margin-bottom: 18px; box-shadow: var(--shadow);
+}
+.sf2-controls h2 { font-size: 1rem; font-weight: 700; margin: 0; flex: 1; color: var(--gray-800); }
+
+/* ── SF2 Paper ── */
+.sf2-paper {
+    background: #fff;
+    font-family: Arial, sans-serif;
+    font-size: 7.5pt;
+    color: #000;
+    padding: 10mm 8mm;
+    width: 100%;
+    box-sizing: border-box;
+    overflow-x: auto;
+}
+.sf2-paper table {
+    border-collapse: collapse;
+    width: 100%;
+    table-layout: fixed;
+}
+.sf2-paper td, .sf2-paper th {
+    border: 0.5px solid #000;
+    padding: 1px 2px;
+    vertical-align: middle;
+    text-align: center;
+    overflow: hidden;
+    word-break: break-word;
+}
+.sf2-paper .no-border { border: none; }
+.sf2-title { font-size: 9.5pt; font-weight: bold; text-align: center; border: none !important; }
+.sf2-subtitle { font-size: 7pt; text-align: center; font-style: italic; border: none !important; }
+.sf2-hdr-label { text-align: left; font-size: 7pt; font-weight: bold; white-space: nowrap; }
+.sf2-hdr-val { text-align: left; font-size: 7.5pt; font-weight: bold; border-bottom: 0.5px solid #000 !important; border-top: none !important; border-left: none !important; border-right: none !important; }
+.sf2-col-no { width: 18px; font-size: 7pt; }
+.sf2-col-name { width: 130px; text-align: left !important; font-size: 7pt; }
+.sf2-col-day { width: 12px; font-size: 6pt; }
+.sf2-col-total { width: 22px; font-size: 6.5pt; }
+.sf2-col-remarks { width: 90px; text-align: left !important; font-size: 6.5pt; }
+.sf2-name-cell { text-align: left !important; padding: 1px 3px !important; }
+.sf2-total-row { background: #f0f0f0; font-weight: bold; font-size: 7pt; }
+.sf2-section-label { background: #d0d0d0; font-weight: bold; font-size: 7pt; }
+.sf2-absent-cell { font-size: 7.5pt; font-weight: bold; }
+.sf2-day-hdr { font-size: 5.5pt; font-weight: bold; }
+.sf2-week-hdr { font-size: 6pt; font-weight: bold; background: #e8e8e8; }
+.sf2-guidelines { font-size: 6pt; text-align: left; vertical-align: top; border: 0.5px solid #000; padding: 2px; }
+.sf2-sign-line { border-top: 0.5px solid #000; margin-top: 18px; }
+.sf2-summary-lbl { text-align: left; font-size: 6.5pt; font-weight: bold; }
+.sf2-summary-val { font-size: 6.5pt; font-weight: bold; }
+
+/* ── Print ── */
+@media print {
+    .sf2-controls, .sidebar, .topbar, .menu-btn { display: none !important; }
+    .content { margin-left: 0 !important; padding: 0 !important; }
+    .page-content { padding: 0 !important; }
+    .sf2-paper { padding: 5mm 4mm; font-size: 7pt; }
+    body { background: #fff !important; }
+    @page { size: legal landscape; margin: 6mm; }
+}
+</style>
+
+<div class="sf2-controls no-print">
+    <h2><i class="fa-solid fa-file-lines"></i> SF2 — Daily Attendance Report &nbsp;|&nbsp; <%= monthName %> <%= year %></h2>
+    <button class="btn btn-primary" onclick="window.print()"><i class="fa-solid fa-print"></i> Print / Export PDF</button>
+    <a href="/admin/adviser-dashboard" class="btn btn-secondary"><i class="fa-solid fa-arrow-left"></i> Back</a>
+</div>
+
+<%
+// ── JS helpers available server-side via EJS ──
+var DAY_ABBR = ['M','T','W','TH','F'];
+// Group school days into weeks (Mon=start of week)
+function getWeeks(days) {
+    var weeks = [];
+    var week  = [];
+    days.forEach(function(d) {
+        var dow = new Date(d + 'T00:00:00').getDay(); // 1=Mon..5=Fri
+        if (dow === 1 && week.length) { weeks.push(week); week = []; }
+        week.push(d);
+    });
+    if (week.length) weeks.push(week);
+    return weeks;
+}
+var weeks = getWeeks(schoolDays);
+
+// Build presentSet as a JS Set for easy lookup
+var pSet = new Set(presentSet);
+
+function isPresent(studentId, dateStr) { return pSet.has(studentId + '-' + dateStr); }
+
+// Split students by gender
+var males   = students.filter(function(s){ return s.gender === 'Male'; });
+var females = students.filter(function(s){ return s.gender !== 'Male'; });
+
+// Compute totals per student
+function studentTotals(s) {
+    var absent = 0, present = 0;
+    schoolDays.forEach(function(d) {
+        // Only count days on/after enrollment
+        var eff = s.active_from
+            ? (s.active_from instanceof Date ? s.active_from.toISOString().slice(0,10) : String(s.active_from).slice(0,10))
+            : (s.created_at instanceof Date ? s.created_at.toISOString().slice(0,10) : String(s.created_at).slice(0,10));
+        if (d < eff) return;
+        if (isPresent(s.id, d)) present++; else absent++;
+    });
+    return { absent: absent, present: present };
+}
+
+// Compute per-day totals for a group
+function dayTotal(group, dateStr, type) {
+    var count = 0;
+    group.forEach(function(s) {
+        var eff = s.active_from
+            ? (s.active_from instanceof Date ? s.active_from.toISOString().slice(0,10) : String(s.active_from).slice(0,10))
+            : (s.created_at instanceof Date ? s.created_at.toISOString().slice(0,10) : String(s.created_at).slice(0,10));
+        if (dateStr < eff) return;
+        if (type === 'present') { if (isPresent(s.id, dateStr)) count++; }
+        else { if (!isPresent(s.id, dateStr)) count++; }
+    });
+    return count;
+}
+
+var adviserName = [teacher.lastname, teacher.firstname, teacher.middlename ? teacher.middlename.charAt(0)+'.' : ''].filter(Boolean).join(', ');
+
+// Summary totals
+var totalEnrollment = students.length;
+var mEnroll = males.length, fEnroll = females.length;
+var mTotalAbsent = 0, fTotalAbsent = 0, mTotalPresent = 0, fTotalPresent = 0;
+males.forEach(function(s){ var t=studentTotals(s); mTotalAbsent+=t.absent; mTotalPresent+=t.present; });
+females.forEach(function(s){ var t=studentTotals(s); fTotalAbsent+=t.absent; fTotalPresent+=t.present; });
+var numDays = schoolDays.length;
+%>
+
+<div class="sf2-paper">
+<table>
+  <!-- Title -->
+  <tr>
+    <td colspan="<%= 3 + schoolDays.length + 3 %>" class="sf2-title no-border" style="border:none;">
+      School Form 2 (SF2) Daily Attendance Report of Learners
+    </td>
+  </tr>
+  <tr>
+    <td colspan="<%= 3 + schoolDays.length + 3 %>" class="sf2-subtitle no-border" style="border:none;">
+      (This replaces Form 1, Form 2 &amp; STS Form 4 - Absenteeism and Dropout Profile)
+    </td>
+  </tr>
+
+  <!-- Header Info Row 1 -->
+  <tr>
+    <td colspan="2" class="sf2-hdr-label no-border" style="border:none;">School ID</td>
+    <td colspan="4" class="sf2-hdr-val" style="border:none;border-bottom:0.5px solid #000 !important;">
+      <%= teacher.school_id_code || '' %>
+    </td>
+    <td colspan="3" class="sf2-hdr-label no-border" style="border:none;">School Year</td>
+    <td colspan="4" class="sf2-hdr-val" style="border:none;border-bottom:0.5px solid #000 !important;">
+      <%= schoolYear %>
+    </td>
+    <td colspan="4" class="sf2-hdr-label no-border" style="border:none;">Report for the Month of</td>
+    <td colspan="<%= Math.max(1, schoolDays.length - 14) + 3 %>" class="sf2-hdr-val" style="border:none;border-bottom:0.5px solid #000 !important;">
+      <%= monthName.toUpperCase() %>
+    </td>
+  </tr>
+
+  <!-- Header Info Row 2 -->
+  <tr>
+    <td colspan="2" class="sf2-hdr-label no-border" style="border:none;">Name of School</td>
+    <td colspan="6" class="sf2-hdr-val" style="border:none;border-bottom:0.5px solid #000 !important;">
+      <%= teacher.school_name %>
+    </td>
+    <td colspan="3" class="sf2-hdr-label no-border" style="border:none;">Grade Level</td>
+    <td colspan="4" class="sf2-hdr-val" style="border:none;border-bottom:0.5px solid #000 !important;">
+      <%= teacher.grade_name %>
+    </td>
+    <td colspan="2" class="sf2-hdr-label no-border" style="border:none;">Section</td>
+    <td colspan="<%= Math.max(1, schoolDays.length - 14) + 3 %>" class="sf2-hdr-val" style="border:none;border-bottom:0.5px solid #000 !important;">
+      <%= teacher.section_name %>
+    </td>
+  </tr>
+
+  <!-- Spacer -->
+  <tr><td colspan="<%= 3 + schoolDays.length + 3 %>" style="height:3px;border:none;"></td></tr>
+
+  <!-- Column Headers Row 1: No | NAME | Week headers | Total | Remarks -->
+  <tr>
+    <td rowspan="3" class="sf2-col-no" style="font-size:6pt;font-weight:bold;">No.</td>
+    <td rowspan="3" colspan="2" class="sf2-col-name" style="font-size:6.5pt;font-weight:bold;text-align:center;">NAME<br><span style="font-size:5.5pt;font-weight:normal;">(Last Name, First Name, Middle Name)</span></td>
+    <% weeks.forEach(function(wk, wi) { %>
+    <td colspan="<%= wk.length %>" class="sf2-week-hdr" style="font-size:6pt;">Week <%= wi+1 %></td>
+    <% }); %>
+    <td rowspan="3" colspan="2" class="sf2-col-total" style="font-size:6pt;font-weight:bold;">Total for<br>the Month</td>
+    <td rowspan="3" class="sf2-col-remarks" style="font-size:6pt;font-weight:bold;text-align:center;">REMARKS</td>
+  </tr>
+
+  <!-- Column Headers Row 2: dates -->
+  <tr>
+    <% schoolDays.forEach(function(d) { %>
+    <td class="sf2-col-day sf2-day-hdr"><%= new Date(d+'T00:00:00').getDate() %></td>
+    <% }); %>
+  </tr>
+
+  <!-- Column Headers Row 3: day abbreviations -->
+  <tr>
+    <% schoolDays.forEach(function(d) { %>
+    <% var dow = new Date(d+'T00:00:00').getDay(); %>
+    <% var abbr = ['S','M','T','W','TH','F','S'][dow]; %>
+    <td class="sf2-col-day sf2-day-hdr"><%= abbr %></td>
+    <% }); %>
+  </tr>
+
+  <!-- Sub-header: absent/present for totals -->
+  <tr>
+    <td class="no-border" style="border:none;"></td>
+    <td colspan="2" class="no-border" style="border:none;"></td>
+    <% schoolDays.forEach(function(){ %><td class="sf2-col-day" style="font-size:5pt;"></td><% }); %>
+    <td class="sf2-col-total" style="font-size:5.5pt;font-weight:bold;">ABSENT</td>
+    <td class="sf2-col-total" style="font-size:5.5pt;font-weight:bold;">PRESENT</td>
+    <td class="sf2-col-remarks" style="border:none;"></td>
+  </tr>
+
+  <!-- ═══ MALE STUDENTS ═══ -->
+  <% males.forEach(function(s, idx) { var t = studentTotals(s); %>
+  <tr>
+    <td class="sf2-col-no"><%= idx+1 %></td>
+    <td colspan="2" class="sf2-name-cell"><%= s.lastname.toUpperCase() %>, <%= s.firstname %><%= s.middlename ? ', '+s.middlename : '' %></td>
+    <% schoolDays.forEach(function(d) {
+        var eff = s.active_from
+            ? (s.active_from instanceof Date ? s.active_from.toISOString().slice(0,10) : String(s.active_from).slice(0,10))
+            : (s.created_at instanceof Date ? s.created_at.toISOString().slice(0,10) : String(s.created_at).slice(0,10));
+    %>
+    <td class="sf2-col-day"><%= d < eff ? '' : (isPresent(s.id, d) ? '' : 'x') %></td>
+    <% }); %>
+    <td class="sf2-col-total sf2-absent-cell"><%= t.absent %></td>
+    <td class="sf2-col-total"><%= t.present %></td>
+    <td class="sf2-col-remarks"></td>
+  </tr>
+  <% }); %>
+
+  <!-- MALE TOTAL PER DAY -->
+  <tr class="sf2-total-row">
+    <td><%= males.length %></td>
+    <td colspan="2" class="sf2-name-cell" style="font-size:6.5pt;">&lt;=== MALE &nbsp;|&nbsp; TOTAL Per Day ===&gt;</td>
+    <% schoolDays.forEach(function(d) { %>
+    <td class="sf2-col-day" style="font-size:6pt;"><%= dayTotal(males,d,'absent') > 0 ? dayTotal(males,d,'absent') : '' %></td>
+    <% }); %>
+    <td class="sf2-col-total sf2-absent-cell"><%= mTotalAbsent %></td>
+    <td class="sf2-col-total"><%= mTotalPresent %></td>
+    <td class="sf2-col-remarks"></td>
+  </tr>
+
+  <!-- ═══ FEMALE STUDENTS ═══ -->
+  <% females.forEach(function(s, idx) { var t = studentTotals(s); %>
+  <tr>
+    <td class="sf2-col-no"><%= idx+1 %></td>
+    <td colspan="2" class="sf2-name-cell"><%= s.lastname.toUpperCase() %>, <%= s.firstname %><%= s.middlename ? ', '+s.middlename : '' %></td>
+    <% schoolDays.forEach(function(d) {
+        var eff = s.active_from
+            ? (s.active_from instanceof Date ? s.active_from.toISOString().slice(0,10) : String(s.active_from).slice(0,10))
+            : (s.created_at instanceof Date ? s.created_at.toISOString().slice(0,10) : String(s.created_at).slice(0,10));
+    %>
+    <td class="sf2-col-day"><%= d < eff ? '' : (isPresent(s.id, d) ? '' : 'x') %></td>
+    <% }); %>
+    <td class="sf2-col-total sf2-absent-cell"><%= t.absent %></td>
+    <td class="sf2-col-total"><%= t.present %></td>
+    <td class="sf2-col-remarks"></td>
+  </tr>
+  <% }); %>
+
+  <!-- FEMALE TOTAL PER DAY -->
+  <tr class="sf2-total-row">
+    <td><%= females.length %></td>
+    <td colspan="2" class="sf2-name-cell" style="font-size:6.5pt;">&lt;=== FEMALE &nbsp;|&nbsp; TOTAL Per Day ===&gt;</td>
+    <% schoolDays.forEach(function(d) { %>
+    <td class="sf2-col-day" style="font-size:6pt;"><%= dayTotal(females,d,'absent') > 0 ? dayTotal(females,d,'absent') : '' %></td>
+    <% }); %>
+    <td class="sf2-col-total sf2-absent-cell"><%= fTotalAbsent %></td>
+    <td class="sf2-col-total"><%= fTotalPresent %></td>
+    <td class="sf2-col-remarks"></td>
+  </tr>
+
+  <!-- COMBINED TOTAL -->
+  <tr class="sf2-total-row" style="background:#c0c0c0;">
+    <td><%= students.length %></td>
+    <td colspan="2" class="sf2-name-cell" style="font-size:6.5pt;">Combined TOTAL Per Day</td>
+    <% schoolDays.forEach(function(d) {
+        var t = dayTotal(students,d,'absent');
+    %>
+    <td class="sf2-col-day" style="font-size:6pt;"><%= t > 0 ? t : '' %></td>
+    <% }); %>
+    <td class="sf2-col-total sf2-absent-cell"><%= mTotalAbsent + fTotalAbsent %></td>
+    <td class="sf2-col-total"><%= mTotalPresent + fTotalPresent %></td>
+    <td class="sf2-col-remarks"></td>
+  </tr>
+</table>
+
+<!-- ── Bottom Section: Guidelines + Summary + Signatures ── -->
+<table style="margin-top:4px;">
+  <tr>
+    <!-- Guidelines -->
+    <td style="width:55%;vertical-align:top;border:0.5px solid #000;padding:3px;font-size:5.5pt;">
+      <strong>GUIDELINES:</strong><br>
+      1. The attendance shall be accomplished daily. Refer to the codes for checking learners' attendance.<br>
+      2. Dates shall be written in the columns after Learner's Name.<br>
+      3. To compute the following:<br>
+      &nbsp;&nbsp;a. <em>Percentage of Enrolment</em> = Registered Learners as of end of month ÷ Enrolment as of 1st Friday × 100<br>
+      &nbsp;&nbsp;b. <em>Average Daily Attendance</em> = Total Daily Attendance ÷ Number of School Days in reporting month<br>
+      &nbsp;&nbsp;c. <em>Percentage of Attendance</em> = Average daily attendance ÷ Registered Learners as of end of month × 100<br>
+      4. Every end of the month, the class adviser will submit this form to the principal's office.<br>
+      5. The adviser will provide necessary interventions for learners absent for 5 consecutive days.<br><br>
+      <strong>CODES:</strong> (blank) = Present &nbsp;|&nbsp; (x) = Absent
+    </td>
+
+    <!-- Summary -->
+    <td style="width:25%;vertical-align:top;border:0.5px solid #000;padding:3px;font-size:6pt;">
+      <table style="width:100%;border-collapse:collapse;font-size:6pt;">
+        <tr>
+          <td style="border:none;"></td>
+          <td style="border:none;font-weight:bold;text-align:center;">M</td>
+          <td style="border:none;font-weight:bold;text-align:center;">F</td>
+          <td style="border:none;font-weight:bold;text-align:center;">TOTAL</td>
+        </tr>
+        <tr>
+          <td style="border:none;font-size:5.5pt;">* Enrolment as of (1st Friday of June)</td>
+          <td style="border:0.5px solid #000;text-align:center;"><%= mEnroll %></td>
+          <td style="border:0.5px solid #000;text-align:center;"><%= fEnroll %></td>
+          <td style="border:0.5px solid #000;text-align:center;"><%= totalEnrollment %></td>
+        </tr>
+        <tr>
+          <td style="border:none;font-size:5.5pt;">Late enrolment during the month</td>
+          <td style="border:0.5px solid #000;text-align:center;">0</td>
+          <td style="border:0.5px solid #000;text-align:center;">0</td>
+          <td style="border:0.5px solid #000;text-align:center;">0</td>
+        </tr>
+        <tr>
+          <td style="border:none;font-size:5.5pt;">Registered Learners as of end of month</td>
+          <td style="border:0.5px solid #000;text-align:center;"><%= mEnroll %></td>
+          <td style="border:0.5px solid #000;text-align:center;"><%= fEnroll %></td>
+          <td style="border:0.5px solid #000;text-align:center;"><%= totalEnrollment %></td>
+        </tr>
+        <tr>
+          <td style="border:none;font-size:5.5pt;">Percentage of Enrolment as of end of month</td>
+          <td style="border:0.5px solid #000;text-align:center;">100%</td>
+          <td style="border:0.5px solid #000;text-align:center;">100%</td>
+          <td style="border:0.5px solid #000;text-align:center;">100%</td>
+        </tr>
+        <tr>
+          <td style="border:none;font-size:5.5pt;">Average Daily Attendance</td>
+          <td style="border:0.5px solid #000;text-align:center;"><%= numDays > 0 ? (mTotalPresent/numDays).toFixed(1) : 0 %></td>
+          <td style="border:0.5px solid #000;text-align:center;"><%= numDays > 0 ? (fTotalPresent/numDays).toFixed(1) : 0 %></td>
+          <td style="border:0.5px solid #000;text-align:center;"><%= numDays > 0 ? ((mTotalPresent+fTotalPresent)/numDays).toFixed(1) : 0 %></td>
+        </tr>
+        <tr>
+          <td style="border:none;font-size:5.5pt;">Percentage of Attendance for the month</td>
+          <td style="border:0.5px solid #000;text-align:center;"><%=
+            mEnroll > 0 && numDays > 0 ? Math.round((mTotalPresent / numDays / mEnroll) * 100) + '%' : '0%' %></td>
+          <td style="border:0.5px solid #000;text-align:center;"><%=
+            fEnroll > 0 && numDays > 0 ? Math.round((fTotalPresent / numDays / fEnroll) * 100) + '%' : '0%' %></td>
+          <td style="border:0.5px solid #000;text-align:center;"><%=
+            totalEnrollment > 0 && numDays > 0 ? Math.round(((mTotalPresent+fTotalPresent) / numDays / totalEnrollment) * 100) + '%' : '0%' %></td>
+        </tr>
+        <tr>
+          <td style="border:none;font-size:5.5pt;">Number of students absent for 5 consecutive days</td>
+          <td style="border:0.5px solid #000;text-align:center;"></td>
+          <td style="border:0.5px solid #000;text-align:center;"></td>
+          <td style="border:0.5px solid #000;text-align:center;"></td>
+        </tr>
+        <tr>
+          <td style="border:none;font-size:5.5pt;">Dropped out</td>
+          <td style="border:0.5px solid #000;text-align:center;"></td>
+          <td style="border:0.5px solid #000;text-align:center;"></td>
+          <td style="border:0.5px solid #000;text-align:center;"></td>
+        </tr>
+        <tr>
+          <td style="border:none;font-size:5.5pt;">Transferred out</td>
+          <td style="border:0.5px solid #000;text-align:center;"></td>
+          <td style="border:0.5px solid #000;text-align:center;"></td>
+          <td style="border:0.5px solid #000;text-align:center;"></td>
+        </tr>
+        <tr>
+          <td style="border:none;font-size:5.5pt;">Transferred in</td>
+          <td style="border:0.5px solid #000;text-align:center;"></td>
+          <td style="border:0.5px solid #000;text-align:center;"></td>
+          <td style="border:0.5px solid #000;text-align:center;"></td>
+        </tr>
+      </table>
+    </td>
+
+    <!-- Signatures -->
+    <td style="width:20%;vertical-align:bottom;border:0.5px solid #000;padding:3px;font-size:6pt;text-align:center;">
+      <div style="margin-bottom:30px;font-size:5.5pt;">I certify that this is a true and correct report.</div>
+      <div style="border-top:0.5px solid #000;padding-top:2px;font-weight:bold;font-size:6.5pt;text-transform:uppercase;">
+        <%= adviserName %>
+      </div>
+      <div style="font-size:5.5pt;">(Signature of Adviser over Printed Name)</div>
+      <br>
+      <div style="font-size:5.5pt;margin-bottom:30px;">Attested by:</div>
+      <div style="border-top:0.5px solid #000;padding-top:2px;font-weight:bold;font-size:6.5pt;text-transform:uppercase;">
+        <%= principal || '________________________________' %>
+      </div>
+      <div style="font-size:5.5pt;">(Signature of School Head over Printed Name)</div>
+    </td>
+  </tr>
+</table>
+</div>
+
+<%- include('partials/footer') %>
