@@ -60,8 +60,9 @@
 .sf2-paper .remark-input  { display: none; width: 100%; font-size: 6pt; padding: 1px 2px; box-sizing: border-box; border: 1px solid #888; }
 .sf2-paper.edit-mode .remark-display { display: none; }
 .sf2-paper.edit-mode .remark-input  { display: block; }
-.sf2-paper .summary-display { display: inline; }
-.sf2-paper .summary-input  { display: none; width: 100%; box-sizing: border-box; font-size: 8pt; text-align: center; border: 1.5px solid var(--primary, #059669); border-radius: 3px; padding: 2px 3px; background: #f0fdf4; color: #111; }
+/* summary inputs always visible; display span only used for print */
+.sf2-paper .summary-display { display: none; }
+.sf2-paper .summary-input  { display: block; width: 100%; box-sizing: border-box; font-size: 8pt; text-align: center; border: 1.5px solid var(--primary, #059669); border-radius: 3px; padding: 2px 3px; background: #f0fdf4; color: #111; }
 .sf2-paper.edit-mode .summary-display { display: none; }
 .sf2-paper.edit-mode .summary-input  { display: block; }
 /* Attendance cell editing */
@@ -537,7 +538,11 @@ function cellHtml(s, d) {
             </div>
             <div style="margin-top:8px;font-size:7pt;">Attested by:</div>
             <div class="sf2-sign" style="margin-top:16px;">
-                <span class="nm"><%= principal || '' %></span>
+                <span class="nm summary-display"><%= summaryMap.school_head || principal || '' %></span>
+                <input class="summary-input" type="text" data-key="school_head"
+                       value="<%= summaryMap.school_head || principal || '' %>"
+                       placeholder="School Head Name"
+                       style="text-align:center;font-weight:bold;text-transform:uppercase;font-size:8pt;max-width:220px;">
                 <div class="cap">(Signature of School Head over Printed Name)</div>
             </div>
         </td>

@@ -628,7 +628,7 @@ router.post('/sf2-save-remarks', express.json(), async (req, res) => {
             }
         });
     }
-    const SUMMARY_KEYS = ['dropped_out_m','dropped_out_f','transferred_out_m','transferred_out_f','transferred_in_m','transferred_in_f'];
+    const SUMMARY_KEYS = ['dropped_out_m','dropped_out_f','transferred_out_m','transferred_out_f','transferred_in_m','transferred_in_f','school_head'];
     if (summary && typeof summary === 'object') {
         SUMMARY_KEYS.forEach(key => {
             const val = summary[key] !== undefined ? String(summary[key]).slice(0, 100) : '';
