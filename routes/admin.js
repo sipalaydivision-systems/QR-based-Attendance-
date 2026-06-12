@@ -818,15 +818,15 @@ router.post('/adviser-delete-student', express.json(), async (req, res) => {
     }
 });
 
-// ---- Adviser: Profile ----
-router.get('/adviser-profile', async (req, res) => {
-    if (!req.session.user || req.session.user.role !== 'adviser') return res.redirect('/adviser-login');
+// ---- Adviser: Profile (JSON for modal) ----
+router.get('/adviser-profile-data', async (req, res) => {
+    if (!req.session.user || req.session.user.role !== 'adviser') return res.status(403).json({ error: 'Unauthorized' });
     const teacherId = req.session.user.teacher_id;
     try {
-        // ensure profile_photo column exists
         await db.query(`ALTER TABLE teachers ADD COLUMN IF NOT EXISTS profile_photo MEDIUMTEXT DEFAULT NULL`).catch(() => {});
         const [[t]] = await db.query(
-            `SELECT t.*, sc.name as school_name, gl.name as grade_name, sec.name as section_name
+            `SELECT t.id, t.firstname, t.lastname, t.middlename, t.email, t.contact, t.profile_photo,
+                    sc.name as school_name, gl.name as grade_name, sec.name as section_name
              FROM teachers t
              LEFT JOIN schools sc ON t.school_id = sc.id
              LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
@@ -834,11 +834,10 @@ router.get('/adviser-profile', async (req, res) => {
              WHERE t.id = ?`,
             [teacherId]
         );
-        if (!t) return res.redirect('/adviser-login');
-        res.render('adviser_profile', { title: 'My Profile', page: 'adviser_profile', teacher: t, error: null, success: null });
+        if (!t) return res.status(404).json({ error: 'Not found' });
+        res.json(t);
     } catch (err) {
-        console.error('Adviser profile error:', err);
-        res.redirect('/admin/adviser-dashboard');
+        res.status(500).json({ error: 'Server error' });
     }
 });
 
