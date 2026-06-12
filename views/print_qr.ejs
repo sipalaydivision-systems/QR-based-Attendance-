@@ -11,6 +11,27 @@
     </div>
 </div>
 
+<% if (isAdviser && typeof teacherQr !== 'undefined' && teacherQr) { %>
+<div class="no-print" style="margin-bottom:8px;">
+    <h3 style="font-size:1rem;font-weight:700;color:var(--gray-700);margin:0 0 10px 0;"><i class="fa-solid fa-id-card" style="color:var(--primary);margin-right:6px;"></i>My QR Code</h3>
+</div>
+<div style="margin-bottom:24px;display:flex;gap:16px;align-items:flex-start;">
+    <div class="qr-card">
+        <div class="qr-card-header"><%= teacherQr.school_name || 'School Attendance System' %></div>
+        <div class="qr-card-body">
+            <img src="<%= teacherQr.qrDataUrl %>" alt="QR" class="qr-image">
+            <div class="qr-name"><%= teacherQr.lastname %>, <%= teacherQr.firstname %></div>
+            <% if (teacherQr.employee_id) { %><div class="qr-detail">ID: <%= teacherQr.employee_id %></div><% } %>
+            <div class="qr-detail qr-grade-section"><%= [teacherQr.grade_name, teacherQr.section_name].filter(Boolean).join(' - ') || '&nbsp;' %></div>
+        </div>
+        <div class="qr-code-text"><%= teacherQr.qr_code %></div>
+    </div>
+</div>
+<hr class="no-print" style="border:none;border-top:1px solid var(--gray-200);margin-bottom:18px;">
+<div class="no-print" style="margin-bottom:8px;">
+    <h3 style="font-size:1rem;font-weight:700;color:var(--gray-700);margin:0 0 10px 0;"><i class="fa-solid fa-users" style="color:var(--primary);margin-right:6px;"></i>My Students' QR Codes</h3>
+</div>
+<% } %>
 <div class="filter-bar no-print">
     <% if (!isAdviser) { %>
     <div class="filter-item">

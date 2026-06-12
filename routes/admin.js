@@ -1677,6 +1677,7 @@ router.get('/print-qr', async (req, res) => {
     try {
         const user = req.session.user;
         let adviserScope = null;
+        let teacherQr = null;
 
         if (user.role === 'adviser' && user.teacher_id) {
             const [t] = await db.query(
@@ -1689,6 +1690,20 @@ router.get('/print-qr', async (req, res) => {
                 req.query.school_id = String(t[0].school_id);
                 req.query.grade_level_id = String(t[0].grade_level_id);
                 req.query.section_id = String(t[0].section_id);
+            }
+            // fetch teacher's own QR card
+            const [[tData]] = await db.query(
+                `SELECT t.id, t.firstname, t.lastname, t.middlename, t.employee_id, t.qr_code,
+                        sc.name AS school_name, gl.name AS grade_name, sec.name AS section_name
+                 FROM teachers t
+                 LEFT JOIN schools sc ON t.school_id = sc.id
+                 LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
+                 LEFT JOIN sections sec ON t.section_id = sec.id
+                 WHERE t.id = ?`,
+                [user.teacher_id]
+            );
+            if (tData && tData.qr_code) {
+                teacherQr = { ...tData, qrDataUrl: await QRCode.toDataURL(tData.qr_code, { width: 200, margin: 1 }) };
             }
         }
 
@@ -1703,7 +1718,8 @@ router.get('/print-qr', async (req, res) => {
             type: filters.type,
             schools,
             filters: filters.viewFilters,
-            adviserScope: adviserScope
+            adviserScope: adviserScope,
+            teacherQr: teacherQr
         });
     } catch (err) {
         console.error('Print QR error:', err);
