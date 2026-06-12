@@ -24,7 +24,7 @@
             <% if (teacherQr.employee_id) { %><div class="qr-detail">ID: <%= teacherQr.employee_id %></div><% } %>
             <div class="qr-detail qr-grade-section"><%= [teacherQr.grade_name, teacherQr.section_name].filter(Boolean).join(' - ') || '&nbsp;' %></div>
         </div>
-        <div class="qr-code-text"><%= teacherQr.qr_code %></div>
+        <div class="qr-code-text">TEACHER</div>
     </div>
 </div>
 <hr class="no-print" style="border:none;border-top:1px solid var(--gray-200);margin-bottom:18px;">
@@ -88,7 +88,7 @@
                     <% if (p.employee_id) { %><div class="qr-detail">ID: <%= p.employee_id %></div><% } %>
                     <div class="qr-detail qr-grade-section"><% if (gradeSectionText) { %><%= gradeSectionText %><% } else { %>&nbsp;<% } %></div>
                 </div>
-                <div class="qr-code-text"><%= p.qr_code %></div>
+                <div class="qr-code-text"><%= p.lrn ? 'STUDENT' : (p.employee_id ? 'TEACHER' : (p.qr_code && p.qr_code.startsWith('TCH-') ? 'TEACHER' : 'STUDENT')) %></div>
             </div>
         <% }); %>
     <% } else { %>
@@ -431,7 +431,8 @@ function makeQrCard(person) {
     body.appendChild(gradeSection);
     card.appendChild(header);
     card.appendChild(body);
-    card.appendChild(makeDiv('qr-code-text', person.qr_code || ''));
+    var typeLabel = person.lrn ? 'STUDENT' : (person.employee_id ? 'TEACHER' : (person.qr_code && person.qr_code.startsWith('TCH-') ? 'TEACHER' : 'STUDENT'));
+    card.appendChild(makeDiv('qr-code-text', typeLabel));
     return card;
 }
 
