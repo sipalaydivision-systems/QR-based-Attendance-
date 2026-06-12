@@ -55,12 +55,26 @@
 .sf2-sign .nm { font-weight: bold; border-bottom: 1px solid #000; display: inline-block; min-width: 200px; padding: 0 8px 1px 8px; text-transform: uppercase; }
 .sf2-sign .cap { font-size: 6pt; }
 
+/* ── Edit Mode ── */
+.sf2-paper .remark-display { display: inline; }
+.sf2-paper .remark-input  { display: none; width: 100%; font-size: 6pt; padding: 1px 2px; box-sizing: border-box; border: 1px solid #888; }
+.sf2-paper.edit-mode .remark-display { display: none; }
+.sf2-paper.edit-mode .remark-input  { display: block; }
+.sf2-paper .summary-display { display: inline; }
+.sf2-paper .summary-input  { display: none; width: 28px; font-size: 6pt; text-align: center; border: 1px solid #888; }
+.sf2-paper.edit-mode .summary-display { display: none; }
+.sf2-paper.edit-mode .summary-input  { display: inline; }
+.edit-hint { font-size: 0.75rem; color: var(--gray-500); }
+#sf2SaveBtn, #sf2CancelBtn { display: none; }
+
 /* ── Print ── */
 @media print {
     .sf2-controls, .sidebar, .topbar, .menu-btn { display: none !important; }
     .content { margin-left: 0 !important; padding: 0 !important; }
     .page-content { padding: 0 !important; }
     .sf2-paper { padding: 2mm; font-size: 7pt; overflow: visible; }
+    .remark-input, .summary-input { display: none !important; }
+    .remark-display, .summary-display { display: inline !important; }
     body { background: #fff !important; }
     @page { size: legal landscape; margin: 5mm; }
 }
@@ -73,6 +87,10 @@
            value="<%= year %>-<%= String(month).padStart(2,'0') %>"
            style="padding:8px 12px;border:1.5px solid var(--gray-300);border-radius:8px;font-size:0.8125rem;"
            onchange="if(this.value) window.location.href='/admin/sf2-report?month=' + this.value;">
+    <button class="btn btn-secondary" id="sf2EditBtn" onclick="sf2EnterEdit()"><i class="fa-solid fa-pen-to-square"></i> Edit Remarks</button>
+    <button class="btn btn-primary" id="sf2SaveBtn" onclick="sf2Save()"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
+    <button class="btn btn-secondary" id="sf2CancelBtn" onclick="sf2CancelEdit()"><i class="fa-solid fa-xmark"></i> Cancel</button>
+    <span class="edit-hint" id="sf2EditHint"></span>
     <button class="btn btn-primary" onclick="window.print()"><i class="fa-solid fa-print"></i> Print / Export PDF</button>
     <a href="/admin/adviser-dashboard" class="btn btn-secondary"><i class="fa-solid fa-arrow-left"></i> Back</a>
 </div>
@@ -163,7 +181,7 @@ function pctAtt(present, registered) {
 var adviserName = [teacher.firstname, teacher.middlename ? teacher.middlename.charAt(0) + '.' : '', teacher.lastname].filter(Boolean).join(' ');
 %>
 
-<div class="sf2-paper">
+<div class="sf2-paper" id="sf2Paper">
 
 <!-- ═══ Title ═══ -->
 <div class="sf2-title">School Form 2 (SF2) Daily Attendance Report of Learners</div>
@@ -219,7 +237,7 @@ var adviserName = [teacher.firstname, teacher.middlename ? teacher.middlename.ch
     </tr>
 
     <!-- ═══ MALE ═══ -->
-    <% males.forEach(function(s, idx) { var t = studentTotals(s); %>
+    <% males.forEach(function(s, idx) { var t = studentTotals(s); var autoRemark = (s.enrolled_from > firstFriday && s.enrolled_from <= endDate) ? 'Late enrolled (' + s.enrolled_from + ')' : ''; var savedRemark = remarksMap[s.id] !== undefined ? remarksMap[s.id] : null; var displayRemark = savedRemark !== null ? savedRemark : autoRemark; %>
     <tr>
         <td class="num-cell"><%= idx + 1 %>.</td>
         <td class="name-cell"><%= fmtName(s) %></td>
@@ -228,7 +246,10 @@ var adviserName = [teacher.firstname, teacher.middlename ? teacher.middlename.ch
         <% }); %>
         <td class="day-cell" style="font-weight:bold;"><%= t.absent || '' %></td>
         <td class="day-cell"><%= t.present || '' %></td>
-        <td class="remark-cell"><%= (s.enrolled_from > firstFriday && s.enrolled_from <= endDate) ? 'Late enrolled (' + s.enrolled_from + ')' : '' %></td>
+        <td class="remark-cell">
+            <span class="remark-display"><%= displayRemark %></span>
+            <input class="remark-input" type="text" data-student-id="<%= s.id %>" value="<%= displayRemark %>" placeholder="<%= autoRemark %>">
+        </td>
     </tr>
     <% }); %>
     <tr class="total-row">
@@ -243,7 +264,7 @@ var adviserName = [teacher.firstname, teacher.middlename ? teacher.middlename.ch
     </tr>
 
     <!-- ═══ FEMALE ═══ -->
-    <% females.forEach(function(s, idx) { var t = studentTotals(s); %>
+    <% females.forEach(function(s, idx) { var t = studentTotals(s); var autoRemark = (s.enrolled_from > firstFriday && s.enrolled_from <= endDate) ? 'Late enrolled (' + s.enrolled_from + ')' : ''; var savedRemark = remarksMap[s.id] !== undefined ? remarksMap[s.id] : null; var displayRemark = savedRemark !== null ? savedRemark : autoRemark; %>
     <tr>
         <td class="num-cell"><%= idx + 1 %>.</td>
         <td class="name-cell"><%= fmtName(s) %></td>
@@ -252,7 +273,10 @@ var adviserName = [teacher.firstname, teacher.middlename ? teacher.middlename.ch
         <% }); %>
         <td class="day-cell" style="font-weight:bold;"><%= t.absent || '' %></td>
         <td class="day-cell"><%= t.present || '' %></td>
-        <td class="remark-cell"><%= (s.enrolled_from > firstFriday && s.enrolled_from <= endDate) ? 'Late enrolled (' + s.enrolled_from + ')' : '' %></td>
+        <td class="remark-cell">
+            <span class="remark-display"><%= displayRemark %></span>
+            <input class="remark-input" type="text" data-student-id="<%= s.id %>" value="<%= displayRemark %>" placeholder="<%= autoRemark %>">
+        </td>
     </tr>
     <% }); %>
     <tr class="total-row">
@@ -267,7 +291,7 @@ var adviserName = [teacher.firstname, teacher.middlename ? teacher.middlename.ch
     </tr>
 
     <!-- ═══ SEX NOT SET (data fix needed) ═══ -->
-    <% unspecified.forEach(function(s, idx) { var t = studentTotals(s); %>
+    <% unspecified.forEach(function(s, idx) { var t = studentTotals(s); var autoRemark = 'SEX NOT SET — update student record'; var savedRemark = remarksMap[s.id] !== undefined ? remarksMap[s.id] : null; var displayRemark = savedRemark !== null ? savedRemark : autoRemark; %>
     <tr>
         <td class="num-cell"><%= idx + 1 %>.</td>
         <td class="name-cell"><%= fmtName(s) %></td>
@@ -276,7 +300,10 @@ var adviserName = [teacher.firstname, teacher.middlename ? teacher.middlename.ch
         <% }); %>
         <td class="day-cell" style="font-weight:bold;"><%= t.absent || '' %></td>
         <td class="day-cell"><%= t.present || '' %></td>
-        <td class="remark-cell">SEX NOT SET — update student record</td>
+        <td class="remark-cell">
+            <span class="remark-display"><%= displayRemark %></span>
+            <input class="remark-input" type="text" data-student-id="<%= s.id %>" value="<%= displayRemark %>" placeholder="<%= autoRemark %>">
+        </td>
     </tr>
     <% }); %>
     <% if (unspecified.length) { %>
@@ -445,15 +472,45 @@ var adviserName = [teacher.firstname, teacher.middlename ? teacher.middlename.ch
                 </tr>
                 <tr>
                     <td class="sl">Dropped out</td>
-                    <td class="sv"></td><td class="sv"></td><td class="sv"></td>
+                    <td class="sv">
+                        <span class="summary-display"><%= summaryMap.dropped_out_m || '' %></span>
+                        <input class="summary-input" type="number" min="0" data-key="dropped_out_m" value="<%= summaryMap.dropped_out_m || '' %>">
+                    </td>
+                    <td class="sv">
+                        <span class="summary-display"><%= summaryMap.dropped_out_f || '' %></span>
+                        <input class="summary-input" type="number" min="0" data-key="dropped_out_f" value="<%= summaryMap.dropped_out_f || '' %>">
+                    </td>
+                    <td class="sv" id="dropped_total">
+                        <%= ((parseInt(summaryMap.dropped_out_m)||0) + (parseInt(summaryMap.dropped_out_f)||0)) || '' %>
+                    </td>
                 </tr>
                 <tr>
                     <td class="sl">Transferred out</td>
-                    <td class="sv"></td><td class="sv"></td><td class="sv"></td>
+                    <td class="sv">
+                        <span class="summary-display"><%= summaryMap.transferred_out_m || '' %></span>
+                        <input class="summary-input" type="number" min="0" data-key="transferred_out_m" value="<%= summaryMap.transferred_out_m || '' %>">
+                    </td>
+                    <td class="sv">
+                        <span class="summary-display"><%= summaryMap.transferred_out_f || '' %></span>
+                        <input class="summary-input" type="number" min="0" data-key="transferred_out_f" value="<%= summaryMap.transferred_out_f || '' %>">
+                    </td>
+                    <td class="sv" id="xout_total">
+                        <%= ((parseInt(summaryMap.transferred_out_m)||0) + (parseInt(summaryMap.transferred_out_f)||0)) || '' %>
+                    </td>
                 </tr>
                 <tr>
                     <td class="sl">Transferred in</td>
-                    <td class="sv"></td><td class="sv"></td><td class="sv"></td>
+                    <td class="sv">
+                        <span class="summary-display"><%= summaryMap.transferred_in_m || '' %></span>
+                        <input class="summary-input" type="number" min="0" data-key="transferred_in_m" value="<%= summaryMap.transferred_in_m || '' %>">
+                    </td>
+                    <td class="sv">
+                        <span class="summary-display"><%= summaryMap.transferred_in_f || '' %></span>
+                        <input class="summary-input" type="number" min="0" data-key="transferred_in_f" value="<%= summaryMap.transferred_in_f || '' %>">
+                    </td>
+                    <td class="sv" id="xin_total">
+                        <%= ((parseInt(summaryMap.transferred_in_m)||0) + (parseInt(summaryMap.transferred_in_f)||0)) || '' %>
+                    </td>
                 </tr>
             </table>
 
@@ -472,5 +529,83 @@ var adviserName = [teacher.firstname, teacher.middlename ? teacher.middlename.ch
     </tr>
 </table>
 </div>
+
+<script>
+var sf2Month = '<%= monthParam %>';
+
+function sf2EnterEdit() {
+    document.getElementById('sf2Paper').classList.add('edit-mode');
+    document.getElementById('sf2EditBtn').style.display = 'none';
+    document.getElementById('sf2SaveBtn').style.display = '';
+    document.getElementById('sf2CancelBtn').style.display = '';
+    document.getElementById('sf2EditHint').textContent = 'Edit remarks and counts, then click Save Changes.';
+}
+
+function sf2CancelEdit() {
+    document.getElementById('sf2Paper').classList.remove('edit-mode');
+    document.getElementById('sf2EditBtn').style.display = '';
+    document.getElementById('sf2SaveBtn').style.display = 'none';
+    document.getElementById('sf2CancelBtn').style.display = 'none';
+    document.getElementById('sf2EditHint').textContent = '';
+}
+
+function sf2Save() {
+    var remarks = {};
+    document.querySelectorAll('.remark-input[data-student-id]').forEach(function(inp) {
+        var sid = inp.getAttribute('data-student-id');
+        remarks[sid] = inp.value;
+    });
+
+    var summary = {};
+    document.querySelectorAll('.summary-input[data-key]').forEach(function(inp) {
+        summary[inp.getAttribute('data-key')] = inp.value;
+    });
+
+    var btn = document.getElementById('sf2SaveBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+
+    fetch('/admin/sf2-save-remarks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ month: sf2Month, remarks: remarks, summary: summary })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            // Update display spans so they reflect new values without a full reload
+            document.querySelectorAll('.remark-input[data-student-id]').forEach(function(inp) {
+                var span = inp.previousElementSibling;
+                if (span) span.textContent = inp.value;
+            });
+            document.querySelectorAll('.summary-input[data-key]').forEach(function(inp) {
+                var span = inp.previousElementSibling;
+                if (span) span.textContent = inp.value;
+            });
+            // Recalculate totals
+            function sumTwo(km, kf, elId) {
+                var m = parseInt(document.querySelector('.summary-input[data-key="' + km + '"]').value) || 0;
+                var f = parseInt(document.querySelector('.summary-input[data-key="' + kf + '"]').value) || 0;
+                var el = document.getElementById(elId);
+                if (el) el.textContent = (m + f) || '';
+            }
+            sumTwo('dropped_out_m', 'dropped_out_f', 'dropped_total');
+            sumTwo('transferred_out_m', 'transferred_out_f', 'xout_total');
+            sumTwo('transferred_in_m', 'transferred_in_f', 'xin_total');
+
+            sf2CancelEdit();
+            document.getElementById('sf2EditHint').textContent = 'Saved.';
+            setTimeout(function() { document.getElementById('sf2EditHint').textContent = ''; }, 3000);
+        } else {
+            alert('Save failed: ' + (data.error || 'unknown error'));
+        }
+    })
+    .catch(function() { alert('Network error — changes not saved.'); })
+    .finally(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Changes';
+    });
+}
+</script>
 
 <%- include('partials/footer') %>

@@ -531,6 +531,31 @@ router.get('/sf2-report', async (req, res) => {
 
         const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
+        // SF2 remarks (teacher-editable): auto-create table on first use, then load
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS sf2_remarks (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                teacher_id INT NOT NULL,
+                month_year CHAR(7) NOT NULL,
+                student_id INT NOT NULL DEFAULT 0,
+                remark_key VARCHAR(30) NOT NULL,
+                remark_value TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_sf2_remark (teacher_id, month_year, student_id, remark_key)
+            )
+        `).catch(() => {});
+        const [remarkRows] = await db.query(
+            `SELECT student_id, remark_key, remark_value FROM sf2_remarks
+             WHERE teacher_id = ? AND month_year = ?`,
+            [teacherId, monthParam]
+        ).catch(() => [[]]);
+        const remarksMap = {};    // student_id (number) → remark text
+        const summaryMap = {};    // remark_key string → value
+        remarkRows.forEach(r => {
+            if (r.student_id === 0) summaryMap[r.remark_key] = r.remark_value;
+            else remarksMap[r.student_id] = r.remark_value;
+        });
+
         res.render('sf2_report', {
             title: 'SF2 Report',
             page: 'sf2_report',
@@ -547,11 +572,55 @@ router.get('/sf2-report', async (req, res) => {
             monthName: MONTH_NAMES[month - 1],
             schoolYear,
             startDate,
-            endDate
+            endDate,
+            remarksMap,
+            summaryMap,
+            monthParam
         });
     } catch (err) {
         console.error('SF2 report error:', err);
         return res.render('error', { title: 'SF2 Error', message: 'Failed to generate SF2.', user: req.session.user });
+    }
+});
+
+// ---- SF2 Save Remarks ----
+router.post('/sf2-save-remarks', express.json(), async (req, res) => {
+    if (!req.session.user || req.session.user.role !== 'adviser') return res.status(403).json({ error: 'Unauthorized' });
+    const teacherId = req.session.user.teacher_id;
+    if (!teacherId) return res.status(400).json({ error: 'No teacher record' });
+
+    const { month, remarks, summary } = req.body;
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: 'Invalid month' });
+
+    const rows = [];
+    if (remarks && typeof remarks === 'object') {
+        Object.entries(remarks).forEach(([sid, text]) => {
+            const studentId = parseInt(sid, 10);
+            if (!isNaN(studentId) && studentId > 0) {
+                rows.push([teacherId, month, studentId, 'remark', String(text).slice(0, 500)]);
+            }
+        });
+    }
+    const SUMMARY_KEYS = ['dropped_out_m','dropped_out_f','transferred_out_m','transferred_out_f','transferred_in_m','transferred_in_f'];
+    if (summary && typeof summary === 'object') {
+        SUMMARY_KEYS.forEach(key => {
+            const val = summary[key] !== undefined ? String(summary[key]).slice(0, 100) : '';
+            rows.push([teacherId, month, 0, key, val]);
+        });
+    }
+
+    try {
+        if (rows.length) {
+            await db.query(
+                `INSERT INTO sf2_remarks (teacher_id, month_year, student_id, remark_key, remark_value)
+                 VALUES ? ON DUPLICATE KEY UPDATE remark_value = VALUES(remark_value), updated_at = CURRENT_TIMESTAMP`,
+                [rows]
+            );
+        }
+        res.json({ success: true });
+    } catch (err) {
+        console.error('SF2 save remarks error:', err);
+        res.status(500).json({ error: 'Save failed' });
     }
 });
 
