@@ -234,7 +234,7 @@
                 <div style="width:100%;display:flex;flex-direction:column;gap:.7rem;">
                     <div>
                         <label style="font-size:.76rem;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px;">Name</label>
-                        <input type="text" id="pmFullNameInput" class="form-control" placeholder="Full name">
+                        <input type="text" id="pmFullNameInput" class="form-control" placeholder="Full name" value="<%= user && user.fullname ? user.fullname : '' %>">
                     </div>
                     <div>
                         <label style="font-size:.76rem;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px;">Email</label>
@@ -326,8 +326,13 @@
     });
 
     async function pmLoadProfile() {
+        // Pre-fill name from session immediately (already set in HTML value attribute)
+        // AJAX will override with DB value if available
+        var sessionName = '<%= user && user.fullname ? user.fullname.replace(/'/g, "\\'") : "" %>';
+        document.getElementById('pmFullNameInput').value = sessionName;
         try {
             var res = await fetch('/admin/adviser-profile-data');
+            if (!res.ok) return;
             var t = await res.json();
             if (t.error) return;
             // photo
@@ -335,14 +340,15 @@
                 document.getElementById('pmAvatarInner').innerHTML =
                     '<img src="' + t.profile_photo + '" alt="Photo" style="width:100%;height:100%;object-fit:cover;">';
             }
-            // populate editable fields
+            // name: build from DB parts; fall back to session name
             var parts = [t.firstname, t.middlename, t.lastname].filter(function(p){ return p && p.trim(); });
             var combinedName = parts.join(' ').trim();
-            // fall back to session fullname if DB fields are blank
-            document.getElementById('pmFullNameInput').value = combinedName || '<%= user.fullname %>';
+            document.getElementById('pmFullNameInput').value = combinedName || sessionName;
             document.getElementById('pmEmail').value   = t.email   || '';
             document.getElementById('pmContact').value = t.contact || '';
-        } catch(e) {}
+        } catch(e) {
+            // network error — name is already set from session above
+        }
     }
 
     async function pmSaveProfile() {
