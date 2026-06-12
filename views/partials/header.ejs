@@ -214,24 +214,51 @@
             </div>
 
             <!-- PROFILE PANEL -->
-            <div id="pmProfilePanel" style="display:none;flex-direction:column;align-items:center;gap:.85rem;padding:1.5rem;">
-                <div style="position:relative;width:96px;height:96px;cursor:pointer;" onclick="document.getElementById('pmPhotoInput').click()" title="Click to change photo">
-                    <div id="pmAvatarInner" style="width:96px;height:96px;border-radius:50%;background:var(--primary,#059669);display:flex;align-items:center;justify-content:center;font-size:2.2rem;font-weight:700;color:#fff;border:3px solid var(--primary,#059669);overflow:hidden;">
+            <div id="pmProfilePanel" style="display:none;flex-direction:column;align-items:center;gap:.9rem;padding:1.4rem;">
+                <!-- Avatar -->
+                <div style="position:relative;width:90px;height:90px;cursor:pointer;flex-shrink:0;" onclick="document.getElementById('pmPhotoInput').click()" title="Click to change photo">
+                    <div id="pmAvatarInner" style="width:90px;height:90px;border-radius:50%;background:var(--primary,#059669);display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:700;color:#fff;border:3px solid var(--primary,#059669);overflow:hidden;">
                         <%= user.fullname ? user.fullname.charAt(0).toUpperCase() : 'T' %>
                     </div>
-                    <div style="position:absolute;bottom:2px;right:2px;background:var(--primary,#059669);width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;">
-                        <i class="fa-solid fa-camera" style="color:#fff;font-size:.68rem;"></i>
+                    <div style="position:absolute;bottom:2px;right:2px;background:var(--primary,#059669);width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;">
+                        <i class="fa-solid fa-camera" style="color:#fff;font-size:.65rem;"></i>
                     </div>
                 </div>
                 <input type="file" id="pmPhotoInput" accept="image/*" style="display:none;" onchange="pmUploadPhoto(this)">
                 <div id="pmPhotoMsg" style="font-size:.78rem;display:none;text-align:center;"></div>
-                <div style="text-align:center;">
-                    <div style="font-size:1.05rem;font-weight:700;color:#111;"><%= user.fullname %></div>
-                    <div style="font-size:.8rem;color:#6b7280;margin-top:2px;text-transform:uppercase;letter-spacing:.05em;">Adviser</div>
+
+                <!-- Alert -->
+                <div id="pmProfileAlert" style="display:none;width:100%;padding:.6rem .85rem;border-radius:8px;font-size:.84rem;"></div>
+
+                <!-- Editable fields -->
+                <div style="width:100%;display:flex;flex-direction:column;gap:.7rem;">
+                    <div style="display:flex;gap:.65rem;">
+                        <div style="flex:1;">
+                            <label style="font-size:.76rem;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px;">Last Name</label>
+                            <input type="text" id="pmLastName" class="form-control" placeholder="Last name">
+                        </div>
+                        <div style="flex:1;">
+                            <label style="font-size:.76rem;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px;">First Name</label>
+                            <input type="text" id="pmFirstName" class="form-control" placeholder="First name">
+                        </div>
+                    </div>
+                    <div>
+                        <label style="font-size:.76rem;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px;">Middle Name</label>
+                        <input type="text" id="pmMiddleName" class="form-control" placeholder="Middle name">
+                    </div>
+                    <div>
+                        <label style="font-size:.76rem;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px;">Email</label>
+                        <input type="email" id="pmEmail" class="form-control" placeholder="Email address">
+                    </div>
+                    <div>
+                        <label style="font-size:.76rem;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px;">Contact Number</label>
+                        <input type="text" id="pmContact" class="form-control" placeholder="Contact number">
+                    </div>
                 </div>
-                <div id="pmInfoBlock" style="width:100%;display:flex;flex-direction:column;gap:.65rem;border-top:1px solid #e5e7eb;padding-top:1rem;">
-                    <div style="color:#9ca3af;font-size:.82rem;text-align:center;">Loading…</div>
-                </div>
+
+                <button class="btn btn-primary" onclick="pmSaveProfile()" id="pmProfileSaveBtn" style="width:100%;margin-top:.2rem;">
+                    <i class="fa-solid fa-floppy-disk"></i> Save Profile
+                </button>
             </div>
 
             <!-- PASSWORD PANEL -->
@@ -299,6 +326,7 @@
         document.getElementById('adviserProfileModal').style.display = 'none';
         document.body.style.overflow = '';
         document.getElementById('pmPwAlert').style.display = 'none';
+        document.getElementById('pmProfileAlert').style.display = 'none';
         document.getElementById('pmCurPw').value = '';
         document.getElementById('pmNewPw').value = '';
         document.getElementById('pmConfPw').value = '';
@@ -312,30 +340,68 @@
             var res = await fetch('/admin/adviser-profile-data');
             var t = await res.json();
             if (t.error) return;
-
-            // show profile photo if uploaded
+            // photo
             if (t.profile_photo) {
                 document.getElementById('pmAvatarInner').innerHTML =
                     '<img src="' + t.profile_photo + '" alt="Photo" style="width:100%;height:100%;object-fit:cover;">';
             }
+            // populate editable fields
+            document.getElementById('pmLastName').value  = t.lastname   || '';
+            document.getElementById('pmFirstName').value = t.firstname  || '';
+            document.getElementById('pmMiddleName').value= t.middlename || '';
+            document.getElementById('pmEmail').value     = t.email      || '';
+            document.getElementById('pmContact').value   = t.contact    || '';
+        } catch(e) {}
+    }
 
-            // info rows
-            var rows = [
-                { label: 'Email', val: t.email || '—' },
-                { label: 'School', val: t.school_name || '—' },
-                { label: 'Grade Level', val: t.grade_name || '—' },
-                { label: 'Section', val: t.section_name || '—' }
-            ];
-            if (t.contact) rows.push({ label: 'Contact', val: t.contact });
-            document.getElementById('pmInfoBlock').innerHTML = rows.map(function(r) {
-                return '<div style="width:100%;">' +
-                    '<div style="font-size:.71rem;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em;">' + r.label + '</div>' +
-                    '<div style="font-size:.84rem;color:#1f2937;font-weight:500;word-break:break-all;">' + r.val + '</div>' +
-                    '</div>';
-            }).join('');
-        } catch(e) {
-            document.getElementById('pmInfoBlock').innerHTML = '<div style="color:#9ca3af;font-size:.8rem;">Could not load info.</div>';
+    async function pmSaveProfile() {
+        var btn = document.getElementById('pmProfileSaveBtn');
+        var alertEl = document.getElementById('pmProfileAlert');
+        var firstname = document.getElementById('pmFirstName').value.trim();
+        var lastname  = document.getElementById('pmLastName').value.trim();
+        var middlename= document.getElementById('pmMiddleName').value.trim();
+        var email     = document.getElementById('pmEmail').value.trim();
+        var contact   = document.getElementById('pmContact').value.trim();
+        if (!firstname || !lastname) {
+            alertEl.textContent = 'First name and last name are required.';
+            alertEl.style.display = 'block';
+            alertEl.style.background = '#fef2f2';
+            alertEl.style.color = '#dc2626';
+            alertEl.style.border = '1px solid #dc2626';
+            return;
         }
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+        try {
+            var res = await fetch('/admin/adviser-update-profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ firstname, lastname, middlename, email, contact })
+            });
+            var data = await res.json();
+            if (data.success) {
+                alertEl.textContent = 'Profile saved successfully.';
+                alertEl.style.display = 'block';
+                alertEl.style.background = '#f0fdf4';
+                alertEl.style.color = '#16a34a';
+                alertEl.style.border = '1px solid #bbf7d0';
+                // update sidebar name
+                var sn = document.querySelector('.sidebar-footer .user-details strong');
+                if (sn) sn.textContent = data.fullname;
+                setTimeout(function(){ alertEl.style.display = 'none'; }, 3000);
+            } else {
+                alertEl.textContent = data.error || 'Failed to save.';
+                alertEl.style.display = 'block';
+                alertEl.style.background = '#fef2f2';
+                alertEl.style.color = '#dc2626';
+                alertEl.style.border = '1px solid #dc2626';
+            }
+        } catch(e) {
+            alertEl.textContent = 'Network error.';
+            alertEl.style.display = 'block';
+        }
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Profile';
     }
 
     function pmToggle(inputId, iconId) {
