@@ -12,24 +12,17 @@
 </div>
 
 <% if (isAdviser && typeof teacherQr !== 'undefined' && teacherQr) { %>
-<div class="no-print" style="margin-bottom:8px;">
-    <h3 style="font-size:1rem;font-weight:700;color:var(--gray-700);margin:0 0 10px 0;"><i class="fa-solid fa-id-card" style="color:var(--primary);margin-right:6px;"></i>My QR Code</h3>
-</div>
-<div style="margin-bottom:24px;display:flex;gap:16px;align-items:flex-start;">
+<div id="teacherQrSection" style="margin-bottom:24px;">
     <div class="qr-card">
         <div class="qr-card-header"><%= teacherQr.school_name || 'School Attendance System' %></div>
         <div class="qr-card-body">
             <img src="<%= teacherQr.qrDataUrl %>" alt="QR" class="qr-image">
-            <div class="qr-name"><%= teacherQr.lastname %>, <%= teacherQr.firstname %></div>
+            <div class="qr-name"><%= [teacherQr.lastname, teacherQr.firstname].filter(function(n){ return n && n.trim(); }).join(', ') %></div>
             <% if (teacherQr.employee_id) { %><div class="qr-detail">ID: <%= teacherQr.employee_id %></div><% } %>
-            <div class="qr-detail qr-grade-section"><%= [teacherQr.grade_name, teacherQr.section_name].filter(Boolean).join(' - ') || '&nbsp;' %></div>
+            <div class="qr-detail qr-grade-section"><%= [teacherQr.grade_name, teacherQr.section_name].filter(Boolean).join(' - ') || '' %></div>
         </div>
         <div class="qr-code-text">TEACHER</div>
     </div>
-</div>
-<hr class="no-print" style="border:none;border-top:1px solid var(--gray-200);margin-bottom:18px;">
-<div class="no-print" style="margin-bottom:8px;">
-    <h3 style="font-size:1rem;font-weight:700;color:var(--gray-700);margin:0 0 10px 0;"><i class="fa-solid fa-users" style="color:var(--primary);margin-right:6px;"></i>My Students' QR Codes</h3>
 </div>
 <% } %>
 <div class="filter-bar no-print">
@@ -64,6 +57,16 @@
     <input type="hidden" id="qrSchool" value="<%= qrFilters.school_id %>">
     <input type="hidden" id="qrGrade" value="<%= qrFilters.grade_level_id %>">
     <input type="hidden" id="qrSection" value="<%= qrFilters.section_id %>">
+    <% if (typeof teacherQr !== 'undefined' && teacherQr) { %>
+    <div class="filter-item">
+        <label>Show</label>
+        <select id="qrShow" onchange="applyQrShow(this.value)">
+            <option value="both">My QR Code &amp; Students</option>
+            <option value="mine">My QR Code Only</option>
+            <option value="students">Students Only</option>
+        </select>
+    </div>
+    <% } %>
     <% } %>
     <div class="filter-item">
         <label>Layout</label>
@@ -75,6 +78,7 @@
     </div>
 </div>
 
+<div id="studentQrSection">
 <div class="qr-grid" id="qrGrid" style="--qr-columns: <%= qrFilters.layout %>;">
     <% if (typeof people !== 'undefined' && people.length) { %>
         <% people.forEach(function(p) { %>
@@ -83,7 +87,7 @@
                 <div class="qr-card-header"><%= p.school_name || 'School Attendance System' %></div>
                 <div class="qr-card-body">
                     <img src="<%= p.qrDataUrl %>" alt="QR" class="qr-image">
-                    <div class="qr-name"><%= p.lastname %>, <%= p.firstname %></div>
+                    <div class="qr-name"><%= [p.lastname, p.firstname].filter(function(n){ return n && n.trim(); }).join(', ') %></div>
                     <% if (p.lrn) { %><div class="qr-detail">LRN: <%= p.lrn %></div><% } %>
                     <% if (p.employee_id) { %><div class="qr-detail">ID: <%= p.employee_id %></div><% } %>
                     <div class="qr-detail qr-grade-section"><% if (gradeSectionText) { %><%= gradeSectionText %><% } else { %>&nbsp;<% } %></div>
@@ -98,6 +102,7 @@
             <p>Choose a type, school, grade, or section above to show matching QR codes automatically.</p>
         </div>
     <% } %>
+</div>
 </div>
 
 <style>
@@ -423,7 +428,7 @@ function makeQrCard(person) {
     img.alt = 'QR';
     img.className = 'qr-image';
     body.appendChild(img);
-    body.appendChild(makeDiv('qr-name', [person.lastname, person.firstname].filter(Boolean).join(', ')));
+    body.appendChild(makeDiv('qr-name', [person.lastname, person.firstname].filter(function(n){ return n && n.trim(); }).join(', ')));
     if (person.lrn) body.appendChild(makeDiv('qr-detail', 'LRN: ' + person.lrn));
     if (person.employee_id) body.appendChild(makeDiv('qr-detail', 'ID: ' + person.employee_id));
     var gradeSectionText = [person.grade_name, person.section_name].filter(Boolean).join(' - ');
@@ -527,6 +532,22 @@ function bindAutoReload() {
         var el = document.getElementById(id);
         if (el) el.addEventListener('change', handleFilterChange);
     });
+}
+
+function applyQrShow(value) {
+    var teacherSec = document.getElementById('teacherQrSection');
+    var studentSec = document.getElementById('studentQrSection');
+    if (!teacherSec || !studentSec) return;
+    if (value === 'mine') {
+        teacherSec.style.display = '';
+        studentSec.style.display = 'none';
+    } else if (value === 'students') {
+        teacherSec.style.display = 'none';
+        studentSec.style.display = '';
+    } else {
+        teacherSec.style.display = '';
+        studentSec.style.display = '';
+    }
 }
 </script>
 <%- include('partials/footer') %>
