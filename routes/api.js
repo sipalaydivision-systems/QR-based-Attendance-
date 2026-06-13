@@ -131,6 +131,7 @@ async function getScannerDesktopDirectory(schoolId) {
             t.id AS person_id,
             t.qr_code,
             'teacher' AS person_type,
+            t.category,
             t.employee_id AS person_code,
             CONCAT_WS(' ', t.firstname, t.lastname) AS person_name,
             t.school_id,
@@ -909,7 +910,7 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
         if (!person) {
             [rows] = await db.query(
                 `SELECT t.id, t.firstname, t.lastname, t.employee_id, t.school_id, t.status AS person_status,
-                        t.qr_code, sc.name AS school_name, gl.name AS grade_name, sec.name AS section_name,
+                        t.qr_code, t.category, sc.name AS school_name, gl.name AS grade_name, sec.name AS section_name,
                         COALESCE(NULLIF(sec.adviser, ''), TRIM(CONCAT_WS(' ', at.firstname, at.middlename, at.lastname))) AS adviser,
                         at.contact AS adviser_contact,
                         at.email AS adviser_email
@@ -983,7 +984,7 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
             qr_code: person.qr_code || qr_code,
             name: person.firstname + ' ' + person.lastname,
             type: personType,
-            category: personType === 'student' ? (person.category || 'student') : null,
+            category: personType === 'student' ? (person.category || 'student') : (person.category || 'teacher'),
             school: person.school_name || 'N/A',
             person_status: person.person_status || 'active',
             adviser: person.adviser || 'N/A',

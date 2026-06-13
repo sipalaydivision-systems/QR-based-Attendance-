@@ -1080,6 +1080,7 @@ body.settings-open .side-panel {
 .res-p-avatar.student     { background: linear-gradient(135deg, #6d4bd8, #8b6ef0); box-shadow: 0 6px 18px rgba(109, 75, 216, 0.32); }
 .res-p-avatar.shs-student { background: linear-gradient(135deg, #d97706, #f59e0b); box-shadow: 0 6px 18px rgba(217, 119, 6, 0.30); }
 .res-p-avatar.teacher     { background: linear-gradient(135deg, #d97706, #fbbf24); box-shadow: 0 6px 18px rgba(217, 119, 6, 0.28); }
+.res-p-avatar.shs-teacher { background: linear-gradient(135deg, #0284c7, #38bdf8); box-shadow: 0 6px 18px rgba(2, 132, 199, 0.30); }
 
 .res-p-name {
   font-size: 1.5rem;
@@ -1102,6 +1103,7 @@ body.settings-open .side-panel {
 .res-p-badge.student     { background: #ede9fe; color: #6d28d9; }
 .res-p-badge.shs-student { background: #fef3c7; color: #92400e; }
 .res-p-badge.teacher     { background: #fffbeb; color: #b45309; }
+.res-p-badge.shs-teacher { background: #e0f2fe; color: #0c4a6e; }
 
 /* ── Body: hero time + details ── */
 .res-body {

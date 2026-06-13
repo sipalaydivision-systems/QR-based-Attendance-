@@ -231,6 +231,15 @@ async function ensureRuntimeSchema() {
         await db.query('ALTER TABLE teachers ADD COLUMN password VARCHAR(255) NULL AFTER email');
         console.log('Added teachers.password column for adviser login.');
     }
+
+    const [teacherCatCol] = await db.query(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'teachers' AND COLUMN_NAME = 'category'`
+    );
+    if (teacherCatCol.length === 0) {
+        await db.query("ALTER TABLE teachers ADD COLUMN category ENUM('teacher','shs_teacher') DEFAULT 'teacher' AFTER status");
+        console.log('Added teachers.category column for SHS teacher distinction.');
+    }
 }
 
 // Root redirect

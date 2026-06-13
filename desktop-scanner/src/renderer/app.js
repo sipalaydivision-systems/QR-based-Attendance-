@@ -707,11 +707,13 @@ function showScanFeedback(title, message, tone = 'success', data = {}) {
     avatarEl.textContent = initials;
     const isTeacherRole = person.type === 'teacher';
     const isShsStudent  = !isTeacherRole && person.category === 'shs_student';
-    const personClass   = isTeacherRole ? 'teacher' : isShsStudent ? 'shs-student' : 'student';
+    const isShsTeacher  = isTeacherRole && person.category === 'shs_teacher';
+    const personClass   = isShsTeacher ? 'shs-teacher' : isTeacherRole ? 'teacher' : isShsStudent ? 'shs-student' : 'student';
+    const badgeText     = isShsTeacher ? 'SHS Teacher' : isTeacherRole ? 'Teacher' : isShsStudent ? 'SHS Student' : 'Student';
     avatarEl.className    = `res-p-avatar ${personClass}`;
     $('modalName').textContent = person.name || '';
     const badgeEl = $('modalBadge');
-    badgeEl.textContent = isTeacherRole ? 'Teacher' : isShsStudent ? 'SHS Student' : 'Student';
+    badgeEl.textContent = badgeText;
     badgeEl.className    = `res-p-badge ${personClass}`;
 
     const dp = modalDateParts(data);

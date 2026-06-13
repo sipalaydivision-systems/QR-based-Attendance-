@@ -1533,11 +1533,12 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                     }
 
                     const qr_code = empId ? 'TCH-' + empId : 'TCH-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);
+                    const teacherCategory = category === 'shs_teacher' ? 'shs_teacher' : 'teacher';
                     const [teacherResult] = await db.query(
                         `INSERT INTO teachers
-                            (employee_id, firstname, lastname, middlename, contact, email, school_id, grade_level_id, section_id, qr_code, active_from, status)
-                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-                        [empId, fn, ln, mn || null, contact, email, schoolId, gradeId, sectionId, qr_code, null, importedTeacherStatus]
+                            (employee_id, firstname, lastname, middlename, contact, email, school_id, grade_level_id, section_id, qr_code, active_from, status, category)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                        [empId, fn, ln, mn || null, contact, email, schoolId, gradeId, sectionId, qr_code, null, importedTeacherStatus, teacherCategory]
                     );
                     await db.query(
                         'UPDATE sections SET adviser = ?, adviser_teacher_id = ? WHERE id = ?',

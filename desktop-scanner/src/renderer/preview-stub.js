@@ -33,7 +33,19 @@
     name: 'Maria Santos',
     type: 'teacher',
     school: 'Agripino Elementary School',
-    employee_id: 'T-0042'
+    employee_id: 'T-0042',
+    grade: 'Grade 6',
+    section: 'Sampaguita'
+  };
+
+  var SHS_TEACHER = {
+    name: 'Ricardo Dalisay',
+    type: 'teacher',
+    category: 'shs_teacher',
+    school: 'Sipalay City National High School',
+    employee_id: 'T-0088',
+    grade: 'Grade 11',
+    section: 'STEM - Rizal'
   };
 
   var SAMPLE_SCANS = [
@@ -88,6 +100,14 @@
     function () {
       var now = _time();
       return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_IN', status: 'present', display_status: 'PRESENT', message: 'Attendance recorded successfully.', person: SHS_STUDENT, time: now, time_in: now });
+    },
+    function () {
+      var now = _time();
+      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_IN', status: 'present', display_status: 'PRESENT', message: 'Attendance recorded successfully.', person: TEACHER, time: now, time_in: now });
+    },
+    function () {
+      var now = _time();
+      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_IN', status: 'present', display_status: 'PRESENT', message: 'Attendance recorded successfully.', person: SHS_TEACHER, time: now, time_in: now });
     },
     function () {
       return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_IN', status: 'late', display_status: 'LATE', message: 'Attendance recorded - marked as LATE.', person: STUDENT, time: _time(), time_in: _time() });

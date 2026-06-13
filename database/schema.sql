@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS teachers (
     qr_code VARCHAR(100) UNIQUE,
     active_from DATE,
     status ENUM('active','inactive','deleted') DEFAULT 'inactive',
+    category ENUM('teacher','shs_teacher') DEFAULT 'teacher',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE,
