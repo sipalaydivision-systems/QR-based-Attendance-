@@ -119,6 +119,7 @@ function migrate() {
       qr_code TEXT PRIMARY KEY,
       server_person_id INTEGER NOT NULL,
       person_type TEXT NOT NULL,
+      category TEXT,
       person_code TEXT,
       name TEXT NOT NULL,
       school_id INTEGER,
@@ -185,6 +186,7 @@ function migrate() {
       meta_value TEXT
     );
   `);
+  try { db.exec(`ALTER TABLE people_cache ADD COLUMN category TEXT`); } catch (_) {}
   saveDatabase();
 }
 
@@ -194,6 +196,7 @@ function normalizePerson(person) {
     qrCode: String(person.qrCode || person.qr_code || '').trim(),
     serverPersonId: Number(person.serverPersonId || person.personId || person.server_person_id || person.person_id || 0),
     personType: String(person.personType || person.person_type || '').trim().toLowerCase(),
+    category: person.category || null,
     personCode: String(person.personCode || person.person_code || '').trim(),
     name: String(person.name || person.person_name || '').trim(),
     schoolId: Number(person.schoolId || person.school_id || 0) || null,
@@ -319,14 +322,15 @@ function writePersonCacheRecord(rawPerson, cachedAt) {
 
   run(`
     INSERT INTO people_cache (
-      qr_code, server_person_id, person_type, person_code, name,
+      qr_code, server_person_id, person_type, category, person_code, name,
       school_id, school_name, grade_level, section_name,
       adviser, adviser_contact, adviser_email, person_status, updated_at, cached_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(qr_code) DO UPDATE SET
       server_person_id = excluded.server_person_id,
       person_type = excluded.person_type,
+      category = excluded.category,
       person_code = excluded.person_code,
       name = excluded.name,
       school_id = excluded.school_id,
@@ -343,6 +347,7 @@ function writePersonCacheRecord(rawPerson, cachedAt) {
     person.qrCode,
     person.serverPersonId,
     person.personType,
+    person.category || null,
     person.personCode || null,
     person.name,
     person.schoolId,
@@ -412,6 +417,7 @@ function mapPersonCacheRow(row) {
     qrCode: row.qr_code,
     serverPersonId: Number(row.server_person_id),
     personType: row.person_type,
+    category: row.category || null,
     personCode: row.person_code || null,
     name: row.name,
     schoolId: row.school_id ? Number(row.school_id) : null,

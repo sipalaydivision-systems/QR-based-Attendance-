@@ -705,11 +705,14 @@ function showScanFeedback(title, message, tone = 'success', data = {}) {
       : String(person.name || '??').substring(0, 2).toUpperCase();
     const avatarEl = $('modalAvatar');
     avatarEl.textContent = initials;
-    avatarEl.className    = `res-p-avatar ${person.type === 'teacher' ? 'teacher' : 'student'}`;
+    const isTeacherRole = person.type === 'teacher';
+    const isShsStudent  = !isTeacherRole && person.category === 'shs_student';
+    const personClass   = isTeacherRole ? 'teacher' : isShsStudent ? 'shs-student' : 'student';
+    avatarEl.className    = `res-p-avatar ${personClass}`;
     $('modalName').textContent = person.name || '';
     const badgeEl = $('modalBadge');
-    badgeEl.textContent = person.type === 'teacher' ? 'Teacher' : 'Student';
-    badgeEl.className    = `res-p-badge ${person.type === 'teacher' ? 'teacher' : 'student'}`;
+    badgeEl.textContent = isTeacherRole ? 'Teacher' : isShsStudent ? 'SHS Student' : 'Student';
+    badgeEl.className    = `res-p-badge ${personClass}`;
 
     const dp = modalDateParts(data);
 

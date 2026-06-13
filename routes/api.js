@@ -105,6 +105,7 @@ async function getScannerDesktopDirectory(schoolId) {
             s.id AS person_id,
             s.qr_code,
             'student' AS person_type,
+            s.category,
             s.lrn AS person_code,
             CONCAT_WS(' ', s.firstname, s.lastname) AS person_name,
             s.school_id,
@@ -169,6 +170,7 @@ async function getScannerDesktopDirectory(schoolId) {
         personId: row.person_id,
         qrCode: row.qr_code,
         personType: row.person_type,
+        category: row.category || null,
         personCode: row.person_code || '',
         name: row.person_name || 'Attendance Record',
         schoolId: row.school_id || null,
@@ -888,7 +890,7 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
         // Check student first (with joins for school, grade, section)
         let [rows] = await db.query(
             `SELECT s.id, s.firstname, s.lastname, s.lrn, s.school_id, s.status AS person_status,
-                    s.qr_code, sc.name AS school_name, gl.name AS grade_name, sec.name AS section_name,
+                    s.qr_code, s.category, sc.name AS school_name, gl.name AS grade_name, sec.name AS section_name,
                     COALESCE(NULLIF(sec.adviser, ''), TRIM(CONCAT_WS(' ', at.firstname, at.middlename, at.lastname))) AS adviser,
                     at.contact AS adviser_contact,
                     at.email AS adviser_email
@@ -981,6 +983,7 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
             qr_code: person.qr_code || qr_code,
             name: person.firstname + ' ' + person.lastname,
             type: personType,
+            category: personType === 'student' ? (person.category || 'student') : null,
             school: person.school_name || 'N/A',
             person_status: person.person_status || 'active',
             adviser: person.adviser || 'N/A',
