@@ -18,6 +18,17 @@
     grade_section: 'Grade 3 - Apple'
   };
 
+  var SHS_STUDENT = {
+    name: 'Wesley Hans Platil',
+    type: 'student',
+    category: 'shs_student',
+    school: 'Sipalay City National High School',
+    lrn: '117359',
+    grade: 'Grade 11',
+    section: 'STEM - Rizal',
+    grade_section: 'Grade 11 - STEM - Rizal'
+  };
+
   var TEACHER = {
     name: 'Maria Santos',
     type: 'teacher',
@@ -73,6 +84,10 @@
     function () {
       var now = _time();
       return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_IN', status: 'present', display_status: 'PRESENT', message: 'Attendance recorded successfully.', person: STUDENT, time: now, time_in: now });
+    },
+    function () {
+      var now = _time();
+      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_IN', status: 'present', display_status: 'PRESENT', message: 'Attendance recorded successfully.', person: SHS_STUDENT, time: now, time_in: now });
     },
     function () {
       return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_IN', status: 'late', display_status: 'LATE', message: 'Attendance recorded - marked as LATE.', person: STUDENT, time: _time(), time_in: _time() });
