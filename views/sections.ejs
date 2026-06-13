@@ -65,6 +65,7 @@
         </div>
         <form id="sectionForm" onsubmit="saveSection(event)">
             <input type="hidden" id="sectionId">
+            <input type="hidden" id="sectionTrack">
             <div class="form-group"><label>Name *</label><input type="text" id="sectionName" required></div>
             <div class="form-row">
                 <div class="form-group"><label>Grade Level</label>
@@ -94,6 +95,28 @@
 <script>
 var allSections = [], allStudents = [];
 
+function splitTrackSection(sectionName) {
+    var name = String(sectionName || '').trim();
+    var match = name.match(/^(STEM|ABM|HUMSS|GAS|TVL-HE|TVL-ICT|TVL-IA|TVL-AFA|Sports|Arts & Design)\s*-\s*(.+)$/i);
+    if (!match) return { track: '', section: name };
+    var trackMap = {
+        stem: 'STEM',
+        abm: 'ABM',
+        humss: 'HUMSS',
+        gas: 'GAS',
+        'tvl-he': 'TVL-HE',
+        'tvl-ict': 'TVL-ICT',
+        'tvl-ia': 'TVL-IA',
+        'tvl-afa': 'TVL-AFA',
+        sports: 'Sports',
+        'arts & design': 'Arts & Design'
+    };
+    return {
+        track: trackMap[match[1].toLowerCase()] || match[1],
+        section: match[2].trim()
+    };
+}
+
 async function loadSections() {
     var school = document.getElementById('filterSchool').value;
     var grade = document.getElementById('filterGrade').value;
@@ -108,6 +131,9 @@ async function loadSections() {
         if (grade) filtered = filtered.filter(function(s){return String(s.grade_level_id)===grade;});
         document.getElementById('sectionCount').textContent = filtered.length + ' section(s) found';
         document.getElementById('sectionsBody').innerHTML = filtered.map(function(s) {
+            var sectionParts = splitTrackSection(s.name);
+            var trackLabel = s.track_strand || s.track || sectionParts.track || '-';
+            var sectionLabel = sectionParts.section || s.name || '-';
             var activeCount = allStudents.filter(function(st){return st.section_id===s.id && st.status==='active';}).length;
             var inactiveCount = allStudents.filter(function(st){return st.section_id===s.id && st.status==='inactive';}).length;
             var stuLabel = activeCount + (inactiveCount > 0 ? ' <span style="color:var(--gray-400);font-size:0.75rem;">(' + inactiveCount + ' inactive)</span>' : '');
@@ -120,8 +146,8 @@ async function loadSections() {
                 '<td><input type="checkbox" class="row-check" value="'+s.id+'"></td>'+
                 '<td><span class="school-code">'+(s.school_name||'-')+'</span></td>'+
                 '<td>'+(s.grade_name||'-')+'</td>'+
-                '<td>-</td>'+
-                '<td><strong>'+s.name+'</strong></td>'+
+                '<td>' + trackLabel + '</td>'+
+                '<td><strong>'+sectionLabel+'</strong></td>'+
                 '<td>'+(s.adviser||'<span style="color:var(--warning);"><i class="fa-solid fa-triangle-exclamation"></i> No Adviser</span>')+'</td>'+
                 '<td>'+stuLabel+'</td>'+
                 '<td>'+statusBadge+'</td>'+
@@ -141,6 +167,7 @@ function openSectionModal() {
     document.getElementById('sectionModalTitle').textContent = 'Add Section';
     document.getElementById('sectionForm').reset();
     document.getElementById('sectionId').value = '';
+    document.getElementById('sectionTrack').value = '';
     document.getElementById('sectionModal').style.display = 'flex';
 }
 function closeSectionModal() { document.getElementById('sectionModal').style.display = 'none'; }
@@ -149,8 +176,10 @@ function editSectionById(id) {
     var s = allSections.find(function(x){return x.id===id;});
     if (!s) return;
     document.getElementById('sectionModalTitle').textContent = 'Edit Section';
+    var sectionParts = splitTrackSection(s.name);
     document.getElementById('sectionId').value = s.id;
-    document.getElementById('sectionName').value = s.name;
+    document.getElementById('sectionTrack').value = sectionParts.track || s.track_strand || s.track || '';
+    document.getElementById('sectionName').value = sectionParts.section || s.name;
     document.getElementById('sectionGrade').value = s.grade_level_id || '';
     document.getElementById('sectionSchool').value = s.school_id || '';
     document.getElementById('sectionAdviser').value = s.adviser || '';
@@ -160,7 +189,12 @@ function editSectionById(id) {
 async function saveSection(e) {
     e.preventDefault();
     var id = document.getElementById('sectionId').value;
-    var body = { name: document.getElementById('sectionName').value, grade_level_id: document.getElementById('sectionGrade').value, school_id: document.getElementById('sectionSchool').value, adviser: document.getElementById('sectionAdviser').value };
+    var rawName = document.getElementById('sectionName').value.trim();
+    var track = document.getElementById('sectionTrack').value.trim();
+    var savedName = track && rawName && rawName.toLowerCase().indexOf(track.toLowerCase() + ' - ') !== 0
+        ? track + ' - ' + rawName
+        : rawName;
+    var body = { name: savedName, grade_level_id: document.getElementById('sectionGrade').value, school_id: document.getElementById('sectionSchool').value, adviser: document.getElementById('sectionAdviser').value };
     var url = id ? '/api/sections/' + id : '/api/sections';
     var method = id ? 'PUT' : 'POST';
     var res = await fetch(url, { method: method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
