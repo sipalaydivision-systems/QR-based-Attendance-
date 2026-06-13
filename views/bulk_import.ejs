@@ -90,19 +90,20 @@
             </div>
             <div class="info-card" id="infoTeachers" style="display:none;">
                 <h4><i class="fa-solid fa-file-lines"></i> Teacher File Format</h4>
-                <div class="code-preview">Employee ID, Teacher/Adviser Name, School, Grade, Section, Contact Number, Email</div>
+                <div class="code-preview">Employee ID, Teacher/Adviser Name, School, Grade, Section, Contact Number, Email/DepEd Email</div>
                 <ul class="info-list">
                     <li><span class="dot" style="background:var(--success);"></span> First row is treated as header (skipped)</li>
                     <li><span class="dot" style="background:var(--primary);"></span> Duplicate Employee IDs update existing records</li>
                     <li><span class="dot" style="background:var(--primary);"></span> QR codes auto-generated as TCH-{Employee ID}</li>
                     <li><span class="dot" style="background:var(--primary);"></span> Existing school, grade, and section are matched before adviser assignment</li>
-                    <li><span class="dot" style="background:var(--gray-400);"></span> Contact Number and Email are optional</li>
+                    <li><span class="dot" style="background:var(--gray-400);"></span> Contact Number is optional</li>
+                    <li><span class="dot" style="background:var(--primary);"></span> Email/DepEd Email is required</li>
                 </ul>
                 <a href="/export/template/teacher" class="btn btn-outline btn-block" style="margin-top:0.75rem;">&#x2B07; Download Teacher Template (.xlsx)</a>
             </div>
             <div class="info-card" id="infoShsTeachers" style="display:none;">
                 <h4><i class="fa-solid fa-file-lines"></i> SHS Teacher File Format</h4>
-                <div class="code-preview">Employee ID, Teacher/Adviser Name, School, Grade, Track/Strand, Section, Contact Number, Email</div>
+                <div class="code-preview">Employee ID, Teacher/Adviser Name, School, Grade, Track/Strand, Section, Contact Number, Email/DepEd Email</div>
                 <ul class="info-list">
                     <li><span class="dot" style="background:var(--success);"></span> First row is treated as header (skipped)</li>
                     <li><span class="dot" style="background:var(--primary);"></span> Grade must be 11 or 12</li>
@@ -110,7 +111,8 @@
                     <li><span class="dot" style="background:var(--primary);"></span> Section is stored as "STRAND - Section" (e.g. STEM - Rizal)</li>
                     <li><span class="dot" style="background:var(--primary);"></span> Duplicate Employee IDs update existing records</li>
                     <li><span class="dot" style="background:var(--primary);"></span> QR codes auto-generated as TCH-{Employee ID}</li>
-                    <li><span class="dot" style="background:var(--gray-400);"></span> Contact Number and Email are optional</li>
+                    <li><span class="dot" style="background:var(--gray-400);"></span> Contact Number is optional</li>
+                    <li><span class="dot" style="background:var(--primary);"></span> Email/DepEd Email is required</li>
                 </ul>
                 <a href="/export/template/shs_teacher" class="btn btn-outline btn-block" style="margin-top:0.75rem;">&#x2B07; Download SHS Teacher Template (.xlsx)</a>
             </div>
@@ -257,9 +259,9 @@ function showPreview(data) {
     var headHtml = '<tr>';
     headHtml += '<th>ROW</th>';
     if (isShsTeacher) {
-        headHtml += '<th>EMP ID</th><th>NAME</th><th>SCHOOL</th><th>GRADE</th><th>TRACK/STRAND</th><th>SECTION</th><th>CONTACT</th><th>QR CODE</th><th>STATUS</th>';
+        headHtml += '<th>EMP ID</th><th>NAME</th><th>SCHOOL</th><th>GRADE</th><th>TRACK/STRAND</th><th>SECTION</th><th>CONTACT NUMBER</th><th>EMAIL/DEPED EMAIL</th><th>QR CODE</th><th>STATUS</th>';
     } else if (isTeacher) {
-        headHtml += '<th>EMP ID</th><th>NAME</th><th>SCHOOL</th><th>GRADE</th><th>SECTION</th><th>CONTACT</th><th>QR CODE</th><th>STATUS</th>';
+        headHtml += '<th>EMP ID</th><th>NAME</th><th>SCHOOL</th><th>GRADE</th><th>SECTION</th><th>CONTACT NUMBER</th><th>EMAIL/DEPED EMAIL</th><th>QR CODE</th><th>STATUS</th>';
     } else if (isShs) {
         headHtml += '<th>LRN</th><th>NAME</th><th>SEX</th><th>SCHOOL</th><th>GRADE</th><th>TRACK/STRAND</th><th>SECTION</th><th>GUARDIAN</th><th>QR CODE</th><th>STATUS</th>';
     } else {
@@ -287,6 +289,7 @@ function showPreview(data) {
             bodyHtml += '<td>' + (p.track || '') + '</td>';
             bodyHtml += '<td>' + (p.section || '') + '</td>';
             bodyHtml += '<td>' + (p.contact || '') + '</td>';
+            bodyHtml += '<td>' + (p.email || '') + '</td>';
             bodyHtml += '<td style="color:var(--primary);font-size:0.8125rem;">' + (p.qr_code || '') + '</td>';
         } else if (isTeacher) {
             bodyHtml += '<td>' + (p.empId || '') + '</td>';
@@ -295,6 +298,7 @@ function showPreview(data) {
             bodyHtml += '<td>' + (p.grade || '') + '</td>';
             bodyHtml += '<td>' + (p.section || '') + '</td>';
             bodyHtml += '<td>' + (p.contact || '') + '</td>';
+            bodyHtml += '<td>' + (p.email || '') + '</td>';
             bodyHtml += '<td style="color:var(--primary);font-size:0.8125rem;">' + (p.qr_code || '') + '</td>';
         } else if (isShs) {
             bodyHtml += '<td>' + (p.lrn || '') + '</td>';

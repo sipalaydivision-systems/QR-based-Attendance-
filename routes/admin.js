@@ -1292,7 +1292,8 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
                 entry.track = trackStrand;
                 entry.section = section ? section.name : sectionName;
                 if (rawSection && !section) entry.section += ' (new)';
-                entry.contact = email || contact;
+                entry.contact = contact;
+                entry.email = email;
                 entry.qr_code = qr_code;
                 if (school.error) { entry.status = 'error'; entry.error = school.error; }
             } else {
