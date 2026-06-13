@@ -72,6 +72,15 @@ function replaceDropdownColumn(choicesSheet, col, values, clearRows = gradeList.
     });
 }
 
+function formatTextColumns(sheet, cols, rows = 101) {
+    cols.forEach(col => {
+        sheet.getColumn(col).numFmt = '@';
+        for (let r = 2; r <= rows; r++) {
+            sheet.getCell(col + r).numFmt = '@';
+        }
+    });
+}
+
 function applyValidation(sheet, col, range, title, rows) {
     for (let r = 2; r <= rows; r++) {
         sheet.getCell(col + r).dataValidation = {
@@ -99,6 +108,7 @@ async function generateStudent() {
     setHeaderCell(row.getCell(6), 'Section', '(Capital first letter (e.g. Banana))');
     setHeaderCell(row.getCell(7), 'Guardian Contact', '(09XXXXXXXXX)');
     row.height = 40;
+    formatTextColumns(sheet, ['A', 'G']);
 
     applyValidation(sheet, 'C', 'Dropdowns!$H$1:$H$' + sexList.length, 'Select Sex', 101);
     applyValidation(sheet, 'D', 'Dropdowns!$A$1:$A$' + schoolList.length, 'Select School', 101);
@@ -126,6 +136,7 @@ async function generateSHS() {
     setHeaderCell(row.getCell(7), 'Section', '(Capital first letter (e.g. Banana))');
     setHeaderCell(row.getCell(8), 'Guardian Contact', '(09XXXXXXXXX)');
     row.height = 40;
+    formatTextColumns(sheet, ['A', 'H']);
 
     applyValidation(sheet, 'C', 'Dropdowns!$H$1:$H$' + sexList.length, 'Select Sex', 101);
     applyValidation(sheet, 'D', 'Dropdowns!$A$1:$A$' + schoolList.length, 'Select School', 101);
@@ -154,6 +165,7 @@ async function generateSHSTeacher() {
     setHeaderCell(row.getCell(7), 'Contact Number', '(09XXXXXXXXX)');
     setHeaderCell(row.getCell(8), 'Email', '(optional)');
     row.height = 40;
+    formatTextColumns(sheet, ['A', 'G']);
 
     applyValidation(sheet, 'C', 'Dropdowns!$A$1:$A$' + schoolList.length, 'Select School', 101);
     applyValidation(sheet, 'D', 'Dropdowns!$B$1:$B$' + shsGradeList.length, 'Select Grade', 101);
@@ -180,6 +192,7 @@ async function generateTeacher() {
     setHeaderCell(row.getCell(6), 'Contact Number', '(09XXXXXXXXX)');
     setHeaderCell(row.getCell(7), 'Email', '(optional)');
     row.height = 40;
+    formatTextColumns(sheet, ['A', 'F']);
 
     applyValidation(sheet, 'C', 'Dropdowns!$A$1:$A$' + schoolList.length, 'Select School', 101);
     applyValidation(sheet, 'D', 'Dropdowns!$B$1:$B$' + studentGradeList.length, 'Select Grade', 101);

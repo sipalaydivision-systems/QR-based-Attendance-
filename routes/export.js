@@ -208,6 +208,15 @@ function addDropdown(sheet, colLetter, fromRow, toRow, formulaList, prompt) {
     }
 }
 
+function formatTextColumns(sheet, cols, fromRow, toRow) {
+    cols.forEach(col => {
+        sheet.getColumn(col).numFmt = '@';
+        for (let r = fromRow; r <= toRow; r++) {
+            sheet.getCell(`${col}${r}`).numFmt = '@';
+        }
+    });
+}
+
 router.get('/template/:type', async (req, res) => {
     const type = req.params.type;
     const DATA_ROWS = 200;
@@ -229,6 +238,7 @@ router.get('/template/:type', async (req, res) => {
                 drops.getCell('B12').value = null;
             }
             // Narrow the validation range to $B$1:$B$10 so no blanks appear
+            formatTextColumns(ws, ['A', 'G'], 2, END);
             addDropdown(ws, 'E', 2, END, "Dropdowns!$B$1:$B$10", 'Select Grade 1 to 10');
             res.setHeader('Content-Disposition', 'attachment; filename="student_import_template.xlsx"');
 
@@ -244,6 +254,7 @@ router.get('/template/:type', async (req, res) => {
                 for (let r = 3; r <= 12; r++) drops.getCell(`B${r}`).value = null;
             }
             // Narrow the validation range to $B$1:$B$2 — exactly 11 and 12, no blanks
+            formatTextColumns(ws, ['A', 'H'], 2, END);
             addDropdown(ws, 'E', 2, END, "Dropdowns!$B$1:$B$2", 'Select Grade 11 or Grade 12');
             res.setHeader('Content-Disposition', 'attachment; filename="shs_student_import_template.xlsx"');
 
@@ -262,6 +273,7 @@ router.get('/template/:type', async (req, res) => {
             ];
             cols.forEach((c, i) => { ws.getColumn(i + 1).width = c.width; });
             applyHeaderRow(ws.getRow(1), ws.getRow(2), cols);
+            formatTextColumns(ws, ['A', 'F'], START, END);
             addDropdown(ws, 'D', START, END, '"Grade 1,Grade 2,Grade 3,Grade 4,Grade 5,Grade 6,Grade 7,Grade 8,Grade 9,Grade 10"', 'Select a grade level');
             res.setHeader('Content-Disposition', 'attachment; filename="teacher_import_template.xlsx"');
 
@@ -281,6 +293,7 @@ router.get('/template/:type', async (req, res) => {
             ];
             cols.forEach((c, i) => { ws.getColumn(i + 1).width = c.width; });
             applyHeaderRow(ws.getRow(1), ws.getRow(2), cols);
+            formatTextColumns(ws, ['A', 'G'], START, END);
             addDropdown(ws, 'D', START, END, '"11,12"', 'Select Grade 11 or Grade 12');
             res.setHeader('Content-Disposition', 'attachment; filename="shs_teacher_import_template.xlsx"');
 
