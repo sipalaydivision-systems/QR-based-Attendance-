@@ -161,36 +161,6 @@ router.get('/not-scanned-today', async (req, res) => {
 
 // ---- Download XLSX Templates (generated on-the-fly with dropdown validation) ----
 
-const HEADER_STYLE = {
-    font: { bold: true, color: { argb: 'FFFFFFFF' } },
-    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF166534' } },
-    alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
-    border: { bottom: { style: 'thin', color: { argb: 'FF14532D' } } }
-};
-
-const NOTE_STYLE = {
-    font: { italic: true, color: { argb: 'FF6B7280' }, size: 10 },
-    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } },
-    alignment: { horizontal: 'center', vertical: 'middle', wrapText: true }
-};
-
-function applyHeaderRow(row, noteRow, columns) {
-    columns.forEach((col, i) => {
-        const hCell = row.getCell(i + 1);
-        hCell.value = col.header;
-        Object.assign(hCell, HEADER_STYLE);
-        hCell.font = { ...HEADER_STYLE.font };
-        hCell.fill = { ...HEADER_STYLE.fill };
-        hCell.alignment = { ...HEADER_STYLE.alignment };
-
-        const nCell = noteRow.getCell(i + 1);
-        nCell.value = col.note || '';
-        nCell.font = { ...NOTE_STYLE.font };
-        nCell.fill = { ...NOTE_STYLE.fill };
-        nCell.alignment = { ...NOTE_STYLE.alignment };
-    });
-}
-
 function addDropdown(sheet, colLetter, fromRow, toRow, formulaList, prompt) {
     for (let r = fromRow; r <= toRow; r++) {
         sheet.getCell(`${colLetter}${r}`).dataValidation = {
@@ -259,42 +229,30 @@ router.get('/template/:type', async (req, res) => {
             res.setHeader('Content-Disposition', 'attachment; filename="shs_student_import_template.xlsx"');
 
         } else if (type === 'teacher') {
-            const ws = wb.addWorksheet('Teachers');
-            ws.getRow(1).height = 28;
-            ws.getRow(2).height = 22;
-            const cols = [
-                { header: 'Employee ID',          note: 'Teacher or employee ID',           width: 18 },
-                { header: 'Teacher/Adviser Name', note: 'Last Name, First Name Middle Name', width: 32 },
-                { header: 'School Name',          note: 'Full school name',                  width: 30 },
-                { header: 'Grade Level',          note: 'Grade 1 to Grade 6 / 7–10',         width: 14 },
-                { header: 'Section Name',         note: 'Advisory section name',             width: 20 },
-                { header: 'Contact Number',       note: 'Mobile or landline',                width: 18 },
-                { header: 'Email',                note: 'Used as adviser login username',     width: 26 }
-            ];
-            cols.forEach((c, i) => { ws.getColumn(i + 1).width = c.width; });
-            applyHeaderRow(ws.getRow(1), ws.getRow(2), cols);
-            formatTextColumns(ws, ['A', 'F'], START, END);
-            addDropdown(ws, 'D', START, END, '"Grade 1,Grade 2,Grade 3,Grade 4,Grade 5,Grade 6,Grade 7,Grade 8,Grade 9,Grade 10"', 'Select a grade level');
+            const filePath = path.join(__dirname, '..', 'public', 'templates', 'teacher_import_template.xlsx');
+            await wb.xlsx.readFile(filePath);
+            const ws = wb.worksheets[0];
+            const drops = wb.getWorksheet('Dropdowns');
+            if (drops) {
+                drops.getCell('B11').value = null;
+                drops.getCell('B12').value = null;
+            }
+            formatTextColumns(ws, ['A', 'F'], 2, END);
+            addDropdown(ws, 'D', 2, END, "Dropdowns!$B$1:$B$10", 'Select Grade 1 to 10');
             res.setHeader('Content-Disposition', 'attachment; filename="teacher_import_template.xlsx"');
 
         } else if (type === 'shs_teacher') {
-            const ws = wb.addWorksheet('SHS Teachers');
-            ws.getRow(1).height = 28;
-            ws.getRow(2).height = 22;
-            const cols = [
-                { header: 'Employee ID',          note: 'Teacher or employee ID',           width: 18 },
-                { header: 'Teacher/Adviser Name', note: 'Last Name, First Name Middle Name', width: 32 },
-                { header: 'School Name',          note: 'Full school name',                  width: 30 },
-                { header: 'Grade Level',          note: '11 or 12',                          width: 10 },
-                { header: 'Track/Strand',         note: 'e.g. STEM, ABM, HUMSS',            width: 18 },
-                { header: 'Section Name',         note: 'Advisory section name',             width: 20 },
-                { header: 'Contact Number',       note: 'Mobile or landline',                width: 18 },
-                { header: 'Email',                note: 'Used as adviser login username',     width: 26 }
-            ];
-            cols.forEach((c, i) => { ws.getColumn(i + 1).width = c.width; });
-            applyHeaderRow(ws.getRow(1), ws.getRow(2), cols);
-            formatTextColumns(ws, ['A', 'G'], START, END);
-            addDropdown(ws, 'D', START, END, '"11,12"', 'Select Grade 11 or Grade 12');
+            const filePath = path.join(__dirname, '..', 'public', 'templates', 'shs_teacher_import_template.xlsx');
+            await wb.xlsx.readFile(filePath);
+            const ws = wb.worksheets[0];
+            const drops = wb.getWorksheet('Dropdowns');
+            if (drops) {
+                drops.getCell('B1').value = 11;
+                drops.getCell('B2').value = 12;
+                for (let r = 3; r <= 12; r++) drops.getCell(`B${r}`).value = null;
+            }
+            formatTextColumns(ws, ['A', 'G'], 2, END);
+            addDropdown(ws, 'D', 2, END, "Dropdowns!$B$1:$B$2", 'Select Grade 11 or Grade 12');
             res.setHeader('Content-Disposition', 'attachment; filename="shs_teacher_import_template.xlsx"');
 
         } else {
