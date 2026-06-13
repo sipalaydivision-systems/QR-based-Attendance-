@@ -889,7 +889,7 @@ router.get('/adviser-profile-data', async (req, res) => {
         await db.query(`ALTER TABLE teachers ADD COLUMN IF NOT EXISTS profile_photo MEDIUMTEXT DEFAULT NULL`).catch(() => {});
         const [[t]] = await db.query(
             `SELECT t.id, t.firstname, t.lastname, t.middlename, t.email, t.contact, t.profile_photo,
-                    sc.name as school_name, gl.name as grade_name, sec.name as section_name
+                    sc.name as school_name, sc.logo as school_logo, gl.name as grade_name, sec.name as section_name
              FROM teachers t
              LEFT JOIN schools sc ON t.school_id = sc.id
              LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id

@@ -140,7 +140,7 @@ router.post('/adviser-login', async (req, res) => {
     }
     try {
         const [rows] = await db.query(
-            `SELECT t.*, sc.name as school_name, gl.name as grade_name, sec.name as section_name
+            `SELECT t.*, sc.name as school_name, sc.logo as school_logo, gl.name as grade_name, sec.name as section_name
              FROM teachers t
              LEFT JOIN schools sc ON t.school_id = sc.id
              LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
@@ -177,6 +177,7 @@ router.post('/adviser-login', async (req, res) => {
             email: teacher.email,
             role: 'adviser',
             school_id: teacher.school_id,
+            school_logo: teacher.school_logo,
             teacher_id: teacher.id
         };
         return res.redirect('/admin/adviser-dashboard');
@@ -232,10 +233,17 @@ router.post('/adviser-setup-password', async (req, res) => {
             teacher_id: teacherId
         };
 
-        const [teacher] = await db.query('SELECT firstname, lastname, school_id FROM teachers WHERE id = ?', [teacherId]);
+        const [teacher] = await db.query(
+            `SELECT t.firstname, t.lastname, t.school_id, sc.logo as school_logo
+             FROM teachers t
+             LEFT JOIN schools sc ON t.school_id = sc.id
+             WHERE t.id = ?`,
+            [teacherId]
+        );
         if (teacher.length > 0) {
             req.session.user.fullname = (teacher[0].firstname + ' ' + teacher[0].lastname).trim();
             req.session.user.school_id = teacher[0].school_id;
+            req.session.user.school_logo = teacher[0].school_logo;
         }
 
         return res.redirect('/admin/adviser-dashboard');

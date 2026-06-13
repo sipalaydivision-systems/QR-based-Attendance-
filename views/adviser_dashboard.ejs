@@ -30,6 +30,16 @@
     padding: 6px 14px; border-radius: 20px;
     font-size: 0.8125rem; font-weight: 600;
 }
+.ad-section-logo {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    border-radius: 50%;
+    background: #fff;
+    padding: 2px;
+    box-shadow: 0 0 0 1px rgba(79,70,229,0.12);
+    flex: 0 0 auto;
+}
 .ad-section-badge.school { background: #eef2ff; color: #4f46e5; }
 .ad-section-badge.grade  { background: #fef3c7; color: #92400e; }
 .ad-section-badge.section { background: #dcfce7; color: #16a34a; }
@@ -143,11 +153,7 @@
 
     <div class="ad-section-info">
         <span class="ad-section-badge school">
-            <% if (teacher.school_logo) { %>
-            <img src="<%= teacher.school_logo %>" alt="" style="width:18px;height:18px;object-fit:contain;border-radius:3px;" onerror="this.outerHTML='<i class=\'fa-solid fa-school\'></i>'">
-            <% } else { %>
-            <i class="fa-solid fa-school"></i>
-            <% } %>
+            <img class="ad-section-logo" src="<%= teacher.school_logo || ((typeof settings !== 'undefined' && settings && settings.system_logo) ? settings.system_logo : '/uploads/logos/system-logo.png') %>" alt="" onerror="this.onerror=null;this.src='/uploads/logos/system-logo.png';">
             <%= teacher.school_name || 'N/A' %>
         </span>
         <span class="ad-section-badge grade"><i class="fa-solid fa-layer-group"></i> <%= teacher.grade_name || 'N/A' %></span>
