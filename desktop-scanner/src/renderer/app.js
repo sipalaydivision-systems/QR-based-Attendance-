@@ -606,7 +606,12 @@ function bannerSubFor(data, tone, fallbackMessage) {
   }
   if (action === 'TIME_OUT') {
     if (ds === 'LUNCH OUT') return 'Enjoy your lunch break. Scan again when you return.';
-    if (ds === 'COMPLETED') return 'Attendance for today is complete. See you tomorrow!';
+    if (ds === 'COMPLETED') {
+      const isFriday = new Date().getDay() === 5;
+      return isFriday
+        ? 'Attendance for today is complete. Enjoy your weekend!'
+        : 'Attendance for today is complete. See you tomorrow!';
+    }
     if (ds === 'OUT') return 'You are now marked as out of school. Scan again when you return.';
     return 'You have successfully timed out for the day.';
   }
@@ -724,8 +729,6 @@ function showScanFeedback(title, message, tone = 'success', data = {}) {
     $('modalHeroIcon').innerHTML   = hero.variant === 'out' ? RES_ICONS['time-out'] : RES_ICONS['clock'];
     $('modalHeroLabel').textContent = hero.label;
     $('modalHeroValue').textContent = hero.value;
-    $('modalHeroDate').textContent  = dp.date;
-    $('modalHeroDay').textContent   = dp.day;
     const pillEl = $('modalHeroPill');
     pillEl.className = `res-hero-pill ${hero.pillClass}`;
     pillEl.innerHTML = hero.pill;
