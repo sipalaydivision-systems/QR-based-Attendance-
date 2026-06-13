@@ -14,7 +14,7 @@
 <div class="filter-bar">
     <div class="filter-item">
         <label>School</label>
-        <select id="filterSchool">
+        <select id="filterSchool" onchange="loadTeachers()">
             <option value="">All Schools</option>
             <% schools.forEach(s => { %>
             <option value="<%= s.id %>"><%= s.name %></option>
@@ -23,7 +23,7 @@
     </div>
     <div class="filter-item">
         <label>Type</label>
-        <select id="filterCategory">
+        <select id="filterCategory" onchange="loadTeachers()">
             <option value="">All Teachers</option>
             <option value="teacher">Regular Teacher</option>
             <option value="shs_teacher">SHS Teacher</option>
@@ -31,7 +31,7 @@
     </div>
     <div class="filter-item">
         <label>Status</label>
-        <select id="filterStatus">
+        <select id="filterStatus" onchange="loadTeachers()">
             <option value="">Active and Inactive</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
