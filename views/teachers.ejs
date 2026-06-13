@@ -132,11 +132,13 @@ function teacherName(t) {
     return [t.firstname, t.middlename ? t.middlename.charAt(0) + '.' : '', t.lastname].filter(Boolean).join(' ');
 }
 
+var lookupsLoaded = false;
 async function loadLookups() {
-    var gradeRes = await fetch('/api/grade-levels');
+    if (lookupsLoaded) return;
+    var [gradeRes, sectionRes] = await Promise.all([fetch('/api/grade-levels'), fetch('/api/sections')]);
     allGrades = await gradeRes.json();
-    var sectionRes = await fetch('/api/sections');
     allSections = await sectionRes.json();
+    lookupsLoaded = true;
 }
 
 async function loadTeachers() {
@@ -200,13 +202,14 @@ function loadTeacherSections(selectedId) {
     if (selectedId) document.getElementById('teacherSection').value = selectedId;
 }
 
-function openTeacherModal() {
+async function openTeacherModal() {
     document.getElementById('teacherModalTitle').textContent = 'Add Teacher';
     document.getElementById('teacherForm').reset();
     document.getElementById('teacherId').value = '';
     document.getElementById('teacherCategory').value = 'teacher';
     document.getElementById('teacherStatus').value = 'active';
     document.getElementById('teacherMsg').innerHTML = '';
+    await loadLookups();
     loadTeacherGrades();
     loadTeacherSections();
     document.getElementById('teacherModal').style.display = 'flex';
@@ -214,7 +217,8 @@ function openTeacherModal() {
 
 function closeTeacherModal() { document.getElementById('teacherModal').style.display = 'none'; }
 
-function editTeacherById(id) {
+async function editTeacherById(id) {
+    await loadLookups();
     var t = allTeachers.find(function(x) { return x.id === id; });
     if (!t) return;
     document.getElementById('teacherModalTitle').textContent = 'Edit Teacher';
@@ -258,7 +262,7 @@ async function saveTeacher(e) {
     var method = id ? 'PUT' : 'POST';
     var res = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     var data = await res.json();
-    if (data.success || data.id) { closeTeacherModal(); await loadLookups(); loadTeachers(); }
+    if (data.success || data.id) { lookupsLoaded = false; closeTeacherModal(); loadTeachers(); }
     else document.getElementById('teacherMsg').innerHTML = '<div class="alert alert-danger">' + esc(data.error || 'Failed to save teacher.') + '</div>';
 }
 
@@ -267,11 +271,10 @@ async function deleteTeacher(id) {
     var res = await fetch('/api/teachers/' + id, { method: 'DELETE' });
     var data = await res.json().catch(function(){ return {}; });
     if (!res.ok || data.error) alert(data.error || 'Failed to deactivate teacher.');
-    await loadLookups();
     loadTeachers();
 }
 
-loadLookups().then(loadTeachers);
+loadTeachers();
 setInterval(function() {
     if (document.getElementById('teacherModal').style.display !== 'flex') loadTeachers();
 }, 10000);
