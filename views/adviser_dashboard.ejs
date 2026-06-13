@@ -133,7 +133,7 @@
 
     <div class="ad-welcome">
         <div class="ad-welcome-left">
-            <h2><i class="fa-solid fa-chalkboard-user"></i> Good morning, <%= [teacher.firstname, teacher.middlename, teacher.lastname].filter(function(p){ return p && p.trim(); }).join(' ') || teacher.firstname %></h2>
+            <h2><i class="fa-solid fa-chalkboard-user"></i> Good morning, <%= [teacher.firstname, teacher.middlename && teacher.middlename.trim() ? teacher.middlename.trim().charAt(0).toUpperCase() + '.' : '', teacher.lastname].filter(function(p){ return p && p.trim(); }).join(' ') || teacher.firstname %></h2>
             <p><i class="fa-solid fa-calendar-day"></i> <span id="adDateLabel"></span></p>
         </div>
         <div class="ad-welcome-right">
@@ -255,7 +255,7 @@
     document.getElementById('adDateLabel').textContent = formatDateLabel(localDateString());
 
     var greetEl = document.querySelector('.ad-welcome-left h2');
-    var teacherFullName = '<%= [teacher.firstname, teacher.middlename, teacher.lastname].filter(function(p){ return p && p.trim(); }).join(" ") || teacher.firstname %>';
+    var teacherFullName = '<%= [teacher.firstname, teacher.middlename && teacher.middlename.trim() ? teacher.middlename.trim().charAt(0).toUpperCase() + "." : "", teacher.lastname].filter(function(p){ return p && p.trim(); }).join(" ") || teacher.firstname %>';
     if (greetEl) greetEl.innerHTML = '<i class="fa-solid fa-chalkboard-user"></i> ' + greetingFor() + ', ' + teacherFullName;
 
     dateInput.addEventListener('change', function() {
