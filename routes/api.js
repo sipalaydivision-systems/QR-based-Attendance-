@@ -1610,6 +1610,7 @@ router.get('/teachers', requireAuth, async (req, res) => {
             WHERE t.status != 'deleted'`;
         const params = [];
         if (schoolId) { query += ' AND t.school_id = ?'; params.push(schoolId); }
+        if (req.query.category) { query += ' AND t.category = ?'; params.push(req.query.category); }
         if (req.query.status) { query += ' AND t.status = ?'; params.push(req.query.status); }
         if (req.query.search) {
             query += ' AND (t.firstname LIKE ? OR t.lastname LIKE ? OR t.employee_id LIKE ? OR t.contact LIKE ? OR t.email LIKE ? OR sec.name LIKE ? OR gl.name LIKE ? OR s.name LIKE ?)';
@@ -1627,7 +1628,7 @@ router.get('/teachers', requireAuth, async (req, res) => {
 
 // POST /api/teachers
 router.post('/teachers', requireAuth, async (req, res) => {
-    const { employee_id, firstname, lastname, middlename, department, subject, contact, email, school_id, grade_level_id, section_id } = req.body;
+    const { employee_id, firstname, lastname, middlename, department, subject, contact, email, school_id, grade_level_id, section_id, category } = req.body;
     if (!firstname || !lastname || !school_id) {
         return res.status(400).json({ error: 'First name, last name, and school are required.' });
     }
@@ -1635,10 +1636,11 @@ router.post('/teachers', requireAuth, async (req, res) => {
         const assignment = await validateTeacherAssignment({ schoolId: school_id, gradeLevelId: grade_level_id, sectionId: section_id });
         if (assignment?.error) return res.status(400).json({ error: assignment.error });
         const qr_code = 'TCH-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);
+        const teacherCategory = category === 'shs_teacher' ? 'shs_teacher' : 'teacher';
         const [result] = await db.query(
-            `INSERT INTO teachers (employee_id, firstname, lastname, middlename, department, subject, contact, email, school_id, grade_level_id, section_id, qr_code, active_from, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [employee_id || null, firstname, lastname, middlename || null, department || null, subject || null, contact || null, email || null, school_id, grade_level_id || null, section_id || null, qr_code, null, 'inactive']
+            `INSERT INTO teachers (employee_id, firstname, lastname, middlename, department, subject, contact, email, school_id, grade_level_id, section_id, qr_code, active_from, status, category)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [employee_id || null, firstname, lastname, middlename || null, department || null, subject || null, contact || null, email || null, school_id, grade_level_id || null, section_id || null, qr_code, null, 'inactive', teacherCategory]
         );
         await syncTeacherAdviserAssignment({
             teacherId: result.insertId,
@@ -1658,7 +1660,7 @@ router.post('/teachers', requireAuth, async (req, res) => {
 
 // PUT /api/teachers/:id
 router.put('/teachers/:id', requireAuth, async (req, res) => {
-    const { employee_id, firstname, lastname, middlename, department, subject, contact, email, school_id, grade_level_id, section_id, status } = req.body;
+    const { employee_id, firstname, lastname, middlename, department, subject, contact, email, school_id, grade_level_id, section_id, category, status } = req.body;
     if (!firstname || !lastname || !school_id) {
         return res.status(400).json({ error: 'First name, last name, and school are required.' });
     }
@@ -1668,13 +1670,14 @@ router.put('/teachers/:id', requireAuth, async (req, res) => {
         const assignment = await validateTeacherAssignment({ teacherId: req.params.id, schoolId: school_id, gradeLevelId: grade_level_id, sectionId: section_id });
         if (assignment?.error) return res.status(400).json({ error: assignment.error });
         const validStatus = ['active', 'inactive', 'deleted'].includes(status) ? status : (existing.status || 'inactive');
+        const teacherCategory = category === 'shs_teacher' ? 'shs_teacher' : 'teacher';
         const fields = [
             'employee_id=?', 'firstname=?', 'lastname=?', 'middlename=?', 'department=?', 'subject=?',
-            'contact=?', 'email=?', 'school_id=?', 'grade_level_id=?', 'section_id=?', 'status=?'
+            'contact=?', 'email=?', 'school_id=?', 'grade_level_id=?', 'section_id=?', 'category=?', 'status=?'
         ];
         const params = [
             employee_id || null, firstname, lastname, middlename || null, department || null, subject || null,
-            contact || null, email || null, school_id, grade_level_id || null, section_id || null, validStatus
+            contact || null, email || null, school_id, grade_level_id || null, section_id || null, teacherCategory, validStatus
         ];
         if (validStatus === 'active') {
             fields.push('active_from = COALESCE(active_from, CURDATE())');

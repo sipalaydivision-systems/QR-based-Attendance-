@@ -22,6 +22,14 @@
         </select>
     </div>
     <div class="filter-item">
+        <label>Type</label>
+        <select id="filterCategory">
+            <option value="">All Types</option>
+            <option value="teacher">Teacher</option>
+            <option value="shs_teacher">SHS Teacher</option>
+        </select>
+    </div>
+    <div class="filter-item">
         <label>Status</label>
         <select id="filterStatus">
             <option value="">Active and Inactive</option>
@@ -47,6 +55,7 @@
             <thead>
                 <tr>
                     <th>Teacher</th>
+                    <th>Type</th>
                     <th>Employee ID</th>
                     <th>School</th>
                     <th>Assignment</th>
@@ -70,6 +79,7 @@
             <input type="hidden" id="teacherId">
             <div class="form-row">
                 <div class="form-group"><label>Employee ID</label><input type="text" id="teacherEmpId" placeholder="Employee or teacher ID"></div>
+                <div class="form-group"><label>Type</label><select id="teacherCategory"><option value="teacher">Teacher (Regular)</option><option value="shs_teacher">SHS Teacher</option></select></div>
                 <div class="form-group"><label>Status</label><select id="teacherStatus"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
             </div>
             <div class="form-row">
@@ -131,16 +141,23 @@ async function loadLookups() {
 
 async function loadTeachers() {
     var school = document.getElementById('filterSchool').value;
+    var category = document.getElementById('filterCategory').value;
     var status = document.getElementById('filterStatus').value;
     var search = document.getElementById('teacherSearch').value;
     var params = new URLSearchParams();
     if (school) params.append('school_id', school);
+    if (category) params.append('category', category);
     if (status) params.append('status', status);
     if (search) params.append('search', search);
     var res = await fetch('/api/teachers?' + params);
     allTeachers = await res.json();
     document.getElementById('teacherCount').textContent = allTeachers.length + ' teacher(s) found';
     renderTeachers();
+}
+
+function categoryBadge(cat) {
+    if (cat === 'shs_teacher') return '<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;background:#e0f2fe;color:#0c4a6e;">SHS</span>';
+    return '<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;background:#fffbeb;color:#b45309;">Regular</span>';
 }
 
 function renderTeachers() {
@@ -150,6 +167,7 @@ function renderTeachers() {
         var contact = [t.contact, t.email].filter(Boolean).map(esc).join('<br>') || '-';
         return '<tr' + (inactive ? ' class="row-inactive"' : '') + '>' +
             '<td><strong>' + esc(teacherName(t)) + '</strong><br><small style="color:var(--gray-500);">' + esc(t.subject || t.department || 'Teacher') + '</small></td>' +
+            '<td>' + categoryBadge(t.category) + '</td>' +
             '<td>' + esc(t.employee_id || '-') + '</td>' +
             '<td><span class="school-code">' + esc(t.school_name || '-') + '</span></td>' +
             '<td>' + assignment + '</td>' +
@@ -160,7 +178,7 @@ function renderTeachers() {
                 '<button class="action-btn delete" onclick="deleteTeacher(' + t.id + ')" title="Deactivate"><i class="fa-solid fa-user-slash"></i></button>' +
             '</div></td>' +
         '</tr>';
-    }).join('') || '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon"><i class="fa-solid fa-chalkboard-user" style="font-size:2.5rem;color:var(--gray-300);"></i></div><h4>No teachers found</h4><p>Use Add Teacher or Import Teachers to create adviser records.</p></div></td></tr>';
+    }).join('') || '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon"><i class="fa-solid fa-chalkboard-user" style="font-size:2.5rem;color:var(--gray-300);"></i></div><h4>No teachers found</h4><p>Use Add Teacher or Import Teachers to create adviser records.</p></div></td></tr>';
 }
 
 function loadTeacherGrades(selectedId) {
@@ -186,6 +204,7 @@ function openTeacherModal() {
     document.getElementById('teacherModalTitle').textContent = 'Add Teacher';
     document.getElementById('teacherForm').reset();
     document.getElementById('teacherId').value = '';
+    document.getElementById('teacherCategory').value = 'teacher';
     document.getElementById('teacherStatus').value = 'active';
     document.getElementById('teacherMsg').innerHTML = '';
     loadTeacherGrades();
@@ -209,6 +228,7 @@ function editTeacherById(id) {
     document.getElementById('teacherDepartment').value = t.department || '';
     document.getElementById('teacherSubject').value = t.subject || '';
     document.getElementById('teacherSchool').value = t.school_id || '';
+    document.getElementById('teacherCategory').value = t.category || 'teacher';
     document.getElementById('teacherStatus').value = t.status || 'active';
     document.getElementById('teacherMsg').innerHTML = '';
     loadTeacherGrades(t.grade_level_id || '');
@@ -231,6 +251,7 @@ async function saveTeacher(e) {
         school_id: document.getElementById('teacherSchool').value,
         grade_level_id: document.getElementById('teacherGrade').value || null,
         section_id: document.getElementById('teacherSection').value || null,
+        category: document.getElementById('teacherCategory').value || 'teacher',
         status: document.getElementById('teacherStatus').value
     };
     var url = id ? '/api/teachers/' + id : '/api/teachers';
