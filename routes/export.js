@@ -219,23 +219,28 @@ router.get('/template/:type', async (req, res) => {
         wb.creator = 'Edutrack';
 
         if (type === 'student') {
-            // Load original static file — Sex=C, Grade=E (confirmed from template structure)
+            // Load original static file — Grade list is in Dropdowns sheet col B rows 1-12
             const filePath = path.join(__dirname, '..', 'public', 'templates', 'student_import_template.xlsx');
             await wb.xlsx.readFile(filePath);
-            const ws = wb.worksheets[0];
-            // Override Grade dropdown (E) to only show Grade 1-10 (not 11-12 which are SHS)
-            addDropdown(ws, 'C', START, END, '"Male,Female"', 'Select Male or Female');
-            addDropdown(ws, 'E', START, END, '"Grade 1,Grade 2,Grade 3,Grade 4,Grade 5,Grade 6,Grade 7,Grade 8,Grade 9,Grade 10"', 'Select Grade 1 to 10');
+            const drops = wb.getWorksheet('Dropdowns');
+            if (drops) {
+                // Keep only Grade 1-10: clear rows 11 and 12 in column B
+                drops.getCell('B11').value = null;
+                drops.getCell('B12').value = null;
+            }
             res.setHeader('Content-Disposition', 'attachment; filename="student_import_template.xlsx"');
 
         } else if (type === 'shs_student') {
-            // Load original static file — Sex=C, Grade=E (confirmed from template structure)
+            // Load original static file — Grade list is in Dropdowns sheet col B rows 1-12
             const filePath = path.join(__dirname, '..', 'public', 'templates', 'shs_student_import_template.xlsx');
             await wb.xlsx.readFile(filePath);
-            const ws = wb.worksheets[0];
-            // Override Grade dropdown (E) to only show 11 and 12
-            addDropdown(ws, 'C', START, END, '"Male,Female"', 'Select Male or Female');
-            addDropdown(ws, 'E', START, END, '"11,12"', 'Select Grade 11 or Grade 12');
+            const drops = wb.getWorksheet('Dropdowns');
+            if (drops) {
+                // Set only 11 and 12 in col B, clear everything else
+                drops.getCell('B1').value = 11;
+                drops.getCell('B2').value = 12;
+                for (let r = 3; r <= 12; r++) drops.getCell(`B${r}`).value = null;
+            }
             res.setHeader('Content-Disposition', 'attachment; filename="shs_student_import_template.xlsx"');
 
         } else if (type === 'teacher') {
