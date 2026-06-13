@@ -219,28 +219,32 @@ router.get('/template/:type', async (req, res) => {
         wb.creator = 'Edutrack';
 
         if (type === 'student') {
-            // Load original static file — Grade list is in Dropdowns sheet col B rows 1-12
             const filePath = path.join(__dirname, '..', 'public', 'templates', 'student_import_template.xlsx');
             await wb.xlsx.readFile(filePath);
+            const ws = wb.worksheets[0];
             const drops = wb.getWorksheet('Dropdowns');
             if (drops) {
-                // Keep only Grade 1-10: clear rows 11 and 12 in column B
+                // Keep Grade 1-10 only — clear 11 and 12
                 drops.getCell('B11').value = null;
                 drops.getCell('B12').value = null;
             }
+            // Narrow the validation range to $B$1:$B$10 so no blanks appear
+            addDropdown(ws, 'E', START, END, "Dropdowns!$B$1:$B$10", 'Select Grade 1 to 10');
             res.setHeader('Content-Disposition', 'attachment; filename="student_import_template.xlsx"');
 
         } else if (type === 'shs_student') {
-            // Load original static file — Grade list is in Dropdowns sheet col B rows 1-12
             const filePath = path.join(__dirname, '..', 'public', 'templates', 'shs_student_import_template.xlsx');
             await wb.xlsx.readFile(filePath);
+            const ws = wb.worksheets[0];
             const drops = wb.getWorksheet('Dropdowns');
             if (drops) {
-                // Set only 11 and 12 in col B, clear everything else
+                // Replace col B with only 11 and 12
                 drops.getCell('B1').value = 11;
                 drops.getCell('B2').value = 12;
                 for (let r = 3; r <= 12; r++) drops.getCell(`B${r}`).value = null;
             }
+            // Narrow the validation range to $B$1:$B$2 — exactly 11 and 12, no blanks
+            addDropdown(ws, 'E', START, END, "Dropdowns!$B$1:$B$2", 'Select Grade 11 or Grade 12');
             res.setHeader('Content-Disposition', 'attachment; filename="shs_student_import_template.xlsx"');
 
         } else if (type === 'teacher') {
