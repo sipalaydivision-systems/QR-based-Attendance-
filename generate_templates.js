@@ -123,6 +123,31 @@ async function generateSHS() {
     console.log('DONE: shs_student_import_template.xlsx');
 }
 
+async function generateSHSTeacher() {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Template');
+    const dd = workbook.addWorksheet('Dropdowns', { state: 'veryHidden' });
+    addDropdowns(dd);
+
+    sheet.columns = [{ width: 22 }, { width: 34 }, { width: 38 }, { width: 18 }, { width: 24 }, { width: 28 }, { width: 22 }, { width: 30 }];
+    const row = sheet.getRow(1);
+    setHeaderCell(row.getCell(1), 'Employee ID', '(e.g. EMP-001)');
+    setHeaderCell(row.getCell(2), 'Teacher/Adviser Name', '(Last Name, First Name, Middle Name)');
+    setHeaderCell(row.getCell(3), 'School', '((Select from dropdown))');
+    setHeaderCell(row.getCell(4), 'Grade', '(11 or 12)');
+    setHeaderCell(row.getCell(5), 'Track/Strand', '((Select from dropdown))');
+    setHeaderCell(row.getCell(6), 'Section', '(Capital first letter (e.g. Rizal))');
+    setHeaderCell(row.getCell(7), 'Contact Number', '(09XXXXXXXXX)');
+    setHeaderCell(row.getCell(8), 'Email', '(optional)');
+    row.height = 40;
+
+    applyValidation(sheet, 'C', 'Dropdowns!$A$1:$A$' + schoolList.length, 'Select School', 101);
+    applyValidation(sheet, 'E', 'Dropdowns!$C$1:$C$' + trackList.length, 'Select Track/Strand', 101);
+
+    await workbook.xlsx.writeFile(path.join(__dirname, 'public/templates/shs_teacher_import_template.xlsx'));
+    console.log('DONE: shs_teacher_import_template.xlsx');
+}
+
 async function generateTeacher() {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Template');
@@ -151,5 +176,6 @@ async function generateTeacher() {
     await generateStudent();
     await generateSHS();
     await generateTeacher();
+    await generateSHSTeacher();
     console.log('ALL TEMPLATES GENERATED!');
 })();

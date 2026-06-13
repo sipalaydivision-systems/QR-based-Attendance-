@@ -1192,7 +1192,7 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
         for (const { row, rowNum: rn } of rows) {
             let entry = { row: rn, status: 'ready', error: null };
 
-            if (category === 'teacher') {
+            if (category === 'teacher' || category === 'shs_teacher') {
                 const empId = getRowValue(row, ['Employee ID', 'Teacher ID', 'Teacher/Adviser ID', 'employee_id']) || null;
                 const rawName = getRowValue(row, ['Teacher/Adviser Name', 'Adviser Name', 'Teacher Name', 'Name', 'name']);
                 const { firstname, lastname, middlename } = parseName(rawName);
@@ -1207,8 +1207,17 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
                 if (gradeErr) { entry.status = 'error'; entry.error = gradeErr; }
                 if (!gradeStr) { entry.status = 'error'; entry.error = 'Grade Level is required for adviser assignment'; }
                 const grade = gradeStr && school.id ? await findGradeByName(gradeStr, school.id) : null;
-                const sectionName = getRowValue(row, ['Section Name', 'Section', 'section']);
-                if (!sectionName) { entry.status = 'error'; entry.error = 'Section Name is required for adviser assignment'; }
+
+                const trackStrand = category === 'shs_teacher'
+                    ? String(getRowValue(row, ['Track/Strand', 'Track', 'Strand']) || '').trim()
+                    : '';
+                if (category === 'shs_teacher' && !trackStrand) { entry.status = 'error'; entry.error = 'Track/Strand is required for SHS teacher'; }
+
+                const rawSection = String(getRowValue(row, ['Section Name', 'Section', 'section']) || '').trim();
+                if (!rawSection) { entry.status = 'error'; entry.error = 'Section Name is required for adviser assignment'; }
+                const sectionName = (category === 'shs_teacher' && trackStrand && rawSection)
+                    ? trackStrand + ' - ' + rawSection
+                    : rawSection;
                 let section = null;
                 if (sectionName && school.id && grade) {
                     section = await findSectionByName(sectionName, school.id, grade.id);
@@ -1230,8 +1239,9 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
                 if (school.willCreate) entry.school += ' (new)';
                 entry.grade = grade ? grade.name : formatGradeLabel(gradeStr);
                 if (gradeStr && !grade) entry.grade += ' (new)';
-                entry.section = section ? section.name : String(sectionName || '').trim();
-                if (sectionName && !section) entry.section += ' (new)';
+                entry.track = trackStrand;
+                entry.section = section ? section.name : sectionName;
+                if (rawSection && !section) entry.section += ' (new)';
                 entry.contact = email || contact;
                 entry.qr_code = qr_code;
                 if (school.error) { entry.status = 'error'; entry.error = school.error; }
@@ -1439,8 +1449,8 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
 
         for (const { row, rowNum: rn } of rows) {
             try {
-                if (category === 'teacher') {
-                    // New format: Employee ID, Teacher/Adviser Name, School, Grade, Section, Contact Number/Email
+                if (category === 'teacher' || category === 'shs_teacher') {
+                    // Format: Employee ID, Teacher/Adviser Name, School, Grade, [Track/Strand,] Section, Contact, Email
                     const empId = getRowValue(row, ['Employee ID', 'Teacher ID', 'Teacher/Adviser ID', 'employee_id']) || null;
                     const rawName = getRowValue(row, ['Teacher/Adviser Name', 'Adviser Name', 'Teacher Name', 'Name', 'name']);
                     const { firstname, lastname, middlename } = parseName(rawName);
@@ -1470,8 +1480,18 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                     const gradeErr = validateGradeForSchool(gradeStr, schoolName);
                     if (gradeErr) { errors.push({ row: rn, message: gradeErr }); continue; }
                     let gradeId = await resolveGrade(gradeStr, schoolId);
-                    const sectionName = getRowValue(row, ['Section Name', 'Section', 'section']);
-                    if (!sectionName) { errors.push({ row: rn, message: 'Section Name is required for adviser assignment.' }); continue; }
+
+                    // SHS teacher: require Track/Strand and compose section name
+                    const trackStrand = category === 'shs_teacher'
+                        ? String(getRowValue(row, ['Track/Strand', 'Track', 'Strand']) || '').trim()
+                        : '';
+                    if (category === 'shs_teacher' && !trackStrand) { errors.push({ row: rn, message: 'Track/Strand is required for SHS teacher.' }); continue; }
+
+                    const rawSection = String(getRowValue(row, ['Section Name', 'Section', 'section']) || '').trim();
+                    if (!rawSection) { errors.push({ row: rn, message: 'Section Name is required for adviser assignment.' }); continue; }
+                    const sectionName = (category === 'shs_teacher' && trackStrand && rawSection)
+                        ? trackStrand + ' - ' + rawSection
+                        : rawSection;
                     const sectionId = await resolveSection(sectionName, schoolId, gradeId, { allowSchoolWideFallback: true });
                     const [[sectionMeta]] = await db.query(
                         'SELECT grade_level_id FROM sections WHERE id = ? LIMIT 1',

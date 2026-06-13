@@ -13,6 +13,7 @@
         <button class="tab-btn active" onclick="switchTab('students')"><i class="fa-solid fa-user-graduate"></i> Students</button>
         <button class="tab-btn" onclick="switchTab('shs_students')"><i class="fa-solid fa-graduation-cap"></i> SHS Students</button>
         <button class="tab-btn" onclick="switchTab('teachers')"><i class="fa-solid fa-chalkboard-user"></i> Teachers</button>
+        <button class="tab-btn" onclick="switchTab('shs_teachers')"><i class="fa-solid fa-person-chalkboard"></i> SHS Teachers</button>
     </div>
 
     <div style="display:grid; grid-template-columns:1fr 350px; gap:1.5rem;">
@@ -99,6 +100,20 @@
                 </ul>
                 <a href="/export/template/teacher" class="btn btn-outline btn-block" style="margin-top:0.75rem;">&#x2B07; Download Teacher Template (.xlsx)</a>
             </div>
+            <div class="info-card" id="infoShsTeachers" style="display:none;">
+                <h4><i class="fa-solid fa-file-lines"></i> SHS Teacher File Format</h4>
+                <div class="code-preview">Employee ID, Teacher/Adviser Name, School, Grade, Track/Strand, Section, Contact Number, Email</div>
+                <ul class="info-list">
+                    <li><span class="dot" style="background:var(--success);"></span> First row is treated as header (skipped)</li>
+                    <li><span class="dot" style="background:var(--primary);"></span> Grade must be 11 or 12</li>
+                    <li><span class="dot" style="background:var(--primary);"></span> Track/Strand is required (e.g. STEM, ABM, HUMSS)</li>
+                    <li><span class="dot" style="background:var(--primary);"></span> Section is stored as "STRAND - Section" (e.g. STEM - Rizal)</li>
+                    <li><span class="dot" style="background:var(--primary);"></span> Duplicate Employee IDs update existing records</li>
+                    <li><span class="dot" style="background:var(--primary);"></span> QR codes auto-generated as TCH-{Employee ID}</li>
+                    <li><span class="dot" style="background:var(--gray-400);"></span> Contact Number and Email are optional</li>
+                </ul>
+                <a href="/export/template/shs_teacher" class="btn btn-outline btn-block" style="margin-top:0.75rem;">&#x2B07; Download SHS Teacher Template (.xlsx)</a>
+            </div>
         </div>
     </div>
 </div>
@@ -146,17 +161,24 @@ var savedFormData = null;
 
 function switchTab(cat) {
     currentCategory = cat;
+    var tabOrder = ['students', 'shs_students', 'teachers', 'shs_teachers'];
     document.querySelectorAll('.tab-btn').forEach(function(b, i) {
-        b.classList.toggle('active', (i===0 && cat==='students') || (i===1 && cat==='shs_students') || (i===2 && cat==='teachers'));
+        b.classList.toggle('active', tabOrder[i] === cat);
     });
     document.getElementById('infoStudents').style.display = cat==='students' ? 'block' : 'none';
     document.getElementById('infoShs').style.display = cat==='shs_students' ? 'block' : 'none';
     document.getElementById('infoTeachers').style.display = cat==='teachers' ? 'block' : 'none';
-    var showGrade = cat !== 'teachers';
+    document.getElementById('infoShsTeachers').style.display = cat==='shs_teachers' ? 'block' : 'none';
+    var showGrade = cat === 'students' || cat === 'shs_students';
     document.getElementById('gradeField').style.display = showGrade ? 'block' : 'none';
     document.getElementById('sectionField').style.display = showGrade ? 'block' : 'none';
     var icon = '<i class="fa-solid fa-file-import"></i> ';
-    var titles = { students: icon + 'Import Students', shs_students: icon + 'Import SHS Students', teachers: icon + 'Import Teachers' };
+    var titles = {
+        students: icon + 'Import Students',
+        shs_students: icon + 'Import SHS Students',
+        teachers: icon + 'Import Teachers',
+        shs_teachers: icon + 'Import SHS Teachers'
+    };
     document.getElementById('importTitle').innerHTML = titles[cat];
 }
 
@@ -176,7 +198,8 @@ async function doPreview(e) {
 
     var formData = new FormData();
     formData.append('file', file);
-    var cat = currentCategory === 'students' ? 'student' : currentCategory === 'shs_students' ? 'shs_student' : 'teacher';
+    var catMap = { students: 'student', shs_students: 'shs_student', teachers: 'teacher', shs_teachers: 'shs_teacher' };
+    var cat = catMap[currentCategory] || 'student';
     formData.append('category', cat);
     formData.append('school_id', document.getElementById('importSchool').value);
     formData.append('active_from', document.getElementById('importDate').value);
@@ -211,8 +234,9 @@ function showPreview(data) {
     document.getElementById('previewStep').style.display = 'block';
 
     var isTeacher = data.category === 'teacher';
+    var isShsTeacher = data.category === 'shs_teacher';
     var isShs = data.category === 'shs_student';
-    var catLabel = isTeacher ? 'Teachers' : isShs ? 'SHS Students' : 'Students';
+    var catLabel = isShsTeacher ? 'SHS Teachers' : isTeacher ? 'Teachers' : isShs ? 'SHS Students' : 'Students';
     document.getElementById('previewTitle').innerHTML = 'Preview Import Data &mdash; ' + catLabel;
 
     // Tags
@@ -221,7 +245,7 @@ function showPreview(data) {
     var dateVal = document.getElementById('importDate').value || localDateString();
     var tags = '';
     tags += '<span class="preview-tag">School: <strong>' + schoolText + '</strong></span>';
-    if (!isTeacher) {
+    if (!isTeacher && !isShsTeacher) {
         tags += '<span class="preview-tag">Grade: <strong>From file</strong></span>';
         tags += '<span class="preview-tag">Section: <strong>From file</strong></span>';
     }
@@ -232,7 +256,9 @@ function showPreview(data) {
     // Table header
     var headHtml = '<tr>';
     headHtml += '<th>ROW</th>';
-    if (isTeacher) {
+    if (isShsTeacher) {
+        headHtml += '<th>EMP ID</th><th>NAME</th><th>SCHOOL</th><th>GRADE</th><th>TRACK/STRAND</th><th>SECTION</th><th>CONTACT</th><th>QR CODE</th><th>STATUS</th>';
+    } else if (isTeacher) {
         headHtml += '<th>EMP ID</th><th>NAME</th><th>SCHOOL</th><th>GRADE</th><th>SECTION</th><th>CONTACT</th><th>QR CODE</th><th>STATUS</th>';
     } else if (isShs) {
         headHtml += '<th>LRN</th><th>NAME</th><th>SEX</th><th>SCHOOL</th><th>GRADE</th><th>TRACK/STRAND</th><th>SECTION</th><th>GUARDIAN</th><th>QR CODE</th><th>STATUS</th>';
@@ -253,7 +279,16 @@ function showPreview(data) {
 
         bodyHtml += '<tr' + (p.status === 'error' ? ' style="background:#fff5f5;"' : '') + '>';
         bodyHtml += '<td>' + p.row + '</td>';
-        if (isTeacher) {
+        if (isShsTeacher) {
+            bodyHtml += '<td>' + (p.empId || '') + '</td>';
+            bodyHtml += '<td>' + (p.name || '') + '</td>';
+            bodyHtml += '<td>' + (p.school || '') + '</td>';
+            bodyHtml += '<td>' + (p.grade || '') + '</td>';
+            bodyHtml += '<td>' + (p.track || '') + '</td>';
+            bodyHtml += '<td>' + (p.section || '') + '</td>';
+            bodyHtml += '<td>' + (p.contact || '') + '</td>';
+            bodyHtml += '<td style="color:var(--primary);font-size:0.8125rem;">' + (p.qr_code || '') + '</td>';
+        } else if (isTeacher) {
             bodyHtml += '<td>' + (p.empId || '') + '</td>';
             bodyHtml += '<td>' + (p.name || '') + '</td>';
             bodyHtml += '<td>' + (p.school || '') + '</td>';

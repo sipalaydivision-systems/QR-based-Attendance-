@@ -166,7 +166,8 @@ router.get('/template/:type', (req, res) => {
     const fileMap = {
         student: 'student_import_template.xlsx',
         shs_student: 'shs_student_import_template.xlsx',
-        teacher: 'teacher_import_template.xlsx'
+        teacher: 'teacher_import_template.xlsx',
+        shs_teacher: 'shs_teacher_import_template.xlsx'
     };
     const filename = fileMap[type];
     if (!filename) {
