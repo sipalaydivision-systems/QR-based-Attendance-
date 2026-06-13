@@ -163,7 +163,7 @@ async function generateSHSTeacher() {
     setHeaderCell(row.getCell(5), 'Track/Strand', '((Select from dropdown))');
     setHeaderCell(row.getCell(6), 'Section', '(Capital first letter (e.g. Rizal))');
     setHeaderCell(row.getCell(7), 'Contact Number', '(09XXXXXXXXX)');
-    setHeaderCell(row.getCell(8), 'Email', '(optional)');
+    setHeaderCell(row.getCell(8), 'Email/DepEd Email', '(required)');
     row.height = 40;
     formatTextColumns(sheet, ['A', 'G']);
 
@@ -190,7 +190,7 @@ async function generateTeacher() {
     setHeaderCell(row.getCell(4), 'Grade', '((Select from dropdown))');
     setHeaderCell(row.getCell(5), 'Section', '(Capital first letter (e.g. Banana))');
     setHeaderCell(row.getCell(6), 'Contact Number', '(09XXXXXXXXX)');
-    setHeaderCell(row.getCell(7), 'Email', '(optional)');
+    setHeaderCell(row.getCell(7), 'Email/DepEd Email', '(required)');
     row.height = 40;
     formatTextColumns(sheet, ['A', 'F']);
 

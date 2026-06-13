@@ -1273,7 +1273,8 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
                     if (!section) section = await findSectionByNameInSchool(sectionName, school.id);
                 }
                 const contact = getRowValue(row, ['Contact Number', 'Contact', 'Phone', 'Mobile', 'contact_number']);
-                const email = getRowValue(row, ['Email', 'Email Address', 'email']);
+                const email = getRowValue(row, ['Email/DepEd Email', 'Email/Deped Email', 'DepEd Email', 'Deped Email', 'Email', 'Email Address', 'email']);
+                if (!email) { entry.status = 'error'; entry.error = 'Email/DepEd Email is required'; }
                 const qr_code = empId ? 'TCH-' + empId : 'TCH-auto';
 
                 // Check if existing
@@ -1549,7 +1550,8 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                         gradeId = sectionMeta.grade_level_id;
                     }
                     const contact = getRowValue(row, ['Contact Number', 'Contact', 'Phone', 'Mobile', 'contact_number']) || null;
-                    const email = getRowValue(row, ['Email', 'Email Address', 'email']) || null;
+                    const email = getRowValue(row, ['Email/DepEd Email', 'Email/Deped Email', 'DepEd Email', 'Deped Email', 'Email', 'Email Address', 'email']) || null;
+                    if (!email) { errors.push({ row: rn, message: 'Email/DepEd Email is required.' }); continue; }
                     const adviserName = displayName(fn, ln, mn);
 
                     const existing = await findTeacherMatch(empId, fn, ln, mn, schoolId);
