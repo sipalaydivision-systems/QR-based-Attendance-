@@ -229,7 +229,7 @@ router.get('/template/:type', async (req, res) => {
                 drops.getCell('B12').value = null;
             }
             // Narrow the validation range to $B$1:$B$10 so no blanks appear
-            addDropdown(ws, 'E', START, END, "Dropdowns!$B$1:$B$10", 'Select Grade 1 to 10');
+            addDropdown(ws, 'E', 2, END, "Dropdowns!$B$1:$B$10", 'Select Grade 1 to 10');
             res.setHeader('Content-Disposition', 'attachment; filename="student_import_template.xlsx"');
 
         } else if (type === 'shs_student') {
@@ -244,7 +244,7 @@ router.get('/template/:type', async (req, res) => {
                 for (let r = 3; r <= 12; r++) drops.getCell(`B${r}`).value = null;
             }
             // Narrow the validation range to $B$1:$B$2 — exactly 11 and 12, no blanks
-            addDropdown(ws, 'E', START, END, "Dropdowns!$B$1:$B$2", 'Select Grade 11 or Grade 12');
+            addDropdown(ws, 'E', 2, END, "Dropdowns!$B$1:$B$2", 'Select Grade 11 or Grade 12');
             res.setHeader('Content-Disposition', 'attachment; filename="shs_student_import_template.xlsx"');
 
         } else if (type === 'teacher') {

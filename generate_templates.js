@@ -21,6 +21,8 @@ const schoolList = [
     'Tugas Integrated School','Vista Alegre Integrated School'
 ];
 const gradeList = ['1','2','3','4','5','6','7','8','9','10','11','12'];
+const studentGradeList = ['1','2','3','4','5','6','7','8','9','10'];
+const shsGradeList = ['11','12'];
 const gradeElementary = ['1','2','3','4','5','6'];
 const gradeHighSchool = ['7','8','9','10','11','12'];
 const trackList = ['STEM','ABM','HUMSS','GAS','TVL-HE','TVL-ICT','TVL-IA','TVL-AFA','Sports','Arts & Design'];
@@ -61,6 +63,15 @@ function addDropdowns(choicesSheet) {
     sexList.forEach((s, idx) => { choicesSheet.getCell('H' + (idx + 1)).value = s; });
 }
 
+function replaceDropdownColumn(choicesSheet, col, values, clearRows = gradeList.length) {
+    for (let r = 1; r <= clearRows; r++) {
+        choicesSheet.getCell(col + r).value = null;
+    }
+    values.forEach((value, idx) => {
+        choicesSheet.getCell(col + (idx + 1)).value = value;
+    });
+}
+
 function applyValidation(sheet, col, range, title, rows) {
     for (let r = 2; r <= rows; r++) {
         sheet.getCell(col + r).dataValidation = {
@@ -76,6 +87,7 @@ async function generateStudent() {
     const sheet = workbook.addWorksheet('Template');
     const dd = workbook.addWorksheet('Dropdowns', { state: 'veryHidden' });
     addDropdowns(dd);
+    replaceDropdownColumn(dd, 'B', studentGradeList);
 
     sheet.columns = [{ width: 22 }, { width: 32 }, { width: 14 }, { width: 38 }, { width: 18 }, { width: 28 }, { width: 22 }];
     const row = sheet.getRow(1);
@@ -90,7 +102,7 @@ async function generateStudent() {
 
     applyValidation(sheet, 'C', 'Dropdowns!$H$1:$H$' + sexList.length, 'Select Sex', 101);
     applyValidation(sheet, 'D', 'Dropdowns!$A$1:$A$' + schoolList.length, 'Select School', 101);
-    applyValidation(sheet, 'E', 'Dropdowns!$B$1:$B$' + gradeList.length, 'Select Grade', 101);
+    applyValidation(sheet, 'E', 'Dropdowns!$B$1:$B$' + studentGradeList.length, 'Select Grade', 101);
 
     await workbook.xlsx.writeFile(path.join(__dirname, 'public/templates/student_import_template.xlsx'));
     console.log('DONE: student_import_template.xlsx');
@@ -101,6 +113,7 @@ async function generateSHS() {
     const sheet = workbook.addWorksheet('Template');
     const dd = workbook.addWorksheet('Dropdowns', { state: 'veryHidden' });
     addDropdowns(dd);
+    replaceDropdownColumn(dd, 'B', shsGradeList);
 
     sheet.columns = [{ width: 22 }, { width: 32 }, { width: 14 }, { width: 38 }, { width: 18 }, { width: 24 }, { width: 28 }, { width: 22 }];
     const row = sheet.getRow(1);
@@ -116,7 +129,7 @@ async function generateSHS() {
 
     applyValidation(sheet, 'C', 'Dropdowns!$H$1:$H$' + sexList.length, 'Select Sex', 101);
     applyValidation(sheet, 'D', 'Dropdowns!$A$1:$A$' + schoolList.length, 'Select School', 101);
-    applyValidation(sheet, 'E', 'Dropdowns!$B$1:$B$' + gradeList.length, 'Select Grade', 101);
+    applyValidation(sheet, 'E', 'Dropdowns!$B$1:$B$' + shsGradeList.length, 'Select Grade', 101);
     applyValidation(sheet, 'F', 'Dropdowns!$C$1:$C$' + trackList.length, 'Select Track', 101);
 
     await workbook.xlsx.writeFile(path.join(__dirname, 'public/templates/shs_student_import_template.xlsx'));
