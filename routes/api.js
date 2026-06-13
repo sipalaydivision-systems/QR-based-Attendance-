@@ -1602,7 +1602,11 @@ router.get('/teachers', requireAuth, async (req, res) => {
     try {
         let schoolId = applySchoolFilter(req);
         if (!schoolId && req.query.school_id) schoolId = parseInt(req.query.school_id, 10);
-        let query = `SELECT t.*, s.name as school_name, gl.name as grade_name, sec.name as section_name
+        let query = `SELECT t.id, t.employee_id, t.firstname, t.lastname, t.middlename, t.department, t.subject,
+                t.contact, t.email, t.school_id, t.grade_level_id, t.section_id, t.qr_code,
+                t.active_from, t.status, t.category, t.created_at, t.updated_at,
+                IF(t.password IS NOT NULL AND t.password != '', 1, 0) as has_password,
+                s.name as school_name, gl.name as grade_name, sec.name as section_name
             FROM teachers t
             LEFT JOIN schools s ON t.school_id = s.id
             LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
@@ -1660,9 +1664,15 @@ router.post('/teachers', requireAuth, async (req, res) => {
 
 // PUT /api/teachers/:id
 router.put('/teachers/:id', requireAuth, async (req, res) => {
-    const { employee_id, firstname, lastname, middlename, department, subject, contact, email, school_id, grade_level_id, section_id, category, status } = req.body;
+    const { employee_id, firstname, lastname, middlename, department, subject, contact, email, school_id, grade_level_id, section_id, category, status, new_password, confirm_password } = req.body;
     if (!firstname || !lastname || !school_id) {
         return res.status(400).json({ error: 'First name, last name, and school are required.' });
+    }
+    if (new_password && new_password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    }
+    if (new_password && new_password !== confirm_password) {
+        return res.status(400).json({ error: 'Passwords do not match.' });
     }
     try {
         const [[existing]] = await db.query('SELECT id, section_id, status FROM teachers WHERE id = ? AND status != ?', [req.params.id, 'deleted']);
@@ -1679,6 +1689,11 @@ router.put('/teachers/:id', requireAuth, async (req, res) => {
             employee_id || null, firstname, lastname, middlename || null, department || null, subject || null,
             contact || null, email || null, school_id, grade_level_id || null, section_id || null, teacherCategory, validStatus
         ];
+        if (new_password) {
+            const hashed = await bcrypt.hash(new_password, 10);
+            fields.push('password=?');
+            params.push(hashed);
+        }
         if (validStatus === 'active') {
             fields.push('active_from = COALESCE(active_from, CURDATE())');
         } else if (validStatus === 'inactive') {
