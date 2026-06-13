@@ -141,6 +141,7 @@ async function generateSHSTeacher() {
     const sheet = workbook.addWorksheet('Template');
     const dd = workbook.addWorksheet('Dropdowns', { state: 'veryHidden' });
     addDropdowns(dd);
+    replaceDropdownColumn(dd, 'B', shsGradeList);
 
     sheet.columns = [{ width: 22 }, { width: 34 }, { width: 38 }, { width: 18 }, { width: 24 }, { width: 28 }, { width: 22 }, { width: 30 }];
     const row = sheet.getRow(1);
@@ -155,6 +156,7 @@ async function generateSHSTeacher() {
     row.height = 40;
 
     applyValidation(sheet, 'C', 'Dropdowns!$A$1:$A$' + schoolList.length, 'Select School', 101);
+    applyValidation(sheet, 'D', 'Dropdowns!$B$1:$B$' + shsGradeList.length, 'Select Grade', 101);
     applyValidation(sheet, 'E', 'Dropdowns!$C$1:$C$' + trackList.length, 'Select Track/Strand', 101);
 
     await workbook.xlsx.writeFile(path.join(__dirname, 'public/templates/shs_teacher_import_template.xlsx'));
@@ -166,6 +168,7 @@ async function generateTeacher() {
     const sheet = workbook.addWorksheet('Template');
     const dd = workbook.addWorksheet('Dropdowns', { state: 'veryHidden' });
     addDropdowns(dd);
+    replaceDropdownColumn(dd, 'B', studentGradeList);
 
     sheet.columns = [{ width: 22 }, { width: 34 }, { width: 38 }, { width: 18 }, { width: 28 }, { width: 22 }, { width: 30 }];
     const row = sheet.getRow(1);
@@ -179,7 +182,7 @@ async function generateTeacher() {
     row.height = 40;
 
     applyValidation(sheet, 'C', 'Dropdowns!$A$1:$A$' + schoolList.length, 'Select School', 101);
-    applyValidation(sheet, 'D', 'Dropdowns!$B$1:$B$' + gradeList.length, 'Select Grade', 101);
+    applyValidation(sheet, 'D', 'Dropdowns!$B$1:$B$' + studentGradeList.length, 'Select Grade', 101);
 
     await workbook.xlsx.writeFile(path.join(__dirname, 'public/templates/teacher_import_template.xlsx'));
     console.log('DONE: teacher_import_template.xlsx');

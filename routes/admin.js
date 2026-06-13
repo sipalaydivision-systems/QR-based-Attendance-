@@ -56,6 +56,23 @@ function normalizeSchoolMeaningKey(value) {
         .join(' ');
 }
 
+function detectSchoolLevel(value) {
+    const key = ` ${normalizeSchoolKey(value)} `;
+    if (!key.trim()) return '';
+    if (/\bintegrated\b/.test(key)) return 'integrated';
+    const isHighSchool = /\bnational high school\b|\bhigh school\b|\bjunior high\b|\bsenior high\b|\bfarm school\b|\bnhs\b/.test(key);
+    const isElementary = /\belementary\b|\bprimary\b|\bes\b/.test(key);
+    if (isHighSchool && !isElementary) return 'high';
+    if (isElementary && !isHighSchool) return 'elementary';
+    return '';
+}
+
+function schoolLevelCompatible(targetLevel, schoolLevel) {
+    if (!targetLevel || !schoolLevel) return true;
+    if (targetLevel === 'integrated' || schoolLevel === 'integrated') return true;
+    return targetLevel === schoolLevel;
+}
+
 function normalizeLookupKey(value) {
     return String(value || '')
         .toLowerCase()
@@ -70,11 +87,34 @@ function normalizeGradeKey(value) {
     return numberMatch ? `grade ${parseInt(numberMatch[0], 10)}` : raw;
 }
 
+function parseGradeNumber(value) {
+    const match = normalizeGradeKey(value).match(/\bgrade\s+(\d+)\b/);
+    return match ? parseInt(match[1], 10) : NaN;
+}
+
 function formatGradeLabel(value) {
     const key = normalizeGradeKey(value);
     const numberMatch = key.match(/^grade\s+(\d+)$/);
     if (numberMatch) return `Grade ${parseInt(numberMatch[1], 10)}`;
     return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+function validateGradeForImportCategory(gradeStr, category) {
+    if (!gradeStr) return null;
+    const gradeNumber = parseGradeNumber(gradeStr);
+    if (!Number.isFinite(gradeNumber)) return null;
+    const label = formatGradeLabel(gradeStr);
+    if (category === 'shs_student' || category === 'shs_teacher') {
+        if (gradeNumber < 11 || gradeNumber > 12) {
+            return `${label} is not valid for SHS import. Use the SHS template with Grades 11-12 only.`;
+        }
+    }
+    if (category === 'student' || category === 'teacher') {
+        if (gradeNumber < 1 || gradeNumber > 10) {
+            return `${label} is not valid for this import. Use Grades 1-10 here, or use the SHS template for Grades 11-12.`;
+        }
+    }
+    return null;
 }
 
 function normalizePersonName(value) {
@@ -183,28 +223,40 @@ function findSchoolMatch(schools, input) {
     if (!target) return null;
     const targetMeaning = normalizeSchoolMeaningKey(input);
     const targetTokens = targetMeaning.split(' ').filter(Boolean);
+    const targetLevel = detectSchoolLevel(input);
+    const schoolList = Array.isArray(schools) ? schools : [];
+    const levelCandidates = targetLevel
+        ? schoolList.filter(school => schoolLevelCompatible(targetLevel, detectSchoolLevel(school.name)))
+        : schoolList;
 
-    for (const school of schools) {
+    for (const school of schoolList) {
         const keys = [school.name, school.school_id_code, school.school_code];
         for (const rawKey of keys) {
             const key = normalizeSchoolKey(rawKey);
             if (key && key === target) return school;
-            const meaningKey = normalizeSchoolMeaningKey(rawKey);
-            if (meaningKey && targetMeaning && meaningKey === targetMeaning) return school;
         }
     }
 
-    for (const school of schools) {
+    if (targetMeaning) {
+        const meaningMatches = levelCandidates.filter(school =>
+            normalizeSchoolMeaningKey(school.name) === targetMeaning
+        );
+        if (meaningMatches.length === 1) return meaningMatches[0];
+    }
+
+    const partialMatches = [];
+    for (const school of levelCandidates) {
         const key = normalizeSchoolKey(school.name);
         if (!key) continue;
-        if (key.includes(target) || target.includes(key)) return school;
+        if (key.includes(target) || target.includes(key)) partialMatches.push(school);
     }
+    if (partialMatches.length === 1) return partialMatches[0];
 
     // Token-based fuzzy fallback (handles extra middle tokens like "Agripino Alvarez" vs "Agripino").
     let best = null;
     const bestCandidates = [];
     let bestScore = 0;
-    for (const school of schools) {
+    for (const school of levelCandidates) {
         const schoolTokens = normalizeSchoolMeaningKey(school.name).split(' ').filter(Boolean);
         if (!schoolTokens.length || !targetTokens.length) continue;
         const overlap = schoolTokens.filter(token => targetTokens.includes(token)).length;
@@ -1154,12 +1206,11 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
             return { id: null, name: rawSchoolName, willCreate: true };
         }
 
-        async function checkGrade(gradeStr) {
+        async function checkGrade(gradeStr, schoolId) {
             if (!gradeStr) return { id: null, name: '' };
-            const g = String(gradeStr).trim();
-            const [found] = await db.query('SELECT id, name FROM grade_levels WHERE name LIKE ? OR name LIKE ? LIMIT 1', ['%' + g, 'Grade ' + g]);
-            if (found.length > 0) return found[0];
-            return { id: null, name: 'Grade ' + g, willCreate: true };
+            const found = await findGradeByName(gradeStr, schoolId);
+            if (found) return found;
+            return { id: null, name: formatGradeLabel(gradeStr), willCreate: true };
         }
 
         async function checkSection(sectionName, schoolId, gradeLevelId) {
@@ -1176,15 +1227,12 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
 
         function validateGradeForSchool(gradeStr, schoolName) {
             if (!gradeStr || !schoolName) return null;
-            const g = parseInt(gradeStr, 10);
-            if (isNaN(g)) return null;
-            const nameUpper = schoolName.toUpperCase();
-            const isIntegrated = nameUpper.includes('INTEGRATED');
-            if (isIntegrated) return null;
-            const isHighSchool = nameUpper.includes('NATIONAL HIGH SCHOOL') || nameUpper.includes('FARM SCHOOL');
-            const isElementary = nameUpper.includes('ELEMENTARY') || nameUpper.includes('PRIMARY');
-            if (isElementary && g > 6) return 'Grade ' + g + ' is not valid for elementary school';
-            if (isHighSchool && g < 7) return 'Grade ' + g + ' is not valid for high school';
+            const g = parseGradeNumber(gradeStr);
+            if (!Number.isFinite(g)) return null;
+            const schoolLevel = detectSchoolLevel(schoolName);
+            if (schoolLevel === 'integrated' || !schoolLevel) return null;
+            if (schoolLevel === 'elementary' && g > 6) return 'Grade ' + g + ' is not valid for elementary school';
+            if (schoolLevel === 'high' && g < 7) return 'Grade ' + g + ' is not valid for high school';
             return null;
         }
 
@@ -1203,7 +1251,8 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
                 const schoolName = getRowValue(row, ['School Name', 'School', 'school']);
                 const school = await resolveSchoolPreview(schoolName, { allowCreate: true });
                 const gradeStr = getRowValue(row, ['Grade Level', 'Grade', 'grade']);
-                const gradeErr = validateGradeForSchool(gradeStr, school.name || schoolName);
+                const categoryGradeErr = validateGradeForImportCategory(gradeStr, category);
+                const gradeErr = categoryGradeErr || validateGradeForSchool(gradeStr, school.name || schoolName);
                 if (gradeErr) { entry.status = 'error'; entry.error = gradeErr; }
                 if (!gradeStr) { entry.status = 'error'; entry.error = 'Grade Level is required for adviser assignment'; }
                 const grade = gradeStr && school.id ? await findGradeByName(gradeStr, school.id) : null;
@@ -1246,8 +1295,8 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
                 entry.qr_code = qr_code;
                 if (school.error) { entry.status = 'error'; entry.error = school.error; }
             } else {
-                const lrn = row['LRN'] || row['lrn'] || null;
-                const rawName = row['Student Name'] || row['student_name'] || '';
+                const lrn = getRowValue(row, ['LRN', 'lrn']) || null;
+                const rawName = getRowValue(row, ['Student Name', 'Learner Name', 'Name', 'student_name']);
                 const { firstname, lastname, middlename } = parseName(rawName);
                 const fn = firstname || row.firstname || '';
                 const ln = lastname || row.lastname || '';
@@ -1260,20 +1309,21 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
                     entry.error = 'Invalid Sex value "' + sexRaw + '" (use Male or Female)';
                 }
 
-                const schoolName = row['School'] || row['school'] || '';
+                const schoolName = getRowValue(row, ['School Name', 'School', 'school']);
                 const school = await resolveSchoolPreview(schoolName);
-                const gradeStr = row['Grade'] || row['grade'];
-                const gradeErr = validateGradeForSchool(gradeStr, school.name || schoolName);
+                const gradeStr = getRowValue(row, ['Grade Level', 'Grade', 'grade']);
+                const categoryGradeErr = validateGradeForImportCategory(gradeStr, category);
+                const gradeErr = categoryGradeErr || validateGradeForSchool(gradeStr, school.name || schoolName);
                 if (gradeErr) { entry.status = 'error'; entry.error = gradeErr; }
-                const grade = gradeStr ? await checkGrade(gradeStr) : { id: null, name: '' };
-                const trackStrand = String(row['Track/Strand'] || row['Track'] || row['Strand'] || '').trim();
+                const grade = gradeStr ? await checkGrade(gradeStr, school.id) : { id: null, name: '' };
+                const trackStrand = String(getRowValue(row, ['Track/Strand', 'Track', 'Strand']) || '').trim();
                 if (category === 'shs_student' && !trackStrand) { entry.status = 'error'; entry.error = 'Track/Strand is required for SHS'; }
-                const rawSection = String(row['Section'] || row['section'] || '').trim();
+                const rawSection = String(getRowValue(row, ['Section Name', 'Section', 'section']) || '').trim();
                 const sectionName = (category === 'shs_student' && trackStrand && rawSection)
                     ? trackStrand + ' - ' + rawSection
                     : rawSection;
                 const section = sectionName ? await checkSection(sectionName, school.id, grade.id) : { id: null, name: '' };
-                const guardianContact = row['Guardian Contact'] || row['guardian_contact'] || '';
+                const guardianContact = getRowValue(row, ['Guardian Contact', 'Guardian Phone', 'Contact Number', 'guardian_contact']) || '';
                 const qr_code = lrn ? 'STU-' + lrn : 'STU-auto';
 
                 // Check if existing
@@ -1435,15 +1485,12 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
         // Helper: validate grade vs school type
         function validateGradeForSchool(gradeStr, schoolName) {
             if (!gradeStr || !schoolName) return null;
-            const g = parseInt(gradeStr, 10);
-            if (isNaN(g)) return null;
-            const nameUpper = schoolName.toUpperCase();
-            const isIntegrated = nameUpper.includes('INTEGRATED');
-            if (isIntegrated) return null; // integrated schools accept grades 1-12
-            const isHighSchool = nameUpper.includes('NATIONAL HIGH SCHOOL') || nameUpper.includes('FARM SCHOOL');
-            const isElementary = nameUpper.includes('ELEMENTARY') || nameUpper.includes('PRIMARY');
-            if (isElementary && g > 6) return 'Grade ' + g + ' is not valid for elementary school "' + schoolName + '" (only Grades 1-6)';
-            if (isHighSchool && g < 7) return 'Grade ' + g + ' is not valid for high school "' + schoolName + '" (only Grades 7-12)';
+            const g = parseGradeNumber(gradeStr);
+            if (!Number.isFinite(g)) return null;
+            const schoolLevel = detectSchoolLevel(schoolName);
+            if (schoolLevel === 'integrated' || !schoolLevel) return null;
+            if (schoolLevel === 'elementary' && g > 6) return 'Grade ' + g + ' is not valid for elementary school "' + schoolName + '" (only Grades 1-6)';
+            if (schoolLevel === 'high' && g < 7) return 'Grade ' + g + ' is not valid for high school "' + schoolName + '" (only Grades 7-12)';
             return null;
         }
 
@@ -1477,7 +1524,8 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                     if (!gradeStr) { errors.push({ row: rn, message: 'Grade Level is required for adviser assignment.' }); continue; }
                     // Validate grade vs school type
                     const schoolName = schoolInfo.name || getRowValue(row, ['School Name', 'School', 'school']);
-                    const gradeErr = validateGradeForSchool(gradeStr, schoolName);
+                    const categoryGradeErr = validateGradeForImportCategory(gradeStr, category);
+                    const gradeErr = categoryGradeErr || validateGradeForSchool(gradeStr, schoolName);
                     if (gradeErr) { errors.push({ row: rn, message: gradeErr }); continue; }
                     let gradeId = await resolveGrade(gradeStr, schoolId);
 
@@ -1548,8 +1596,8 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                 } else {
                     // student or shs_student
                     // New format: LRN, Student Name, School, Grade, [Track/Strand], Section, Guardian Contact
-                    const lrn = row['LRN'] || row['lrn'] || null;
-                    const rawName = row['Student Name'] || row['student_name'] || '';
+                    const lrn = getRowValue(row, ['LRN', 'lrn']) || null;
+                    const rawName = getRowValue(row, ['Student Name', 'Learner Name', 'Name', 'student_name']);
                     const { firstname, lastname, middlename } = parseName(rawName);
 
                     if (!firstname && !lastname) {
@@ -1563,23 +1611,24 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                     const mn = middlename || row.middlename || '';
                     if (!fn && !ln) { errors.push({ row: rn, message: 'Missing student name' }); continue; }
 
-                    const schoolInfo = await resolveSchool(row['School'] || row['school']);
+                    const schoolInfo = await resolveSchool(getRowValue(row, ['School Name', 'School', 'school']));
                     if (schoolInfo.error) { errors.push({ row: rn, message: schoolInfo.error }); continue; }
                     const schoolId = schoolInfo.id;
-                    const gradeStr = row['Grade'] || row['grade'];
+                    const gradeStr = getRowValue(row, ['Grade Level', 'Grade', 'grade']);
                     // Validate grade vs school type
-                    const schoolName = schoolInfo.name || row['School'] || row['school'] || '';
-                    const gradeErr = validateGradeForSchool(gradeStr, schoolName);
+                    const schoolName = schoolInfo.name || getRowValue(row, ['School Name', 'School', 'school']);
+                    const categoryGradeErr = validateGradeForImportCategory(gradeStr, category);
+                    const gradeErr = categoryGradeErr || validateGradeForSchool(gradeStr, schoolName);
                     if (gradeErr) { errors.push({ row: rn, message: gradeErr }); continue; }
                     const gradeId = await resolveGrade(gradeStr, schoolId);
-                    const trackStrand = String(row['Track/Strand'] || row['Track'] || row['Strand'] || '').trim();
+                    const trackStrand = String(getRowValue(row, ['Track/Strand', 'Track', 'Strand']) || '').trim();
                     if (category === 'shs_student' && !trackStrand) { errors.push({ row: rn, message: 'Track/Strand is required for SHS' }); continue; }
-                    const rawSection = String(row['Section'] || row['section'] || '').trim();
+                    const rawSection = String(getRowValue(row, ['Section Name', 'Section', 'section']) || '').trim();
                     const composedSection = (category === 'shs_student' && trackStrand && rawSection)
                         ? trackStrand + ' - ' + rawSection
                         : rawSection;
                     const sectionId = await resolveSection(composedSection, schoolId, gradeId);
-                    const guardianContact = row['Guardian Contact'] || row['guardian_contact'] || null;
+                    const guardianContact = getRowValue(row, ['Guardian Contact', 'Guardian Phone', 'Contact Number', 'guardian_contact']) || null;
                     const sex = parseSexValue(getRowValue(row, ['Sex', 'Gender', 'sex', 'gender']));
 
                     if (lrn) {
