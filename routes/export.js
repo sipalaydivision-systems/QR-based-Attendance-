@@ -219,37 +219,23 @@ router.get('/template/:type', async (req, res) => {
         wb.creator = 'Edutrack';
 
         if (type === 'student') {
-            // Load original static file, inject Sex dropdown only
+            // Load original static file — Sex=C, Grade=E (confirmed from template structure)
             const filePath = path.join(__dirname, '..', 'public', 'templates', 'student_import_template.xlsx');
             await wb.xlsx.readFile(filePath);
             const ws = wb.worksheets[0];
-            // Find which column is Sex/Gender by reading header row
-            const headerRow = ws.getRow(1);
-            let sexCol = null;
-            headerRow.eachCell((cell, colNum) => {
-                const v = String(cell.value || '').toLowerCase();
-                if (v === 'sex' || v === 'gender') sexCol = colNum;
-            });
-            if (sexCol) {
-                const letter = ws.getColumn(sexCol).letter;
-                addDropdown(ws, letter, START, END, '"Male,Female"', 'Select Male or Female');
-            }
+            // Override Grade dropdown (E) to only show Grade 1-10 (not 11-12 which are SHS)
+            addDropdown(ws, 'C', START, END, '"Male,Female"', 'Select Male or Female');
+            addDropdown(ws, 'E', START, END, '"Grade 1,Grade 2,Grade 3,Grade 4,Grade 5,Grade 6,Grade 7,Grade 8,Grade 9,Grade 10"', 'Select Grade 1 to 10');
             res.setHeader('Content-Disposition', 'attachment; filename="student_import_template.xlsx"');
 
         } else if (type === 'shs_student') {
-            // Load original static file, inject Sex and Grade dropdowns only
+            // Load original static file — Sex=C, Grade=E (confirmed from template structure)
             const filePath = path.join(__dirname, '..', 'public', 'templates', 'shs_student_import_template.xlsx');
             await wb.xlsx.readFile(filePath);
             const ws = wb.worksheets[0];
-            const headerRow = ws.getRow(1);
-            let sexCol = null, gradeCol = null;
-            headerRow.eachCell((cell, colNum) => {
-                const v = String(cell.value || '').toLowerCase();
-                if (v === 'sex' || v === 'gender') sexCol = colNum;
-                if (v === 'grade' || v === 'grade level') gradeCol = colNum;
-            });
-            if (sexCol) addDropdown(ws, ws.getColumn(sexCol).letter, START, END, '"Male,Female"', 'Select Male or Female');
-            if (gradeCol) addDropdown(ws, ws.getColumn(gradeCol).letter, START, END, '"11,12"', 'Select Grade 11 or Grade 12');
+            // Override Grade dropdown (E) to only show 11 and 12
+            addDropdown(ws, 'C', START, END, '"Male,Female"', 'Select Male or Female');
+            addDropdown(ws, 'E', START, END, '"11,12"', 'Select Grade 11 or Grade 12');
             res.setHeader('Content-Disposition', 'attachment; filename="shs_student_import_template.xlsx"');
 
         } else if (type === 'teacher') {
