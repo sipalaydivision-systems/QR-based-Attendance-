@@ -49,12 +49,12 @@
   };
 
   var SAMPLE_SCANS = [
-    { name: 'Juan Dela Cruz',       gradeLevel: 'Grade 3', sectionName: 'Apple',    schoolName: 'Agripino Elementary School', scanTime: new Date().toISOString(), eventAction: 'TIME_IN'  },
-    { name: 'Maria Santos',         gradeLevel: '',         sectionName: '',          schoolName: 'Agripino Elementary School', scanTime: new Date().toISOString(), eventAction: 'TIME_IN'  },
-    { name: 'Pedro Reyes',          gradeLevel: 'Grade 5', sectionName: 'Mango',    schoolName: 'Agripino Elementary School', scanTime: new Date().toISOString(), eventAction: 'TIME_OUT' },
-    { name: 'Ana Liza Buenaventura',gradeLevel: 'Grade 6', sectionName: 'Sampaguita',schoolName: 'Agripino Elementary School', scanTime: new Date().toISOString(), eventAction: 'TIME_IN'  },
-    { name: 'Carlo Villanueva',     gradeLevel: 'Grade 4', sectionName: 'Rose',     schoolName: 'Agripino Elementary School', scanTime: new Date().toISOString(), eventAction: 'TIME_IN'  },
-    { name: 'Rosa Fernandez',       gradeLevel: 'Grade 2', sectionName: 'Lily',     schoolName: 'Agripino Elementary School', scanTime: new Date().toISOString(), eventAction: 'TIME_IN'  }
+    { name: 'Juan Dela Cruz',        personType: 'student', category: '',            gradeLevel: 'Grade 3',  sectionName: 'Apple',       schoolName: 'Agripino Elementary School',      scanTime: new Date().toISOString(), eventAction: 'TIME_IN',  attendanceStatus: 'present', displayStatus: 'PRESENT' },
+    { name: 'Wesley Hans Platil',    personType: 'student', category: 'shs_student', gradeLevel: 'Grade 11', sectionName: 'STEM - Rizal',schoolName: 'Sipalay City National High School',scanTime: new Date().toISOString(), eventAction: 'TIME_IN',  attendanceStatus: 'late',    displayStatus: 'LATE' },
+    { name: 'Maria Santos',          personType: 'teacher', category: '',            gradeLevel: 'Grade 6',  sectionName: 'Sampaguita',  schoolName: 'Agripino Elementary School',      scanTime: new Date().toISOString(), eventAction: 'TIME_OUT', attendanceStatus: 'present', displayStatus: 'LUNCH OUT' },
+    { name: 'Ricardo Dalisay',       personType: 'teacher', category: 'shs_teacher', gradeLevel: 'Grade 11', sectionName: 'STEM - Rizal',schoolName: 'Sipalay City National High School',scanTime: new Date().toISOString(), eventAction: 'TIME_IN',  attendanceStatus: 'present', displayStatus: 'RETURNED' },
+    { name: 'Pedro Reyes',           personType: 'student', category: '',            gradeLevel: 'Grade 5',  sectionName: 'Mango',       schoolName: 'Agripino Elementary School',      scanTime: new Date().toISOString(), eventAction: 'TIME_OUT', attendanceStatus: 'present', displayStatus: 'COMPLETED' },
+    { name: 'Ana Liza Buenaventura', personType: 'teacher', category: '',            gradeLevel: 'Grade 6',  sectionName: 'Sampaguita',  schoolName: 'Agripino Elementary School',      scanTime: new Date().toISOString(), eventAction: 'TIME_IN',  attendanceStatus: 'present', displayStatus: 'PM PRESENT' }
   ];
 
   var SETTINGS = {

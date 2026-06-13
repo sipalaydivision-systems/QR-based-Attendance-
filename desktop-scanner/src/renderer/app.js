@@ -443,6 +443,33 @@ function humanizeAction(value) {
   return 'Scan';
 }
 
+function humanizeStatus(status, eventAction) {
+  const s = String(status || '').toUpperCase();
+  if (s === 'LATE') return 'Late';
+  if (s === 'RETURNED') return 'Returned';
+  if (s === 'LUNCH OUT') return 'Lunch Out';
+  if (s === 'PM PRESENT') return 'PM Present';
+  if (s === 'COMPLETED') return 'Completed';
+  if (s === 'OUT') return 'Out';
+  if (s === 'PRESENT' || s === '') {
+    const a = String(eventAction || '').toUpperCase();
+    if (a === 'TIME_OUT') return 'Out';
+    return 'Present';
+  }
+  return 'Present';
+}
+
+function statusClassFor(status, eventAction) {
+  const s = String(status || '').toUpperCase();
+  if (s === 'LATE') return 'late';
+  if (s === 'RETURNED' || s === 'PM PRESENT') return 'returned';
+  if (s === 'LUNCH OUT' || s === 'OUT') return 'out';
+  if (s === 'COMPLETED') return 'completed';
+  const a = String(eventAction || '').toUpperCase();
+  if (a === 'TIME_OUT') return 'out';
+  return 'present';
+}
+
 function humanizeSync(value) {
   const status = String(value || '').toLowerCase();
   if (status === 'synced') return 'Synced';
@@ -818,15 +845,28 @@ function renderLocalScans(scans = []) {
     const name = scan.name || 'Attendance Record';
     const grade = cleanCell(scan.gradeLevel);
     const section = cleanCell(scan.sectionName);
+    const gradeSection = grade && section && section !== 'N/A' ? `${grade} — ${section}` : grade || section || '—';
     const school = cleanCell(scan.schoolName);
     const action = humanizeAction(scan.eventAction);
     const actionClass = scan.eventAction === 'TIME_OUT' ? 'time-out' : 'time-in';
 
+    const pType = scan.personType || 'student';
+    const pCat = scan.category || '';
+    const isTeacher = pType === 'teacher';
+    const isShs = pCat === 'shs_student' || pCat === 'shs_teacher';
+    const typeLabel = isShs && isTeacher ? 'SHS Teacher' : isTeacher ? 'Teacher' : isShs ? 'SHS Student' : 'Student';
+    const typeClass = isShs && isTeacher ? 'shs-teacher' : isTeacher ? 'teacher' : isShs ? 'shs-student' : 'student';
+
+    const status = scan.displayStatus || scan.attendanceStatus || '';
+    const statusLabel = humanizeStatus(status, scan.eventAction);
+    const statusClass = statusClassFor(status, scan.eventAction);
+
     tr.innerHTML = `
       <td data-label="Name">${escapeHtml(name)}</td>
-      <td data-label="Grade">${escapeHtml(grade)}</td>
-      <td data-label="Section">${escapeHtml(section)}</td>
+      <td data-label="Type"><span class="log-type-badge ${typeClass}">${escapeHtml(typeLabel)}</span></td>
+      <td data-label="Grade & Section">${escapeHtml(gradeSection)}</td>
       <td data-label="School">${escapeHtml(school)}</td>
+      <td data-label="Status"><span class="log-status-badge ${statusClass}">${escapeHtml(statusLabel)}</span></td>
       <td data-label="Time"><span class="time-badge ${actionClass}"><b>${escapeHtml(action)}</b><small>${escapeHtml(time)}</small></span></td>
     `;
     rows.appendChild(tr);

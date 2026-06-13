@@ -187,6 +187,8 @@ function migrate() {
     );
   `);
   try { db.exec(`ALTER TABLE people_cache ADD COLUMN category TEXT`); } catch (_) {}
+  try { db.exec(`ALTER TABLE attendance_events ADD COLUMN category TEXT`); } catch (_) {}
+  try { db.exec(`ALTER TABLE attendance_events ADD COLUMN display_status TEXT`); } catch (_) {}
   saveDatabase();
 }
 
@@ -260,6 +262,8 @@ function hydrateEvent(row) {
     attendanceStatus: row.attendance_status || null,
     timeIn: row.time_in || null,
     timeOut: row.time_out || null,
+    category: row.category || null,
+    displayStatus: row.display_status || null,
     syncStatus: row.sync_status,
     serverMessage: row.server_message || null,
     lastError: row.last_error || null,
@@ -445,9 +449,9 @@ function insertAttendanceEvent(eventInput) {
         name, school_id, school_name, grade_level, section_name,
         attendance_date, scan_time, event_action, attendance_status,
         time_in, time_out, sync_status, server_message, last_error,
-        sync_attempts, created_at, updated_at, synced_at
+        sync_attempts, created_at, updated_at, synced_at, category, display_status
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       event.localEventId,
       event.syncEventId,
@@ -472,7 +476,9 @@ function insertAttendanceEvent(eventInput) {
       event.syncAttempts,
       event.createdAt,
       event.updatedAt,
-      event.syncedAt
+      event.syncedAt,
+      event.category || null,
+      event.displayStatus || null
     ]);
   });
 
@@ -527,6 +533,8 @@ function updateAttendanceEvent(localEventId, patch) {
         attendance_status = ?,
         time_in = ?,
         time_out = ?,
+        category = ?,
+        display_status = ?,
         sync_status = ?,
         server_message = ?,
         last_error = ?,
@@ -551,6 +559,8 @@ function updateAttendanceEvent(localEventId, patch) {
       next.attendanceStatus,
       next.timeIn,
       next.timeOut,
+      next.category,
+      next.displayStatus,
       next.syncStatus,
       next.serverMessage,
       next.lastError,

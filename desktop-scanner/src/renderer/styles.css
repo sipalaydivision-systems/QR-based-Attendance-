@@ -808,17 +808,19 @@ body.settings-open .side-panel {
 .local-scan-table th:first-child { border-radius: 16px 0 0 0; }
 .local-scan-table th:last-child  { border-radius: 0 16px 0 0; }
 
-/* Name gets the most space; Grade/Section are short; School moderate; Time fixed */
+/* Name | Type | Grade & Section | School | Status | Time */
 .local-scan-table th:nth-child(1),
-.local-scan-table td:nth-child(1) { width: 25%; min-width: 0; }
+.local-scan-table td:nth-child(1) { width: 20%; min-width: 0; }
 .local-scan-table th:nth-child(2),
-.local-scan-table td:nth-child(2) { width: 15%; min-width: 62px; }
+.local-scan-table td:nth-child(2) { width: 12%; min-width: 72px; }
 .local-scan-table th:nth-child(3),
-.local-scan-table td:nth-child(3) { width: 14%; min-width: 60px; }
+.local-scan-table td:nth-child(3) { width: 18%; min-width: 0; }
 .local-scan-table th:nth-child(4),
-.local-scan-table td:nth-child(4) { width: 26%; min-width: 0; }
+.local-scan-table td:nth-child(4) { width: 20%; min-width: 0; }
 .local-scan-table th:nth-child(5),
-.local-scan-table td:nth-child(5) { width: 20%; min-width: 72px; white-space: nowrap; }
+.local-scan-table td:nth-child(5) { width: 12%; min-width: 64px; }
+.local-scan-table th:nth-child(6),
+.local-scan-table td:nth-child(6) { width: 18%; min-width: 72px; white-space: nowrap; }
 
 .local-scan-table td {
   color: var(--ink);
@@ -844,6 +846,38 @@ body.settings-open .side-panel {
 .local-scan-table tbody tr {
   animation: rowSlideIn 0.22s ease-out;
 }
+
+/* Log type badges */
+.log-type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.log-type-badge.student     { background: #ede9fe; color: #6d28d9; }
+.log-type-badge.shs-student { background: #fef3c7; color: #92400e; }
+.log-type-badge.teacher     { background: #fffbeb; color: #b45309; }
+.log-type-badge.shs-teacher { background: #e0f2fe; color: #0c4a6e; }
+
+/* Log status badges */
+.log-status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+.log-status-badge.present   { background: #dcfce7; color: #166534; }
+.log-status-badge.late      { background: #fef3c7; color: #92400e; }
+.log-status-badge.out       { background: #ffedd5; color: #9a3412; }
+.log-status-badge.returned  { background: #dbeafe; color: #1e40af; }
+.log-status-badge.completed { background: #dcfce7; color: #166534; }
 
 /* Empty state */
 .table-empty {
@@ -2012,7 +2046,8 @@ body.settings-open .side-panel {
     text-transform: uppercase;
   }
 
-  .local-scan-table td:nth-child(5) {
+  .local-scan-table td:nth-child(5),
+  .local-scan-table td:nth-child(6) {
     align-items: center;
   }
 
