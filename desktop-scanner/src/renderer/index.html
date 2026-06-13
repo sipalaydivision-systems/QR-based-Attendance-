@@ -147,12 +147,10 @@
             <table class="local-scan-table" aria-label="Attendance log">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Type</th>
-                  <th>Grade & Section</th>
-                  <th>School</th>
-                  <th>Status</th>
-                  <th>Time</th>
+                  <th><span class="th-label"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="8" r="4"/></svg>Name</span></th>
+                  <th><span class="th-label"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m22 10-10-5-10 5 10 5 10-5z"/><path d="M6 12v5c3 2 9 2 12 0v-5"/></svg>Grade & Section</span></th>
+                  <th><span class="th-label"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-6h6v6"/><path d="M9 10h.01M15 10h.01"/></svg>School</span></th>
+                  <th><span class="th-label"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Time</span></th>
                 </tr>
               </thead>
               <tbody id="localScanRows"></tbody>
@@ -164,6 +162,10 @@
               <strong>No attendance recorded yet</strong>
               <span>Scans will appear here in real time</span>
             </div>
+          </div>
+          <div class="local-log-footer" id="localLogFooter">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/><path d="m9 15 2 2 4-5"/></svg>
+            <span id="localLogFooterText">Showing 0 record(s) for today</span>
           </div>
 
           <div class="confirm-box hidden" id="confirmBox">

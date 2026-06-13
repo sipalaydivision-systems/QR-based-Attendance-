@@ -821,53 +821,75 @@ function showScanFeedback(title, message, tone = 'success', data = {}) {
 // Fingerprint of the last rendered scan list — prevents constant DOM thrashing
 // when the main process fires status events with identical data.
 let _lastScanFingerprint = '';
+let _lastFirstScanKey = '';
 
 function renderLocalScans(scans = []) {
   const rows = $('localScanRows');
   const empty = $('localScanEmpty');
+  const footerText = $('localLogFooterText');
 
   // Show only the 6 most recent scans from this device — newest first
   const localScans = Array.isArray(scans) ? scans.slice(0, 6) : [];
+  if (footerText) {
+    footerText.textContent = `Showing ${localScans.length} record(s) for today - Last updated ${formatShortTime(new Date())}`;
+  }
 
   // Skip the full re-render if nothing has changed — stops the stutter/flash
   // caused by status poll events that don't bring new scan data.
   const fp = localScans.map((s) => `${s.name}|${s.eventAction}|${s.scanTime}`).join('\n');
   if (fp === _lastScanFingerprint) return;
+  const firstScanKey = localScans[0]
+    ? `${localScans[0].name}|${localScans[0].eventAction}|${localScans[0].scanTime}`
+    : '';
+  const hasNewTopScan = !!firstScanKey && !!_lastFirstScanKey && firstScanKey !== _lastFirstScanKey;
   _lastScanFingerprint = fp;
+  _lastFirstScanKey = firstScanKey;
 
   rows.innerHTML = '';
   empty.classList.toggle('hidden', localScans.length > 0);
 
-  localScans.forEach((scan) => {
+  localScans.forEach((scan, index) => {
     const tr = document.createElement('tr');
+    if (index === 0 && hasNewTopScan) tr.classList.add('new-scan-row');
     const scanDate = parseSqlDateTime(scan.scanTime);
     const time = scanDate ? formatShortTime(scanDate) : '--:--';
     const name = scan.name || 'Attendance Record';
+    const avatarText = initials(name);
     const grade = cleanCell(scan.gradeLevel);
     const section = cleanCell(scan.sectionName);
     const gradeSection = grade && section && section !== 'N/A' ? `${grade} — ${section}` : grade || section || '—';
     const school = cleanCell(scan.schoolName);
     const action = humanizeAction(scan.eventAction);
     const actionClass = scan.eventAction === 'TIME_OUT' ? 'time-out' : 'time-in';
-
-    const pType = scan.personType || 'student';
-    const pCat = scan.category || '';
-    const isTeacher = pType === 'teacher';
-    const isShs = pCat === 'shs_student' || pCat === 'shs_teacher';
-    const typeLabel = isShs && isTeacher ? 'SHS Teacher' : isTeacher ? 'Teacher' : isShs ? 'SHS Student' : 'Student';
-    const typeClass = isShs && isTeacher ? 'shs-teacher' : isTeacher ? 'teacher' : isShs ? 'shs-student' : 'student';
+    const personType = String(scan.personType || '').toLowerCase();
+    const personCategory = String(scan.category || '').toLowerCase();
+    const isTeacherLog = personType === 'teacher' || personCategory === 'shs_teacher';
+    const personBadgeLabel = isTeacherLog ? 'Teacher' : '';
 
     const status = scan.displayStatus || scan.attendanceStatus || '';
     const statusLabel = humanizeStatus(status, scan.eventAction);
     const statusClass = statusClassFor(status, scan.eventAction);
 
     tr.innerHTML = `
-      <td data-label="Name">${escapeHtml(name)}</td>
-      <td data-label="Type"><span class="log-type-badge ${typeClass}">${escapeHtml(typeLabel)}</span></td>
+      <td data-label="Name">
+        <div class="scan-person">
+          <span class="scan-avatar avatar-${index % 4}">${escapeHtml(avatarText)}</span>
+          <span class="scan-person-text">
+            <span class="scan-name">${escapeHtml(name)}</span>
+            ${personBadgeLabel ? `<span class="person-role-badge">${escapeHtml(personBadgeLabel)}</span>` : ''}
+          </span>
+        </div>
+      </td>
       <td data-label="Grade & Section">${escapeHtml(gradeSection)}</td>
       <td data-label="School">${escapeHtml(school)}</td>
-      <td data-label="Status"><span class="log-status-badge ${statusClass}">${escapeHtml(statusLabel)}</span></td>
-      <td data-label="Time"><span class="time-badge ${actionClass}"><b>${escapeHtml(action)}</b><small>${escapeHtml(time)}</small></span></td>
+      <td data-label="Time">
+        <span class="time-badge ${actionClass}">
+          <span class="time-arrow" aria-hidden="true">-&gt;</span>
+          <b>${escapeHtml(action)}</b>
+          <small>${escapeHtml(time)}</small>
+          <span class="log-status-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
+        </span>
+      </td>
     `;
     rows.appendChild(tr);
   });

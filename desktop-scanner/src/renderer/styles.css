@@ -273,9 +273,9 @@ svg {
 .scanner-layout {
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(620px, 1fr) 520px;
-  gap: 20px;
-  padding: 22px 28px;
+  grid-template-columns: minmax(460px, 1fr) minmax(720px, 40vw);
+  gap: 16px;
+  padding: 22px 24px;
 }
 
 .scanner-column,
@@ -654,8 +654,8 @@ body.settings-open .side-panel {
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 16px;
-  padding: 20px;
+  gap: 18px;
+  padding: 24px;
   position: relative;
   overflow: hidden;
 }
@@ -664,7 +664,7 @@ body.settings-open .side-panel {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0;
-  height: 3px;
+  height: 8px;
   background: linear-gradient(90deg, var(--green), #22c55e, var(--green));
   border-radius: 22px 22px 0 0;
 }
@@ -674,7 +674,7 @@ body.settings-open .side-panel {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 18px;
 }
 
 .panel-head-main {
@@ -684,15 +684,15 @@ body.settings-open .side-panel {
 }
 
 .panel-icon {
-  width: 42px;
-  height: 42px;
+  width: 60px;
+  height: 60px;
   flex-shrink: 0;
   display: grid;
   place-items: center;
-  border-radius: 13px;
+  border-radius: 18px;
   background: linear-gradient(135deg, #e8f7f0, #d0f0e2);
   border: 1px solid #b8e8d0;
-  padding: 9px;
+  padding: 13px;
   color: var(--green-deep);
 }
 
@@ -705,15 +705,15 @@ body.settings-open .side-panel {
 .panel-label {
   display: block;
   color: var(--green-deep);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
-  letter-spacing: 0.6px;
-  margin-bottom: 2px;
+  letter-spacing: 1.4px;
+  margin-bottom: 6px;
 }
 
 .panel-head h2 {
-  font-size: 22px;
+  font-size: 28px;
   line-height: 1.1;
   font-weight: 900;
   margin: 0;
@@ -759,7 +759,7 @@ body.settings-open .side-panel {
 .local-scan-table th,
 .toggle-list > span {
   color: var(--green-deep);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 900;
   text-transform: uppercase;
 }
@@ -769,10 +769,10 @@ body.settings-open .side-panel {
   min-height: 0;
   overflow: auto;
   overflow-x: hidden;
-  border-radius: 16px;
-  border: 1px solid #d8ede4;
-  background: #fafdfb;
-  box-shadow: inset 0 1px 3px rgba(10, 60, 42, 0.04);
+  border-radius: 18px;
+  border: 1px solid #d3e9df;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(10, 60, 42, 0.06);
 }
 
 .local-scan-table {
@@ -784,50 +784,65 @@ body.settings-open .side-panel {
 
 .local-scan-table th,
 .local-scan-table td {
-  padding: 9px 7px;
-  border-bottom: 1px solid #eaf3ee;
+  padding: 11px 8px;
+  border-bottom: 1px solid #e1ebe6;
   text-align: left;
   vertical-align: middle;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .local-scan-table th {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: linear-gradient(180deg, #eef8f3 0%, #e6f4ed 100%);
+  background: linear-gradient(180deg, #eef9f4 0%, #e7f5ee 100%);
   letter-spacing: 0.4px;
   border-bottom: 2px solid #c8e6d8;
-  padding-top: 11px;
-  padding-bottom: 11px;
+  padding-top: 13px;
+  padding-bottom: 13px;
   /* overflow / text-overflow / white-space come from the shared th+td rule */
 }
 
 .local-scan-table th:first-child { border-radius: 16px 0 0 0; }
 .local-scan-table th:last-child  { border-radius: 0 16px 0 0; }
 
-/* Name | Type | Grade & Section | School | Status | Time */
+.th-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.th-label svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Name | Grade & Section | School | Time */
 .local-scan-table th:nth-child(1),
-.local-scan-table td:nth-child(1) { width: 20%; min-width: 0; }
+.local-scan-table td:nth-child(1) { width: 27%; min-width: 0; }
 .local-scan-table th:nth-child(2),
-.local-scan-table td:nth-child(2) { width: 12%; min-width: 72px; }
+.local-scan-table td:nth-child(2) { width: 24%; min-width: 0; }
 .local-scan-table th:nth-child(3),
-.local-scan-table td:nth-child(3) { width: 18%; min-width: 0; }
+.local-scan-table td:nth-child(3) { width: 28%; min-width: 0; }
 .local-scan-table th:nth-child(4),
-.local-scan-table td:nth-child(4) { width: 20%; min-width: 0; }
-.local-scan-table th:nth-child(5),
-.local-scan-table td:nth-child(5) { width: 12%; min-width: 64px; }
-.local-scan-table th:nth-child(6),
-.local-scan-table td:nth-child(6) { width: 18%; min-width: 72px; white-space: nowrap; }
+.local-scan-table td:nth-child(4) { width: 21%; min-width: 0; }
 
 .local-scan-table td {
   color: var(--ink);
-  font-size: 11.5px;
+  font-size: 10.5px;
   line-height: 1.35;
-  font-weight: 600;
-  /* overflow / text-overflow / white-space inherited from the shared th+td rule above */
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .local-scan-table tbody tr:last-child td {
@@ -843,31 +858,94 @@ body.settings-open .side-panel {
   to   { opacity: 1; transform: translateX(0); }
 }
 
+@keyframes newScanDropDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-28px);
+  }
+  55% {
+    opacity: 1;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes newScanGlow {
+  0%, 65% { background: #dcfce7; }
+  100% { background: transparent; }
+}
+
 .local-scan-table tbody tr {
   animation: rowSlideIn 0.22s ease-out;
 }
 
-/* Log type badges */
-.log-type-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
-  white-space: nowrap;
+.local-scan-table tbody tr.new-scan-row {
+  animation: newScanDropDown 0.46s cubic-bezier(0.16, 1, 0.3, 1), newScanGlow 1.35s ease-out;
 }
-.log-type-badge.student     { background: #ede9fe; color: #6d28d9; }
-.log-type-badge.shs-student { background: #fef3c7; color: #92400e; }
-.log-type-badge.teacher     { background: #fffbeb; color: #b45309; }
-.log-type-badge.shs-teacher { background: #e0f2fe; color: #0c4a6e; }
+
+.scan-person {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.scan-avatar {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #0f5135;
+  font-size: 10.5px;
+  font-weight: 900;
+  border: 3px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 5px 14px rgba(10, 60, 42, 0.12);
+}
+
+.scan-avatar.avatar-0,
+.scan-avatar.avatar-3 { background: linear-gradient(135deg, #d9f7e8, #bdf0d5); }
+.scan-avatar.avatar-1 { background: linear-gradient(135deg, #dcfce7, #bbf7d0); }
+.scan-avatar.avatar-2 { background: linear-gradient(135deg, #fee2e2, #fecaca); color: #7f1d1d; }
+
+.scan-name {
+  min-width: 0;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  font-weight: 900;
+  color: #10231b;
+}
+
+.scan-person-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.person-role-badge {
+  justify-self: start;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #0c4a6e;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 0.25px;
+}
 
 /* Log status badges */
 .log-status-badge {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 10px;
+  margin-top: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.3px;
@@ -924,28 +1002,59 @@ body.settings-open .side-panel {
 
 /* Time badge */
 .time-badge {
-  display: inline-flex;
-  flex-direction: column;
-  justify-content: center;
+  position: relative;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-areas:
+    "icon label"
+    "icon value"
+    "status status";
   align-items: center;
+  column-gap: 6px;
   width: 100%;
   min-width: 0;
-  min-height: 42px;
-  padding: 5px 7px;
-  border-radius: 11px;
+  min-height: 64px;
+  padding: 7px 7px;
+  border-radius: 12px;
   color: var(--green-deep);
-  background: linear-gradient(135deg, #e8f7f0, #d4f0e4);
-  border: 1px solid #b8e8d0;
+  background: linear-gradient(135deg, #effaf6, #e3f4ed);
+  border: 1px solid #caeadb;
   line-height: 1.1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 .time-badge.time-out {
-  color: #7f1d1d;
-  background: linear-gradient(135deg, #fee2e2, #fecaca);
-  border-color: #fca5a5;
+  color: #b91c1c;
+  background: linear-gradient(135deg, #fff1f1, #fee2e2);
+  border-color: #fecaca;
+}
+
+.time-arrow {
+  grid-area: icon;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  font-size: 0;
+  font-weight: 900;
+}
+
+.time-arrow::before {
+  content: '>';
+  font-size: 16px;
+  line-height: 1;
+}
+
+.time-badge.time-out .time-arrow {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
 }
 
 .time-badge b {
+  grid-area: label;
+  min-width: 0;
   font-size: 9px;
   font-weight: 900;
   text-transform: uppercase;
@@ -953,9 +1062,36 @@ body.settings-open .side-panel {
 }
 
 .time-badge small {
-  margin-top: 3px;
-  font-size: 11px;
+  grid-area: value;
+  min-width: 0;
+  margin-top: 2px;
+  font-size: 12px;
   font-weight: 900;
+}
+
+.time-badge .log-status-badge {
+  grid-area: status;
+  justify-self: center;
+}
+
+.local-log-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: #6b7b73;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.local-log-footer svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: #16a34a;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .confirm-box {
@@ -1947,7 +2083,7 @@ body.settings-open .side-panel {
   background: #fff6f6;
 }
 
-@media (max-width: 1260px) {
+@media (max-width: 1180px) {
   html,
   body {
     overflow: auto;
@@ -2046,8 +2182,7 @@ body.settings-open .side-panel {
     text-transform: uppercase;
   }
 
-  .local-scan-table td:nth-child(5),
-  .local-scan-table td:nth-child(6) {
+  .local-scan-table td:nth-child(4) {
     align-items: center;
   }
 
