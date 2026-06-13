@@ -159,26 +159,153 @@ router.get('/not-scanned-today', async (req, res) => {
     }
 });
 
-// ---- Download XLSX Templates ----
+// ---- Download XLSX Templates (generated on-the-fly with dropdown validation) ----
 
-router.get('/template/:type', (req, res) => {
+const HEADER_STYLE = {
+    font: { bold: true, color: { argb: 'FFFFFFFF' } },
+    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF166534' } },
+    alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
+    border: { bottom: { style: 'thin', color: { argb: 'FF14532D' } } }
+};
+
+const NOTE_STYLE = {
+    font: { italic: true, color: { argb: 'FF6B7280' }, size: 10 },
+    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } },
+    alignment: { horizontal: 'center', vertical: 'middle', wrapText: true }
+};
+
+function applyHeaderRow(row, noteRow, columns) {
+    columns.forEach((col, i) => {
+        const hCell = row.getCell(i + 1);
+        hCell.value = col.header;
+        Object.assign(hCell, HEADER_STYLE);
+        hCell.font = { ...HEADER_STYLE.font };
+        hCell.fill = { ...HEADER_STYLE.fill };
+        hCell.alignment = { ...HEADER_STYLE.alignment };
+
+        const nCell = noteRow.getCell(i + 1);
+        nCell.value = col.note || '';
+        nCell.font = { ...NOTE_STYLE.font };
+        nCell.fill = { ...NOTE_STYLE.fill };
+        nCell.alignment = { ...NOTE_STYLE.alignment };
+    });
+}
+
+function addDropdown(sheet, colLetter, fromRow, toRow, formulaList, prompt) {
+    for (let r = fromRow; r <= toRow; r++) {
+        sheet.getCell(`${colLetter}${r}`).dataValidation = {
+            type: 'list',
+            allowBlank: true,
+            formulae: [formulaList],
+            showErrorMessage: true,
+            errorStyle: 'warning',
+            errorTitle: 'Invalid value',
+            error: `Please select from the dropdown. ${prompt || ''}`,
+            showInputMessage: true,
+            promptTitle: 'Select value',
+            prompt: prompt || 'Choose from the list'
+        };
+    }
+}
+
+router.get('/template/:type', async (req, res) => {
     const type = req.params.type;
-    const fileMap = {
-        student: 'student_import_template.xlsx',
-        shs_student: 'shs_student_import_template.xlsx',
-        teacher: 'teacher_import_template.xlsx',
-        shs_teacher: 'shs_teacher_import_template.xlsx'
-    };
-    const filename = fileMap[type];
-    if (!filename) {
-        return res.status(404).json({ error: 'Template not found.' });
+    const DATA_ROWS = 200;
+    const START = 3;
+    const END = START + DATA_ROWS - 1;
+
+    try {
+        const wb = new ExcelJS.Workbook();
+        wb.creator = 'Edutrack';
+
+        if (type === 'student') {
+            const ws = wb.addWorksheet('Students');
+            ws.getRow(1).height = 28;
+            ws.getRow(2).height = 22;
+            const cols = [
+                { header: 'LRN',          note: 'Learner Reference Number',        width: 18 },
+                { header: 'Student Name', note: 'Last Name, First Name Middle Name', width: 32 },
+                { header: 'Sex',          note: 'Male or Female',                   width: 12 },
+                { header: 'School',       note: 'Full school name',                 width: 30 },
+                { header: 'Grade',        note: 'Grade 1 to Grade 6 / 7–10',        width: 14 },
+                { header: 'Section',      note: 'Section name',                     width: 20 },
+                { header: 'Contact',      note: 'Guardian contact number',          width: 18 }
+            ];
+            cols.forEach((c, i) => { ws.getColumn(i + 1).width = c.width; });
+            applyHeaderRow(ws.getRow(1), ws.getRow(2), cols);
+            addDropdown(ws, 'C', START, END, '"Male,Female"', 'Select Male or Female');
+            addDropdown(ws, 'E', START, END, '"Grade 1,Grade 2,Grade 3,Grade 4,Grade 5,Grade 6,Grade 7,Grade 8,Grade 9,Grade 10"', 'Select a grade level');
+            ws.addRow([]);
+            res.setHeader('Content-Disposition', 'attachment; filename="student_import_template.xlsx"');
+
+        } else if (type === 'shs_student') {
+            const ws = wb.addWorksheet('SHS Students');
+            ws.getRow(1).height = 28;
+            ws.getRow(2).height = 22;
+            const cols = [
+                { header: 'LRN',          note: 'Learner Reference Number',         width: 18 },
+                { header: 'Student Name', note: 'Last Name, First Name Middle Name', width: 32 },
+                { header: 'Sex',          note: 'Male or Female',                    width: 12 },
+                { header: 'School',       note: 'Full school name',                  width: 30 },
+                { header: 'Grade',        note: '11 or 12',                          width: 10 },
+                { header: 'Track/Strand', note: 'e.g. STEM, ABM, HUMSS',            width: 18 },
+                { header: 'Section',      note: 'Section name',                      width: 20 },
+                { header: 'Contact',      note: 'Guardian contact number',           width: 18 }
+            ];
+            cols.forEach((c, i) => { ws.getColumn(i + 1).width = c.width; });
+            applyHeaderRow(ws.getRow(1), ws.getRow(2), cols);
+            addDropdown(ws, 'C', START, END, '"Male,Female"', 'Select Male or Female');
+            addDropdown(ws, 'E', START, END, '"11,12"', 'Select Grade 11 or Grade 12');
+            res.setHeader('Content-Disposition', 'attachment; filename="shs_student_import_template.xlsx"');
+
+        } else if (type === 'teacher') {
+            const ws = wb.addWorksheet('Teachers');
+            ws.getRow(1).height = 28;
+            ws.getRow(2).height = 22;
+            const cols = [
+                { header: 'Employee ID',          note: 'Teacher or employee ID',           width: 18 },
+                { header: 'Teacher/Adviser Name', note: 'Last Name, First Name Middle Name', width: 32 },
+                { header: 'School Name',          note: 'Full school name',                  width: 30 },
+                { header: 'Grade Level',          note: 'Grade 1 to Grade 6 / 7–10',         width: 14 },
+                { header: 'Section Name',         note: 'Advisory section name',             width: 20 },
+                { header: 'Contact Number',       note: 'Mobile or landline',                width: 18 },
+                { header: 'Email',                note: 'Used as adviser login username',     width: 26 }
+            ];
+            cols.forEach((c, i) => { ws.getColumn(i + 1).width = c.width; });
+            applyHeaderRow(ws.getRow(1), ws.getRow(2), cols);
+            addDropdown(ws, 'D', START, END, '"Grade 1,Grade 2,Grade 3,Grade 4,Grade 5,Grade 6,Grade 7,Grade 8,Grade 9,Grade 10"', 'Select a grade level');
+            res.setHeader('Content-Disposition', 'attachment; filename="teacher_import_template.xlsx"');
+
+        } else if (type === 'shs_teacher') {
+            const ws = wb.addWorksheet('SHS Teachers');
+            ws.getRow(1).height = 28;
+            ws.getRow(2).height = 22;
+            const cols = [
+                { header: 'Employee ID',          note: 'Teacher or employee ID',           width: 18 },
+                { header: 'Teacher/Adviser Name', note: 'Last Name, First Name Middle Name', width: 32 },
+                { header: 'School Name',          note: 'Full school name',                  width: 30 },
+                { header: 'Grade Level',          note: '11 or 12',                          width: 10 },
+                { header: 'Track/Strand',         note: 'e.g. STEM, ABM, HUMSS',            width: 18 },
+                { header: 'Section Name',         note: 'Advisory section name',             width: 20 },
+                { header: 'Contact Number',       note: 'Mobile or landline',                width: 18 },
+                { header: 'Email',                note: 'Used as adviser login username',     width: 26 }
+            ];
+            cols.forEach((c, i) => { ws.getColumn(i + 1).width = c.width; });
+            applyHeaderRow(ws.getRow(1), ws.getRow(2), cols);
+            addDropdown(ws, 'D', START, END, '"11,12"', 'Select Grade 11 or Grade 12');
+            res.setHeader('Content-Disposition', 'attachment; filename="shs_teacher_import_template.xlsx"');
+
+        } else {
+            return res.status(404).json({ error: 'Template not found.' });
+        }
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        await wb.xlsx.write(res);
+        res.end();
+    } catch (err) {
+        console.error('Template generation error:', err);
+        return res.status(500).json({ error: 'Failed to generate template.' });
     }
-    const filePath = path.join(__dirname, '..', 'public', 'templates', filename);
-    if (!fs.existsSync(filePath)) {
-        return res.status(404).json({ error: 'Template file not found on server.' });
-    }
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.download(filePath, filename);
 });
 
 // ---- Export Users (Admin Accounts) ----
