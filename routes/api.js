@@ -1193,13 +1193,16 @@ const dashboardCache = { data: null, timestamp: 0, key: '' };
 
 router.get('/dashboard-data', requireAuth, async (req, res) => {
     try {
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
         const date = req.query.date || todayDate();
         const schoolId = applySchoolFilter(req);
         const absenceCountingActive = await shouldCountComputedAbsences(date, schoolId);
         const cacheKey = `${date}-${schoolId || 'all'}-${absenceCountingActive ? 'absence-closed' : 'attendance-open'}`;
 
         // Return cached if fresh (3 seconds)
-        if (dashboardCache.key === cacheKey && (Date.now() - dashboardCache.timestamp) < 3000) {
+        if (!req.query._ && dashboardCache.key === cacheKey && (Date.now() - dashboardCache.timestamp) < 3000) {
             return res.json(dashboardCache.data);
         }
 
@@ -1493,6 +1496,9 @@ router.get('/division-weekly-trend', requireAuth, async (req, res) => {
 // GET /api/realtime-poll
 // =============================================
 router.get('/realtime-poll', requireAuth, async (req, res) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     const clientHash = req.query.hash || '';
     const schoolId = applySchoolFilter(req);
 
@@ -2848,9 +2854,12 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
 
 // ---- Absence Flagging (2+ consecutive days) ----
 router.get('/absence-flags', requireAuth, async (req, res) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     const days = parseInt(req.query.days) || 2;
     let schoolId = applySchoolFilter(req);
-    if (!schoolId && req.query.school_id) schoolId = parseInt(req.query.school_id, 10);
+    if (!schoolId && (req.query.school_id || req.query.school)) schoolId = parseInt(req.query.school_id || req.query.school, 10);
     try {
         const baseDate = req.query.date || todayDate();
         const includeTeachers = req.query.include_teachers !== '0';

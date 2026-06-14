@@ -36,6 +36,7 @@ async function request(path, options = {}) {
 
   const response = await fetch(`${base}${path}`, {
     ...options,
+    cache: 'no-store',
     headers
   });
 
@@ -61,6 +62,11 @@ async function request(path, options = {}) {
   return payload;
 }
 
+function cacheBust(path) {
+  const sep = path.includes('?') ? '&' : '?';
+  return `${path}${sep}_=${Date.now()}`;
+}
+
 export const api = {
   login: async (username, password) => request('/app-login', {
     method: 'POST',
@@ -68,9 +74,9 @@ export const api = {
   }),
   logout: async () => request('/app-logout', { method: 'POST' }),
   appInfo: async () => request('/api/app-info'),
-  dashboard: async (date) => request(`/api/dashboard-data?date=${encodeURIComponent(date)}`),
-  absenceFlags: async () => request('/api/absence-flags?days=2'),
-  getAbsenceFlags: async () => request('/api/absence-flags?days=2'),
+  dashboard: async (date) => request(cacheBust(`/api/dashboard-data?date=${encodeURIComponent(date)}`)),
+  absenceFlags: async () => request(cacheBust('/api/absence-flags?days=2')),
+  getAbsenceFlags: async () => request(cacheBust('/api/absence-flags?days=2')),
   scanAttendance: async (qr_code) => request('/api/scan-attendance', {
     method: 'POST',
     body: JSON.stringify({ qr_code })

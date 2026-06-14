@@ -92,6 +92,12 @@
     return path + (path.indexOf('?') === -1 ? '?app=1' : '&app=1');
   }
 
+  function liveParams(base) {
+    var params = base || new URLSearchParams();
+    params.set('_', String(Date.now()));
+    return params;
+  }
+
   function installBottomNavigation() {
     if (!isMobileAppShell() || document.querySelector('.mobile-bottom-nav')) return;
 
@@ -203,9 +209,9 @@
       try {
         var dateEl = document.getElementById('dashDate');
         var schoolEl = document.getElementById('dashSchool');
-        var params = new URLSearchParams({ date: dateEl ? dateEl.value : localDateString() });
+        var params = liveParams(new URLSearchParams({ date: dateEl ? dateEl.value : localDateString() }));
         if (schoolEl && schoolEl.value) params.append('school', schoolEl.value);
-        var res = await fetch('/api/dashboard-data?' + params, { credentials: 'same-origin' });
+        var res = await fetch('/api/dashboard-data?' + params, { credentials: 'same-origin', cache: 'no-store' });
         if (!res.ok) return;
         var data = await res.json();
         applyDashboardData(data);
@@ -218,9 +224,9 @@
     async function poll() {
       try {
         var schoolEl = document.getElementById('dashSchool');
-        var params = new URLSearchParams({ hash: currentHash });
+        var params = liveParams(new URLSearchParams({ hash: currentHash }));
         if (schoolEl && schoolEl.value) params.append('school', schoolEl.value);
-        var res = await fetch('/api/realtime-poll?' + params, { credentials: 'same-origin' });
+        var res = await fetch('/api/realtime-poll?' + params, { credentials: 'same-origin', cache: 'no-store' });
         if (res.ok) {
           var data = await res.json();
           if (data.changed || !currentHash) {
@@ -287,7 +293,11 @@
 
   async function checkAbsenceFlagsAndNotify() {
     try {
-      var res = await fetch('/api/absence-flags?days=2', { credentials: 'same-origin' });
+      var schoolEl = document.getElementById('dashSchool');
+      var dateEl = document.getElementById('dashDate');
+      var params = liveParams(new URLSearchParams({ days: '2', date: dateEl ? dateEl.value : localDateString() }));
+      if (schoolEl && schoolEl.value) params.append('school', schoolEl.value);
+      var res = await fetch('/api/absence-flags?' + params, { credentials: 'same-origin', cache: 'no-store' });
       if (!res.ok) return;
       var flags = await res.json();
       if (!Array.isArray(flags) || !flags.length) return;
@@ -299,7 +309,21 @@
       var newlyFlagged = [];
       for (var i = 0; i < flags.length; i++) {
         var st = flags[i];
-        var key = String(st.id || '') + '|' + String(st.lrn || '') + '|' + String(st.absent_days || 2);
+        var fingerprint = [
+          st.name,
+          st.firstname,
+          st.lastname,
+          st.lrn,
+          st.grade_name,
+          st.section_name,
+          st.school_name,
+          st.adviser,
+          st.adviser_contact,
+          st.adviser_email,
+          st.school_contact,
+          st.absent_days || 2
+        ].map(function(v) { return String(v || '').trim(); }).join('|');
+        var key = String(st.person_type || 'student') + '|' + String(st.id || '') + '|' + fingerprint;
         if (!notifiedMap[today][key]) {
           notifiedMap[today][key] = 1;
           newlyFlagged.push(st);

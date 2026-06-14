@@ -13,10 +13,12 @@ export default function DashboardScreen({ user, onLogout, onOpenScanner }) {
   const [dashboard, setDashboard] = useState(null);
   const [flags, setFlags] = useState([]);
 
-  const load = useCallback(async (isRefresh = false) => {
+  const load = useCallback(async (isRefresh = false, quiet = false) => {
     try {
       setError('');
-      if (isRefresh) setRefreshing(true); else setLoading(true);
+      if (!quiet) {
+        if (isRefresh) setRefreshing(true); else setLoading(true);
+      }
       const [d, f] = await Promise.all([api.dashboard(today()), api.absenceFlags()]);
       setDashboard(d);
       setFlags(Array.isArray(f) ? f : []);
@@ -24,12 +26,19 @@ export default function DashboardScreen({ user, onLogout, onOpenScanner }) {
       setError(err.message || 'Failed to load dashboard.');
     } finally {
       setLoading(false);
-      setRefreshing(false);
+      if (!quiet) setRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
     load(false);
+  }, [load]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      load(false, true);
+    }, 5000);
+    return () => clearInterval(timer);
   }, [load]);
 
   if (loading) {
@@ -59,7 +68,9 @@ export default function DashboardScreen({ user, onLogout, onOpenScanner }) {
       <View style={styles.panel}>
         <Text style={styles.panelTitle}>2-Day Absence Alerts</Text>
         {flags.length === 0 ? <Text style={styles.small}>No alerts found.</Text> : flags.slice(0, 10).map((item) => (
-          <Text key={String(item.id)} style={styles.small}>{item.name || `${item.firstname} ${item.lastname}`}</Text>
+          <Text key={`${item.person_type || 'student'}-${item.id}-${item.lrn || ''}-${item.grade_name || ''}-${item.section_name || ''}-${item.adviser_contact || item.school_contact || ''}`} style={styles.small}>
+            {(item.name || `${item.firstname || ''} ${item.lastname || ''}`.trim())} - {item.grade_name || '-'} / {item.section_name || '-'} - {item.adviser_contact || item.adviser_email || item.school_contact || 'No contact'}
+          </Text>
         ))}
       </View>
 

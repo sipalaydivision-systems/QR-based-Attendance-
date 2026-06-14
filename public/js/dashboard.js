@@ -19,11 +19,11 @@
 
     async function fetchDashboard() {
         const { date, school } = getFilters();
-        const params = new URLSearchParams({ date });
+        const params = new URLSearchParams({ date, _: String(Date.now()) });
         if (school) params.append('school', school);
 
         try {
-            const res = await fetch('/api/dashboard-data?' + params);
+            const res = await fetch('/api/dashboard-data?' + params, { cache: 'no-store' });
             if (!res.ok) return;
             const data = await res.json();
             updateUI(data);
@@ -99,8 +99,11 @@
     async function loadFlaggedStudents() {
         var flaggedCard = document.getElementById('flaggedCard');
         if (!flaggedCard) return;
+        const { date, school } = getFilters();
+        const params = new URLSearchParams({ days: '2', date, _: String(Date.now()) });
+        if (school) params.append('school', school);
         try {
-            var res = await fetch('/api/absence-flags?days=2');
+            var res = await fetch('/api/absence-flags?' + params, { cache: 'no-store' });
             var data = await res.json();
             if (data.length > 0) {
                 flaggedCard.style.display = 'block';
@@ -117,13 +120,13 @@
 
     async function poll() {
         const { date, school } = getFilters();
-        const params = new URLSearchParams({ hash: currentHash });
+        const params = new URLSearchParams({ hash: currentHash, _: String(Date.now()) });
         if (school) params.append('school', school);
 
         try {
             const controller = new AbortController();
             const timeout = setTimeout(function() { controller.abort(); }, 8000);
-            const res = await fetch('/api/realtime-poll?' + params, { signal: controller.signal });
+            const res = await fetch('/api/realtime-poll?' + params, { signal: controller.signal, cache: 'no-store' });
             clearTimeout(timeout);
             if (!res.ok) { schedulePoll(); return; }
             const data = await res.json();
