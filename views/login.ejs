@@ -60,22 +60,6 @@
                 </button>
             </form>
 
-            <p style="text-align:center;margin-top:20px;font-size:0.75rem;color:var(--gray-400);">
-                <i class="fa-solid fa-shield-halved"></i> Authorized personnel only
-            </p>
-            <button type="button" id="installWebAppBtn" class="btn btn-block" style="display:none;margin-top:10px;background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;">
-                <i class="fa-solid fa-mobile-screen-button"></i> Install Web App
-            </button>
-            <p style="text-align:center;margin-top:12px;font-size:0.8125rem;">
-                <a href="/adviser-login" style="color:#16a34a;font-weight:700;text-decoration:none;">
-                    <i class="fa-solid fa-chalkboard-user"></i> Adviser Login
-                </a>
-            </p>
-            <p class="mobile-app-download-link" style="text-align:center;margin-top:8px;font-size:0.8125rem;">
-                <a href="/app" style="color:var(--primary);font-weight:700;text-decoration:none;">
-                    <i class="fa-solid fa-globe"></i> Open Mobile Web App
-                </a>
-            </p>
         </div>
     </div>
     <script>
@@ -105,21 +89,6 @@
             navigator.serviceWorker.register('/sw.js').catch(function () {});
         }
 
-        var deferredPrompt = null;
-        var installBtn = document.getElementById('installWebAppBtn');
-        window.addEventListener('beforeinstallprompt', function (e) {
-            e.preventDefault();
-            deferredPrompt = e;
-            installBtn.style.display = 'inline-flex';
-        });
-
-        installBtn.addEventListener('click', async function () {
-            if (!deferredPrompt) return;
-            deferredPrompt.prompt();
-            try { await deferredPrompt.userChoice; } catch (_) {}
-            deferredPrompt = null;
-            installBtn.style.display = 'none';
-        });
     })();
     </script>
 </body>

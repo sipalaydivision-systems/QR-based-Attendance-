@@ -91,6 +91,9 @@
     <button class="btn" style="background:#fff;color:var(--primary);font-weight:700;padding:9px 18px;" onclick="openAddModal()">
         <i class="fa-solid fa-user-plus"></i> Add Student
     </button>
+    <button class="btn" style="background:#fff;color:var(--primary);font-weight:700;padding:9px 18px;" onclick="openImportModal()">
+        <i class="fa-solid fa-file-arrow-up"></i> Import Students
+    </button>
 </div>
 
 <div class="as-section-badges">
@@ -161,6 +164,34 @@
 </div>
 
 <% } %>
+</div>
+
+<!-- Import Students Modal -->
+<div class="modal-overlay" id="importModal" style="display:none;">
+    <div class="modal" style="max-width:520px;">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-file-arrow-up"></i> Import Students</h3>
+            <button class="modal-close" onclick="closeImportModal()">&times;</button>
+        </div>
+        <div style="padding:24px;">
+            <p style="font-size:0.875rem;color:var(--gray-600);margin:0 0 16px;">
+                Imported students will be assigned to <strong><%= teacher.grade_name || 'your grade' %> - <%= teacher.section_name || 'your section' %></strong>.
+            </p>
+            <div class="form-group" style="margin-bottom:14px;">
+                <label class="form-label">Excel or CSV File</label>
+                <input type="file" id="importFile" class="form-control" accept=".xlsx,.xls,.csv" style="width:100%;box-sizing:border-box;">
+            </div>
+            <div style="font-size:0.8125rem;color:var(--gray-500);margin-bottom:16px;">
+                Use columns like LRN, Student Name, Sex/Gender, and Guardian Contact. School, grade, and section columns are ignored for adviser imports.
+                <a href="/export/template/student" style="color:var(--primary);font-weight:700;">Download template</a>
+            </div>
+            <div id="importResult" style="display:none;font-size:0.8125rem;margin-bottom:12px;"></div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeImportModal()">Cancel</button>
+                <button class="btn btn-primary" id="importBtn" onclick="submitImport()"><i class="fa-solid fa-file-arrow-up"></i> Import</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- ── Add Student Modal ── -->
@@ -288,6 +319,59 @@
 </div>
 
 <script>
+function openImportModal() {
+    document.getElementById('importFile').value = '';
+    document.getElementById('importResult').style.display = 'none';
+    document.getElementById('importModal').style.display = 'flex';
+}
+function closeImportModal() { document.getElementById('importModal').style.display = 'none'; }
+
+function submitImport() {
+    var file = document.getElementById('importFile').files[0];
+    var resultEl = document.getElementById('importResult');
+    if (!file) {
+        resultEl.style.display = '';
+        resultEl.style.color = '#dc2626';
+        resultEl.textContent = 'Please choose an Excel or CSV file first.';
+        return;
+    }
+
+    var btn = document.getElementById('importBtn');
+    var fd = new FormData();
+    fd.append('file', file);
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Importing...';
+    resultEl.style.display = 'none';
+
+    fetch('/admin/adviser-import-students', { method: 'POST', body: fd })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        resultEl.style.display = '';
+        if (data.success) {
+            resultEl.style.color = '#047857';
+            resultEl.innerHTML = 'Imported ' + data.imported + ' student(s), updated ' + data.updated + ' student(s).' +
+                (data.errors && data.errors.length ? '<br><span style="color:#dc2626;">Skipped ' + data.errors.length + ' row(s): ' + data.errors.slice(0, 3).map(function(e) { return 'Row ' + e.row + ' - ' + e.message; }).join('; ') + '</span>' : '');
+            setTimeout(function() { window.location.reload(); }, 1200);
+        } else {
+            resultEl.style.color = '#dc2626';
+            resultEl.textContent = data.error || 'Import failed.';
+        }
+    })
+    .catch(function() {
+        resultEl.style.display = '';
+        resultEl.style.color = '#dc2626';
+        resultEl.textContent = 'Network error - try again.';
+    })
+    .finally(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-file-arrow-up"></i> Import';
+    });
+}
+
+if (window.location.hash === '#import') {
+    setTimeout(openImportModal, 150);
+}
+
 // ── Search ──
 function filterTable() {
     var q = document.getElementById('asSearch').value.toLowerCase();

@@ -139,6 +139,19 @@ function parseSexValue(raw) {
     return null;
 }
 
+function parseImportName(nameStr) {
+    const raw = String(nameStr || '').trim();
+    if (!raw) return { firstname: '', lastname: '', middlename: '' };
+    const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+        return { lastname: parts[0], firstname: parts[1], middlename: parts[2] || '' };
+    }
+    const words = raw.split(/\s+/);
+    if (words.length === 1) return { firstname: words[0], lastname: '', middlename: '' };
+    if (words.length === 2) return { firstname: words[0], lastname: words[1], middlename: '' };
+    return { firstname: words[0], lastname: words[words.length - 1], middlename: words.slice(1, -1).join(' ') };
+}
+
 function getRowValue(row, keys) {
     for (const key of keys) {
         if (row[key] != null && String(row[key]).trim() !== '') return String(row[key]).trim();
@@ -854,6 +867,130 @@ router.post('/adviser-add-student', express.json(), async (req, res) => {
         if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'LRN already exists in the system' });
         console.error('Adviser add student error:', err);
         res.status(500).json({ error: 'Failed to add student' });
+    }
+});
+
+// ---- Adviser: Import Students ----
+router.post('/adviser-import-students', upload.single('file'), async (req, res) => {
+    if (!req.session.user || req.session.user.role !== 'adviser') return res.status(403).json({ error: 'Unauthorized' });
+    const teacherId = req.session.user.teacher_id;
+    if (!teacherId) return res.status(400).json({ error: 'No teacher record' });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+
+    let rows = [];
+    try {
+        const [[t]] = await db.query(
+            `SELECT t.section_id, t.school_id, t.grade_level_id, gl.name as grade_name
+             FROM teachers t
+             LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
+             WHERE t.id = ?`,
+            [teacherId]
+        );
+        if (!t || !t.section_id) return res.status(400).json({ error: 'No section assigned to your account' });
+
+        const ext = String(req.file.originalname || '').toLowerCase();
+        if (ext.endsWith('.xlsx') || ext.endsWith('.xls')) {
+            const ExcelJS = require('exceljs');
+            const workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.load(req.file.buffer);
+            const sheet = workbook.getWorksheet('Template') || workbook.worksheets[0];
+            if (!sheet) return res.status(400).json({ error: 'No worksheet found in the uploaded file.' });
+            const headers = [];
+            sheet.getRow(1).eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                const raw = parseExcelCellValue(cell);
+                headers[colNumber] = raw.split('\n')[0].trim();
+            });
+            sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+                if (rowNumber <= 1) return;
+                const obj = {};
+                row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                    const key = headers[colNumber];
+                    if (key) obj[key] = parseExcelCellValue(cell);
+                });
+                if (Object.values(obj).some(v => String(v || '').trim() !== '')) {
+                    rows.push({ row: obj, rowNum: rowNumber });
+                }
+            });
+        } else {
+            await new Promise((resolve, reject) => {
+                let rowNum = 1;
+                const stream = Readable.from(req.file.buffer.toString());
+                stream.pipe(csv())
+                    .on('data', row => { rowNum++; rows.push({ row, rowNum }); })
+                    .on('end', resolve)
+                    .on('error', reject);
+            });
+        }
+
+        if (!rows.length) return res.status(400).json({ error: 'No student rows found in the uploaded file.' });
+
+        const gradeNumber = parseGradeNumber(t.grade_name);
+        const category = Number.isFinite(gradeNumber) && gradeNumber >= 11 ? 'shs_student' : 'student';
+        const errors = [];
+        let imported = 0;
+        let updated = 0;
+
+        for (const { row, rowNum } of rows) {
+            try {
+                const rawName = getRowValue(row, ['Student Name', 'Learner Name', 'Name', 'student_name']);
+                const parsed = parseImportName(rawName);
+                const fn = parsed.firstname || getRowValue(row, ['First Name', 'Firstname', 'Given Name', 'firstname']);
+                const ln = parsed.lastname || getRowValue(row, ['Last Name', 'Lastname', 'Surname', 'lastname']);
+                const mn = parsed.middlename || getRowValue(row, ['Middle Name', 'Middlename', 'Middle Initial', 'middlename']);
+                const lrnVal = getRowValue(row, ['LRN', 'lrn']) || null;
+                const sexRaw = getRowValue(row, ['Sex', 'Gender', 'sex', 'gender']);
+                const sex = parseSexValue(sexRaw);
+                const guardianContact = getRowValue(row, ['Guardian Contact', 'Guardian Phone', 'Contact Number', 'guardian_contact']) || null;
+
+                if (!fn || !ln) {
+                    errors.push({ row: rowNum, message: 'Missing student name' });
+                    continue;
+                }
+                if (sexRaw && !sex) {
+                    errors.push({ row: rowNum, message: 'Invalid Sex/Gender value "' + sexRaw + '"' });
+                    continue;
+                }
+
+                if (lrnVal) {
+                    const [existing] = await db.query(
+                        'SELECT id, section_id FROM students WHERE lrn = ? AND status != ?',
+                        [lrnVal, 'deleted']
+                    );
+                    if (existing.length && Number(existing[0].section_id) !== Number(t.section_id)) {
+                        errors.push({ row: rowNum, message: 'LRN already belongs to another section' });
+                        continue;
+                    }
+                    if (existing.length) {
+                        await db.query(
+                            `UPDATE students
+                             SET firstname=?, lastname=?, middlename=?, gender=?, school_id=?, grade_level_id=?, section_id=?,
+                                 guardian_contact=?, category=?, status='active', active_from=COALESCE(active_from, CURDATE())
+                             WHERE id=?`,
+                            [fn, ln, mn || null, sex || null, t.school_id, t.grade_level_id, t.section_id, guardianContact, category, existing[0].id]
+                        );
+                        updated++;
+                        continue;
+                    }
+                }
+
+                const qr_code = lrnVal ? 'STU-' + lrnVal : 'STU-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);
+                await db.query(
+                    `INSERT INTO students
+                        (lrn, firstname, lastname, middlename, gender, school_id, grade_level_id, section_id, guardian_contact, qr_code, category, active_from, status)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,CURDATE(),'active')`,
+                    [lrnVal, fn, ln, mn || null, sex || null, t.school_id, t.grade_level_id, t.section_id, guardianContact, qr_code, category]
+                );
+                imported++;
+            } catch (err) {
+                if (err.code === 'ER_DUP_ENTRY') errors.push({ row: rowNum, message: 'Duplicate LRN or QR code' });
+                else errors.push({ row: rowNum, message: err.message });
+            }
+        }
+
+        return res.json({ success: true, imported, updated, errors, total: rows.length });
+    } catch (err) {
+        console.error('Adviser import students error:', err);
+        return res.status(400).json({ error: 'Failed to import students: ' + err.message });
     }
 });
 

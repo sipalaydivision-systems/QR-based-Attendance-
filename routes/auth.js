@@ -61,14 +61,16 @@ router.post('/login', async (req, res) => {
 
 // POST /logout
 router.post('/logout', (req, res) => {
+    const logoutPath = req.session.user && req.session.user.role === 'adviser' ? '/adviser-login' : '/login';
     req.session.destroy(() => {
-        res.redirect('/login');
+        res.redirect(logoutPath);
     });
 });
 
 router.get('/logout', (req, res) => {
+    const logoutPath = req.session.user && req.session.user.role === 'adviser' ? '/adviser-login' : '/login';
     req.session.destroy(() => {
-        res.redirect('/login');
+        res.redirect(logoutPath);
     });
 });
 
