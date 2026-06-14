@@ -55,6 +55,7 @@
         setText('statSchools', data.total_schools);
         setText('statStudents', data.active_students);
         setText('statPresent', data.students_present);
+        setText('statHalfDay', data.students_half_day || 0);
         setText('statAbsent', data.students_absent);
         setText('statTeachers', data.teachers_present + '/' + data.total_teachers);
         setText('statRate', data.attendance_rate + '%');
@@ -81,10 +82,10 @@
         if (tbody && data.schools) {
             tbody.innerHTML = data.schools.map(function(s) {
                 return '<tr><td>' + s.name + '</td><td>' + s.enrollment + '</td><td>' + s.present +
-                '</td><td>' + s.absent + '</td><td>' + s.rate + '%</td>' +
+                '</td><td>' + (s.late || 0) + '</td><td>' + (s.half_day || 0) + '</td><td>' + s.absent + '</td><td>' + s.rate + '%</td>' +
                 '<td>' + s.teachers_present + '/' + s.teachers_total + '</td>' +
                 '<td>' + s.teacher_rate + '%</td></tr>';
-            }).join('') || '<tr><td colspan="7" class="text-center">No schools</td></tr>';
+            }).join('') || '<tr><td colspan="9" class="text-center">No schools</td></tr>';
         }
 
         // Load 2-day absence flagged students

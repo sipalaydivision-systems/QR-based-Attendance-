@@ -6,6 +6,8 @@
         present: 'Present',
         absent: 'Absent',
         late: 'Late',
+        half_day: 'Half-Day',
+        'half day': 'Half-Day',
         flagged: 'Flagged',
         pending: 'Pending',
         sent: 'Sent',

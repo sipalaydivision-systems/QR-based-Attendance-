@@ -126,6 +126,7 @@ async function ensureRuntimeSchema() {
 
     await db.query("ALTER TABLE students MODIFY COLUMN status ENUM('active','inactive','deleted') DEFAULT 'inactive'");
     await db.query("ALTER TABLE teachers MODIFY COLUMN status ENUM('active','inactive','deleted') DEFAULT 'inactive'");
+    await db.query("ALTER TABLE attendance MODIFY COLUMN status ENUM('present','late','half_day','absent') DEFAULT 'present'");
 
     // Imported students should not become attendance-eligible until their first valid attendance scan.
     const [inactiveResult] = await db.query(`

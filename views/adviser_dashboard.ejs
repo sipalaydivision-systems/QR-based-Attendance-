@@ -96,6 +96,7 @@
 }
 .ad-status-pill.present { background: #dcfce7; color: #16a34a; }
 .ad-status-pill.late    { background: #fef3c7; color: #d97706; }
+.ad-status-pill.half_day { background: #ffedd5; color: #ea580c; }
 .ad-status-pill.absent  { background: #fee2e2; color: #dc2626; }
 .ad-status-pill.inside  { background: #dbeafe; color: #2563eb; }
 .ad-status-pill.outside { background: #fce7f3; color: #db2777; }
@@ -160,7 +161,7 @@
         <span class="ad-section-badge section"><i class="fa-solid fa-users"></i> <%= teacher.section_name || 'N/A' %></span>
     </div>
 
-    <div class="stats-grid" style="grid-template-columns: repeat(5, minmax(0, 1fr));">
+    <div class="stats-grid" style="grid-template-columns: repeat(6, minmax(0, 1fr));">
 
         <div class="stat-card stat-students">
             <div class="stat-icon-wrap blue"><i class="fa-solid fa-users"></i></div>
@@ -181,6 +182,13 @@
             <div class="stat-info">
                 <span class="stat-number" id="adLate">--</span>
                 <span class="stat-label">Late</span>
+            </div>
+        </div>
+        <div class="stat-card" style="border-left:3px solid #ea580c;">
+            <div class="stat-icon-wrap orange"><i class="fa-solid fa-circle-half-stroke"></i></div>
+            <div class="stat-info">
+                <span class="stat-number" id="adHalfDay">--</span>
+                <span class="stat-label">Half-Day</span>
             </div>
         </div>
         <div class="stat-card stat-absent">
@@ -206,6 +214,7 @@
                 <button class="ad-filter-btn active" data-filter="all" onclick="setFilter('all')">All</button>
                 <button class="ad-filter-btn" data-filter="present" onclick="setFilter('present')">Present</button>
                 <button class="ad-filter-btn" data-filter="late" onclick="setFilter('late')">Late</button>
+                <button class="ad-filter-btn" data-filter="half_day" onclick="setFilter('half_day')">Half-Day</button>
                 <button class="ad-filter-btn" data-filter="absent" onclick="setFilter('absent')">Absent</button>
                 <button class="ad-filter-btn" data-filter="flagged" onclick="setFilter('flagged')">Flagged</button>
                 <input type="text" id="adSearch" class="ad-search" placeholder="Search student...">
@@ -284,6 +293,7 @@
     function statusPill(attStatus) {
         if (!attStatus) return '<span class="ad-status-pill absent"><i class="fa-solid fa-circle-xmark"></i> Absent</span>';
         if (attStatus === 'late') return '<span class="ad-status-pill late"><i class="fa-solid fa-clock"></i> Late</span>';
+        if (attStatus === 'half_day') return '<span class="ad-status-pill half_day"><i class="fa-solid fa-circle-half-stroke"></i> Half-Day</span>';
         return '<span class="ad-status-pill present"><i class="fa-solid fa-circle-check"></i> Present</span>';
     }
 
@@ -310,6 +320,7 @@
 
         if (currentFilter === 'present') filtered = filtered.filter(function(s) { return s.att_status === 'present'; });
         else if (currentFilter === 'late') filtered = filtered.filter(function(s) { return s.att_status === 'late'; });
+        else if (currentFilter === 'half_day') filtered = filtered.filter(function(s) { return s.att_status === 'half_day'; });
         else if (currentFilter === 'absent') filtered = filtered.filter(function(s) { return !s.att_status && s.student_status === 'active'; });
         else if (currentFilter === 'flagged') filtered = filtered.filter(function(s) { return s.flagged; });
 
@@ -352,6 +363,7 @@
             document.getElementById('adTotal').textContent = data.kpi.total;
             document.getElementById('adPresent').textContent = data.kpi.present;
             document.getElementById('adLate').textContent = data.kpi.late;
+            document.getElementById('adHalfDay').textContent = data.kpi.half_day || 0;
             document.getElementById('adAbsent').textContent = data.kpi.absent;
             document.getElementById('adFlagged').textContent = data.kpi.flagged || 0;
             allStudents = data.students;

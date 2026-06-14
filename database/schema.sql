@@ -137,7 +137,7 @@ CREATE TABLE IF NOT EXISTS attendance (
     time_in DATETIME,
     last_time_in DATETIME,
     time_out DATETIME,
-    status ENUM('present','late','absent') DEFAULT 'present',
+    status ENUM('present','late','half_day','absent') DEFAULT 'present',
     monitoring_status VARCHAR(20) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

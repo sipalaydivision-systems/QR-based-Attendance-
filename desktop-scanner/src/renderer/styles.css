@@ -953,6 +953,7 @@ body.settings-open .side-panel {
 }
 .log-status-badge.present   { background: #dcfce7; color: #166534; }
 .log-status-badge.late      { background: #fef3c7; color: #92400e; }
+.log-status-badge.half-day  { background: #ffedd5; color: #c2410c; }
 .log-status-badge.out       { background: #ffedd5; color: #9a3412; }
 .log-status-badge.returned  { background: #dbeafe; color: #1e40af; }
 .log-status-badge.completed { background: #dcfce7; color: #166534; }

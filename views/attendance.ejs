@@ -97,7 +97,10 @@ async function loadAttendance() {
 
     document.getElementById('attendanceBody').innerHTML = data.map(function(r) {
         var rawStatus = String(r.status || '').toLowerCase();
-        var statusClass = rawStatus === 'present' ? 'badge-active' : rawStatus === 'late' ? 'badge-late' : 'badge-inactive';
+        var statusClass = rawStatus === 'present' ? 'badge-active'
+            : rawStatus === 'late' ? 'badge-late'
+            : rawStatus === 'half_day' ? 'badge-half-day'
+            : 'badge-inactive';
         var statusText = formatStatusLabel(r.status);
         var timeOutText = r.time_out ? new Date(r.time_out).toLocaleTimeString() : (r.monitoring_status === 'Pending Time Out' ? 'Pending Time Out' : '-');
         return '<tr>' +

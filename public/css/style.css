@@ -459,6 +459,7 @@ a:hover { color: var(--primary-dark); }
 .badge-active, .badge-present   { background: #dcfce7; color: #15803d; }
 .badge-inactive, .badge-absent  { background: #fee2e2; color: #b91c1c; }
 .badge-late                     { background: #fef3c7; color: #92400e; }
+.badge-half-day                 { background: #ffedd5; color: #c2410c; }
 .badge-info                     { background: #e0e7ff; color: var(--primary); }
 .badge-pending                  { background: #dbeafe; color: #1e40af; }
 .badge-purple                   { background: #f3e8ff; color: #7c3aed; }

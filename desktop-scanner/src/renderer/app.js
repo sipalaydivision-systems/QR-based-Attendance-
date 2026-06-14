@@ -377,7 +377,7 @@ function resultTone(data) {
   if (!data.success && !data.offline) return 'error';
   if (data.offline && !data.success) return 'warning';
   if (data.offline) return 'warning';
-  if (['ALREADY_RECORDED', 'PENDING_TIME_OUT', 'CONFIRM_TIME_OUT'].includes(data.action) || data.status === 'late') return 'warning';
+  if (['ALREADY_RECORDED', 'PENDING_TIME_OUT', 'CONFIRM_TIME_OUT'].includes(data.action) || data.status === 'late' || data.status === 'half_day') return 'warning';
   return 'success';
 }
 
@@ -386,6 +386,7 @@ function titleForResult(data) {
   if (data.offline && data.success && data.action === 'TIME_OUT') return 'Time out saved locally';
   if (data.offline && !data.success) return 'Offline review';
   if (!data.success) return data.person ? 'Scan needs attention' : 'QR code not recognized';
+  if (data.status === 'half_day') return 'Half-day attendance recorded';
   if (data.action === 'TIME_IN' && data.status === 'late') return 'Late time in recorded';
   if (data.action === 'TIME_IN') return 'Time in recorded';
   if (data.action === 'TIME_OUT') return 'Time out recorded';
@@ -446,6 +447,7 @@ function humanizeAction(value) {
 function humanizeStatus(status, eventAction) {
   const s = String(status || '').toUpperCase();
   if (s === 'LATE') return 'Late';
+  if (s === 'HALF_DAY' || s === 'HALF-DAY') return 'Half-Day';
   if (s === 'RETURNED') return 'Returned';
   if (s === 'LUNCH OUT') return 'Lunch Out';
   if (s === 'PM PRESENT') return 'PM Present';
@@ -461,6 +463,7 @@ function humanizeStatus(status, eventAction) {
 
 function statusClassFor(status, eventAction) {
   const s = String(status || '').toUpperCase();
+  if (s === 'HALF_DAY' || s === 'HALF-DAY') return 'half-day';
   if (s === 'LATE') return 'late';
   if (s === 'RETURNED' || s === 'PM PRESENT') return 'returned';
   if (s === 'LUNCH OUT' || s === 'OUT') return 'out';
@@ -567,6 +570,7 @@ const CELL_ICONS = {
 
 function resIconKey(data, tone) {
   if (tone === 'error') return 'error';
+  if (data?.status === 'half_day') return 'clock';
   if (data?.offline) return 'cloud';
   const action = String(data?.action || '');
   if (action === 'TIME_OUT') return 'time-out';
@@ -583,6 +587,7 @@ function displayStatusOf(data) {
 
 function resBannerVariant(data, tone) {
   if (tone === 'error') return 'error';
+  if (data?.status === 'half_day') return 'time-out';
   if (data?.offline) return 'offline';
   const action = String(data?.action || '');
   const ds = displayStatusOf(data);
@@ -601,6 +606,7 @@ function bannerHeadingFor(data, tone, fallbackTitle) {
   if (tone === 'error') return 'Scan needs attention'.toUpperCase();
   const action = String(data.action || '');
   const ds = displayStatusOf(data);
+  if (data.status === 'half_day') return 'Half-day attendance'.toUpperCase();
   if (data.offline) return action === 'TIME_OUT' ? 'Time out saved offline'.toUpperCase() : 'Time in saved offline'.toUpperCase();
   if (action === 'TIME_IN') {
     if (ds === 'RETURNED') return 'Welcome back!'.toUpperCase();
@@ -624,6 +630,12 @@ function bannerSubFor(data, tone, fallbackMessage) {
   if (tone === 'error') return fallbackMessage || 'Please try scanning again.';
   const action = String(data.action || '');
   const ds = displayStatusOf(data);
+  if (data.status === 'half_day') {
+    const offlineText = data.offline ? ' Saved locally and ready to sync.' : '';
+    return data.remarks
+      ? `Remarks: ${data.remarks}.${offlineText}`
+      : `Partial-day attendance was detected.${offlineText}`;
+  }
   if (data.offline) return 'Saved on this computer — it will sync automatically when internet returns.';
   if (action === 'TIME_IN') {
     if (ds === 'RETURNED') return 'Return time in recorded. Welcome back to school.';
@@ -653,6 +665,15 @@ function heroConfigFor(data) {
   const action = String(data.action || '');
   const ds = displayStatusOf(data);
   if (action === 'TIME_OUT') {
+    if (data.status === 'half_day') {
+      return {
+        label: 'Half-Day',
+        value: data.time_out || data.time || '---',
+        variant: 'out',
+        pill: data.remarks || 'Partial Day',
+        pillClass: 'out'
+      };
+    }
     const pills = {
       'COMPLETED': { pill: '&#10003; Completed', pillClass: 'out' },
       'LUNCH OUT': { pill: 'Lunch Out', pillClass: 'pending' },
@@ -673,6 +694,15 @@ function heroConfigFor(data) {
   }
   // TIME_IN (and generic)
   const late = ds ? ds === 'LATE' : data.status === 'late';
+  if (data.status === 'half_day') {
+    return {
+      label: 'Half-Day',
+      value: data.time_in || data.time || '---',
+      variant: 'out',
+      pill: data.remarks || 'Partial Day',
+      pillClass: 'out'
+    };
+  }
   if (data.offline) {
     return { label: 'Time In', value: data.time_in || data.time || '—', variant: 'offline', pill: 'Saved Offline', pillClass: 'offline' };
   }

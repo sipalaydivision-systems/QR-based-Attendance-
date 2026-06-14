@@ -47,6 +47,13 @@
             </div>
         </div>
         <div class="div-sum-card">
+            <div class="div-sum-icon" style="background:#ffedd5;color:#ea580c;border-radius:10px;"><i class="fa-solid fa-circle-half-stroke"></i></div>
+            <div class="div-sum-info">
+                <span class="div-sum-val" id="dsStudentsHalfDay">0</span>
+                <span class="div-sum-lbl">Half-Day</span>
+            </div>
+        </div>
+        <div class="div-sum-card">
             <div class="div-sum-icon" style="background:#fee2e2;color:#dc2626;border-radius:10px;"><i class="fa-solid fa-circle-xmark"></i></div>
             <div class="div-sum-info">
                 <span class="div-sum-val" id="dsStudentsAbsent">0</span>
@@ -240,6 +247,7 @@
         setText('dsTotalSchools', d.total_schools || 0);
         setText('dsTotalStudents', d.active_students || 0);
         setText('dsStudentsPresent', d.students_present || 0);
+        setText('dsStudentsHalfDay', d.students_half_day || 0);
         setText('dsStudentsAbsent', d.students_absent || 0);
         setText('ds2DayAbsent', d.flagged_absent_2day || 0);
         setText('dsTotalTeachers', d.total_teachers || 0);
@@ -298,6 +306,7 @@
                 '<div class="sc-stats">' +
                     '<div class="sc-stat"><span class="sc-stat-val">' + (s.enrollment||0) + '</span><span class="sc-stat-lbl">Students</span></div>' +
                     '<div class="sc-stat"><span class="sc-stat-val" style="color:#16a34a">' + (s.present||0) + '</span><span class="sc-stat-lbl">Present</span></div>' +
+                    '<div class="sc-stat"><span class="sc-stat-val" style="color:#ea580c">' + (s.half_day||0) + '</span><span class="sc-stat-lbl">Half-Day</span></div>' +
                     '<div class="sc-stat"><span class="sc-stat-val" style="color:#dc2626">' + (s.absent||0) + '</span><span class="sc-stat-lbl">Absent</span></div>' +
                     '<div class="sc-stat"><span class="sc-stat-val">' + s.teachers_present + '/' + s.teachers_total + '</span><span class="sc-stat-lbl">Teachers</span></div>' +
                 '</div>' +
@@ -414,6 +423,7 @@
 
             var present = records.filter(function(r){ return r.status === 'present'; });
             var late    = records.filter(function(r){ return r.status === 'late'; });
+            var halfDay = records.filter(function(r){ return r.status === 'half_day'; });
             var total   = day.total || (day.present + day.absent);
             var rate    = total > 0 ? Math.round(((present.length + late.length) / total) * 100) : 0;
 
@@ -425,6 +435,8 @@
                     '<i class="fa-solid fa-circle-check"></i> ' + present.length + ' Present</span>' +
                 '<span style="display:inline-flex;align-items:center;gap:5px;background:#fef3c7;color:#b45309;border-radius:20px;padding:4px 12px;font-size:0.75rem;font-weight:700;">' +
                     '<i class="fa-solid fa-clock"></i> ' + late.length + ' Late</span>' +
+                '<span style="display:inline-flex;align-items:center;gap:5px;background:#ffedd5;color:#c2410c;border-radius:20px;padding:4px 12px;font-size:0.75rem;font-weight:700;">' +
+                    '<i class="fa-solid fa-circle-half-stroke"></i> ' + halfDay.length + ' Half-Day</span>' +
                 '<span style="display:inline-flex;align-items:center;gap:5px;background:#fee2e2;color:#dc2626;border-radius:20px;padding:4px 12px;font-size:0.75rem;font-weight:700;">' +
                     '<i class="fa-solid fa-circle-xmark"></i> ' + day.absent + ' Absent</span>' +
                 '<span style="display:inline-flex;align-items:center;gap:5px;background:#eef2ff;color:#4338ca;border-radius:20px;padding:4px 12px;font-size:0.75rem;font-weight:700;">' +
@@ -438,16 +450,16 @@
             }
 
             var allRows = records.slice().sort(function(a, b) {
-                var order = { present: 0, late: 1, absent: 2 };
+                var order = { present: 0, late: 1, half_day: 2, absent: 3 };
                 return (order[a.status] || 0) - (order[b.status] || 0);
             });
 
             document.getElementById('calModalBody').innerHTML =
                 '<div style="display:flex;flex-direction:column;gap:7px;">' +
                 allRows.map(function(r) {
-                    var sc = r.status === 'present' ? '#16a34a' : r.status === 'late' ? '#d97706' : '#dc2626';
-                    var sb = r.status === 'present' ? '#dcfce7' : r.status === 'late' ? '#fef3c7' : '#fee2e2';
-                    var si = r.status === 'present' ? 'fa-circle-check' : r.status === 'late' ? 'fa-clock' : 'fa-circle-xmark';
+                    var sc = r.status === 'present' ? '#16a34a' : r.status === 'late' ? '#d97706' : r.status === 'half_day' ? '#ea580c' : '#dc2626';
+                    var sb = r.status === 'present' ? '#dcfce7' : r.status === 'late' ? '#fef3c7' : r.status === 'half_day' ? '#ffedd5' : '#fee2e2';
+                    var si = r.status === 'present' ? 'fa-circle-check' : r.status === 'late' ? 'fa-clock' : r.status === 'half_day' ? 'fa-circle-half-stroke' : 'fa-circle-xmark';
                     var initials = (r.person_name || 'U').split(' ').map(function(w){ return w[0]; }).slice(0,2).join('').toUpperCase();
                     var timeStr = r.time_in ? new Date(r.time_in).toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' }) : '—';
                     return '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:var(--gray-50);border:1px solid var(--gray-100);">' +

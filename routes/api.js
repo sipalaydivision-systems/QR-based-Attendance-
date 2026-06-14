@@ -17,6 +17,7 @@ const {
     secondsBetween,
     formatTime12
 } = require('../utils/appTime');
+const { computeDailyAttendanceStatus, statusLabel } = require('../utils/attendanceStatus');
 
 function requireAuthOrScannerKiosk(req, res, next) {
     if (req.session && req.session.user) return next();
@@ -634,6 +635,39 @@ function timeInLabelFor(now, schedule) {
     return compareDateTime(now, schedule.pmInStart) >= 0 ? 'PM PRESENT' : 'RETURNED';
 }
 
+async function getBaseAttendanceStatus(personType, dateStr, timeIn) {
+    if (!timeIn) return 'absent';
+    const lateThreshold = await getAttendanceLateThreshold(personType, dateStr);
+    return compareDateTime(timeIn, lateThreshold) >= 0 ? 'late' : 'present';
+}
+
+async function resolveAttendanceStatus(personType, dateStr, rowState) {
+    const timeIn = rowState && rowState.time_in;
+    if (!timeIn) {
+        return { status: 'absent', label: 'Absent', remarks: 'No attendance recorded for the entire day' };
+    }
+    const [baseStatus, schedule] = await Promise.all([
+        getBaseAttendanceStatus(personType, dateStr, timeIn),
+        getAttendanceScheduleTimes(dateStr)
+    ]);
+    return computeDailyAttendanceStatus({
+        timeIn,
+        lastTimeIn: rowState.last_time_in || timeIn,
+        timeOut: rowState.time_out,
+        schedule,
+        baseStatus
+    });
+}
+
+function responseAttendanceMeta(resolved) {
+    const status = resolved || {};
+    return {
+        attendance_status: status.label || statusLabel(status.status),
+        half_day_type: status.halfDayType || null,
+        remarks: status.remarks || ''
+    };
+}
+
 async function logAttendanceEvent(attendanceId, personType, personId, schoolId, dateStr, event, label, eventTime) {
     try {
         await db.query(
@@ -733,6 +767,47 @@ async function countAttendanceEligibleTeachers(dateStr, schoolId) {
     }
     const [[row]] = await db.query(query, params);
     return row.count || 0;
+}
+
+async function getAttendanceStatusCounts(personType, dateStr, filters = {}) {
+    const isTeacher = personType === 'teacher';
+    const table = isTeacher ? 'teachers' : 'students';
+    const alias = isTeacher ? 't' : 's';
+    let query = `
+        SELECT
+            COUNT(DISTINCT CASE WHEN a.status = 'present' THEN a.person_id END) AS present,
+            COUNT(DISTINCT CASE WHEN a.status = 'late' THEN a.person_id END) AS late,
+            COUNT(DISTINCT CASE WHEN a.status = 'half_day' THEN a.person_id END) AS half_day,
+            COUNT(DISTINCT CASE WHEN a.status IN ('present','late') THEN a.person_id END) AS full_day,
+            COUNT(DISTINCT CASE WHEN a.time_in IS NOT NULL THEN a.person_id END) AS timed_in,
+            COUNT(DISTINCT CASE WHEN a.time_out IS NOT NULL THEN a.person_id END) AS timed_out
+        FROM attendance a
+        INNER JOIN ${table} ${alias}
+            ON a.person_id = ${alias}.id
+           AND a.person_type = ?
+           AND ${alias}.status = 'active'
+        WHERE a.date = ?
+          AND a.time_in IS NOT NULL`;
+    const params = [personType, dateStr];
+
+    if (filters.schoolId) {
+        query += ' AND a.school_id = ?';
+        params.push(filters.schoolId);
+    }
+    if (!isTeacher && filters.sectionId) {
+        query += ' AND s.section_id = ?';
+        params.push(filters.sectionId);
+    }
+
+    const [[row]] = await db.query(query, params);
+    return {
+        present: Number(row.present || 0),
+        late: Number(row.late || 0),
+        half_day: Number(row.half_day || 0),
+        full_day: Number(row.full_day || 0),
+        timed_in: Number(row.timed_in || 0),
+        timed_out: Number(row.timed_out || 0)
+    };
 }
 
 async function countSectionStudentsWithoutTimeIn(dateStr, sectionId) {
@@ -1072,9 +1147,19 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
 
         if (existing.length === 0) {
             // ── First scan of the day = AM Time In (PRESENT on/before cutoff, LATE after) ──
-            const lateThreshold = await getAttendanceLateThreshold(personType, today);
-            const attendanceStatus = compareDateTime(now, lateThreshold) >= 0 ? 'late' : 'present';
-            const displayStatus = attendanceStatus === 'late' ? 'LATE' : 'PRESENT';
+            const schedule = await getAttendanceScheduleTimes(today);
+            const baseStatus = await getBaseAttendanceStatus(personType, today, now);
+            const resolvedStatus = computeDailyAttendanceStatus({
+                timeIn: now,
+                lastTimeIn: now,
+                timeOut: null,
+                schedule,
+                baseStatus
+            });
+            const attendanceStatus = resolvedStatus.status;
+            const displayStatus = attendanceStatus === 'half_day'
+                ? 'PM PRESENT'
+                : attendanceStatus === 'late' ? 'LATE' : 'PRESENT';
 
             const [insertResult] = await db.query(
                 'INSERT INTO attendance (person_type, person_id, school_id, date, time_in, last_time_in, status, monitoring_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
@@ -1087,8 +1172,11 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
                 action: 'TIME_IN',
                 status: attendanceStatus,
                 display_status: displayStatus,
+                ...responseAttendanceMeta(resolvedStatus),
                 monitoring_status: displayStatus,
-                message: attendanceStatus === 'late' ? 'Attendance recorded - marked as LATE' : 'Attendance recorded successfully',
+                message: attendanceStatus === 'half_day'
+                    ? 'PM time in recorded - marked as HALF-DAY.'
+                    : attendanceStatus === 'late' ? 'Attendance recorded - marked as LATE' : 'Attendance recorded successfully',
                 person: personInfo,
                 time: formatTime12(now),
                 time_in: formatTime12(now)
@@ -1132,9 +1220,14 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
                 });
             }
 
+            const resolvedStatus = await resolveAttendanceStatus(personType, today, {
+                ...attendanceRow,
+                time_out: now
+            });
+
             await db.query(
-                'UPDATE attendance SET time_out = ?, monitoring_status = ?, updated_at = ? WHERE id = ?',
-                [now, label, now, attendanceRow.id]
+                'UPDATE attendance SET time_out = ?, status = ?, monitoring_status = ?, updated_at = ? WHERE id = ?',
+                [now, resolvedStatus.status, label, now, attendanceRow.id]
             );
             await logAttendanceEvent(attendanceRow.id, personType, person.id, person.school_id, today, 'time_out', label, now);
 
@@ -1146,11 +1239,14 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
             return res.json({
                 success: true,
                 action: 'TIME_OUT',
-                status: attendanceRow.status,
+                status: resolvedStatus.status,
                 display_status: label,
+                ...responseAttendanceMeta(resolvedStatus),
                 monitoring_status: label,
                 completed: label === 'COMPLETED',
-                message: outMessages[label],
+                message: resolvedStatus.status === 'half_day'
+                    ? 'Time out recorded - marked as HALF-DAY (' + resolvedStatus.remarks + ').'
+                    : outMessages[label],
                 person: personInfo,
                 time: formatTime12(now),
                 time_in: formatTime12(attendanceRow.last_time_in || attendanceRow.time_in),
@@ -1160,17 +1256,22 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
 
         // ── Time In again after a Time Out (return from outside / PM session) ──
         const label = timeInLabelFor(now, schedule);
+        const resolvedStatus = await resolveAttendanceStatus(personType, today, {
+            ...attendanceRow,
+            last_time_in: now
+        });
         await db.query(
-            'UPDATE attendance SET last_time_in = ?, monitoring_status = ?, updated_at = ? WHERE id = ?',
-            [now, label, now, attendanceRow.id]
+            'UPDATE attendance SET last_time_in = ?, status = ?, monitoring_status = ?, updated_at = ? WHERE id = ?',
+            [now, resolvedStatus.status, label, now, attendanceRow.id]
         );
         await logAttendanceEvent(attendanceRow.id, personType, person.id, person.school_id, today, 'time_in', label, now);
 
         return res.json({
             success: true,
             action: 'TIME_IN',
-            status: attendanceRow.status,
+            status: resolvedStatus.status,
             display_status: label,
+            ...responseAttendanceMeta(resolvedStatus),
             monitoring_status: label,
             message: label === 'PM PRESENT'
                 ? 'PM time in recorded. Welcome back!'
@@ -1233,36 +1334,20 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
             schoolParams
         );
 
-        // Students present today (only active students)
-        const [presentStudents] = await db.query(
-            `SELECT COUNT(DISTINCT a.person_id) as count FROM attendance a
-             INNER JOIN students s ON a.person_id = s.id
-             WHERE a.person_type = 'student' AND s.status = 'active' AND a.date = ? AND a.time_in IS NOT NULL` + (schoolId ? ' AND a.school_id = ?' : ''),
-            [date, ...schoolParams]
-        );
-
         const computedAbsent = await countStudentsWithoutTimeIn(date, schoolId);
         const eligibleStudents = await countAttendanceEligibleStudents(date, schoolId);
         const computedTeacherAbsent = await countTeachersWithoutTimeIn(date, schoolId);
         const eligibleTeachers = await countAttendanceEligibleTeachers(date, schoolId);
-
-        // Teachers present today (only active teachers)
-        const [presentTeachers] = await db.query(
-            `SELECT COUNT(DISTINCT a.person_id) as count FROM attendance a
-             INNER JOIN teachers t ON a.person_id = t.id
-             WHERE a.person_type = 'teacher' AND t.status = 'active' AND a.date = ? AND a.time_in IS NOT NULL` + (schoolId ? ' AND a.school_id = ?' : ''),
-            [date, ...schoolParams]
-        );
+        const studentStatusCounts = await getAttendanceStatusCounts('student', date, { schoolId });
+        const teacherStatusCounts = await getAttendanceStatusCounts('teacher', date, { schoolId });
 
         // School-by-school breakdown (join on active status)
         let schoolBreakdownQuery = `
             SELECT s.id, s.name, s.logo,
                 (SELECT COUNT(*) FROM students st WHERE st.school_id = s.id AND st.status = 'active') as enrollment,
-                (SELECT COUNT(DISTINCT a.person_id) FROM attendance a INNER JOIN students st ON a.person_id = st.id AND st.status = 'active' WHERE a.school_id = s.id AND a.person_type = 'student' AND a.date = ? AND a.time_in IS NOT NULL) as present,
-                (SELECT COUNT(*) FROM teachers t WHERE t.school_id = s.id AND t.status = 'active') as teachers_total,
-                (SELECT COUNT(DISTINCT a.person_id) FROM attendance a INNER JOIN teachers t ON a.person_id = t.id AND t.status = 'active' WHERE a.school_id = s.id AND a.person_type = 'teacher' AND a.date = ? AND a.time_in IS NOT NULL) as teachers_present
+                (SELECT COUNT(*) FROM teachers t WHERE t.school_id = s.id AND t.status = 'active') as teachers_total
             FROM schools s WHERE s.status = 'active'`;
-        const breakdownParams = [date, date];
+        const breakdownParams = [];
         if (schoolId) {
             schoolBreakdownQuery += ' AND s.id = ?';
             breakdownParams.push(schoolId);
@@ -1274,26 +1359,37 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
             const eligible = await countAttendanceEligibleStudents(date, s.id);
             const teacherEligible = await countAttendanceEligibleTeachers(date, s.id);
             const teacherAbsent = await countTeachersWithoutTimeIn(date, s.id);
+            const studentCounts = await getAttendanceStatusCounts('student', date, { schoolId: s.id });
+            const teacherCounts = await getAttendanceStatusCounts('teacher', date, { schoolId: s.id });
+            const fullDayStudents = studentCounts.full_day;
+            const fullDayTeachers = teacherCounts.full_day;
             breakdown.push({
                 id: s.id,
                 name: s.name,
                 logo: s.logo,
                 enrollment: s.enrollment,
-                attendance_eligible_students: Math.max(eligible, s.present || 0),
-                present: s.present,
+                attendance_eligible_students: Math.max(eligible, studentCounts.timed_in || 0),
+                present: studentCounts.present,
+                late: studentCounts.late,
+                half_day: studentCounts.half_day,
+                full_day: fullDayStudents,
                 absent: await countStudentsWithoutTimeIn(date, s.id),
-                rate: Math.max(eligible, s.present || 0) > 0 ? Math.min(100, Math.round((s.present / Math.max(eligible, s.present || 0)) * 100)) : 0,
+                rate: Math.max(eligible, studentCounts.timed_in || 0) > 0 ? Math.min(100, Math.round((fullDayStudents / Math.max(eligible, studentCounts.timed_in || 0)) * 100)) : 0,
                 teachers_total: s.teachers_total || 0,
-                attendance_eligible_teachers: Math.max(teacherEligible, s.teachers_present || 0),
-                teachers_present: s.teachers_present || 0,
+                attendance_eligible_teachers: Math.max(teacherEligible, teacherCounts.timed_in || 0),
+                teachers_present: teacherCounts.present,
+                teachers_late: teacherCounts.late,
+                teachers_half_day: teacherCounts.half_day,
+                teachers_full_day: fullDayTeachers,
                 teachers_absent: teacherAbsent,
-                teacher_rate: Math.max(teacherEligible, s.teachers_present || 0) > 0 ? Math.min(100, Math.round((s.teachers_present / Math.max(teacherEligible, s.teachers_present || 0)) * 100)) : 0
+                teacher_rate: Math.max(teacherEligible, teacherCounts.timed_in || 0) > 0 ? Math.min(100, Math.round((fullDayTeachers / Math.max(teacherEligible, teacherCounts.timed_in || 0)) * 100)) : 0
             });
         }
 
         const totalActive = activeStudents[0].count;
-        const totalPresent = presentStudents[0].count;
-        const attendanceDenominator = Math.max(eligibleStudents, totalPresent);
+        const totalPresent = studentStatusCounts.present;
+        const totalFullDay = studentStatusCounts.full_day;
+        const attendanceDenominator = Math.max(eligibleStudents, studentStatusCounts.timed_in);
 
         // Teachers timed out today (only active teachers)
         const [timedOutTeachers] = await db.query(
@@ -1332,14 +1428,20 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
             attendance_eligible_students: attendanceDenominator,
             total_teachers: teacherRows[0].count,
             active_teachers: teacherRows[0].count,
-            attendance_eligible_teachers: Math.max(eligibleTeachers, presentTeachers[0].count),
+            attendance_eligible_teachers: Math.max(eligibleTeachers, teacherStatusCounts.timed_in),
             students_present: totalPresent,
+            students_late: studentStatusCounts.late,
+            students_half_day: studentStatusCounts.half_day,
+            students_full_day: totalFullDay,
             students_absent: computedAbsent,
             students_timed_out: 0,
             teachers_timed_out: timedOutTeachers[0].count,
-            teachers_present: presentTeachers[0].count,
+            teachers_present: teacherStatusCounts.present,
+            teachers_late: teacherStatusCounts.late,
+            teachers_half_day: teacherStatusCounts.half_day,
+            teachers_full_day: teacherStatusCounts.full_day,
             teachers_absent: computedTeacherAbsent,
-            attendance_rate: attendanceDenominator > 0 ? Math.min(100, Math.round((totalPresent / attendanceDenominator) * 100)) : 0,
+            attendance_rate: attendanceDenominator > 0 ? Math.min(100, Math.round((totalFullDay / attendanceDenominator) * 100)) : 0,
             inactive_students: inactiveStudents[0].count,
             flagged_absent_2day: flaggedAbsent.length,
             absence_counting_active: absenceCountingActive,
@@ -2106,12 +2208,12 @@ router.get('/attendance', requireAuth, async (req, res) => {
             sc.name as school_name,
             gl.name as grade_name,
             sec.name as section_name,
-            CASE
+            COALESCE(a.monitoring_status, CASE
                 WHEN a.person_type = 'student' AND a.time_in IS NOT NULL THEN 'Inside School'
                 WHEN a.person_type = 'teacher' AND a.time_in IS NOT NULL AND a.time_out IS NULL THEN 'Pending Time Out'
                 WHEN a.time_out IS NOT NULL THEN 'Complete'
                 ELSE 'No Time In'
-            END as monitoring_status
+            END) as monitoring_status
             FROM attendance a
             LEFT JOIN students s ON a.person_type = 'student' AND a.person_id = s.id
             LEFT JOIN teachers t ON a.person_type = 'teacher' AND a.person_id = t.id
@@ -2595,12 +2697,20 @@ router.get('/reports', requireAuth, async (req, res) => {
         // Stats summary
         const totalDays = Math.ceil((new Date(endDate) - new Date(startDate)) / 86400000) + 1;
         const uniquePersons = new Set(records.map(r => r.person_name)).size;
-        const presentCount = records.filter(r => r.time_in).length;
+        const presentCount = records.filter(r => r.status === 'present').length;
         const lateCount = records.filter(r => r.status === 'late').length;
+        const halfDayCount = records.filter(r => r.status === 'half_day').length;
 
         return res.json({
             records,
-            summary: { total_days: totalDays, unique_persons: uniquePersons, present_count: presentCount, late_count: lateCount, total_records: records.length }
+            summary: {
+                total_days: totalDays,
+                unique_persons: uniquePersons,
+                present_count: presentCount,
+                late_count: lateCount,
+                half_day_count: halfDayCount,
+                total_records: records.length
+            }
         });
     } catch (err) {
         console.error('Reports error:', err);
@@ -2616,30 +2726,34 @@ router.get('/reports/daily-summary', requireAuth, async (req, res) => {
         let query = `
             SELECT s.id, s.name, s.logo,
                 (SELECT COUNT(*) FROM students st WHERE st.school_id = s.id AND st.status = 'active') as enrolled,
-                (SELECT COUNT(DISTINCT a.person_id) FROM attendance a INNER JOIN students st ON a.person_id = st.id AND st.status = 'active' WHERE a.school_id = s.id AND a.person_type = 'student' AND a.date = ? AND a.time_in IS NOT NULL) as present,
-                (SELECT COUNT(DISTINCT a.person_id) FROM attendance a INNER JOIN students st ON a.person_id = st.id AND st.status = 'active' WHERE a.school_id = s.id AND a.person_type = 'student' AND a.date = ? AND a.status = 'late') as late_count,
-                (SELECT COUNT(*) FROM teachers t WHERE t.school_id = s.id AND t.status = 'active') as teachers_total,
-                (SELECT COUNT(DISTINCT a.person_id) FROM attendance a INNER JOIN teachers t ON a.person_id = t.id AND t.status = 'active' WHERE a.school_id = s.id AND a.person_type = 'teacher' AND a.date = ? AND a.time_in IS NOT NULL) as teachers_present
+                (SELECT COUNT(*) FROM teachers t WHERE t.school_id = s.id AND t.status = 'active') as teachers_total
             FROM schools s WHERE s.status = 'active'`;
-        const params = [date, date, date];
+        const params = [];
         if (schoolId) { query += ' AND s.id = ?'; params.push(schoolId); }
         query += ' ORDER BY s.name';
         const [rows] = await db.query(query, params);
 
         const schools = [];
         for (const s of rows) {
-            const eligible = Math.max(await countAttendanceEligibleStudents(date, s.id), s.present || 0);
-            const eligibleTeachers = Math.max(await countAttendanceEligibleTeachers(date, s.id), s.teachers_present || 0);
+            const studentCounts = await getAttendanceStatusCounts('student', date, { schoolId: s.id });
+            const teacherCounts = await getAttendanceStatusCounts('teacher', date, { schoolId: s.id });
+            const eligible = Math.max(await countAttendanceEligibleStudents(date, s.id), studentCounts.timed_in || 0);
+            const eligibleTeachers = Math.max(await countAttendanceEligibleTeachers(date, s.id), teacherCounts.timed_in || 0);
             schools.push({
                 id: s.id,
                 name: s.name,
                 logo: s.logo,
                 enrolled: eligible,
-                present: s.present,
-                late: s.late_count,
+                present: studentCounts.present,
+                late: studentCounts.late,
+                half_day: studentCounts.half_day,
+                full_day: studentCounts.full_day,
                 absent: await countStudentsWithoutTimeIn(date, s.id),
-                rate: eligible > 0 ? Math.min(100, Math.round((s.present / eligible) * 100)) : 0,
-                teachers_present: s.teachers_present || 0,
+                rate: eligible > 0 ? Math.min(100, Math.round((studentCounts.full_day / eligible) * 100)) : 0,
+                teachers_present: teacherCounts.present,
+                teachers_late: teacherCounts.late,
+                teachers_half_day: teacherCounts.half_day,
+                teachers_full_day: teacherCounts.full_day,
                 teachers_total: s.teachers_total || 0,
                 attendance_eligible_teachers: eligibleTeachers,
                 teachers_absent: await countTeachersWithoutTimeIn(date, s.id)
@@ -2651,13 +2765,18 @@ router.get('/reports/daily-summary', requireAuth, async (req, res) => {
             acc.enrolled += s.enrolled;
             acc.present += s.present;
             acc.late += s.late;
+            acc.half_day += s.half_day;
+            acc.full_day += s.full_day;
             acc.absent += s.absent;
             acc.teachers_present += s.teachers_present;
+            acc.teachers_late += s.teachers_late;
+            acc.teachers_half_day += s.teachers_half_day;
+            acc.teachers_full_day += s.teachers_full_day;
             acc.teachers_total += s.teachers_total;
             acc.teachers_absent += s.teachers_absent;
             return acc;
-        }, { enrolled: 0, present: 0, late: 0, absent: 0, teachers_present: 0, teachers_total: 0, teachers_absent: 0 });
-        totals.rate = totals.enrolled > 0 ? Math.min(100, Math.round((totals.present / totals.enrolled) * 100)) : 0;
+        }, { enrolled: 0, present: 0, late: 0, half_day: 0, full_day: 0, absent: 0, teachers_present: 0, teachers_late: 0, teachers_half_day: 0, teachers_full_day: 0, teachers_total: 0, teachers_absent: 0 });
+        totals.rate = totals.enrolled > 0 ? Math.min(100, Math.round((totals.full_day / totals.enrolled) * 100)) : 0;
 
         return res.json({ schools, totals });
     } catch (err) {
@@ -2745,8 +2864,13 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
                 at.contact as adviser_contact,
                 at.email as adviser_email,
                 sc.name as school_name,
-                CASE WHEN SUM(CASE WHEN a.status = 'late' THEN 1 ELSE 0 END) > 0 THEN 'Late' ELSE 'Present' END as attendance_status,
-                'Inside School' as monitoring_status
+                CASE
+                    WHEN SUM(CASE WHEN a.status = 'half_day' THEN 1 ELSE 0 END) > 0 THEN 'Half-Day'
+                    WHEN SUM(CASE WHEN a.status = 'late' THEN 1 ELSE 0 END) > 0 THEN 'Late'
+                    ELSE 'Present'
+                END as attendance_status,
+                MAX(a.status) as att_status,
+                MAX(a.monitoring_status) as monitoring_status
             FROM attendance a
             INNER JOIN students s ON a.person_id = s.id
             LEFT JOIN schools sc ON s.school_id = sc.id
@@ -2840,7 +2964,9 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
             non_school_day_reason: schoolDay.reason,
             totals: {
                 students_total: totalRow.cnt,
-                present: presentStudents.length,
+                present: presentStudents.filter(s => s.att_status === 'present').length,
+                late: presentStudents.filter(s => s.att_status === 'late').length,
+                half_day: presentStudents.filter(s => s.att_status === 'half_day').length,
                 absent: absentStudents.length
             },
             present_students: presentStudents,
@@ -3114,26 +3240,25 @@ router.get('/school-kpi/:id', requireAuth, async (req, res) => {
     try {
         const [totalStudents] = await db.query(
             "SELECT COUNT(*) as cnt FROM students WHERE school_id = ? AND status = 'active' AND COALESCE(active_from, DATE(created_at)) < ?", [schoolId, today]);
-        const [presentStudents] = await db.query(
-            "SELECT COUNT(DISTINCT a.person_id) as cnt FROM attendance a INNER JOIN students s ON a.person_id = s.id AND a.person_type = 'student' WHERE s.school_id = ? AND a.date = ? AND a.status IN ('present','late')", [schoolId, today]);
-        const [lateStudents] = await db.query(
-            "SELECT COUNT(DISTINCT a.person_id) as cnt FROM attendance a INNER JOIN students s ON a.person_id = s.id AND a.person_type = 'student' WHERE s.school_id = ? AND a.date = ? AND a.status = 'late'", [schoolId, today]);
+        const studentCounts = await getAttendanceStatusCounts('student', today, { schoolId });
         const absentStudents = await countStudentsWithoutTimeIn(today, schoolId);
         const [totalTeachers] = await db.query(
             "SELECT COUNT(*) as cnt FROM teachers WHERE school_id = ? AND status = 'active'", [schoolId]);
-        const [presentTeachers] = await db.query(
-            "SELECT COUNT(DISTINCT a.person_id) as cnt FROM attendance a INNER JOIN teachers t ON a.person_id = t.id AND a.person_type = 'teacher' WHERE t.school_id = ? AND a.date = ?", [schoolId, today]);
+        const teacherCounts = await getAttendanceStatusCounts('teacher', today, { schoolId });
         const absentTeachers = await countTeachersWithoutTimeIn(today, schoolId);
 
-        const present = presentStudents[0].cnt;
-        const total = Math.max(totalStudents[0].cnt, present);
+        const present = studentCounts.present;
+        const total = Math.max(totalStudents[0].cnt, studentCounts.timed_in);
         return res.json({
             students_total: total,
             students_present: present,
+            students_late: studentCounts.late,
+            students_half_day: studentCounts.half_day,
             students_absent: absentStudents,
-            students_late: lateStudents[0].cnt,
             teachers_total: totalTeachers[0].cnt,
-            teachers_present: presentTeachers[0].cnt,
+            teachers_present: teacherCounts.present,
+            teachers_late: teacherCounts.late,
+            teachers_half_day: teacherCounts.half_day,
             teachers_absent: absentTeachers
         });
     } catch (err) {
@@ -3149,15 +3274,16 @@ router.get('/section-kpi/:id', requireAuth, async (req, res) => {
     try {
         const [totalStudents] = await db.query(
             "SELECT COUNT(*) as cnt FROM students WHERE section_id = ? AND status = 'active' AND COALESCE(active_from, DATE(created_at)) < ?", [sectionId, today]);
-        const [presentStudents] = await db.query(
-            "SELECT COUNT(DISTINCT a.person_id) as cnt FROM attendance a INNER JOIN students s ON a.person_id = s.id AND a.person_type = 'student' WHERE s.section_id = ? AND a.date = ? AND a.status IN ('present','late')", [sectionId, today]);
+        const studentCounts = await getAttendanceStatusCounts('student', today, { sectionId });
         const absentStudents = await countSectionStudentsWithoutTimeIn(today, sectionId);
 
-        const present = presentStudents[0].cnt;
-        const total = Math.max(totalStudents[0].cnt, present);
+        const present = studentCounts.present;
+        const total = Math.max(totalStudents[0].cnt, studentCounts.timed_in);
         return res.json({
             total: total,
             present: present,
+            late: studentCounts.late,
+            half_day: studentCounts.half_day,
             absent: absentStudents
         });
     } catch (err) {
@@ -3184,7 +3310,7 @@ router.get('/adviser-dashboard', requireAuth, async (req, res) => {
         );
         if (teacher.length === 0) return res.status(404).json({ error: 'Teacher not found' });
         const sectionId = teacher[0].section_id;
-        if (!sectionId) return res.json({ teacher: teacher[0], students: [], kpi: { total: 0, present: 0, late: 0, absent: 0 } });
+        if (!sectionId) return res.json({ teacher: teacher[0], students: [], kpi: { total: 0, present: 0, late: 0, half_day: 0, absent: 0 } });
 
         const [students] = await db.query(
             `SELECT s.id, s.lrn, s.firstname, s.lastname, s.middlename, s.guardian_contact, s.category, s.status,
@@ -3197,8 +3323,9 @@ router.get('/adviser-dashboard', requireAuth, async (req, res) => {
         );
 
         const activeStudents = students.filter(s => s.status === 'active');
-        const present = activeStudents.filter(s => s.att_status === 'present' || s.att_status === 'late');
+        const present = activeStudents.filter(s => s.att_status === 'present');
         const late = activeStudents.filter(s => s.att_status === 'late');
+        const halfDay = activeStudents.filter(s => s.att_status === 'half_day');
         const absent = activeStudents.filter(s => !s.att_status);
 
         // 2-day consecutive absence flagging — delegate to the same function the mobile app uses
@@ -3231,12 +3358,14 @@ router.get('/adviser-dashboard', requireAuth, async (req, res) => {
                 last_time_in: s.last_time_in ? formatTime12(s.last_time_in) : null,
                 att_status: s.att_status,
                 monitoring_status: s.monitoring_status,
+                attendance_status: statusLabel(s.att_status),
                 flagged: flaggedIds.includes(s.id)
             })),
             kpi: {
                 total: activeStudents.length,
                 present: present.length,
                 late: late.length,
+                half_day: halfDay.length,
                 absent: absent.length,
                 flagged: flaggedIds.length
             }
@@ -3291,7 +3420,7 @@ router.get('/monthly-attendance', requireAuth, async (req, res) => {
         let pQuery = `SELECT DATE(a.date) as day, COUNT(DISTINCT a.person_id) as present
                       FROM attendance a
                       INNER JOIN students s ON a.person_id = s.id AND s.status = 'active'
-                      WHERE a.person_type = 'student' AND a.date BETWEEN ? AND ? AND a.time_in IS NOT NULL`;
+                      WHERE a.person_type = 'student' AND a.date BETWEEN ? AND ? AND a.status IN ('present','late')`;
         const pParams = [startDate, endDate];
         if (schoolId) { pQuery += ' AND a.school_id = ?'; pParams.push(schoolId); }
         pQuery += ' GROUP BY DATE(a.date)';

@@ -535,7 +535,11 @@ function renderStudents() {
         }
 
         var statusLabel = formatStatusLabel(status);
-        var badgeClass = isStudentInactive ? 'badge badge-inactive' : (status === 'not recorded' ? 'badge badge-inactive' : 'status-badge status-' + status);
+        var badgeClass = isStudentInactive
+            ? 'badge badge-inactive'
+            : (status === 'not recorded'
+                ? 'badge badge-inactive'
+                : (status === 'half_day' ? 'badge badge-half-day' : 'badge badge-' + status));
 
         return '<tr'+rowClass+'>'+
             '<td class="student-num">'+(idx+1)+'</td>'+

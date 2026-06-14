@@ -192,6 +192,13 @@
             </div>
         </div>
         <div class="pd-kpi-card">
+            <div class="pd-kpi-icon" style="background:#ffedd5;color:#ea580c;"><i class="fa-solid fa-circle-half-stroke"></i></div>
+            <div class="pd-kpi-info">
+                <span class="pd-kpi-val" id="pdHalfDay">&mdash;</span>
+                <span class="pd-kpi-lbl">Half-Day</span>
+            </div>
+        </div>
+        <div class="pd-kpi-card">
             <div class="pd-kpi-icon" style="background:#dbeafe;color:#2563eb;"><i class="fa-solid fa-chalkboard-user"></i></div>
             <div class="pd-kpi-info">
                 <span class="pd-kpi-val" id="pdTeachersPresent">—</span>
@@ -222,6 +229,7 @@
             <div class="chart-legend">
                 <span class="legend-item"><span class="legend-dot" style="background:#16a34a;"></span> Present</span>
                 <span class="legend-item"><span class="legend-dot" style="background:#f59e0b;"></span> Late</span>
+                <span class="legend-item"><span class="legend-dot" style="background:#ea580c;"></span> Half-Day</span>
                 <span class="legend-item"><span class="legend-dot" style="background:#dc2626;"></span> Absent</span>
             </div>
         </div>
@@ -327,24 +335,25 @@
             var enrolled = data.active_students;
             var present  = data.students_present;
             var absent   = data.students_absent;
+            var late     = data.students_late || 0;
+            var halfDay  = data.students_half_day || 0;
             var rate     = data.attendance_rate;
 
             document.getElementById('pdEnrolled').textContent = enrolled;
             document.getElementById('pdPresent').textContent  = present;
             document.getElementById('pdAbsent').textContent   = absent;
+            document.getElementById('pdLate').textContent     = late;
+            document.getElementById('pdHalfDay').textContent  = halfDay;
             document.getElementById('pdRate').textContent     = rate + '%';
             document.getElementById('pdRate').style.color     = rateColor(rate);
             document.getElementById('pdWbRate').textContent   = rate + '%';
             document.getElementById('pdTeachersPresent').textContent = data.teachers_present;
             document.getElementById('pdFlaggedCount').textContent    = data.flagged_absent_2day;
 
-            // Late count — fetch from reports API
-            loadLate(date);
-
             // Donut
             document.getElementById('donutRate').textContent = rate + '%';
             document.getElementById('donutRate').style.color = rateColor(rate);
-            renderDonut(present, 0, absent); // late updated separately
+            renderDonut(present, late, halfDay, absent);
 
             // Absent list
             loadAbsentList(date);
@@ -353,32 +362,17 @@
         } catch(e) { console.error('Principal dashboard error:', e); }
     }
 
-    async function loadLate(date) {
-        var params = new URLSearchParams({ date: date, type: 'student' });
-        if (schoolId) params.append('school', schoolId);
-        try {
-            var res  = await fetch('/api/reports?' + params);
-            var data = await res.json();
-            var late = (data.records || []).filter(function(r) { return r.status === 'late'; }).length;
-            document.getElementById('pdLate').textContent = late;
-            // Update donut with actual late count
-            var present = parseInt(document.getElementById('pdPresent').textContent) || 0;
-            var absent  = parseInt(document.getElementById('pdAbsent').textContent)  || 0;
-            renderDonut(present - late, late, absent);
-        } catch(e) { /* silently skip */ }
-    }
-
-    function renderDonut(present, late, absent) {
+    function renderDonut(present, late, halfDay, absent) {
         var ctx = document.getElementById('donutChart').getContext('2d');
         if (donutChart) donutChart.destroy();
-        var total = present + late + absent;
+        var total = present + late + halfDay + absent;
         donutChart = new Chart(ctx, {
             type: 'doughnut',
             data: {
-                labels: ['Present', 'Late', 'Absent'],
+                labels: ['Present', 'Late', 'Half-Day', 'Absent'],
                 datasets: [{
-                    data: [present, late, absent],
-                    backgroundColor: ['#16a34a', '#f59e0b', '#dc2626'],
+                    data: [present, late, halfDay, absent],
+                    backgroundColor: ['#16a34a', '#f59e0b', '#ea580c', '#dc2626'],
                     borderWidth: 0,
                     hoverOffset: 6
                 }]

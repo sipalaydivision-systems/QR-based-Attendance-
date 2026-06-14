@@ -44,13 +44,14 @@
                             <th>Enrolled</th>
                             <th>Present</th>
                             <th>Late</th>
+                            <th>Half-Day</th>
                             <th>Absent</th>
                             <th>Rate</th>
                             <th>Teachers</th>
                         </tr>
                     </thead>
                     <tbody id="dsBody">
-                        <tr><td colspan="7" class="text-center">Loading...</td></tr>
+                        <tr><td colspan="8" class="text-center">Loading...</td></tr>
                     </tbody>
                     <tfoot id="dsFoot"></tfoot>
                 </table>
@@ -197,7 +198,7 @@
         var tbody = document.getElementById('dsBody');
         var tfoot = document.getElementById('dsFoot');
         if (!data.schools || !data.schools.length) {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No data found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No data found</td></tr>';
             tfoot.innerHTML = '';
             return;
         }
@@ -208,6 +209,7 @@
                 '<td>' + s.enrolled + '</td>' +
                 '<td style="color:#22c55e;font-weight:600">' + s.present + '</td>' +
                 '<td style="color:#f59e0b;font-weight:600">' + s.late + '</td>' +
+                '<td style="color:#ea580c;font-weight:600">' + (s.half_day || 0) + '</td>' +
                 '<td style="color:#ef4444;font-weight:600">' + s.absent + '</td>' +
                 '<td style="color:' + rateColor + ';font-weight:700">' + s.rate + '%</td>' +
                 '<td>' + s.teachers_present + '/' + s.teachers_total + '</td>' +
@@ -220,6 +222,7 @@
             '<td>' + t.enrolled + '</td>' +
             '<td style="color:#22c55e">' + t.present + '</td>' +
             '<td style="color:#f59e0b">' + t.late + '</td>' +
+            '<td style="color:#ea580c">' + (t.half_day || 0) + '</td>' +
             '<td style="color:#ef4444">' + t.absent + '</td>' +
             '<td style="color:' + tRateColor + '">' + t.rate + '%</td>' +
             '<td>' + t.teachers_present + '/' + t.teachers_total + '</td>' +
@@ -265,13 +268,14 @@
         var endD = new Date(end + 'T00:00:00');
         while (d <= endD) {
             var key = d.toISOString().slice(0, 10);
-            dateMap[key] = { present: 0, late: 0, absent: 0 };
+            dateMap[key] = { present: 0, late: 0, half_day: 0, absent: 0 };
             d.setDate(d.getDate() + 1);
         }
         records.forEach(function(r) {
             if (dateMap[r.date]) {
-                if (r.time_in) dateMap[r.date].present++;
+                if (r.status === 'present') dateMap[r.date].present++;
                 if (r.status === 'late') dateMap[r.date].late++;
+                if (r.status === 'half_day') dateMap[r.date].half_day++;
             }
         });
         var labels = Object.keys(dateMap);
@@ -283,7 +287,8 @@
                 labels: labels,
                 datasets: [
                     { label: 'Present', data: labels.map(function(l) { return dateMap[l].present; }), borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.1)', fill: true, tension: 0.3 },
-                    { label: 'Late', data: labels.map(function(l) { return dateMap[l].late; }), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.3 }
+                    { label: 'Late', data: labels.map(function(l) { return dateMap[l].late; }), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.3 },
+                    { label: 'Half-Day', data: labels.map(function(l) { return dateMap[l].half_day; }), borderColor: '#ea580c', backgroundColor: 'rgba(234,88,12,0.1)', fill: true, tension: 0.3 }
                 ]
             },
             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }

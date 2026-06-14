@@ -65,7 +65,14 @@
         <div class="stat-icon-wrap green"><i class="fa-solid fa-circle-check"></i></div>
         <div class="stat-info">
             <span class="stat-number" id="statPresent">—</span>
-            <span class="stat-label">Timed In Today</span>
+            <span class="stat-label">Present Today</span>
+        </div>
+    </div>
+    <div class="stat-card" style="border-left:3px solid #ea580c;">
+        <div class="stat-icon-wrap orange"><i class="fa-solid fa-circle-half-stroke"></i></div>
+        <div class="stat-info">
+            <span class="stat-number" id="statHalfDay">&mdash;</span>
+            <span class="stat-label">Half-Day</span>
         </div>
     </div>
     <div class="stat-card stat-absent">
@@ -127,6 +134,8 @@
                     <th>School</th>
                     <th>Enrollment</th>
                     <th>Present</th>
+                    <th>Late</th>
+                    <th>Half-Day</th>
                     <th>Absent</th>
                     <th>Student Rate</th>
                     <th>Teachers</th>
@@ -134,7 +143,7 @@
                 </tr>
             </thead>
             <tbody id="schoolBreakdownBody">
-                <tr><td colspan="7" class="text-center text-muted" style="padding:32px;">
+                <tr><td colspan="9" class="text-center text-muted" style="padding:32px;">
                     <i class="fa-solid fa-spinner fa-spin" style="margin-right:6px;"></i> Loading...
                 </td></tr>
             </tbody>
@@ -242,6 +251,8 @@
             document.getElementById('statSchools').textContent  = data.total_schools;
             document.getElementById('statStudents').textContent = data.active_students;
             document.getElementById('statPresent').textContent  = data.students_present;
+            var halfDayEl = document.getElementById('statHalfDay');
+            if (halfDayEl) halfDayEl.textContent = data.students_half_day || 0;
             document.getElementById('statAbsent').textContent   = data.students_absent;
             document.getElementById('statRate').textContent     = data.attendance_rate + '%';
             document.getElementById('saWbRate').textContent     = data.attendance_rate + '%';
@@ -261,7 +272,7 @@
             // School breakdown table
             var tbody = document.getElementById('schoolBreakdownBody');
             if (!data.schools || !data.schools.length) {
-                tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><i class="fa-solid fa-building-columns"></i><h4>No schools found</h4><p>No attendance data available.</p></div></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><i class="fa-solid fa-building-columns"></i><h4>No schools found</h4><p>No attendance data available.</p></div></td></tr>';
             } else {
                 tbody.innerHTML = data.schools.map(function(s) {
                     var sRate = s.rate;
@@ -273,6 +284,8 @@
                             '<span>' + s.name + '</span></div></td>' +
                         '<td>' + s.enrollment + '</td>' +
                         '<td style="color:var(--success);font-weight:600;">' + s.present + '</td>' +
+                        '<td style="color:#d97706;font-weight:600;">' + (s.late || 0) + '</td>' +
+                        '<td style="color:#ea580c;font-weight:600;">' + (s.half_day || 0) + '</td>' +
                         '<td style="color:var(--danger);font-weight:600;">' + s.absent + '</td>' +
                         '<td>' +
                             '<div style="display:flex;align-items:center;gap:8px;">' +

@@ -255,6 +255,7 @@
     set('statSchools', data.total_schools);
     set('statStudents', data.active_students || data.total_students || 0);
     set('statPresent', data.students_present);
+    set('statHalfDay', data.students_half_day || 0);
     set('statAbsent', data.students_absent);
     set('statRate', data.attendance_rate + '%');
     set('saWbRate', data.attendance_rate + '%');
@@ -277,7 +278,7 @@
     var tbody = document.getElementById('schoolBreakdownBody');
     if (tbody && Array.isArray(data.schools)) {
       tbody.innerHTML = data.schools.map(function(s) {
-        return '<tr><td><strong>' + s.name + '</strong></td><td>' + s.enrollment + '</td><td>' + s.present + '</td><td>' + s.absent + '</td><td>' + s.rate + '%</td><td>' + s.teachers_present + '/' + s.teachers_total + '</td><td>' + s.teacher_rate + '%</td></tr>';
+        return '<tr><td><strong>' + s.name + '</strong></td><td>' + s.enrollment + '</td><td>' + s.present + '</td><td>' + (s.late || 0) + '</td><td>' + (s.half_day || 0) + '</td><td>' + s.absent + '</td><td>' + s.rate + '%</td><td>' + s.teachers_present + '/' + s.teachers_total + '</td><td>' + s.teacher_rate + '%</td></tr>';
       }).join('');
     }
   }

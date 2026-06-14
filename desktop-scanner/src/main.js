@@ -247,6 +247,88 @@ function combineDateAndTime(dateKey, timeValue, fallback = '00:00') {
   return `${dateKey} ${safeTime}:00`;
 }
 
+function statusLabel(value) {
+  const status = String(value || '').toLowerCase();
+  if (status === 'half_day') return 'Half-Day';
+  if (status === 'late') return 'Late';
+  if (status === 'absent') return 'Absent';
+  if (status === 'present') return 'Present';
+  return status ? status.replace(/_/g, ' ') : '';
+}
+
+function offlineScheduleForDate(attendanceDate, settings) {
+  return {
+    lunchStart: combineDateAndTime(attendanceDate, settings.lunchBreakStart, '11:30'),
+    pmInStart: combineDateAndTime(attendanceDate, settings.pmTimeInStart, '13:00'),
+    pmOutStart: combineDateAndTime(attendanceDate, settings.timeOutOpen, '16:00')
+  };
+}
+
+function baseAttendanceStatusFor(person, attendanceDate, timeIn, settings) {
+  const isTeacher = person.personType === 'teacher';
+  const lateThreshold = combineDateAndTime(
+    attendanceDate,
+    isTeacher ? settings.teacherDutyStart : settings.timeInStart,
+    '07:00'
+  );
+  const graceMinutes = Math.max(
+    0,
+    Number(isTeacher ? settings.teacherLateGraceMinutes : settings.lateGraceMinutes) || 0
+  );
+  const lateBoundary = parseSqlDateTime(lateThreshold);
+  const lateCutoff = lateBoundary ? toLocalSqlDateTime(new Date(lateBoundary.getTime() + graceMinutes * 60000)) : lateThreshold;
+  return compareSqlDateTimes(timeIn, lateCutoff) >= 0 ? 'late' : 'present';
+}
+
+function computeOfflineDailyAttendanceStatus(input = {}) {
+  const timeIn = input.timeIn;
+  if (!timeIn) {
+    return { status: 'absent', label: 'Absent', remarks: 'No attendance recorded for the entire day' };
+  }
+
+  const schedule = input.schedule || {};
+  const baseStatus = input.baseStatus || 'present';
+  const lastTimeIn = input.lastTimeIn || timeIn;
+  const timeOut = input.timeOut || null;
+
+  if (schedule.pmInStart && compareSqlDateTimes(timeIn, schedule.pmInStart) >= 0) {
+    return {
+      status: 'half_day',
+      label: 'Half-Day',
+      halfDayType: 'pm_only',
+      remarks: 'Afternoon Session Only'
+    };
+  }
+
+  const leftAndDidNotReturn = timeOut && compareSqlDateTimes(lastTimeIn, timeOut) <= 0;
+  if (leftAndDidNotReturn && schedule.pmOutStart && compareSqlDateTimes(timeOut, schedule.pmOutStart) < 0) {
+    if (schedule.pmInStart && compareSqlDateTimes(timeOut, schedule.pmInStart) < 0) {
+      return {
+        status: 'half_day',
+        label: 'Half-Day',
+        halfDayType: 'am_only',
+        remarks: 'Morning Session Only'
+      };
+    }
+    return {
+      status: 'half_day',
+      label: 'Half-Day',
+      halfDayType: 'early_dismissal',
+      remarks: 'Official Early Dismissal'
+    };
+  }
+
+  return { status: baseStatus, label: statusLabel(baseStatus), remarks: '' };
+}
+
+function responseAttendanceMeta(status) {
+  return {
+    attendance_status: status.label || statusLabel(status.status),
+    half_day_type: status.halfDayType || null,
+    remarks: status.remarks || ''
+  };
+}
+
 function localNonSchoolDayStatus(dateKey) {
   const day = new Date(`${dateKey}T00:00:00`).getDay();
   if (day === 0 || day === 6) {
@@ -824,20 +906,18 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
 
   if (!lastEvent) {
     const settings = loadSettings();
-    const isTeacher = person.personType === 'teacher';
-    const lateThreshold = combineDateAndTime(
-      attendanceDate,
-      isTeacher ? settings.teacherDutyStart : settings.timeInStart,
-      '07:00'
-    );
-    const graceMinutes = Math.max(
-      0,
-      Number(isTeacher ? settings.teacherLateGraceMinutes : settings.lateGraceMinutes) || 0
-    );
-    const lateBoundary = parseSqlDateTime(lateThreshold);
-    const lateCutoff = lateBoundary ? toLocalSqlDateTime(new Date(lateBoundary.getTime() + graceMinutes * 60000)) : lateThreshold;
-    const attendanceStatus = compareSqlDateTimes(scanTime, lateCutoff) >= 0 ? 'late' : 'present';
-    const displayStatus = attendanceStatus === 'late' ? 'LATE' : 'PRESENT';
+    const schedule = offlineScheduleForDate(attendanceDate, settings);
+    const baseStatus = baseAttendanceStatusFor(person, attendanceDate, scanTime, settings);
+    const resolvedStatus = computeOfflineDailyAttendanceStatus({
+      timeIn: scanTime,
+      lastTimeIn: scanTime,
+      schedule,
+      baseStatus
+    });
+    const attendanceStatus = resolvedStatus.status;
+    const displayStatus = attendanceStatus === 'half_day'
+      ? 'PM PRESENT'
+      : (attendanceStatus === 'late' ? 'LATE' : 'PRESENT');
 
     insertAttendanceEvent({
       localEventId: createId(),
@@ -859,7 +939,7 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
       category: person.category || null,
       displayStatus: displayStatus,
       syncStatus: 'pending',
-      serverMessage: OFFLINE_MODE_MESSAGE,
+      serverMessage: resolvedStatus.remarks || OFFLINE_MODE_MESSAGE,
       lastError: null,
       syncAttempts: 0,
       createdAt: toLocalSqlDateTime(),
@@ -874,9 +954,12 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
       status: attendanceStatus,
       display_status: displayStatus,
       monitoring_status: displayStatus,
-      message: attendanceStatus === 'late'
-        ? 'Attendance recorded offline - marked as LATE.'
-        : 'Attendance recorded offline.',
+      ...responseAttendanceMeta(resolvedStatus),
+      message: attendanceStatus === 'half_day'
+        ? `PM time in recorded offline - marked as HALF-DAY (${resolvedStatus.remarks}).`
+        : attendanceStatus === 'late'
+          ? 'Attendance recorded offline - marked as LATE.'
+          : 'Attendance recorded offline.',
       person: personResponseFromCache(person),
       time: formatTime12(scanTime),
       time_in: formatTime12(scanTime)
@@ -895,16 +978,32 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
   }
 
   const scheduleSettings = loadSettings();
-  const lunchStart = combineDateAndTime(attendanceDate, scheduleSettings.lunchBreakStart, '11:30');
-  const pmInStart = combineDateAndTime(attendanceDate, scheduleSettings.pmTimeInStart, '13:00');
-  const pmOutStart = combineDateAndTime(attendanceDate, scheduleSettings.timeOutOpen, '16:00');
-  const dailyStatus = lastEvent.attendanceStatus || 'present';
+  const schedule = offlineScheduleForDate(attendanceDate, scheduleSettings);
+  const lunchStart = schedule.lunchStart;
+  const pmInStart = schedule.pmInStart;
+  const pmOutStart = schedule.pmOutStart;
+  const firstTimeInEvent = events
+    .filter((item) => item.eventAction === 'TIME_IN' && item.scanTime)
+    .reduce((first, item) => {
+      if (!first || compareSqlDateTimes(item.scanTime, first.scanTime) < 0) return item;
+      return first;
+    }, null);
+  const firstTimeIn = firstTimeInEvent?.timeIn || firstTimeInEvent?.scanTime || lastEvent.timeIn || lastEvent.scanTime;
+  const baseStatus = baseAttendanceStatusFor(person, attendanceDate, firstTimeIn, scheduleSettings);
 
   if (lastEvent.eventAction === 'TIME_IN') {
     // ── Time Out (leave premises / lunch out / end of day) ──
     let label = 'OUT';
     if (compareSqlDateTimes(scanTime, pmOutStart) >= 0) label = 'COMPLETED';
     else if (compareSqlDateTimes(scanTime, lunchStart) >= 0 && compareSqlDateTimes(scanTime, pmInStart) < 0) label = 'LUNCH OUT';
+    const resolvedStatus = computeOfflineDailyAttendanceStatus({
+      timeIn: firstTimeIn,
+      lastTimeIn: lastEvent.timeIn || lastEvent.scanTime,
+      timeOut: scanTime,
+      schedule,
+      baseStatus
+    });
+    const dailyStatus = resolvedStatus.status;
 
     insertAttendanceEvent({
       localEventId: createId(),
@@ -926,7 +1025,7 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
       category: person.category || null,
       displayStatus: label,
       syncStatus: 'pending',
-      serverMessage: OFFLINE_MODE_MESSAGE,
+      serverMessage: resolvedStatus.remarks || OFFLINE_MODE_MESSAGE,
       lastError: null,
       syncAttempts: 0,
       createdAt: toLocalSqlDateTime(),
@@ -946,8 +1045,11 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
       status: dailyStatus,
       display_status: label,
       monitoring_status: label,
+      ...responseAttendanceMeta(resolvedStatus),
       completed: label === 'COMPLETED',
-      message: outMessages[label],
+      message: dailyStatus === 'half_day'
+        ? `Time out recorded offline - marked as HALF-DAY (${resolvedStatus.remarks}).`
+        : outMessages[label],
       person: personResponseFromCache(person),
       time: formatTime12(scanTime),
       time_in: formatTime12(lastEvent.timeIn || lastEvent.scanTime),
@@ -957,6 +1059,14 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
 
   // ── Time In again after a Time Out (return from outside / PM session) ──
   const label = compareSqlDateTimes(scanTime, pmInStart) >= 0 ? 'PM PRESENT' : 'RETURNED';
+  const resolvedStatus = computeOfflineDailyAttendanceStatus({
+    timeIn: firstTimeIn,
+    lastTimeIn: scanTime,
+    timeOut: lastEvent.timeOut || lastEvent.scanTime,
+    schedule,
+    baseStatus
+  });
+  const dailyStatus = resolvedStatus.status;
 
   insertAttendanceEvent({
     localEventId: createId(),
@@ -978,7 +1088,7 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
     category: person.category || null,
     displayStatus: label,
     syncStatus: 'pending',
-    serverMessage: OFFLINE_MODE_MESSAGE,
+    serverMessage: resolvedStatus.remarks || OFFLINE_MODE_MESSAGE,
     lastError: null,
     syncAttempts: 0,
     createdAt: toLocalSqlDateTime(),
@@ -993,6 +1103,7 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
     status: dailyStatus,
     display_status: label,
     monitoring_status: label,
+    ...responseAttendanceMeta(resolvedStatus),
     message: label === 'PM PRESENT'
       ? 'PM time in recorded offline. Welcome back!'
       : 'Return time in recorded offline. Welcome back!',
@@ -1019,7 +1130,7 @@ function buildOfflineScanResponse(qrCode, scanTime, payload) {
   const response = {
     ...localResult,
     error: localResult.error || 'Offline Mode: Saved Locally',
-    message: localResult.success ? OFFLINE_MODE_MESSAGE : (localResult.error || NO_INTERNET_MESSAGE),
+    message: localResult.success ? (localResult.message || OFFLINE_MODE_MESSAGE) : (localResult.error || NO_INTERNET_MESSAGE),
     ...currentDashboard()
   };
   broadcastScannerStatus();

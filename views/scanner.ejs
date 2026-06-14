@@ -522,7 +522,12 @@
         }
 
         var ds = String(data.display_status || '').toUpperCase();
-        if (data.action === 'TIME_IN' && (ds === 'LATE' || (!ds && data.status === 'late'))) {
+        if (data.status === 'half_day') {
+            banner.className = 'status-banner time-out';
+            icon.innerHTML = '<i class="fas fa-circle-half-stroke"></i>';
+            label.textContent = 'HALF-DAY';
+            fill.className = 'fill orange';
+        } else if (data.action === 'TIME_IN' && (ds === 'LATE' || (!ds && data.status === 'late'))) {
             banner.className = 'status-banner late';
             icon.innerHTML = '<i class="fas fa-clock"></i>';
             label.textContent = 'LATE TIME IN';
@@ -569,7 +574,9 @@
             fill.className = 'fill orange';
         }
 
-        msg.textContent = data.message;
+        msg.textContent = data.status === 'half_day' && data.remarks
+            ? 'Remarks: ' + data.remarks
+            : data.message;
         fillPerson(data.person);
 
         var timeHTML = '';
