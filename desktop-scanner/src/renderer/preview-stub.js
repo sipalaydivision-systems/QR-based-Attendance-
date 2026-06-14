@@ -54,7 +54,8 @@
     { name: 'Maria Santos',          personType: 'teacher', category: '',            gradeLevel: 'Grade 6',  sectionName: 'Sampaguita',  schoolName: 'Agripino Elementary School',      scanTime: new Date().toISOString(), eventAction: 'TIME_OUT', attendanceStatus: 'present', displayStatus: 'LUNCH OUT' },
     { name: 'Ricardo Dalisay',       personType: 'teacher', category: 'shs_teacher', gradeLevel: 'Grade 11', sectionName: 'STEM - Rizal',schoolName: 'Sipalay City National High School',scanTime: new Date().toISOString(), eventAction: 'TIME_IN',  attendanceStatus: 'present', displayStatus: 'RETURNED' },
     { name: 'Pedro Reyes',           personType: 'student', category: '',            gradeLevel: 'Grade 5',  sectionName: 'Mango',       schoolName: 'Agripino Elementary School',      scanTime: new Date().toISOString(), eventAction: 'TIME_OUT', attendanceStatus: 'present', displayStatus: 'COMPLETED' },
-    { name: 'Ana Liza Buenaventura', personType: 'teacher', category: '',            gradeLevel: 'Grade 6',  sectionName: 'Sampaguita',  schoolName: 'Agripino Elementary School',      scanTime: new Date().toISOString(), eventAction: 'TIME_IN',  attendanceStatus: 'present', displayStatus: 'PM PRESENT' }
+    { name: 'Ana Liza Buenaventura', personType: 'teacher', category: '',            gradeLevel: 'Grade 6',  sectionName: 'Sampaguita',  schoolName: 'Agripino Elementary School',      scanTime: new Date().toISOString(), eventAction: 'TIME_IN',  attendanceStatus: 'present', displayStatus: 'PM PRESENT' },
+    { name: 'Juan Dela Cruz',        personType: 'student', category: '',            gradeLevel: 'Grade 3',  sectionName: 'Apple',       schoolName: 'Agripino Elementary School',      scanTime: new Date().toISOString(), eventAction: 'TIME_OUT', attendanceStatus: 'half_day', displayStatus: 'LUNCH OUT' }
   ];
 
   var SETTINGS = {
@@ -122,7 +123,16 @@
       return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_OUT', status: 'present', display_status: 'LUNCH OUT', message: 'Lunch time out recorded. Scan again when you return.', person: STUDENT, time: _time(), time_in: '07:30 AM', time_out: _time() });
     },
     function () {
+      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_OUT', status: 'half_day', attendance_status: 'Half-Day', half_day_type: 'am_only', remarks: 'Morning Session Only', display_status: 'LUNCH OUT', message: 'Time out recorded - marked as HALF-DAY (Morning Session Only).', person: STUDENT, time: _time(), time_in: '07:00 AM', time_out: '11:30 AM' });
+    },
+    function () {
       return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_IN', status: 'present', display_status: 'PM PRESENT', message: 'PM time in recorded. Welcome back!', person: TEACHER, time: _time(), time_in: _time(), time_out: '11:35 AM' });
+    },
+    function () {
+      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_IN', status: 'half_day', attendance_status: 'Half-Day', half_day_type: 'pm_only', remarks: 'Afternoon Session Only', display_status: 'PM PRESENT', message: 'PM time in recorded - marked as HALF-DAY.', person: SHS_STUDENT, time: _time(), time_in: '01:00 PM' });
+    },
+    function () {
+      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_OUT', status: 'half_day', attendance_status: 'Half-Day', half_day_type: 'early_dismissal', remarks: 'Official Early Dismissal', display_status: 'OUT', message: 'Time out recorded - marked as HALF-DAY (Official Early Dismissal).', person: SHS_TEACHER, time: _time(), time_in: '07:20 AM', time_out: '02:00 PM' });
     },
     function () {
       return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_OUT', status: 'present', display_status: 'COMPLETED', completed: true, message: 'Time out recorded - attendance for today is complete.', person: TEACHER, time: _time(), time_in: '01:00 PM', time_out: _time() });
@@ -139,6 +149,73 @@
 
   function _time() {
     return new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+  }
+
+  function _halfDayDemo(kind) {
+    if (kind === 'half-day-pm') {
+      return Object.assign({}, BASE_STATUS, {
+        success: true,
+        action: 'TIME_IN',
+        status: 'half_day',
+        attendance_status: 'Half-Day',
+        half_day_type: 'pm_only',
+        remarks: 'Afternoon Session Only',
+        display_status: 'PM PRESENT',
+        message: 'PM time in recorded - marked as HALF-DAY.',
+        person: SHS_STUDENT,
+        time: '01:00 PM',
+        time_in: '01:00 PM'
+      });
+    }
+    if (kind === 'half-day-early') {
+      return Object.assign({}, BASE_STATUS, {
+        success: true,
+        action: 'TIME_OUT',
+        status: 'half_day',
+        attendance_status: 'Half-Day',
+        half_day_type: 'early_dismissal',
+        remarks: 'Official Early Dismissal',
+        display_status: 'OUT',
+        message: 'Time out recorded - marked as HALF-DAY (Official Early Dismissal).',
+        person: SHS_TEACHER,
+        time: '02:00 PM',
+        time_in: '07:20 AM',
+        time_out: '02:00 PM'
+      });
+    }
+    return Object.assign({}, BASE_STATUS, {
+      success: true,
+      action: 'TIME_OUT',
+      status: 'half_day',
+      attendance_status: 'Half-Day',
+      half_day_type: 'am_only',
+      remarks: 'Morning Session Only',
+      display_status: 'LUNCH OUT',
+      message: 'Time out recorded - marked as HALF-DAY (Morning Session Only).',
+      person: STUDENT,
+      time: '11:30 AM',
+      time_in: '07:00 AM',
+      time_out: '11:30 AM'
+    });
+  }
+
+  function _autoShowDemoFromUrl() {
+    var params = new URLSearchParams(window.location.search || '');
+    var demo = params.get('demo');
+    if (!/^half-day-(am|pm|early)$/.test(demo || '')) return;
+
+    var attempts = 0;
+    function showWhenReady() {
+      attempts++;
+      if (typeof window.showScanFeedback === 'function') {
+        var result = _halfDayDemo(demo);
+        result.preview_sticky = params.get('sticky') === '1';
+        window.showScanFeedback('Half-day attendance recorded', result.message, 'warning', result);
+        return;
+      }
+      if (attempts < 40) setTimeout(showWhenReady, 150);
+    }
+    setTimeout(showWhenReady, 500);
   }
 
   /* ── Mock API ── */
@@ -185,4 +262,5 @@
   hint.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(10,60,42,.88);color:#fff;font:700 12px/1.4 Segoe UI,sans-serif;padding:8px 18px;border-radius:20px;z-index:9999;pointer-events:none;letter-spacing:.4px;';
   hint.textContent = '⌨ PREVIEW MODE — press Space to demo a scan result';
   document.addEventListener('DOMContentLoaded', function () { document.body.appendChild(hint); });
+  window.addEventListener('load', _autoShowDemoFromUrl);
 })();

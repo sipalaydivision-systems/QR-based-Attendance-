@@ -829,7 +829,8 @@ function showScanFeedback(title, message, tone = 'success', data = {}) {
   fill.className = `res-countdown-fill ${fillColor}`;
   fill.style.animation = 'none';
   void fill.offsetHeight;
-  const duration = action === 'CONFIRM_TIME_OUT' ? 10 : 3;
+  const isStickyPreview = data?.preview_sticky === true;
+  const duration = action === 'CONFIRM_TIME_OUT' || isStickyPreview ? 10 : 3;
   fill.style.animation = `resCountdownShrink ${duration}s linear forwards`;
 
   /* ── Animate the card ── */
@@ -843,7 +844,8 @@ function showScanFeedback(title, message, tone = 'success', data = {}) {
   modal.classList.add('visible');
 
   if (state.scanModalTimer) clearTimeout(state.scanModalTimer);
-  if (action !== 'CONFIRM_TIME_OUT') {
+  state.scanModalTimer = null;
+  if (action !== 'CONFIRM_TIME_OUT' && !isStickyPreview) {
     state.scanModalTimer = setTimeout(closeScanModal, 3000);
   }
 }
