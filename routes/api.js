@@ -36,6 +36,17 @@ function normalizeOptionalSchoolId(value) {
     return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+function deriveTrackFromSection(sectionName) {
+    const raw = String(sectionName || '').trim();
+    const match = raw.match(/^(STEM|ABM|HUMSS|GAS|TVL(?:-[A-Z]+)?|Sports|Arts(?:\s+and\s+| & )Design)\s*-\s*(.+)$/i);
+    if (!match) return '';
+    const label = match[1].replace(/\s*&\s*/g, ' and ');
+    const upper = label.toUpperCase();
+    if (upper === 'ARTS AND DESIGN') return 'Arts and Design';
+    if (upper.startsWith('TVL-')) return 'TVL';
+    return upper === 'SPORTS' ? 'Sports' : upper;
+}
+
 async function getScannerDesktopSummary(schoolId) {
     const today = todayDate();
     let totalQuery = `
@@ -204,11 +215,37 @@ async function getScannerDesktopDirectoryVersion(schoolId) {
                 COALESCE(sc.updated_at, sc.created_at, '1970-01-01 00:00:00'),
                 COALESCE(gl.created_at, '1970-01-01 00:00:00'),
                 COALESCE(sec.created_at, '1970-01-01 00:00:00')
-            )) AS latest_update
+            )) AS latest_update,
+            COALESCE(SUM(CRC32(CONCAT_WS('|',
+                s.id,
+                COALESCE(s.qr_code, ''),
+                COALESCE(s.lrn, ''),
+                COALESCE(s.firstname, ''),
+                COALESCE(s.lastname, ''),
+                COALESCE(s.middlename, ''),
+                COALESCE(s.gender, ''),
+                COALESCE(s.birthdate, ''),
+                COALESCE(s.guardian_name, ''),
+                COALESCE(s.guardian_contact, ''),
+                COALESCE(s.category, ''),
+                COALESCE(s.status, ''),
+                COALESCE(s.school_id, ''),
+                COALESCE(sc.name, ''),
+                COALESCE(gl.name, ''),
+                COALESCE(sec.name, ''),
+                COALESCE(sec.adviser, ''),
+                COALESCE(sec.adviser_teacher_id, ''),
+                COALESCE(at.firstname, ''),
+                COALESCE(at.lastname, ''),
+                COALESCE(at.middlename, ''),
+                COALESCE(at.contact, ''),
+                COALESCE(at.email, '')
+            ))), 0) AS checksum
         FROM students s
         LEFT JOIN schools sc ON s.school_id = sc.id
         LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id
         LEFT JOIN sections sec ON s.section_id = sec.id
+        LEFT JOIN teachers at ON sec.adviser_teacher_id = at.id
         WHERE s.qr_code IS NOT NULL
           AND s.qr_code <> ''
           AND s.status <> 'deleted'`;
@@ -221,11 +258,35 @@ async function getScannerDesktopDirectoryVersion(schoolId) {
                 COALESCE(sc.updated_at, sc.created_at, '1970-01-01 00:00:00'),
                 COALESCE(gl.created_at, '1970-01-01 00:00:00'),
                 COALESCE(sec.created_at, '1970-01-01 00:00:00')
-            )) AS latest_update
+            )) AS latest_update,
+            COALESCE(SUM(CRC32(CONCAT_WS('|',
+                t.id,
+                COALESCE(t.qr_code, ''),
+                COALESCE(t.employee_id, ''),
+                COALESCE(t.firstname, ''),
+                COALESCE(t.lastname, ''),
+                COALESCE(t.middlename, ''),
+                COALESCE(t.contact, ''),
+                COALESCE(t.email, ''),
+                COALESCE(t.category, ''),
+                COALESCE(t.status, ''),
+                COALESCE(t.school_id, ''),
+                COALESCE(sc.name, ''),
+                COALESCE(gl.name, ''),
+                COALESCE(sec.name, ''),
+                COALESCE(sec.adviser, ''),
+                COALESCE(sec.adviser_teacher_id, ''),
+                COALESCE(at.firstname, ''),
+                COALESCE(at.lastname, ''),
+                COALESCE(at.middlename, ''),
+                COALESCE(at.contact, ''),
+                COALESCE(at.email, '')
+            ))), 0) AS checksum
         FROM teachers t
         LEFT JOIN schools sc ON t.school_id = sc.id
         LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
         LEFT JOIN sections sec ON t.section_id = sec.id
+        LEFT JOIN teachers at ON sec.adviser_teacher_id = at.id
         WHERE t.qr_code IS NOT NULL
           AND t.qr_code <> ''
           AND t.status <> 'deleted'`;
@@ -248,10 +309,12 @@ async function getScannerDesktopDirectoryVersion(schoolId) {
     const teacherCount = Number(teacher.person_count || 0);
     const studentLatest = normalizeDirectoryVersionDate(student.latest_update);
     const teacherLatest = normalizeDirectoryVersionDate(teacher.latest_update);
+    const studentChecksum = String(student.checksum || 0);
+    const teacherChecksum = String(teacher.checksum || 0);
     const latestUpdate = [studentLatest, teacherLatest].filter(Boolean).sort().pop() || null;
     const directoryVersion = crypto
         .createHash('sha256')
-        .update([schoolId || 'all', studentCount, studentLatest, teacherCount, teacherLatest].join('|'))
+        .update([schoolId || 'all', studentCount, studentLatest, studentChecksum, teacherCount, teacherLatest, teacherChecksum].join('|'))
         .digest('hex');
 
     return {
@@ -1452,13 +1515,43 @@ router.get('/realtime-poll', requireAuth, async (req, res) => {
         // Track ALL non-deleted students (not just active) so imports trigger refresh
         const [studentRows] = await db.query(
             `SELECT COUNT(*) as cnt, SUM(status='active') as active, SUM(status='inactive') as inactive,
-                    COALESCE(SUM(CRC32(CONCAT_WS('|', id, firstname, lastname, COALESCE(lrn, ''), COALESCE(status, ''), COALESCE(grade_level_id, ''), COALESCE(section_id, ''), COALESCE(school_id, '')))), 0) as checksum
+                    COALESCE(SUM(CRC32(CONCAT_WS('|',
+                        id,
+                        COALESCE(lrn, ''),
+                        COALESCE(firstname, ''),
+                        COALESCE(lastname, ''),
+                        COALESCE(middlename, ''),
+                        COALESCE(gender, ''),
+                        COALESCE(birthdate, ''),
+                        COALESCE(guardian_name, ''),
+                        COALESCE(guardian_contact, ''),
+                        COALESCE(category, ''),
+                        COALESCE(status, ''),
+                        COALESCE(active_from, ''),
+                        COALESCE(grade_level_id, ''),
+                        COALESCE(section_id, ''),
+                        COALESCE(school_id, '')
+                    ))), 0) as checksum
              FROM students WHERE status != 'deleted'` + schoolWhere,
             schoolParams
         );
         const [teacherRows] = await db.query(
             `SELECT COUNT(*) as cnt,
-                    COALESCE(SUM(CRC32(CONCAT_WS('|', id, firstname, lastname, COALESCE(employee_id, ''), COALESCE(status, ''), COALESCE(school_id, '')))), 0) as checksum
+                    COALESCE(SUM(CRC32(CONCAT_WS('|',
+                        id,
+                        COALESCE(employee_id, ''),
+                        COALESCE(firstname, ''),
+                        COALESCE(lastname, ''),
+                        COALESCE(middlename, ''),
+                        COALESCE(contact, ''),
+                        COALESCE(email, ''),
+                        COALESCE(category, ''),
+                        COALESCE(status, ''),
+                        COALESCE(active_from, ''),
+                        COALESCE(grade_level_id, ''),
+                        COALESCE(section_id, ''),
+                        COALESCE(school_id, '')
+                    ))), 0) as checksum
              FROM teachers WHERE status != 'deleted'` + schoolWhere,
             schoolParams
         );
@@ -1504,7 +1597,8 @@ router.get('/realtime-poll', requireAuth, async (req, res) => {
 router.get('/students', requireAuth, async (req, res) => {
     try {
         let schoolId = applySchoolFilter(req);
-        if (!schoolId && req.query.school_id) schoolId = parseInt(req.query.school_id, 10);
+        if (!schoolId && (req.query.school_id || req.query.school)) schoolId = parseInt(req.query.school_id || req.query.school, 10);
+        const gradeId = req.query.grade_level_id || req.query.grade;
         let query = `SELECT s.*, sc.name as school_name, gl.name as grade_name, sec.name as section_name
             FROM students s
             LEFT JOIN schools sc ON s.school_id = sc.id
@@ -1513,6 +1607,7 @@ router.get('/students', requireAuth, async (req, res) => {
             WHERE s.status != 'deleted'`;
         const params = [];
         if (schoolId) { query += ' AND s.school_id = ?'; params.push(schoolId); }
+        if (gradeId) { query += ' AND s.grade_level_id = ?'; params.push(parseInt(gradeId, 10)); }
         if (req.query.section_id) { query += ' AND s.section_id = ?'; params.push(parseInt(req.query.section_id, 10)); }
         if (req.query.status) { query += ' AND s.status = ?'; params.push(req.query.status); }
         if (req.query.category) { query += ' AND s.category = ?'; params.push(req.query.category); }
@@ -1523,7 +1618,10 @@ router.get('/students', requireAuth, async (req, res) => {
         }
         query += ' ORDER BY s.lastname, s.firstname';
         const [rows] = await db.query(query, params);
-        return res.json(rows);
+        return res.json(rows.map(row => ({
+            ...row,
+            track: deriveTrackFromSection(row.section_name)
+        })));
     } catch (err) {
         console.error('Get students error:', err);
         return res.status(500).json({ error: 'Failed to fetch students.' });
