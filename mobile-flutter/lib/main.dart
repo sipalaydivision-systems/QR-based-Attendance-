@@ -120,8 +120,20 @@ class ApiService {
 
   Map<String, String> get authHeaders => {
     'Accept': 'application/json',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
     if (cookie.isNotEmpty) 'Cookie': cookie,
   };
+
+  Uri liveUri(String path) {
+    final base = Uri.parse('${AppConfig.baseUrl}$path');
+    return base.replace(
+      queryParameters: {
+        ...base.queryParameters,
+        '_': DateTime.now().millisecondsSinceEpoch.toString(),
+      },
+    );
+  }
 
   Future<http.Response> _request(
     Future<http.Response> Function() runner,
@@ -244,7 +256,7 @@ class ApiService {
   Future<Map<String, dynamic>> map(String path) async {
     final response = await _request(
       () => http.get(
-        Uri.parse('${AppConfig.baseUrl}$path'),
+        liveUri(path),
         headers: authHeaders,
       ),
     );
@@ -266,7 +278,7 @@ class ApiService {
   Future<List<dynamic>> list(String path) async {
     final response = await _request(
       () => http.get(
-        Uri.parse('${AppConfig.baseUrl}$path'),
+        liveUri(path),
         headers: authHeaders,
       ),
     );
@@ -1091,9 +1103,9 @@ class _HomeShellState extends State<HomeShell>
       duration: const Duration(seconds: 9),
     )..repeat();
     load();
-    // Poll every 30s (was 6s) — 5× less data while still feeling live
+    // Poll often so edited student and absence details show quickly.
     timer = Timer.periodic(
-      const Duration(seconds: 30),
+      const Duration(seconds: 5),
       (_) => load(silent: true),
     );
   }
