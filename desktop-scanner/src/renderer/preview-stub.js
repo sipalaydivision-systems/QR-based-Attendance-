@@ -129,7 +129,7 @@
       return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_IN', status: 'present', display_status: 'PM PRESENT', message: 'PM time in recorded. Welcome back!', person: TEACHER, time: _time(), time_in: _time(), time_out: '11:35 AM' });
     },
     function () {
-      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_IN', status: 'half_day', attendance_status: 'Half-Day', half_day_type: 'pm_only', remarks: 'Afternoon Session Only', display_status: 'PM PRESENT', message: 'PM time in recorded - marked as HALF-DAY.', person: SHS_STUDENT, time: _time(), time_in: '01:00 PM' });
+      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_OUT', status: 'half_day', attendance_status: 'Half-Day', half_day_type: 'pm_only', remarks: 'Afternoon Session Only', display_status: 'COMPLETED', message: 'PM time out recorded - marked as HALF-DAY (Afternoon Session Only).', person: SHS_STUDENT, time: _time(), time_in: '01:00 PM', time_out: '04:00 PM' });
     },
     function () {
       return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_OUT', status: 'half_day', attendance_status: 'Half-Day', half_day_type: 'early_dismissal', remarks: 'Official Early Dismissal', display_status: 'OUT', message: 'Time out recorded - marked as HALF-DAY (Official Early Dismissal).', person: SHS_TEACHER, time: _time(), time_in: '07:20 AM', time_out: '02:00 PM' });
@@ -155,16 +155,17 @@
     if (kind === 'half-day-pm') {
       return Object.assign({}, BASE_STATUS, {
         success: true,
-        action: 'TIME_IN',
+        action: 'TIME_OUT',
         status: 'half_day',
         attendance_status: 'Half-Day',
         half_day_type: 'pm_only',
         remarks: 'Afternoon Session Only',
-        display_status: 'PM PRESENT',
-        message: 'PM time in recorded - marked as HALF-DAY.',
+        display_status: 'COMPLETED',
+        message: 'PM time out recorded - marked as HALF-DAY (Afternoon Session Only).',
         person: SHS_STUDENT,
-        time: '01:00 PM',
-        time_in: '01:00 PM'
+        time: '04:00 PM',
+        time_in: '01:00 PM',
+        time_out: '04:00 PM'
       });
     }
     if (kind === 'half-day-early') {
@@ -209,7 +210,7 @@
       attempts++;
       if (typeof window.showScanFeedback === 'function') {
         var result = _halfDayDemo(demo);
-        result.preview_sticky = params.get('sticky') === '1';
+        result.preview_sticky = params.get('sticky') !== '0';
         window.showScanFeedback('Half-day attendance recorded', result.message, 'warning', result);
         return;
       }

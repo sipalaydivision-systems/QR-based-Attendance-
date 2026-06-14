@@ -719,12 +719,13 @@ function heroConfigFor(data) {
   };
 }
 
-// Look up a school's logo URL from the synced settings by matching its name
+// Look up a school's logo URL from the synced settings by matching its name.
+// Fall back to the bundled app logo so the modal always shows an image.
 function schoolLogoFor(schoolName) {
   const name = String(schoolName || '').trim().toLowerCase();
-  if (!name) return '';
+  if (!name) return LOCAL_LOGO_URL;
   const school = (state.settings.schools || []).find((s) => String(s.name || '').trim().toLowerCase() === name);
-  return school ? resolveAssetUrl(school.logo) : '';
+  return (school && resolveAssetUrl(school.logo)) || LOCAL_LOGO_URL;
 }
 
 // Long + weekday date parts for the modal
@@ -796,11 +797,9 @@ function showScanFeedback(title, message, tone = 'success', data = {}) {
     const idValue   = isTeacher ? (person.employee_id || 'N/A') : (person.lrn || 'N/A');
     const gradeText = `${person.grade || 'N/A'}${person.section && person.section !== 'N/A' ? ' — ' + person.section : ''}`;
 
-    // School icon = real school logo when available, else a school SVG
+    // School cell always uses an image logo: synced school logo first, bundled logo fallback.
     const logoUrl = schoolLogoFor(person.school);
-    const schoolIcon = logoUrl
-      ? `<img class="res-cell-logo" src="${escapeHtml(logoUrl)}" alt="" onerror="this.onerror=null;this.src='${LOCAL_LOGO_URL}';">`
-      : CELL_ICONS.school;
+    const schoolIcon = `<img class="res-cell-logo" src="${escapeHtml(logoUrl)}" alt="" onerror="this.onerror=null;this.src='${LOCAL_LOGO_URL}';">`;
 
     const cells = [
       { ic: schoolIcon,       tone: 'school', label: 'School',          value: person.school || 'N/A' },
