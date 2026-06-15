@@ -3,6 +3,11 @@
   var CHECK_MS = 60000;
   var permissionAsked = false;
 
+  if (new URLSearchParams(window.location.search).get('app') === '1' ||
+      /SchoolAttendanceAndroidWebView/i.test(navigator.userAgent)) {
+    document.body.classList.add('edutrack-mobile-app');
+  }
+
   function localDateString(date) {
     var d = date || new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -92,6 +97,56 @@
     return path + (path.indexOf('?') === -1 ? '?app=1' : '&app=1');
   }
 
+  function escapeHtml(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function getMobileUserName() {
+    var el = document.querySelector('.topbar-user-details strong') ||
+      document.querySelector('.sidebar-footer .user-details strong') ||
+      document.querySelector('.user-details strong');
+    return el ? el.textContent.trim() : 'hans';
+  }
+
+  function brandInfo() {
+    var logo = document.querySelector('.sidebar-brand img');
+    var title = document.querySelector('.brand-title');
+    var subtitle = document.querySelector('.brand-subtitle');
+    return {
+      logo: logo ? logo.getAttribute('src') : '/uploads/logos/system-logo.png',
+      title: title ? title.textContent.trim() : 'Edutrack',
+      subtitle: subtitle ? subtitle.textContent.trim() : 'Schools Division of Sipalay City'
+    };
+  }
+
+  function pageKey() {
+    var path = window.location.pathname;
+    if (/\/admin\/attendance/.test(path)) return 'attendance';
+    if (/\/admin\/schools|\/admin\/school\//.test(path)) return 'schools';
+    if (/\/admin\/reports/.test(path)) return 'reports';
+    if (/\/admin\/notifications/.test(path)) return 'alerts';
+    return 'home';
+  }
+
+  function dashboardHref() {
+    var link = document.querySelector('.nav-links a[href*="dashboard"]');
+    return link ? link.getAttribute('href') : '/admin/dashboard';
+  }
+
+  function mobileDateParts() {
+    var d = new Date();
+    return {
+      chip: d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+      iso: localDateString(d),
+      long: d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    };
+  }
+
   function liveParams(base) {
     var params = base || new URLSearchParams();
     params.set('_', String(Date.now()));
@@ -101,36 +156,69 @@
   function installBottomNavigation() {
     if (!isMobileAppShell() || document.querySelector('.mobile-bottom-nav')) return;
 
+    var active = pageKey();
+    var reportsHref = document.querySelector('.nav-links a[href="/admin/reports"]')
+      ? '/admin/reports'
+      : '/admin/sf2-report';
+    function item(key, href, icon, label, hasDot) {
+      return '<a href="' + appPath(href) + '" class="' + (active === key ? 'active' : '') + '">' +
+        '<span class="mobile-nav-icon"><i class="fa-solid ' + icon + '"></i>' + (hasDot ? '<b id="mobileAlertDot"></b>' : '') + '</span>' +
+        '<span>' + label + '</span></a>';
+    }
+
     var nav = document.createElement('nav');
     nav.className = 'mobile-bottom-nav';
     nav.innerHTML =
-      '<a href="' + appPath('/admin/dashboard') + '" class="active"><i class="fa-solid fa-chart-pie"></i><span>Dashboard</span></a>' +
-      '<a href="' + appPath('/admin/attendance') + '"><i class="fa-solid fa-clipboard-list"></i><span>Attendance</span></a>' +
-      '<a href="' + appPath('/admin/schools') + '"><i class="fa-solid fa-building-columns"></i><span>Schools</span></a>' +
-      '<a href="' + appPath('/admin/reports') + '"><i class="fa-solid fa-file-lines"></i><span>Reports</span></a>' +
-      '<button type="button" id="mobileMenuButton"><i class="fa-solid fa-grip"></i><span>Menu</span></button>';
+      item('home', dashboardHref(), 'fa-house', 'Home') +
+      item('attendance', '/admin/attendance', 'fa-calendar-check', 'Attendance') +
+      item('schools', '/admin/schools', 'fa-building-columns', 'Schools') +
+      item('reports', reportsHref, 'fa-chart-simple', 'Report') +
+      item('alerts', '/admin/notifications', 'fa-bell', 'Alerts', true);
     document.body.appendChild(nav);
+  }
 
-    var menu = document.createElement('div');
-    menu.className = 'mobile-menu-panel';
-    var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar .nav-links a'));
-    menu.innerHTML =
-      '<div class="mobile-menu-head"><strong>EduTrack Menu</strong><button type="button" id="mobileMenuClose"><i class="fa-solid fa-xmark"></i></button></div>' +
-      '<div class="mobile-menu-links">' +
-      links.map(function(a) {
-        return '<a href="' + appPath(a.getAttribute('href')) + '">' + a.innerHTML + '</a>';
-      }).join('') +
-      '<a href="/change-password?app=1"><i class="fa-solid fa-key"></i> Password</a>' +
-      '<a href="/logout"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>' +
+  function ensureMobileTopChrome() {
+    if (!isMobileAppShell() || document.querySelector('.mobile-app-top')) return;
+    var content = document.querySelector('.content');
+    var page = document.querySelector('.page-content');
+    if (!content || !page) return;
+
+    var brand = brandInfo();
+    var dates = mobileDateParts();
+    var top = document.createElement('section');
+    top.className = 'mobile-app-top';
+    top.innerHTML =
+      '<div class="mobile-brand-row">' +
+        '<div class="mobile-brand-logo"><img src="' + escapeHtml(brand.logo) + '" alt=""></div>' +
+        '<div class="mobile-brand-copy"><strong>' + escapeHtml(brand.title || 'Edutrack') + '</strong><span>' + escapeHtml(brand.subtitle || 'Schools Division of Sipalay City') + '</span></div>' +
+        '<a href="' + appPath('/admin/notifications') + '" class="mobile-bell" aria-label="Alerts"><i class="fa-regular fa-bell"></i><b></b></a>' +
+      '</div>' +
+      '<div class="mobile-chip-row">' +
+        '<span class="mobile-chip live"><i></i> LIVE</span>' +
+        '<span class="mobile-chip"><i class="fa-regular fa-calendar-days"></i> <b id="mobileTopDate">' + escapeHtml(dates.chip) + '</b></span>' +
+        '<span class="mobile-chip"><i class="fa-regular fa-calendar"></i> <b id="mobileTopIso">' + escapeHtml(dates.iso) + '</b></span>' +
       '</div>';
-    document.body.appendChild(menu);
+    content.insertBefore(top, page);
+  }
 
-    document.getElementById('mobileMenuButton').addEventListener('click', function() {
-      menu.classList.add('open');
-    });
-    document.getElementById('mobileMenuClose').addEventListener('click', function() {
-      menu.classList.remove('open');
-    });
+  function ensureMobilePageIntro() {
+    if (!isMobileAppShell() || isDashboardPage() || document.querySelector('.mobile-page-intro')) return;
+    var page = document.querySelector('.page-content');
+    if (!page) return;
+    var meta = {
+      attendance: ['Attendance', 'Live daily scan records', 'fa-calendar-check'],
+      schools: ['Schools', 'School profiles and counts', 'fa-building-columns'],
+      reports: ['Report', 'Attendance summaries and trends', 'fa-chart-simple'],
+      alerts: ['Alerts', '2-day absence flags and activity', 'fa-bell'],
+      home: ['EduTrack', 'Mobile monitoring dashboard', 'fa-house']
+    }[pageKey()];
+
+    var intro = document.createElement('section');
+    intro.className = 'mobile-page-intro';
+    intro.innerHTML =
+      '<div class="mobile-page-intro-icon"><i class="fa-solid ' + meta[2] + '"></i></div>' +
+      '<div><span>' + escapeHtml(meta[1]) + '</span><strong>' + escapeHtml(meta[0]) + '</strong></div>';
+    page.insertBefore(intro, page.firstChild);
   }
 
   function ensureMobileDashboardShell() {
@@ -145,23 +233,36 @@
     var shell = document.createElement('section');
     shell.className = 'mobile-dashboard-shell';
     shell.innerHTML =
-      '<div class="mobile-dash-profile">' +
-      '<div><span id="mobileGreeting">Good Day</span><strong id="mobileUserName">Dashboard</strong><small>Division-Level Monitoring</small></div>' +
-      '<button type="button" id="mobileRefreshButton"><i class="fa-solid fa-rotate"></i></button>' +
+      '<div class="mobile-greeting-card">' +
+        '<div class="mobile-greeting-copy">' +
+          '<span id="mobileGreeting">Good afternoon</span>' +
+          '<strong id="mobileUserName">Dashboard</strong>' +
+          '<small id="mobileLongDate">Monday, June 8, 2026</small>' +
+        '</div>' +
+        '<div class="mobile-school-art" aria-hidden="true"><i class="fa-solid fa-school"></i><b></b><em></em></div>' +
+        '<div class="mobile-kpi-row">' +
+          '<div class="mobile-kpi green"><i class="fa-solid fa-users"></i><strong id="mobileMetricStudents">0</strong><span>Students</span></div>' +
+          '<div class="mobile-kpi blue"><i class="fa-solid fa-graduation-cap"></i><strong id="mobileMetricTeachers">0</strong><span>Teachers</span></div>' +
+          '<div class="mobile-kpi red"><i class="fa-solid fa-triangle-exclamation"></i><strong id="mobileMetricFlagged">0</strong><span>2-Day<br>Flagged Students</span></div>' +
+        '</div>' +
       '</div>' +
-      '<div class="mobile-live-row"><span><i class="fa-solid fa-bolt"></i> Real-time</span><span id="mobileLiveDate"></span><button type="button" id="mobileTestNotify"><i class="fa-solid fa-bell"></i> Test</button></div>' +
-      '<div class="mobile-attendance-card">' +
-      '<div class="mobile-ring" style="--p:0"><div><strong id="mobileRate">0%</strong><span>ATTENDANCE</span></div></div>' +
-      '<p id="mobilePresentSummary">Loading attendance...</p>' +
+      '<div class="mobile-analytics-card">' +
+        '<div class="mobile-card-title"><span><i class="fa-solid fa-chart-line"></i></span><strong>Today Analytics</strong></div>' +
+        '<div class="mobile-analytics-body">' +
+          '<div class="mobile-ring" style="--p:0"><div><strong id="mobileRate">0%</strong><span>ATTENDANCE</span></div></div>' +
+          '<div class="mobile-analytics-copy">' +
+            '<div class="mobile-excellent"><i class="fa-regular fa-star"></i><span id="mobileRateBadge">Excellent Attendance</span></div>' +
+            '<div class="mobile-ana-line"><i class="fa-solid fa-user-group"></i><p><strong id="mobilePresentSummary">0 of 0 students</strong><span>present</span></p></div>' +
+            '<div class="mobile-live-meter"><div><span>Live Attendance</span><strong id="mobileRateInline">0%</strong></div><b><i id="mobileRateBar"></i></b></div>' +
+            '<div class="mobile-ana-line muted"><i class="fa-solid fa-user"></i><p><strong id="mobileAbsentSummary">0 students absent</strong></p></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="mobile-status-row">' +
+        '<a href="' + appPath('/admin/attendance') + '" class="mobile-status-card present"><i class="fa-solid fa-user"></i><p><strong id="mobilePresentQuick">0</strong><span>Present</span></p><em class="fa-solid fa-chevron-right"></em></a>' +
+        '<a href="' + appPath('/admin/notifications') + '" class="mobile-status-card absent"><i class="fa-solid fa-user"></i><p><strong id="mobileAbsentQuick">0</strong><span>Absent</span></p><em class="fa-solid fa-chevron-right"></em></a>' +
       '</div>';
     toolbar.parentNode.insertBefore(shell, toolbar);
-
-    document.getElementById('mobileRefreshButton').addEventListener('click', function() {
-      window.dispatchEvent(new Event('edutrack-force-refresh'));
-    });
-    document.getElementById('mobileTestNotify').addEventListener('click', function() {
-      notify('Notification test successful', 'EduTrack mobile notifications are working on this phone.');
-    });
     updateMobileDashboardShell();
   }
 
@@ -170,23 +271,39 @@
     var rate = numberFromText(text('statRate'));
     var present = text('statPresent');
     var students = text('statStudents');
-    var nameEl = document.querySelector('.topbar-user-details strong') || document.querySelector('.user-details strong');
-    var userName = nameEl ? nameEl.textContent.trim() : 'Dashboard';
+    var absent = text('statAbsent');
+    var teachers = text('statTeachers');
+    var flagged = text('statFlagged');
+    var displayName = getMobileUserName();
     var hour = new Date().getHours();
-    var greeting = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
+    var greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+    var dates = mobileDateParts();
 
     var ring = document.querySelector('.mobile-ring');
     if (ring) ring.style.setProperty('--p', Math.max(0, Math.min(100, rate)));
     var rateEl = document.getElementById('mobileRate');
     if (rateEl) rateEl.textContent = rate + '%';
+    set('mobileRateInline', rate + '%');
+    set('mobileRateBadge', rate >= 95 ? 'Excellent Attendance' : rate >= 80 ? 'Strong Attendance' : rate >= 50 ? 'Needs Monitoring' : 'Attendance Alert');
+    var rateBar = document.getElementById('mobileRateBar');
+    if (rateBar) rateBar.style.width = Math.max(0, Math.min(100, rate)) + '%';
     var presentEl = document.getElementById('mobilePresentSummary');
-    if (presentEl) presentEl.textContent = present + ' of ' + students + ' students present';
+    if (presentEl) presentEl.textContent = present + ' of ' + students + ' students';
+    set('mobileAbsentSummary', absent + ' students absent');
+    set('mobileMetricStudents', students);
+    set('mobileMetricTeachers', teachers);
+    set('mobileMetricFlagged', flagged);
+    set('mobilePresentQuick', present);
+    set('mobileAbsentQuick', absent);
     var gEl = document.getElementById('mobileGreeting');
     if (gEl) gEl.textContent = greeting;
     var uEl = document.getElementById('mobileUserName');
-    if (uEl) uEl.textContent = userName;
-    var dEl = document.getElementById('mobileLiveDate');
-    if (dEl) dEl.textContent = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    if (uEl) uEl.textContent = displayName;
+    set('mobileLongDate', dates.long);
+    set('mobileTopDate', dates.chip);
+    set('mobileTopIso', dates.iso);
+    var dot = document.getElementById('mobileAlertDot');
+    if (dot) dot.style.display = numberFromText(flagged) > 0 ? 'block' : 'none';
   }
 
   function watchMobileDashboardValues() {
@@ -285,7 +402,10 @@
 
   function enhanceMobileApp() {
     if (!isMobileAppShell()) return;
+    document.body.classList.add('mobile-route-' + pageKey());
+    ensureMobileTopChrome();
     installBottomNavigation();
+    ensureMobilePageIntro();
     ensureMobileDashboardShell();
     watchMobileDashboardValues();
     startMobileRealtimePoll();

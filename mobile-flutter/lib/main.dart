@@ -1180,11 +1180,11 @@ class _HomeShellState extends State<HomeShell>
     ];
     final destinations = <NavigationDestination>[
       const NavigationDestination(
-        icon: Icon(Icons.dashboard_customize_rounded),
+        icon: Icon(Icons.home_rounded),
         label: 'Home',
       ),
       const NavigationDestination(
-        icon: Icon(Icons.fact_check_rounded),
+        icon: Icon(Icons.calendar_month_rounded),
         label: 'Attendance',
       ),
       const NavigationDestination(
@@ -1192,11 +1192,16 @@ class _HomeShellState extends State<HomeShell>
         label: 'Schools',
       ),
       const NavigationDestination(
-        icon: Icon(Icons.insert_chart_rounded),
+        icon: Icon(Icons.bar_chart_rounded),
         label: 'Report',
       ),
-      const NavigationDestination(
-        icon: Icon(Icons.notifications_active_rounded),
+      NavigationDestination(
+        icon: Badge(
+          isLabelVisible: flags.isNotEmpty,
+          smallSize: 8,
+          backgroundColor: const Color(0xFFE53935),
+          child: const Icon(Icons.notifications_rounded),
+        ),
         label: 'Alerts',
       ),
     ];
@@ -1226,6 +1231,7 @@ class _HomeShellState extends State<HomeShell>
           children: [
             Header(
               api: widget.api,
+              onAlerts: () => setState(() => tab = 4),
               onLogout: () async {
                 final navigator = Navigator.of(context);
                 await widget.api.logout();
@@ -2926,8 +2932,14 @@ class ActivityRow extends StatelessWidget {
 }
 
 class Header extends StatelessWidget {
-  const Header({super.key, required this.api, required this.onLogout});
+  const Header({
+    super.key,
+    required this.api,
+    required this.onAlerts,
+    required this.onLogout,
+  });
   final ApiService api;
+  final VoidCallback onAlerts;
   final VoidCallback onLogout;
 
   @override
@@ -2935,19 +2947,19 @@ class Header extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: EdgeInsets.fromLTRB(
-        14,
-        MediaQuery.paddingOf(context).top + 6,
-        14,
-        10,
+        22,
+        MediaQuery.paddingOf(context).top + 18,
+        22,
+        22,
       ),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: const Border(bottom: BorderSide(color: Color(0xFFE2E9E5))),
+        color: const Color(0xFF173F35),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(32)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF111827).withValues(alpha: .06),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
+            color: const Color(0xFF0B1F1A).withValues(alpha: .22),
+            blurRadius: 28,
+            offset: const Offset(0, 14),
           ),
         ],
       ),
@@ -2955,8 +2967,24 @@ class Header extends StatelessWidget {
         children: [
           Row(
             children: [
-              const AppLogo(size: 36),
-              const SizedBox(width: 10),
+              Container(
+                width: 58,
+                height: 58,
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: .16),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: const AppLogo(size: 44),
+              ),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2964,10 +2992,11 @@ class Header extends StatelessWidget {
                     const Text(
                       AppConfig.appName,
                       style: TextStyle(
-                        color: Color(0xFF0F211B),
-                        fontSize: 18,
+                        color: Colors.white,
+                        fontSize: 31,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: -.2,
+                        letterSpacing: -.8,
+                        height: 1,
                       ),
                     ),
                     const Text(
@@ -2975,18 +3004,72 @@ class Header extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: Color(0xFF6D7A74),
-                        fontSize: 10.5,
+                        color: Color(0xFFD8E8E2),
+                        fontSize: 13.5,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
                 ),
               ),
-              _actionIcon(icon: Icons.logout_rounded, onTap: onLogout),
+              PopupMenuButton<String>(
+                color: Colors.white,
+                elevation: 10,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                onSelected: (value) {
+                  if (value == 'alerts') onAlerts();
+                  if (value == 'logout') onLogout();
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'alerts',
+                    child: Text('Open alerts'),
+                  ),
+                  PopupMenuItem(
+                    value: 'logout',
+                    child: Text('Logout'),
+                  ),
+                ],
+                child: Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: .13),
+                    borderRadius: BorderRadius.circular(19),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: .18),
+                    ),
+                  ),
+                  child: Stack(
+                    children: [
+                      const Center(
+                        child: Icon(
+                          Icons.notifications_none_rounded,
+                          color: Colors.white,
+                          size: 30,
+                        ),
+                      ),
+                      Positioned(
+                        top: 12,
+                        right: 12,
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFF3B30),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 22),
           Row(
             children: [
               _chip(
@@ -2999,10 +3082,41 @@ class Header extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              _chip(Text(shortDate()), dense: true),
-              const SizedBox(width: 8),
-              Flexible(child: _chip(Text(date()), dense: true)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _chip(
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.calendar_month_rounded, size: 18),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          shortDate(),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  dense: true,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _chip(
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.calendar_month_rounded, size: 18),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(date(), overflow: TextOverflow.ellipsis),
+                      ),
+                    ],
+                  ),
+                  dense: true,
+                ),
+              ),
             ],
           ),
         ],
@@ -3012,39 +3126,30 @@ class Header extends StatelessWidget {
 
   Widget _chip(Widget child, {bool dense = false}) => Container(
     padding: EdgeInsets.symmetric(
-      horizontal: dense ? 11 : 12,
-      vertical: dense ? 7 : 8,
+      horizontal: dense ? 12 : 18,
+      vertical: dense ? 13 : 14,
     ),
     decoration: BoxDecoration(
       color: const Color(0xFFF7FAF8),
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: const Color(0xFFDCE6E1)),
+      borderRadius: BorderRadius.circular(17),
+      border: Border.all(color: Colors.white.withValues(alpha: .76)),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: .12),
+          blurRadius: 16,
+          offset: const Offset(0, 8),
+        ),
+      ],
     ),
     child: DefaultTextStyle(
       style: const TextStyle(
         color: Color(0xFF0F6E52),
         fontWeight: FontWeight.w900,
-        fontSize: 11.5,
+        fontSize: 14,
       ),
       child: child,
     ),
   );
-
-  Widget _actionIcon({required IconData icon, required VoidCallback onTap}) =>
-      Container(
-        width: 38,
-        height: 38,
-        decoration: BoxDecoration(
-          color: const Color(0xFFEAF7F1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFD7EDE3)),
-        ),
-        child: IconButton(
-          padding: EdgeInsets.zero,
-          onPressed: onTap,
-          icon: Icon(icon, size: 20, color: const Color(0xFF138A64)),
-        ),
-      );
 }
 
 class DashboardPage extends StatelessWidget {
@@ -3167,13 +3272,13 @@ class DashboardPage extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: () => onRefresh(silent: false),
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+        padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
         children: [
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(30),
               border: Border.all(color: const Color(0xFFDCE6E1)),
               boxShadow: [
                 BoxShadow(
@@ -3186,35 +3291,51 @@ class DashboardPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  greeting(),
-                  style: const TextStyle(
-                    color: Color(0xFF4C5F57),
-                    fontWeight: FontWeight.w800,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            greeting(),
+                            style: const TextStyle(
+                              color: Color(0xFF4C5F57),
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            api.fullname,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF151827),
+                              fontSize: 34,
+                              fontWeight: FontWeight.w900,
+                              height: .98,
+                              letterSpacing: -1,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            fullDate(),
+                            style: const TextStyle(
+                              color: Color(0xFF5F6F69),
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const SchoolIllustration(size: 132),
+                  ],
                 ),
-                const SizedBox(height: 5),
-                Text(
-                  api.fullname,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF111827),
-                    fontSize: 25,
-                    fontWeight: FontWeight.w900,
-                    height: 1.04,
-                    letterSpacing: -.7,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  fullDate(),
-                  style: const TextStyle(
-                    color: Color(0xFF5F6F69),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 22),
                 Row(
                   children: [
                     Expanded(
@@ -3225,7 +3346,7 @@ class DashboardPage extends StatelessWidget {
                         accent: const Color(0xFF138A64),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: KpiPill(
                         label: 'Teachers',
@@ -3234,7 +3355,7 @@ class DashboardPage extends StatelessWidget {
                         accent: const Color(0xFF4F46E5),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: KpiPill(
                         label: '2-Day Flagged Students',
@@ -3249,91 +3370,139 @@ class DashboardPage extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 18),
           Container(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: attendanceScoreSoftColor(rate)),
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: const Color(0xFFDCE6E1)),
               boxShadow: [
                 BoxShadow(
                   color: scoreColor.withValues(alpha: .10),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
+                  blurRadius: 22,
+                  offset: const Offset(0, 10),
                 ),
               ],
             ),
             child: Column(
               children: [
+                const Row(
+                  children: [
+                    SoftIconTile(
+                      icon: Icons.query_stats_rounded,
+                      color: Color(0xFF138A64),
+                    ),
+                    SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        'Today Analytics',
+                        style: TextStyle(
+                          color: Color(0xFF151827),
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -.45,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     AttendanceScoreRing(rate: rate, color: scoreColor),
-                    const SizedBox(width: 18),
+                    const SizedBox(width: 20),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Today Analytics',
-                            style: TextStyle(
-                              fontSize: 21,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -.4,
-                            ),
-                          ),
-                          const SizedBox(height: 7),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
+                              horizontal: 12,
+                              vertical: 8,
                             ),
                             decoration: BoxDecoration(
                               color: attendanceScoreSoftColor(rate),
                               borderRadius: BorderRadius.circular(999),
                             ),
-                            child: Text(
-                              scoreLabel,
-                              style: TextStyle(
-                                color: scoreColor,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w900,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.star_border_rounded,
+                                  color: scoreColor,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 7),
+                                Flexible(
+                                  child: Text(
+                                    scoreLabel,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: scoreColor,
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          Row(
+                            children: [
+                              const SoftIconTile(
+                                icon: Icons.groups_rounded,
+                                color: Color(0xFF138A64),
+                                size: 34,
                               ),
-                            ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  '$present of $analyticsBase students\npresent',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF1F2A26),
+                                    fontSize: 15,
+                                    height: 1.22,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 10),
-                          Text(
-                            '$present of $analyticsBase students present',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                              color: Color(0xFF1F2A26),
-                              height: 1.25,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
                           RateBar(
-                            'Live Attendance Rate',
+                            'Live Attendance',
                             rate,
                             color: scoreColor,
                           ),
-                          const SizedBox(height: 2),
                           InkWell(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                             onTap: () => openAbsentDetails(
                               title: 'Absent Students Today',
                             ),
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              child: Text(
-                                absent == 1
-                                    ? '1 student absent'
-                                    : '$absent students absent',
-                                style: const TextStyle(
-                                  color: Color(0xFF74827E),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
-                                ),
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: Row(
+                                children: [
+                                  const SoftIconTile(
+                                    icon: Icons.person_rounded,
+                                    color: Color(0xFF9CA3AF),
+                                    size: 34,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    absent == 1
+                                        ? '1 student absent'
+                                        : '$absent students absent',
+                                    style: const TextStyle(
+                                      color: Color(0xFF74827E),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -3342,50 +3511,33 @@ class DashboardPage extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: AnalyticsMetric(
-                        label: 'Total Students',
-                        value: '$analyticsBase',
-                        color: const Color(0xFF138A64),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: AnalyticsMetric(
-                        label: 'Present Students',
-                        value: '$present',
-                        color: const Color(0xFF138A64),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: AnalyticsMetric(
-                        label: 'Absent Students',
-                        value: '$absent',
-                        color: const Color(0xFFDC2626),
-                        onTap: () =>
-                            openAbsentDetails(title: 'Absent Students Today'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: AnalyticsMetric(
-                        label: 'Attendance Percentage',
-                        value: '$rate%',
-                        color: scoreColor,
-                      ),
-                    ),
-                  ],
-                ),
               ],
             ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: StatusShortcutCard(
+                  icon: Icons.person_rounded,
+                  label: 'Present',
+                  value: '$present',
+                  color: const Color(0xFF138A64),
+                  onTap: () => onOpenTab(1),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: StatusShortcutCard(
+                  icon: Icons.person_rounded,
+                  label: 'Absent',
+                  value: '$absent',
+                  color: const Color(0xFFD97706),
+                  onTap: () =>
+                      openAbsentDetails(title: 'Absent Students Today'),
+                ),
+              ),
+            ],
           ),
           if (dashboard['is_school_day'] == false) ...[
             const SizedBox(height: 12),
@@ -3440,13 +3592,13 @@ class KpiPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) => InkWell(
     onTap: onTap,
-    borderRadius: BorderRadius.circular(16),
+    borderRadius: BorderRadius.circular(24),
     child: Container(
-      constraints: const BoxConstraints(minHeight: 88),
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+      constraints: const BoxConstraints(minHeight: 112),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: accent.withValues(alpha: .07),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: accent.withValues(alpha: .18)),
       ),
       child: Column(
@@ -3454,15 +3606,15 @@ class KpiPill extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Container(
-            width: 26,
-            height: 26,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: .86),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(16),
             ),
-            child: Icon(icon, color: accent, size: 16),
+            child: Icon(icon, color: accent, size: 23),
           ),
-          const SizedBox(height: 7),
+          const SizedBox(height: 12),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 260),
             switchInCurve: Curves.easeOutCubic,
@@ -3481,8 +3633,8 @@ class KpiPill extends StatelessWidget {
               value,
               key: ValueKey(value),
               style: const TextStyle(
-                color: Color(0xFF111827),
-                fontSize: 20,
+                color: Color(0xFF151827),
+                fontSize: 28,
                 fontWeight: FontWeight.w900,
                 height: 1,
               ),
@@ -3495,8 +3647,8 @@ class KpiPill extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: Color(0xFF5C6E66),
-              fontSize: 10.3,
-              height: 1.08,
+              fontSize: 13,
+              height: 1.1,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -3504,6 +3656,198 @@ class KpiPill extends StatelessWidget {
       ),
     ),
   );
+}
+
+class SoftIconTile extends StatelessWidget {
+  const SoftIconTile({
+    super.key,
+    required this.icon,
+    required this.color,
+    this.size = 48,
+  });
+
+  final IconData icon;
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .09),
+      borderRadius: BorderRadius.circular(size * .34),
+    ),
+    child: Icon(icon, color: color, size: size * .5),
+  );
+}
+
+class StatusShortcutCard extends StatelessWidget {
+  const StatusShortcutCard({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(24),
+    child: Container(
+      padding: const EdgeInsets.fromLTRB(16, 15, 14, 15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFE1EAE6)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF111827).withValues(alpha: .07),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            child: Icon(icon, color: Colors.white, size: 30),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: Color(0xFF151827),
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    height: 1,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(
+            Icons.chevron_right_rounded,
+            color: Color(0xFF2F3B36),
+            size: 28,
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class SchoolIllustration extends StatelessWidget {
+  const SchoolIllustration({super.key, this.size = 132});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: size,
+    height: size * .82,
+    child: CustomPaint(painter: SchoolIllustrationPainter()),
+  );
+}
+
+class SchoolIllustrationPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final green = Paint()..color = const Color(0xFF3D956D);
+    final lightGreen = Paint()..color = const Color(0xFFA9D9BA);
+    final pale = Paint()..color = const Color(0xFFEAF5EF);
+    final roof = Paint()..color = const Color(0xFF28795C);
+    final door = Paint()..color = const Color(0xFF2D7B5D);
+    final window = Paint()..color = const Color(0xFFF7FCF9);
+
+    canvas.drawOval(
+      Rect.fromLTWH(size.width * .03, size.height * .78, size.width * .9, 16),
+      pale,
+    );
+    canvas.drawCircle(Offset(size.width * .21, size.height * .61), 20, lightGreen);
+    canvas.drawRect(
+      Rect.fromLTWH(size.width * .18, size.height * .62, 7, size.height * .28),
+      green,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          size.width * .42,
+          size.height * .38,
+          size.width * .50,
+          size.height * .42,
+        ),
+        const Radius.circular(4),
+      ),
+      lightGreen,
+    );
+    final roofPath = Path()
+      ..moveTo(size.width * .38, size.height * .40)
+      ..lineTo(size.width * .67, size.height * .20)
+      ..lineTo(size.width * .96, size.height * .40)
+      ..close();
+    canvas.drawPath(roofPath, roof);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          size.width * .58,
+          size.height * .54,
+          size.width * .15,
+          size.height * .27,
+        ),
+        const Radius.circular(4),
+      ),
+      door,
+    );
+    for (final x in [.47, .79]) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(size.width * x, size.height * .52, 15, 18),
+          const Radius.circular(2),
+        ),
+        window,
+      );
+    }
+    canvas.drawCircle(Offset(size.width * .67, size.height * .35), 17, window);
+    canvas.drawLine(
+      Offset(size.width * .67, size.height * .27),
+      Offset(size.width * .67, size.height * .06),
+      green..strokeWidth = 3,
+    );
+    final flag = Path()
+      ..moveTo(size.width * .68, size.height * .06)
+      ..lineTo(size.width * .86, size.height * .11)
+      ..lineTo(size.width * .68, size.height * .16)
+      ..close();
+    canvas.drawPath(flag, green);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class FlaggedStudentsSheet extends StatelessWidget {
@@ -5491,52 +5835,9 @@ class ReportsPage extends StatelessWidget {
     Future<void> Function(String) openDateDetails,
   ) {
       return ListView(
-        padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+        padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
         children: [
-          PremiumCard(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00885B),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Icon(
-                    Icons.insert_chart_rounded,
-                    color: Colors.white,
-                    size: 28,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Reports',
-                        style: TextStyle(
-                          fontSize: 25,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -.65,
-                        ),
-                      ),
-                      Text(
-                        'Live daily insight - ${shortDate()}',
-                        style: const TextStyle(
-                          color: Color(0xFF667872),
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const LiveDot(color: Color(0xFFFF3B30)),
-              ],
-            ),
-          ),
+          SectionTitle('Report', 'Attendance summaries and trends'),
           const SizedBox(height: 14),
           PremiumCard(
             title: 'Daily Summary',
@@ -5667,7 +5968,7 @@ class _SchoolsPageState extends State<SchoolsPage> {
     return RefreshIndicator(
       onRefresh: () => load(silent: true),
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
         children: [
           SectionTitle(
             'Schools',
@@ -5955,7 +6256,7 @@ class _AlertsPageState extends State<AlertsPage> {
       _consumeIntentIfNeeded();
     });
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
       children: [
         const SectionTitle(
           'Alerts',
@@ -6495,7 +6796,7 @@ class _LiveListState extends State<LiveList> {
     return RefreshIndicator(
       onRefresh: () => load(silent: true),
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
         children: [
           SectionTitle(widget.title, widget.subtitle),
           const SizedBox(height: 16),
@@ -6644,7 +6945,7 @@ class FutureList extends StatelessWidget {
       }
       final rows = snapshot.data!;
       return ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
         children: [
           SectionTitle(title, subtitle),
           const SizedBox(height: 16),
@@ -6745,30 +7046,70 @@ class SectionTitle extends StatelessWidget {
   final String subtitle;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(4, 2, 4, 2),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w900,
-            letterSpacing: -.55,
+  Widget build(BuildContext context) {
+    final icon = mobilePageIcon(title);
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: const Color(0xFFDCE6E1)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF111827).withValues(alpha: .07),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          subtitle,
-          style: const TextStyle(
-            color: Color(0xFF667872),
-            fontWeight: FontWeight.w600,
+        ],
+      ),
+      child: Row(
+        children: [
+          SoftIconTile(icon: icon, color: const Color(0xFF138A64), size: 54),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF5F716B),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF151827),
+                    fontSize: 25,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -.55,
+                    height: 1.02,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
+}
+
+IconData mobilePageIcon(String title) {
+  final normalized = title.toLowerCase();
+  if (normalized.contains('attendance')) return Icons.fact_check_rounded;
+  if (normalized.contains('school')) return Icons.account_balance_rounded;
+  if (normalized.contains('report')) return Icons.insert_chart_rounded;
+  if (normalized.contains('alert')) return Icons.notifications_rounded;
+  if (normalized.contains('admin')) return Icons.admin_panel_settings_rounded;
+  return Icons.dashboard_customize_rounded;
 }
 
 class SchoolLogoAvatar extends StatelessWidget {
