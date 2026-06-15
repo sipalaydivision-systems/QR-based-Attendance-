@@ -1450,11 +1450,14 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
         // logo is fetched separately from /mobile-branding, and only when this
         // version changes, to avoid re-downloading it on every poll.
         const [brandingRows] = await db.query(
-            "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('system_logo', 'system_name', 'division_name')"
+            "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('system_logo', 'system_name', 'division_name', 'mobile_dashboard_school_art')"
         );
         const branding = Object.fromEntries(brandingRows.map(r => [r.setting_key, r.setting_value]));
         const logoVersion = branding.system_logo
             ? crypto.createHash('md5').update(String(branding.system_logo)).digest('hex').slice(0, 12)
+            : '';
+        const schoolArtVersion = branding.mobile_dashboard_school_art
+            ? crypto.createHash('md5').update(String(branding.mobile_dashboard_school_art)).digest('hex').slice(0, 12)
             : '';
 
         const data = {
@@ -1462,6 +1465,7 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
             system_name: branding.system_name || '',
             division_name: branding.division_name || '',
             logo_version: logoVersion,
+            school_art_version: schoolArtVersion,
             total_schools: schoolRows[0].count,
             total_students: allStudents[0].count,
             active_students: totalActive,
@@ -1513,18 +1517,24 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
 router.get('/mobile-branding', requireAuth, async (req, res) => {
     try {
         const [rows] = await db.query(
-            "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('system_logo', 'system_name', 'division_name')"
+            "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('system_logo', 'system_name', 'division_name', 'mobile_dashboard_school_art')"
         );
         const branding = Object.fromEntries(rows.map(r => [r.setting_key, r.setting_value]));
         const logo = branding.system_logo || '';
+        const schoolArt = branding.mobile_dashboard_school_art || '';
         const logoVersion = logo
             ? crypto.createHash('md5').update(String(logo)).digest('hex').slice(0, 12)
+            : '';
+        const schoolArtVersion = schoolArt
+            ? crypto.createHash('md5').update(String(schoolArt)).digest('hex').slice(0, 12)
             : '';
         return res.json({
             system_logo: logo,
             system_name: branding.system_name || '',
             division_name: branding.division_name || '',
-            logo_version: logoVersion
+            logo_version: logoVersion,
+            mobile_dashboard_school_art: schoolArt,
+            school_art_version: schoolArtVersion
         });
     } catch (err) {
         console.error('Mobile branding error:', err);
@@ -2395,6 +2405,33 @@ router.delete('/settings/logo', requireRole('super_admin'), async (req, res) => 
         return res.json({ success: true });
     } catch (e) {
         return res.status(500).json({ error: 'Failed to remove logo.' });
+    }
+});
+
+// ---- Mobile Dashboard School Art Upload ----
+router.post('/settings/mobile-dashboard-art', requireRole('super_admin'), (req, res) => {
+    logoUpload.single('logo')(req, res, async function(err) {
+        if (err) return res.status(400).json({ error: err.message });
+        if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+        try {
+            const art = uploadedFileToDataUrl(req.file);
+            await db.query(
+                "INSERT INTO settings (setting_key, setting_value) VALUES ('mobile_dashboard_school_art', ?) ON DUPLICATE KEY UPDATE setting_value = ?",
+                [art, art]
+            );
+            return res.json({ success: true, art });
+        } catch (e) {
+            return res.status(500).json({ error: 'Failed to save mobile dashboard school art.' });
+        }
+    });
+});
+
+router.delete('/settings/mobile-dashboard-art', requireRole('super_admin'), async (req, res) => {
+    try {
+        await db.query("DELETE FROM settings WHERE setting_key='mobile_dashboard_school_art'");
+        return res.json({ success: true });
+    } catch (e) {
+        return res.status(500).json({ error: 'Failed to remove mobile dashboard school art.' });
     }
 });
 

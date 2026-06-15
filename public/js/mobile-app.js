@@ -41,11 +41,11 @@
     extra = extra || {};
     if (window.EduTrackNative && typeof window.EduTrackNative.notify === 'function') {
       window.EduTrackNative.notify(title, body);
-      return;
+      return true;
     }
 
     var canNotify = await ensureNotificationPermission();
-    if (!canNotify) return;
+    if (!canNotify) return false;
 
     if ('serviceWorker' in navigator) {
       var reg = await navigator.serviceWorker.getRegistration();
@@ -59,13 +59,14 @@
           data: extra.data || {},
           actions: extra.actions || []
         });
-        return;
+        return true;
       }
     }
     new Notification(title, {
       body: body,
       icon: '/uploads/logos/system-logo.png'
     });
+    return true;
   }
 
   function isMobileAppShell() {
@@ -326,41 +327,45 @@
         ].map(function(v) { return String(v || '').trim(); }).join('|');
         var key = String(st.person_type || 'student') + '|' + String(st.id || '') + '|' + fingerprint;
         if (!notifiedMap[today][key]) {
-          notifiedMap[today][key] = 1;
+          st.__notifyKey = key;
           newlyFlagged.push(st);
         }
       }
 
-      saveNotifiedMap(notifiedMap);
-
       if (newlyFlagged.length > 0) {
-        var sample = newlyFlagged[0];
-        var studentName = (sample.firstname && sample.lastname)
-          ? (sample.lastname + ', ' + sample.firstname)
-          : (sample.name || 'Student');
-        var gradeSection = (sample.grade_name || '-') + ' / ' + (sample.section_name || '-');
-        var lrn = sample.lrn || '-';
-        var days = sample.absent_days || 2;
-        var adviser = sample.adviser || 'Assigned adviser';
-        var detail = studentName + ' | ' + gradeSection + ' | LRN ' + lrn + ' | ' + days + ' days absent';
-        var msg = newlyFlagged.length === 1
-          ? detail
-          : (newlyFlagged.length + ' students flagged. First: ' + detail);
-        var contact = (sample.adviser_contact || sample.adviser_email || sample.school_contact || '').trim();
-        var contactUrl = '';
-        if (contact && /@/.test(contact)) {
-          contactUrl = 'mailto:' + encodeURIComponent(contact) + '?subject=' + encodeURIComponent('Absence Alert - ' + studentName) + '&body=' + encodeURIComponent('Please check absence alert for ' + studentName + ' (' + gradeSection + ', LRN: ' + lrn + ', ' + days + ' days absent). Adviser: ' + adviser + '.');
-        } else if (contact) {
-          var digits = contact.replace(/[^0-9+]/g, '');
-          if (digits) {
-            contactUrl = 'sms:' + encodeURIComponent(digits) + '?body=' + encodeURIComponent('Please check absence alert for ' + studentName + ' (' + gradeSection + ', LRN: ' + lrn + ', ' + days + ' days absent). Adviser: ' + adviser + '.');
+        var deliveredAny = false;
+        for (var n = 0; n < newlyFlagged.length; n++) {
+          var sample = newlyFlagged[n];
+          var notifyKey = sample.__notifyKey || String(n);
+          var studentName = (sample.firstname && sample.lastname)
+            ? (sample.lastname + ', ' + sample.firstname)
+            : (sample.name || 'Student');
+          var gradeSection = (sample.grade_name || '-') + ' / ' + (sample.section_name || '-');
+          var lrn = sample.lrn || '-';
+          var days = sample.absent_days || 2;
+          var adviser = sample.adviser || 'Assigned adviser';
+          var msg = studentName + ' | ' + gradeSection + ' | LRN ' + lrn + ' | ' + days + ' days absent';
+          var contact = (sample.adviser_contact || sample.adviser_email || sample.school_contact || '').trim();
+          var contactUrl = '';
+          if (contact && /@/.test(contact)) {
+            contactUrl = 'mailto:' + encodeURIComponent(contact) + '?subject=' + encodeURIComponent('Absence Alert - ' + studentName) + '&body=' + encodeURIComponent('Please check absence alert for ' + studentName + ' (' + gradeSection + ', LRN: ' + lrn + ', ' + days + ' days absent). Adviser: ' + adviser + '.');
+          } else if (contact) {
+            var digits = contact.replace(/[^0-9+]/g, '');
+            if (digits) {
+              contactUrl = 'sms:' + encodeURIComponent(digits) + '?body=' + encodeURIComponent('Please check absence alert for ' + studentName + ' (' + gradeSection + ', LRN: ' + lrn + ', ' + days + ' days absent). Adviser: ' + adviser + '.');
+            }
+          }
+          var delivered = await notify('2-Day Absence Alert', msg, {
+            tag: 'absence-2day-alert-' + notifyKey,
+            data: { url: '/admin/notifications?app=1', contactUrl: contactUrl },
+            actions: [{ action: 'contact-adviser', title: 'Please contact adviser' }]
+          });
+          if (delivered) {
+            notifiedMap[today][notifyKey] = 1;
+            deliveredAny = true;
           }
         }
-        notify('2-Day Absence Alert', msg, {
-          tag: 'absence-2day-alert',
-          data: { url: '/admin/notifications?app=1', contactUrl: contactUrl },
-          actions: [{ action: 'contact-adviser', title: 'Please contact adviser' }]
-        });
+        if (deliveredAny) saveNotifiedMap(notifiedMap);
       }
     } catch (_) {}
   }

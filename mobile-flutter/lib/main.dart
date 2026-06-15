@@ -26,6 +26,9 @@ class AppConfig {
 // values are cached on the device so the correct logo shows immediately on the
 // next launch, even before the first network call completes.
 final ValueNotifier<String?> brandLogoData = ValueNotifier<String?>(null);
+final ValueNotifier<String?> dashboardSchoolArtData = ValueNotifier<String?>(
+  null,
+);
 final ValueNotifier<String> brandName = ValueNotifier<String>(AppConfig.appName);
 final ValueNotifier<String> brandSubtitle =
     ValueNotifier<String>(AppConfig.subtitle);
@@ -33,6 +36,10 @@ final ValueNotifier<String> brandSubtitle =
 void loadCachedBranding(SharedPreferences prefs) {
   final logo = prefs.getString('brand_logo');
   if (logo != null && logo.trim().isNotEmpty) brandLogoData.value = logo.trim();
+  final schoolArt = prefs.getString('dashboard_school_art');
+  if (schoolArt != null && schoolArt.trim().isNotEmpty) {
+    dashboardSchoolArtData.value = schoolArt.trim();
+  }
   final name = prefs.getString('brand_name');
   if (name != null && name.trim().isNotEmpty) brandName.value = name.trim();
   final sub = prefs.getString('brand_subtitle');
@@ -70,6 +77,17 @@ Future<void> applyBranding(
       }
     }
   }
+  if (data.containsKey('mobile_dashboard_school_art')) {
+    final art = '${data['mobile_dashboard_school_art'] ?? ''}'.trim();
+    if (art != (dashboardSchoolArtData.value ?? '')) {
+      dashboardSchoolArtData.value = art.isEmpty ? null : art;
+      if (art.isEmpty) {
+        await prefs.remove('dashboard_school_art');
+      } else {
+        await prefs.setString('dashboard_school_art', art);
+      }
+    }
+  }
   await applyBrandingNames(data, prefs);
 }
 
@@ -84,20 +102,48 @@ Future<void> syncBranding(
 ) async {
   await applyBrandingNames(dashboard, api.prefs);
   final version = '${dashboard['logo_version'] ?? ''}'.trim();
+  final schoolArtVersion = '${dashboard['school_art_version'] ?? ''}'.trim();
+  var shouldFetchBranding = false;
   if (version.isEmpty) {
     if (brandLogoData.value != null) {
       brandLogoData.value = null;
       await api.prefs.remove('brand_logo');
       await api.prefs.remove('brand_logo_version');
     }
-    return;
+  } else {
+    final cachedVersion = api.prefs.getString('brand_logo_version') ?? '';
+    shouldFetchBranding =
+        shouldFetchBranding ||
+        version != cachedVersion ||
+        brandLogoData.value == null;
   }
-  final cachedVersion = api.prefs.getString('brand_logo_version') ?? '';
-  if (version == cachedVersion && brandLogoData.value != null) return;
+  if (schoolArtVersion.isEmpty) {
+    if (dashboardSchoolArtData.value != null) {
+      dashboardSchoolArtData.value = null;
+      await api.prefs.remove('dashboard_school_art');
+      await api.prefs.remove('dashboard_school_art_version');
+    }
+  } else {
+    final cachedArtVersion =
+        api.prefs.getString('dashboard_school_art_version') ?? '';
+    shouldFetchBranding =
+        shouldFetchBranding ||
+        schoolArtVersion != cachedArtVersion ||
+        dashboardSchoolArtData.value == null;
+  }
+  if (!shouldFetchBranding) return;
   try {
     final branding = await api.map('/api/mobile-branding');
     await applyBranding(branding, api.prefs);
-    await api.prefs.setString('brand_logo_version', version);
+    if (version.isNotEmpty) {
+      await api.prefs.setString('brand_logo_version', version);
+    }
+    if (schoolArtVersion.isNotEmpty) {
+      await api.prefs.setString(
+        'dashboard_school_art_version',
+        schoolArtVersion,
+      );
+    }
   } on Exception {
     // Keep showing the cached logo on a network/auth hiccup; retry next poll.
   }
@@ -3364,33 +3410,48 @@ class DashboardPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  greeting(),
-                  style: const TextStyle(
-                    color: Color(0xFF4C5F57),
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  api.fullname,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF111827),
-                    fontSize: 25,
-                    fontWeight: FontWeight.w900,
-                    height: 1.04,
-                    letterSpacing: -.7,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  fullDate(),
-                  style: const TextStyle(
-                    color: Color(0xFF5F6F69),
-                    fontWeight: FontWeight.w700,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            greeting(),
+                            style: const TextStyle(
+                              color: Color(0xFF4C5F57),
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            api.fullname,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF111827),
+                              fontSize: 30,
+                              fontWeight: FontWeight.w900,
+                              height: 1.02,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            fullDate(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF5F6F69),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const DashboardSchoolArt(),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 Row(
@@ -6173,24 +6234,26 @@ class _AlertsPageState extends State<AlertsPage> {
                 );
                 return;
               }
-              final row = Map<String, dynamic>.from(widget.flags.first as Map);
-              await showLocalNotification(
-                absenceTitle(widget.flags.length),
-                absenceBody(row, count: widget.flags.length),
-                payload: absenceNotificationPayload(widget.flags),
-                actions: const [
-                  AndroidNotificationAction(
-                    'view',
-                    'View',
-                    showsUserInterface: true,
-                  ),
-                  AndroidNotificationAction(
-                    'contact_adviser',
-                    'Contact Adviser',
-                    showsUserInterface: true,
-                  ),
-                ],
-              );
+              for (final item in widget.flags) {
+                final row = Map<String, dynamic>.from(item as Map);
+                await showLocalNotification(
+                  '2-Day Absence Alert',
+                  absenceBody(row),
+                  payload: absenceNotificationPayload([row]),
+                  actions: const [
+                    AndroidNotificationAction(
+                      'view',
+                      'View',
+                      showsUserInterface: true,
+                    ),
+                    AndroidNotificationAction(
+                      'contact_adviser',
+                      'Contact Adviser',
+                      showsUserInterface: true,
+                    ),
+                  ],
+                );
+              }
             },
             icon: const Icon(Icons.notifications_active),
             label: const Text('Send 2-day flagged alert'),
@@ -7417,6 +7480,144 @@ class BackLine extends StatelessWidget {
   );
 }
 
+class DashboardSchoolArt extends StatelessWidget {
+  const DashboardSchoolArt({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 132,
+      height: 96,
+      child: ValueListenableBuilder<String?>(
+        valueListenable: dashboardSchoolArtData,
+        builder: (context, data, _) {
+          if (data != null && data.trim().isNotEmpty) {
+            try {
+              final value = data.trim();
+              final comma = value.indexOf(',');
+              final encoded = comma != -1 ? value.substring(comma + 1) : value;
+              final bytes = base64Decode(encoded);
+              return Image.memory(
+                bytes,
+                fit: BoxFit.contain,
+                alignment: Alignment.bottomRight,
+                gaplessPlayback: true,
+                errorBuilder: (_, __, ___) => const _DefaultSchoolArt(),
+              );
+            } on FormatException {
+              return const _DefaultSchoolArt();
+            }
+          }
+          return const _DefaultSchoolArt();
+        },
+      ),
+    );
+  }
+}
+
+class _DefaultSchoolArt extends StatelessWidget {
+  const _DefaultSchoolArt();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(painter: _SchoolArtPainter());
+  }
+}
+
+class _SchoolArtPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final ground = Paint()..color = const Color(0xFFE8F7EE);
+    final green = Paint()..color = const Color(0xFF45A56D);
+    final deep = Paint()..color = const Color(0xFF127456);
+    final mid = Paint()..color = const Color(0xFF73BE89);
+    final pale = Paint()..color = const Color(0xFFF8FFFB);
+    final sky = Paint()..color = const Color(0xFFEAF7FF);
+
+    canvas.drawOval(
+      Rect.fromLTWH(6, size.height - 18, size.width - 12, 15),
+      ground,
+    );
+    canvas.drawCircle(Offset(size.width * .18, size.height * .64), 20, mid);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          size.width * .16,
+          size.height * .64,
+          size.width * .08,
+          size.height * .26,
+        ),
+        const Radius.circular(4),
+      ),
+      deep,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          size.width * .38,
+          size.height * .40,
+          size.width * .52,
+          size.height * .42,
+        ),
+        const Radius.circular(5),
+      ),
+      mid,
+    );
+
+    final roof = Path()
+      ..moveTo(size.width * .34, size.height * .42)
+      ..lineTo(size.width * .64, size.height * .23)
+      ..lineTo(size.width * .94, size.height * .42)
+      ..close();
+    canvas.drawPath(roof, deep);
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          size.width * .58,
+          size.height * .58,
+          size.width * .14,
+          size.height * .27,
+        ),
+        const Radius.circular(4),
+      ),
+      deep,
+    );
+    for (final x in [0.45, 0.78]) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(size.width * x, size.height * .54, 14, 17),
+          const Radius.circular(2),
+        ),
+        pale,
+      );
+    }
+    canvas.drawCircle(Offset(size.width * .65, size.height * .37), 16, pale);
+    canvas.drawLine(
+      Offset(size.width * .65, size.height * .28),
+      Offset(size.width * .65, size.height * .08),
+      deep..strokeWidth = 3,
+    );
+    final flag = Path()
+      ..moveTo(size.width * .66, size.height * .08)
+      ..lineTo(size.width * .82, size.height * .13)
+      ..lineTo(size.width * .66, size.height * .18)
+      ..close();
+    canvas.drawPath(flag, green);
+    canvas.drawOval(
+      Rect.fromLTWH(size.width * .08, 6, size.width * .22, 9),
+      sky,
+    );
+    canvas.drawOval(
+      Rect.fromLTWH(size.width * .78, 15, size.width * .18, 8),
+      sky,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
 // Renders the live (admin-uploaded) logo when available, otherwise the bundled
 // asset. Listens to [brandLogoData] so it swaps instantly when the logo changes.
 class BrandLogoImage extends StatelessWidget {
@@ -7659,24 +7860,37 @@ Future<void> contactAdviserAlertViaEmail(
 
 Future<void> notifyAbsenceFlags(List flags, SharedPreferences prefs) async {
   if (flags.isEmpty) return;
-  final key = '${date()}:${flags.length}';
-  if (prefs.getString('last_absence_key') == key) return;
-  final row = Map<String, dynamic>.from(flags.first as Map);
-  await showLocalNotification(
-    absenceTitle(flags.length),
-    absenceBody(row, count: flags.length),
-    payload: absenceNotificationPayload(flags),
-    actions: const [
-      AndroidNotificationAction('view', 'View', showsUserInterface: true),
-      AndroidNotificationAction(
-        'contact_adviser',
-        'Contact Adviser',
-        showsUserInterface: true,
-      ),
-    ],
-    showToast: false,
-  );
-  await prefs.setString('last_absence_key', key);
+  final today = date();
+  final storeKey = 'absence_notified_flags_$today';
+  final notified = (prefs.getStringList(storeKey) ?? <String>[]).toSet();
+  var changed = false;
+
+  for (final item in flags) {
+    final row = Map<String, dynamic>.from(item as Map);
+    final key = absenceFlagNotificationKey(row, today);
+    if (notified.contains(key)) continue;
+    final sent = await showLocalNotification(
+      '2-Day Absence Alert',
+      absenceBody(row),
+      id: stableNotificationId(key),
+      payload: absenceNotificationPayload([row]),
+      actions: const [
+        AndroidNotificationAction('view', 'View', showsUserInterface: true),
+        AndroidNotificationAction(
+          'contact_adviser',
+          'Contact Adviser',
+          showsUserInterface: true,
+        ),
+      ],
+      showToast: false,
+    );
+    if (sent) {
+      notified.add(key);
+      changed = true;
+    }
+  }
+
+  if (changed) await prefs.setStringList(storeKey, notified.toList());
 }
 
 Future<bool> launchContactActionFromIntent(Map<String, dynamic> intent) async {
@@ -7731,6 +7945,7 @@ Future<bool> ensureNotificationPermission() async {
 Future<bool> showLocalNotification(
   String title,
   String body, {
+  int? id,
   String? payload,
   List<AndroidNotificationAction>? actions,
   bool showToast = true,
@@ -7749,7 +7964,7 @@ Future<bool> showLocalNotification(
     actions: actions,
   );
   await notifications.show(
-    DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    id ?? (DateTime.now().microsecondsSinceEpoch % 2147483647),
     title,
     body,
     NotificationDetails(android: android),
@@ -7763,15 +7978,28 @@ String absenceTitle(int count) => count == 1
     : '$count Students Flagged for Absence';
 
 String absenceBody(Map<String, dynamic> row, {int count = 1}) {
-  if (count > 1) {
-    return 'Tap to view flagged students and adviser details.';
-  }
   final student = '${row['name'] ?? 'Student'}';
   final gradeSection =
       '${row['grade_name'] ?? '-'} - ${row['section_name'] ?? '-'}';
   final school = '${row['school_name'] ?? '-'}';
   final days = absenceDays(row);
   return '$student\n$gradeSection | $school\n$days Absent';
+}
+
+String absenceFlagNotificationKey(Map<String, dynamic> row, String day) {
+  final personType = '${row['person_type'] ?? 'student'}'.trim();
+  final id = '${row['id'] ?? row['lrn'] ?? row['name'] ?? ''}'.trim();
+  final school = '${row['school_name'] ?? ''}'.trim();
+  final days = absenceDayCount(row);
+  return '$day|$personType|$id|$school|$days';
+}
+
+int stableNotificationId(String value) {
+  var hash = 17;
+  for (final unit in value.codeUnits) {
+    hash = ((hash * 31) + unit) & 0x7fffffff;
+  }
+  return 100000 + (hash % 2000000000);
 }
 
 String absenceNotificationPayload(List flags) {
