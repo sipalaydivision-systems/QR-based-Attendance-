@@ -82,6 +82,15 @@
 
     .adv-footer { margin-top: 20px; font-size: 0.75rem; color: var(--gray-400); }
     .adv-footer a { color: var(--primary); text-decoration: none; font-weight: 600; }
+    .adv-install-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        margin-top: 10px; padding: 8px 18px;
+        background: #f0fdf4; border: 1.5px solid #bbf7d0;
+        border-radius: 20px; color: #16a34a !important;
+        font-size: 0.8125rem; font-weight: 700; text-decoration: none !important;
+        transition: background 0.2s, box-shadow 0.2s;
+    }
+    .adv-install-btn:hover { background: #dcfce7; box-shadow: 0 2px 8px rgba(22,163,74,0.15); }
     </style>
 </head>
 <body class="adv-login-page">
@@ -130,6 +139,9 @@
 
         <div class="adv-footer">
             <p><i class="fa-solid fa-shield-halved"></i> For registered teachers/advisers only</p>
+            <a href="/mobile-app" class="adv-install-btn">
+                <i class="fa-solid fa-mobile-screen-button"></i> Install EduTrack
+            </a>
         </div>
     </div>
 
