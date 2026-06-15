@@ -1146,7 +1146,7 @@ class _LoginScreenState extends State<LoginScreen>
                       const SizedBox(height: 18),
                       const Center(
                         child: Text(
-                          '${AppConfig.monitoringLabel}\nv2.1.4',
+                          '${AppConfig.monitoringLabel}\nv2.1.15',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Color(0xFF77847E),
