@@ -597,7 +597,7 @@ async function getAttendanceLateThreshold(personType, dateStr) {
     const isTeacher = personType === 'teacher';
     const baseTime = normalizeTimeSetting(
         isTeacher ? (settings.teacher_duty_start_time || settings.am_time_in_end) : settings.am_time_in_end,
-        '08:00:00'
+        '07:00:00'
     );
     const graceValue = isTeacher
         ? (settings.teacher_late_threshold ?? settings.late_threshold)

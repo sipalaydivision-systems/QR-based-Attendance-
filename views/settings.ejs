@@ -121,9 +121,9 @@
 
     <div class="settings-grid">
         <div class="form-group">
-            <label>School Start Time <span class="lbl-hint">late line</span></label>
-            <input type="time" id="am_time_in_end" class="form-control sched-input" value="08:00">
-            <small class="fld-note">Students who first scan after this (plus grace) are marked <strong>LATE</strong>.</small>
+            <label>School Start Time <span class="lbl-hint">on-time line</span></label>
+            <input type="time" id="am_time_in_end" class="form-control sched-input" value="07:00">
+            <small class="fld-note">On-time start. Scanning before this &mdash; including early arrivals &mdash; counts <strong>PRESENT</strong>; after this (plus grace) = <strong>LATE</strong>.</small>
         </div>
         <div class="form-group">
             <label>Lunch Break Start</label>
@@ -463,7 +463,7 @@ function renderSchedulePreview() {
     var tl = document.getElementById('scheduleTimeline');
     if (tl) {
         tl.innerHTML =
-            tlSeg('am', 'AM Session', to12(start), 'On-time before ' + to12(lateLine) + ', Late after') +
+            tlSeg('am', 'AM Session', to12(start), 'Early OK &middot; Late after ' + to12(lateLine)) +
             tlSeg('lunch', 'Lunch', to12(lunch), 'Time Out here = Lunch Out') +
             tlSeg('pm', 'PM Session', to12(pmIn), 'First scan here = Half-Day') +
             tlSeg('end', 'Dismissal', to12(end), 'Time Out here = full day');
@@ -472,8 +472,10 @@ function renderSchedulePreview() {
     var sc = document.getElementById('scheduleScenarios');
     if (sc) {
         sc.innerHTML =
+            scenCard('ok', 'fa-mug-hot', 'Early arrival',
+                'First scan <strong>' + to12(addMin(start, -25)) + '</strong> (before ' + to12(start) + ', allowed) &rarr; <span class="s-pill present">PRESENT</span>') +
             scenCard('ok', 'fa-circle-check', 'On-time student',
-                'First scan <strong>' + to12(addMin(start, -15)) + '</strong> &rarr; <span class="s-pill present">PRESENT</span>') +
+                'First scan <strong>' + to12(start) + '</strong> &rarr; <span class="s-pill present">PRESENT</span>') +
             scenCard('late', 'fa-clock', 'Late student',
                 'First scan <strong>' + to12(addMin(lateLine, 30)) + '</strong> (after ' + to12(lateLine) + ') &rarr; <span class="s-pill late">LATE</span>') +
             scenCard('ok', 'fa-utensils', 'Lunch out &amp; back',
