@@ -1,5 +1,77 @@
 <%- include('partials/header') %>
 
+<style>
+/* Daily Schedule — visual timeline */
+.schedule-timeline {
+    display: flex;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 1px solid var(--gray-200);
+    margin-bottom: 20px;
+    background: var(--gray-50);
+}
+.tl-seg {
+    flex: 1;
+    padding: 14px 12px;
+    text-align: center;
+    border-right: 1px solid rgba(255,255,255,0.7);
+}
+.tl-seg:last-child { border-right: none; }
+.tl-seg.am    { background: rgba(10,154,106,0.10); }
+.tl-seg.lunch { background: rgba(221,122,11,0.12); flex: 0.75; }
+.tl-seg.pm    { background: rgba(37,99,235,0.10); }
+.tl-seg.end   { background: var(--gray-100); flex: 0.85; }
+.tl-phase { font-size: 0.68rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--gray-700); }
+.tl-time  { font-size: 0.98rem; font-weight: 700; color: var(--gray-900); margin-top: 4px; }
+.tl-note  { font-size: 0.67rem; color: var(--gray-500); margin-top: 3px; line-height: 1.35; }
+.tl-seg.am .tl-phase    { color: var(--primary-dark); }
+.tl-seg.lunch .tl-phase { color: var(--warning); }
+.tl-seg.pm .tl-phase    { color: #2563eb; }
+
+/* Field hints */
+.lbl-hint { font-weight: 600; font-size: 0.66rem; color: var(--warning); background: rgba(221,122,11,0.12); padding: 1px 7px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
+.fld-note { display: block; margin-top: 5px; font-size: 0.72rem; color: var(--gray-500); line-height: 1.4; }
+.fld-note strong { color: var(--gray-700); }
+
+/* Scenario cards */
+.schedule-scenarios {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(225px, 1fr));
+    gap: 12px;
+    margin-top: 22px;
+}
+.scenario-card {
+    border: 1px solid var(--gray-200);
+    border-left: 4px solid var(--gray-300);
+    border-radius: var(--radius-lg);
+    padding: 13px 15px;
+    background: #fff;
+}
+.scenario-card.ok     { border-left-color: var(--success); }
+.scenario-card.late   { border-left-color: var(--warning); }
+.scenario-card.half   { border-left-color: #2563eb; }
+.scenario-card.absent { border-left-color: var(--danger); }
+.scenario-title { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.84rem; color: var(--gray-800); margin-bottom: 7px; }
+.scenario-title i { color: var(--gray-400); }
+.scenario-card.ok .scenario-title i     { color: var(--success); }
+.scenario-card.late .scenario-title i   { color: var(--warning); }
+.scenario-card.half .scenario-title i   { color: #2563eb; }
+.scenario-card.absent .scenario-title i { color: var(--danger); }
+.scenario-flow { font-size: 0.78rem; color: var(--gray-600); line-height: 1.6; }
+.scenario-flow strong { color: var(--gray-900); }
+.s-pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.67rem; font-weight: 700; }
+.s-pill.present { background: rgba(22,163,74,0.12); color: var(--success); }
+.s-pill.late    { background: rgba(221,122,11,0.14); color: var(--warning); }
+.s-pill.half    { background: rgba(37,99,235,0.12); color: #2563eb; }
+.s-pill.absent  { background: rgba(220,38,38,0.10); color: var(--danger); }
+
+@media (max-width: 640px) {
+    .schedule-timeline { flex-direction: column; }
+    .tl-seg { border-right: none; border-bottom: 1px solid var(--gray-200); }
+    .tl-seg:last-child { border-bottom: none; }
+}
+</style>
+
 <div class="page-header">
     <div class="page-header-left">
         <h1><i class="fa-solid fa-gear"></i> Settings</h1>
@@ -40,22 +112,53 @@
     </div>
 </div>
 
-<!-- Student Attendance Rules -->
+<!-- Daily Schedule & Session Times -->
 <div class="settings-section">
-    <h3><i class="fa-solid fa-user-graduate"></i> Student Attendance Settings</h3>
-    <p class="section-desc">Central student rules used by every EduTrack Scanner. Students scan once when entering school; lunch, recess, transfers, library visits, and activities never create Time Out records.</p>
+    <h3><i class="fa-solid fa-clock"></i> Daily Schedule &amp; Session Times</h3>
+    <p class="section-desc">The master clock for the whole system. Every EduTrack Scanner uses these times to decide Present, Late, Half-Day, and Completed. Edit any time and the timeline and scenarios below update instantly.</p>
+
+    <div class="schedule-timeline" id="scheduleTimeline"></div>
+
     <div class="settings-grid">
         <div class="form-group">
-            <label>School Start Time</label>
-            <input type="time" id="am_time_in_end" class="form-control" value="08:00">
+            <label>School Start Time <span class="lbl-hint">late line</span></label>
+            <input type="time" id="am_time_in_end" class="form-control sched-input" value="08:00">
+            <small class="fld-note">Students who first scan after this (plus grace) are marked <strong>LATE</strong>.</small>
+        </div>
+        <div class="form-group">
+            <label>Lunch Break Start</label>
+            <input type="time" id="lunch_break_start" class="form-control sched-input" value="11:30">
+            <small class="fld-note">A Time Out from here until PM start is a <strong>LUNCH OUT</strong> (expected to return).</small>
+        </div>
+        <div class="form-group">
+            <label>PM Session Start</label>
+            <input type="time" id="pm_time_in_start" class="form-control sched-input" value="13:00">
+            <small class="fld-note">A <em>first</em> scan at/after this counts as <strong>HALF-DAY (PM only)</strong>.</small>
+        </div>
+        <div class="form-group">
+            <label>Official School Day End</label>
+            <input type="time" id="pm_time_out_end" class="form-control sched-input" value="16:00">
+            <small class="fld-note">A Time Out at/after this is a complete <strong>full day</strong>.</small>
         </div>
         <div class="form-group">
             <label>Absence Cutoff Time</label>
-            <input type="time" id="absence_cutoff_time" class="form-control" value="17:00">
+            <input type="time" id="absence_cutoff_time" class="form-control sched-input" value="17:00">
+            <small class="fld-note">No Time In by this time → counted <strong>ABSENT</strong> for the day.</small>
         </div>
+    </div>
+
+    <div class="schedule-scenarios" id="scheduleScenarios"></div>
+</div>
+
+<!-- Student Attendance Rules -->
+<div class="settings-section">
+    <h3><i class="fa-solid fa-user-graduate"></i> Student Attendance Settings</h3>
+    <p class="section-desc">How student scans are counted. Students scan once when entering school; lunch, recess, transfers, library visits, and activities never create Time Out records.</p>
+    <div class="settings-grid">
         <div class="form-group">
             <label>Late Cutoff Grace (minutes)</label>
-            <input type="number" id="late_threshold" class="form-control" min="0" value="15">
+            <input type="number" id="late_threshold" class="form-control sched-input" min="0" value="15">
+            <small class="fld-note">Minutes of leeway added to School Start before <strong>LATE</strong> applies.</small>
         </div>
         <div class="form-group">
             <label>Student Attendance Rule</label>
@@ -104,10 +207,6 @@
         <div class="form-group">
             <label>System Name</label>
             <input type="text" id="system_name" class="form-control" placeholder="School Attendance System">
-        </div>
-        <div class="form-group">
-            <label>Official School Day End</label>
-            <input type="time" id="pm_time_out_end" class="form-control" value="17:00">
         </div>
         <div class="form-group">
             <label>Auto Time-Out (minutes)</label>
@@ -288,6 +387,8 @@ var settingKeys = [
     'system_name',
     'division_name',
     'am_time_in_end',
+    'lunch_break_start',
+    'pm_time_in_start',
     'absence_cutoff_time',
     'late_threshold',
     'student_attendance_rule',
@@ -317,6 +418,73 @@ async function loadSettings() {
             });
         }
     } catch(e) { console.error(e); }
+    renderSchedulePreview();
+}
+
+// ---- Live schedule preview (timeline + scenarios) ----
+function schedTime(id, fallback) {
+    var el = document.getElementById(id);
+    var v = (el && el.value) ? el.value : fallback;
+    return v.length >= 5 ? v.slice(0, 5) : fallback;
+}
+function to12(hhmm) {
+    var p = hhmm.split(':');
+    var h = parseInt(p[0], 10);
+    var m = p[1] || '00';
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    var h12 = h % 12; if (h12 === 0) h12 = 12;
+    return h12 + ':' + m + ' ' + ampm;
+}
+function addMin(hhmm, mins) {
+    var p = hhmm.split(':');
+    var t = parseInt(p[0], 10) * 60 + parseInt(p[1], 10) + (parseInt(mins, 10) || 0);
+    t = ((t % 1440) + 1440) % 1440;
+    var h = Math.floor(t / 60), m = t % 60;
+    return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+}
+function tlSeg(cls, phase, time, note) {
+    return '<div class="tl-seg ' + cls + '"><div class="tl-phase">' + phase + '</div>' +
+        '<div class="tl-time">' + time + '</div><div class="tl-note">' + note + '</div></div>';
+}
+function scenCard(cls, icon, title, flow) {
+    return '<div class="scenario-card ' + cls + '"><div class="scenario-title">' +
+        '<i class="fa-solid ' + icon + '"></i>' + title + '</div>' +
+        '<div class="scenario-flow">' + flow + '</div></div>';
+}
+function renderSchedulePreview() {
+    var start  = schedTime('am_time_in_end', '08:00');
+    var lunch  = schedTime('lunch_break_start', '11:30');
+    var pmIn   = schedTime('pm_time_in_start', '13:00');
+    var end    = schedTime('pm_time_out_end', '16:00');
+    var absent = schedTime('absence_cutoff_time', '17:00');
+    var grace  = (document.getElementById('late_threshold') || {}).value || '0';
+    var lateLine = addMin(start, grace);
+
+    var tl = document.getElementById('scheduleTimeline');
+    if (tl) {
+        tl.innerHTML =
+            tlSeg('am', 'AM Session', to12(start), 'On-time before ' + to12(lateLine) + ', Late after') +
+            tlSeg('lunch', 'Lunch', to12(lunch), 'Time Out here = Lunch Out') +
+            tlSeg('pm', 'PM Session', to12(pmIn), 'First scan here = Half-Day') +
+            tlSeg('end', 'Dismissal', to12(end), 'Time Out here = full day');
+    }
+
+    var sc = document.getElementById('scheduleScenarios');
+    if (sc) {
+        sc.innerHTML =
+            scenCard('ok', 'fa-circle-check', 'On-time student',
+                'First scan <strong>' + to12(addMin(start, -15)) + '</strong> &rarr; <span class="s-pill present">PRESENT</span>') +
+            scenCard('late', 'fa-clock', 'Late student',
+                'First scan <strong>' + to12(addMin(lateLine, 30)) + '</strong> (after ' + to12(lateLine) + ') &rarr; <span class="s-pill late">LATE</span>') +
+            scenCard('ok', 'fa-utensils', 'Lunch out &amp; back',
+                'Out <strong>' + to12(addMin(lunch, 10)) + '</strong>, back <strong>' + to12(addMin(pmIn, -20)) + '</strong> &rarr; <span class="s-pill present">PM PRESENT</span>, stays full day') +
+            scenCard('half', 'fa-circle-half-stroke', 'Afternoon only',
+                'First scan <strong>' + to12(addMin(pmIn, 10)) + '</strong> &rarr; <span class="s-pill half">HALF-DAY</span> (PM only)') +
+            scenCard('half', 'fa-right-from-bracket', 'Early dismissal',
+                'Leaves <strong>' + to12(addMin(end, -30)) + '</strong>, no return &rarr; <span class="s-pill half">HALF-DAY</span>') +
+            scenCard('absent', 'fa-user-xmark', 'No-show',
+                'No scan by <strong>' + to12(absent) + '</strong> &rarr; <span class="s-pill absent">ABSENT</span>');
+    }
 }
 
 async function saveSettings() {
@@ -612,6 +780,11 @@ async function loadSchoolDropdowns() {
         document.getElementById('adminSchool').innerHTML = adminOpts;
     } catch(e) {}
 }
+
+renderSchedulePreview();
+document.querySelectorAll('.sched-input').forEach(function(el) {
+    el.addEventListener('input', renderSchedulePreview);
+});
 
 loadSettings();
 loadHolidays();
