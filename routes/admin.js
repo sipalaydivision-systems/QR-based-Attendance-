@@ -855,9 +855,12 @@ router.get('/adviser-import-students', async (req, res) => {
                 [teacher.section_id]
             );
         }
+        const gradeNum = parseGradeNumber(teacher.grade_name || '');
+        const isShs = Number.isFinite(gradeNum) && gradeNum >= 11;
         res.render('adviser_import_students', {
             title: 'Import Students',
             page: 'adviser_student_import',
+            isShs,
             teacher,
             students
         });

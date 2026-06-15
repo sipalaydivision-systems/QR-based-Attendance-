@@ -198,7 +198,7 @@
             <p>Upload your Excel or CSV file. The imported rows will preview here immediately.</p>
         </div>
         <div class="ai-hero-actions">
-            <a href="/export/template/student" class="btn"><i class="fa-solid fa-download"></i> Download Template</a>
+            <a href="/export/template/<%= isShs ? 'shs_student' : 'student' %>" class="btn"><i class="fa-solid fa-download"></i> Download Template</a>
             <a href="/admin/adviser-students" class="btn"><i class="fa-solid fa-users"></i> Student List</a>
         </div>
     </div>
