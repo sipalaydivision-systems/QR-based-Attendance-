@@ -123,7 +123,12 @@
         <div class="form-group">
             <label>School Start Time <span class="lbl-hint">on-time line</span></label>
             <input type="time" id="am_time_in_end" class="form-control sched-input" value="07:00">
-            <small class="fld-note">On-time start. Scanning before this &mdash; including early arrivals &mdash; counts <strong>PRESENT</strong>; after this (plus grace) = <strong>LATE</strong>.</small>
+            <small class="fld-note">On-time start. Scanning before this &mdash; including early arrivals &mdash; counts <strong>PRESENT</strong>.</small>
+        </div>
+        <div class="form-group">
+            <label>AM Late Start Time <span class="lbl-hint">late line</span></label>
+            <input type="time" id="am_late_time" class="form-control sched-input" value="07:15">
+            <small class="fld-note">A morning first scan at/after this is marked <strong>LATE</strong>.</small>
         </div>
         <div class="form-group">
             <label>Lunch Break Start</label>
@@ -134,6 +139,11 @@
             <label>PM Session Start</label>
             <input type="time" id="pm_time_in_start" class="form-control sched-input" value="13:00">
             <small class="fld-note">A <em>first</em> scan at/after this counts as <strong>HALF-DAY (PM only)</strong>.</small>
+        </div>
+        <div class="form-group">
+            <label>PM Late Start Time <span class="lbl-hint">PM late line</span></label>
+            <input type="time" id="pm_late_time" class="form-control sched-input" value="13:15">
+            <small class="fld-note">An afternoon time-in at/after this shows <strong>PM LATE</strong> (label only &mdash; report totals unchanged).</small>
         </div>
         <div class="form-group">
             <label>Official School Day End</label>
@@ -387,8 +397,10 @@ var settingKeys = [
     'system_name',
     'division_name',
     'am_time_in_end',
+    'am_late_time',
     'lunch_break_start',
     'pm_time_in_start',
+    'pm_late_time',
     'absence_cutoff_time',
     'late_threshold',
     'student_attendance_rule',
@@ -452,20 +464,23 @@ function scenCard(cls, icon, title, flow) {
         '<div class="scenario-flow">' + flow + '</div></div>';
 }
 function renderSchedulePreview() {
-    var start  = schedTime('am_time_in_end', '08:00');
+    var start  = schedTime('am_time_in_end', '07:00');
     var lunch  = schedTime('lunch_break_start', '11:30');
     var pmIn   = schedTime('pm_time_in_start', '13:00');
+    var pmLate = schedTime('pm_late_time', '13:15');
     var end    = schedTime('pm_time_out_end', '16:00');
     var absent = schedTime('absence_cutoff_time', '17:00');
     var grace  = (document.getElementById('late_threshold') || {}).value || '0';
-    var lateLine = addMin(start, grace);
+    // Explicit AM Late Start Time is the late line; otherwise school start + grace.
+    var amLateEl = document.getElementById('am_late_time');
+    var lateLine = (amLateEl && amLateEl.value) ? amLateEl.value.slice(0, 5) : addMin(start, grace);
 
     var tl = document.getElementById('scheduleTimeline');
     if (tl) {
         tl.innerHTML =
             tlSeg('am', 'AM Session', to12(start), 'Early OK &middot; Late after ' + to12(lateLine)) +
             tlSeg('lunch', 'Lunch', to12(lunch), 'Time Out here = Lunch Out') +
-            tlSeg('pm', 'PM Session', to12(pmIn), 'First scan here = Half-Day') +
+            tlSeg('pm', 'PM Session', to12(pmIn), 'Half-Day &middot; PM Late after ' + to12(pmLate)) +
             tlSeg('end', 'Dismissal', to12(end), 'Time Out here = full day');
     }
 
@@ -481,7 +496,9 @@ function renderSchedulePreview() {
             scenCard('ok', 'fa-utensils', 'Lunch out &amp; back',
                 'Out <strong>' + to12(addMin(lunch, 10)) + '</strong>, back <strong>' + to12(addMin(pmIn, -20)) + '</strong> &rarr; <span class="s-pill present">PM PRESENT</span>, stays full day') +
             scenCard('half', 'fa-circle-half-stroke', 'Afternoon only',
-                'First scan <strong>' + to12(addMin(pmIn, 10)) + '</strong> &rarr; <span class="s-pill half">HALF-DAY</span> (PM only)') +
+                'First scan <strong>' + to12(addMin(pmIn, 5)) + '</strong> &rarr; <span class="s-pill half">HALF-DAY</span> (PM only)') +
+            scenCard('late', 'fa-clock', 'Late PM return',
+                'Back from lunch <strong>' + to12(addMin(pmLate, 20)) + '</strong> (after ' + to12(pmLate) + ') &rarr; <span class="s-pill late">PM LATE</span> label') +
             scenCard('half', 'fa-right-from-bracket', 'Early dismissal',
                 'Leaves <strong>' + to12(addMin(end, -30)) + '</strong>, no return &rarr; <span class="s-pill half">HALF-DAY</span>') +
             scenCard('absent', 'fa-user-xmark', 'No-show',

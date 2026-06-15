@@ -403,9 +403,11 @@ router.get('/scanner-desktop-config', async (req, res) => {
                 'division_name',
                 'system_logo',
                 'am_time_in_end',
+                'am_late_time',
                 'pm_time_out_end',
                 'lunch_break_start',
                 'pm_time_in_start',
+                'pm_late_time',
                 'late_threshold',
                 'teacher_duty_start_time',
                 'teacher_duty_end_time',
@@ -591,10 +593,15 @@ async function getAttendanceLateThreshold(personType, dateStr) {
     const [rows] = await db.query(
         `SELECT setting_key, setting_value
          FROM settings
-         WHERE setting_key IN ('am_time_in_end', 'late_threshold', 'teacher_duty_start_time', 'teacher_late_threshold')`
+         WHERE setting_key IN ('am_time_in_end', 'am_late_time', 'late_threshold', 'teacher_duty_start_time', 'teacher_late_threshold')`
     );
     const settings = Object.fromEntries(rows.map(row => [row.setting_key, row.setting_value]));
     const isTeacher = personType === 'teacher';
+    // An explicit AM Late Start Time wins as the exact late line (no extra grace).
+    // Falls back to "school start + grace" only when no explicit time is configured.
+    if (!isTeacher && settings.am_late_time) {
+        return new Date(dateStr + 'T' + normalizeTimeSetting(settings.am_late_time, '07:15:00') + '+08:00');
+    }
     const baseTime = normalizeTimeSetting(
         isTeacher ? (settings.teacher_duty_start_time || settings.am_time_in_end) : settings.am_time_in_end,
         '07:00:00'
@@ -617,14 +624,26 @@ async function getAttendanceScheduleTimes(dateStr) {
     const [rows] = await db.query(
         `SELECT setting_key, setting_value
          FROM settings
-         WHERE setting_key IN ('lunch_break_start', 'pm_time_in_start', 'pm_time_out_end')`
+         WHERE setting_key IN ('lunch_break_start', 'pm_time_in_start', 'pm_late_time', 'pm_time_out_end')`
     );
     const settings = Object.fromEntries(rows.map(row => [row.setting_key, row.setting_value]));
     return {
         lunchStart: sqlDateTime(dateStr, normalizeTimeSetting(settings.lunch_break_start, '11:30:00')),
         pmInStart: sqlDateTime(dateStr, normalizeTimeSetting(settings.pm_time_in_start, '13:00:00')),
+        // PM Late Start Time is opt-in: null unless explicitly configured, so existing
+        // setups keep showing plain "PM PRESENT" until the admin sets a PM late line.
+        pmLateStart: settings.pm_late_time ? sqlDateTime(dateStr, normalizeTimeSetting(settings.pm_late_time, '13:15:00')) : null,
         pmOutStart: sqlDateTime(dateStr, normalizeTimeSetting(settings.pm_time_out_end, '16:00:00'))
     };
+}
+
+// A return/PM time-in that lands on or after the PM Late Start Time is shown as
+// "PM LATE" instead of "PM PRESENT". Display-only — the stored daily status
+// (present / late / half_day) is unchanged, so report totals are unaffected.
+function pmLabelFor(label, now, schedule) {
+    if (label !== 'PM PRESENT') return label;
+    if (schedule.pmLateStart && compareDateTime(now, schedule.pmLateStart) >= 0) return 'PM LATE';
+    return label;
 }
 
 // Statuses that mean the person is currently OUTSIDE the school after a time-out scan.
@@ -1180,7 +1199,7 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
                 : computedStatus;
             const attendanceStatus = resolvedStatus.status;
             const displayStatus = attendanceStatus === 'half_day'
-                ? 'PM PRESENT'
+                ? pmLabelFor('PM PRESENT', now, schedule)
                 : attendanceStatus === 'late' ? 'LATE' : 'PRESENT';
 
             const [insertResult] = await db.query(
@@ -1282,7 +1301,7 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
         // Returning from a lunch-out always counts as the afternoon session, so
         // it is labeled PM PRESENT even when scanned before the PM start time.
         const wasLunchOut = String(attendanceRow.monitoring_status || '').toUpperCase() === 'LUNCH OUT';
-        const label = wasLunchOut ? 'PM PRESENT' : timeInLabelFor(now, schedule);
+        const label = pmLabelFor(wasLunchOut ? 'PM PRESENT' : timeInLabelFor(now, schedule), now, schedule);
         const resolvedStatus = await resolveAttendanceStatus(personType, today, {
             ...attendanceRow,
             last_time_in: now
@@ -1300,9 +1319,11 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
             display_status: label,
             ...responseAttendanceMeta(resolvedStatus),
             monitoring_status: label,
-            message: label === 'PM PRESENT'
-                ? 'PM time in recorded. Welcome back!'
-                : 'Return time in recorded. Welcome back!',
+            message: label === 'PM LATE'
+                ? 'PM time in recorded - marked PM LATE. Welcome back!'
+                : label === 'PM PRESENT'
+                    ? 'PM time in recorded. Welcome back!'
+                    : 'Return time in recorded. Welcome back!',
             person: personInfo,
             time: formatTime12(now),
             time_in: formatTime12(now),
