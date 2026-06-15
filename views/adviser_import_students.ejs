@@ -1,0 +1,418 @@
+<%- include('partials/header') %>
+
+<style>
+.ai-wrap { width: 100%; }
+.ai-hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    background: linear-gradient(135deg, var(--primary), #16a34a);
+    border-radius: var(--radius-lg);
+    padding: 20px 24px;
+    color: #fff;
+    margin-bottom: 18px;
+}
+.ai-hero h2 { margin: 0; font-size: 1.2rem; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+.ai-hero p { margin: 5px 0 0; opacity: .88; font-size: .83rem; }
+.ai-hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.ai-hero-actions .btn { background: #fff; color: var(--primary); font-weight: 700; border: 0; }
+
+.ai-badges { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+.ai-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 13px;
+    border-radius: 999px;
+    font-size: .8rem;
+    font-weight: 700;
+}
+.ai-badge.school { background: #eef2ff; color: #4f46e5; }
+.ai-badge.grade { background: #fef3c7; color: #92400e; }
+.ai-badge.section { background: #dcfce7; color: #15803d; }
+.ai-school-logo {
+    width: 21px;
+    height: 21px;
+    object-fit: contain;
+    border-radius: 50%;
+    background: #fff;
+    padding: 2px;
+    box-shadow: 0 0 0 1px rgba(79,70,229,.12);
+}
+
+.ai-grid { display: grid; grid-template-columns: minmax(300px, 420px) minmax(0, 1fr); gap: 18px; align-items: start; }
+.ai-card {
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+}
+.ai-card-header {
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--gray-100);
+}
+.ai-card-header h3 { margin: 0; font-size: .98rem; font-weight: 800; color: var(--gray-900); display: flex; align-items: center; gap: 8px; }
+.ai-card-header h3 i { color: var(--primary); }
+.ai-card-body { padding: 18px; }
+.ai-upload-zone {
+    border: 2px dashed #b7d9cb;
+    border-radius: 16px;
+    background: #f4fbf8;
+    min-height: 160px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 20px;
+    cursor: pointer;
+    transition: border-color .15s ease, background .15s ease;
+}
+.ai-upload-zone:hover { border-color: var(--primary); background: #ecfdf5; }
+.ai-upload-zone i { display: block; font-size: 2rem; color: var(--primary); margin-bottom: 10px; }
+.ai-upload-zone strong { display: block; font-size: .95rem; color: var(--gray-900); }
+.ai-upload-zone span { display: block; margin-top: 5px; font-size: .78rem; color: var(--gray-500); line-height: 1.4; }
+.ai-file-chip {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    margin-top: 13px;
+    padding: 11px 12px;
+    border: 1px solid #c7eadb;
+    border-radius: 12px;
+    background: #effcf5;
+    color: #065f46;
+    font-size: .8rem;
+    font-weight: 700;
+}
+.ai-file-chip i { color: var(--primary); }
+.ai-file-chip small { display: block; color: #4f6f63; font-weight: 600; margin-top: 1px; }
+.ai-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 16px; }
+.ai-note { margin-top: 12px; color: var(--gray-500); font-size: .78rem; line-height: 1.5; }
+.ai-alert { display: none; margin-top: 14px; padding: 11px 12px; border-radius: 12px; font-size: .82rem; font-weight: 700; }
+.ai-alert.ok { display: block; color: #047857; background: #ecfdf5; border: 1px solid #bbf7d0; }
+.ai-alert.err { display: block; color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; }
+
+.ai-preview-empty {
+    min-height: 290px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: var(--gray-400);
+    padding: 30px;
+}
+.ai-preview-empty i { display: block; font-size: 2.4rem; margin-bottom: 11px; color: var(--gray-300); }
+.ai-summary { display: none; grid-template-columns: repeat(4, minmax(100px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.ai-summary-card {
+    border-radius: 14px;
+    padding: 12px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+}
+.ai-summary-card strong { display: block; font-size: 1.35rem; line-height: 1; color: var(--gray-900); }
+.ai-summary-card span { display: block; margin-top: 5px; color: var(--gray-500); font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.ai-table-wrap { display: none; overflow-x: auto; border: 1px solid var(--gray-200); border-radius: 14px; }
+.ai-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.ai-table th {
+    text-align: left;
+    padding: 10px 12px;
+    background: var(--gray-50);
+    color: var(--gray-500);
+    font-size: .68rem;
+    font-weight: 800;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--gray-200);
+}
+.ai-table td { padding: 10px 12px; border-bottom: 1px solid var(--gray-100); color: var(--gray-700); vertical-align: top; }
+.ai-table tr:last-child td { border-bottom: 0; }
+.ai-student-name { font-weight: 800; color: var(--gray-900); }
+.ai-muted { color: var(--gray-400); font-size: .74rem; margin-top: 2px; }
+.ai-pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: .68rem; font-weight: 800; }
+.ai-pill.success { background: #dcfce7; color: #15803d; }
+.ai-pill.error { background: #fee2e2; color: #dc2626; }
+
+.ai-current { margin-top: 18px; }
+.ai-current-list { max-height: 260px; overflow: auto; }
+.ai-current-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--gray-100);
+    font-size: .8rem;
+}
+.ai-current-row:last-child { border-bottom: 0; }
+
+.ai-no-section {
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+    border-radius: var(--radius-lg);
+    padding: 32px;
+    text-align: center;
+    color: #92400e;
+}
+.ai-no-section i { font-size: 2.5rem; display: block; margin-bottom: 12px; }
+
+@media (max-width: 980px) {
+    .ai-grid { grid-template-columns: 1fr; }
+    .ai-summary { grid-template-columns: repeat(2, minmax(100px, 1fr)); }
+}
+</style>
+
+<div class="ai-wrap">
+<% if (!teacher.section_id) { %>
+    <div class="ai-no-section">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <h3>No Section Assigned</h3>
+        <p>Please contact the administrator to assign your grade level and section before importing students.</p>
+    </div>
+<% } else { %>
+    <div class="ai-hero">
+        <div>
+            <h2><i class="fa-solid fa-file-arrow-up"></i> Import Students</h2>
+            <p>Upload your Excel or CSV file. The imported rows will preview here immediately.</p>
+        </div>
+        <div class="ai-hero-actions">
+            <a href="/export/template/student" class="btn"><i class="fa-solid fa-download"></i> Download Template</a>
+            <a href="/admin/adviser-students" class="btn"><i class="fa-solid fa-users"></i> Student List</a>
+        </div>
+    </div>
+
+    <div class="ai-badges">
+        <span class="ai-badge school">
+            <img class="ai-school-logo" src="<%= teacher.school_logo || ((typeof settings !== 'undefined' && settings && settings.system_logo) ? settings.system_logo : '/uploads/logos/system-logo.png') %>" alt="" onerror="this.onerror=null;this.src='/uploads/logos/system-logo.png';">
+            <%= teacher.school_name || 'N/A' %>
+        </span>
+        <span class="ai-badge grade"><i class="fa-solid fa-layer-group"></i> <%= teacher.grade_name || 'N/A' %></span>
+        <span class="ai-badge section"><i class="fa-solid fa-users"></i> <%= teacher.section_name || 'N/A' %></span>
+        <span class="ai-badge" style="background:#f0f9ff;color:#0369a1;"><i class="fa-solid fa-user-graduate"></i> <%= students.length %> current student<%= students.length !== 1 ? 's' : '' %></span>
+    </div>
+
+    <div class="ai-grid">
+        <div>
+            <div class="ai-card">
+                <div class="ai-card-header">
+                    <h3><i class="fa-solid fa-cloud-arrow-up"></i> Upload File</h3>
+                </div>
+                <div class="ai-card-body">
+                    <input type="file" id="adviserImportFile" accept=".xlsx,.xls,.csv" style="display:none;">
+                    <label for="adviserImportFile" class="ai-upload-zone">
+                        <span>
+                            <i class="fa-solid fa-file-excel"></i>
+                            <strong>Choose Excel or CSV file</strong>
+                            <span>Supported: .xlsx, .xls, .csv. File name will show below after selection.</span>
+                        </span>
+                    </label>
+
+                    <div class="ai-file-chip" id="fileChip">
+                        <i class="fa-solid fa-file-circle-check"></i>
+                        <div>
+                            <div id="fileName">No file selected</div>
+                            <small id="fileSize"></small>
+                        </div>
+                    </div>
+
+                    <div class="ai-actions">
+                        <button class="btn btn-secondary" type="button" onclick="clearImportFile()">Clear</button>
+                        <button class="btn btn-primary" type="button" id="uploadBtn" onclick="submitAdviserImport()" disabled>
+                            <i class="fa-solid fa-file-arrow-up"></i> Upload & Import
+                        </button>
+                    </div>
+
+                    <div class="ai-note">
+                        School, grade, and section columns in the file are ignored here. Every row is assigned to your current advisory section.
+                    </div>
+                    <div id="importAlert" class="ai-alert"></div>
+                </div>
+            </div>
+
+            <div class="ai-card ai-current">
+                <div class="ai-card-header">
+                    <h3><i class="fa-solid fa-users"></i> Current Students</h3>
+                </div>
+                <div class="ai-card-body ai-current-list">
+                    <% if (!students.length) { %>
+                        <div style="color:var(--gray-400);font-size:.83rem;text-align:center;padding:20px;">No students in this section yet.</div>
+                    <% } else { students.slice(0, 80).forEach(function(s) { %>
+                        <div class="ai-current-row">
+                            <div>
+                                <div class="ai-student-name"><%= s.lastname %>, <%= s.firstname %><%= s.middlename ? ' ' + s.middlename.charAt(0).toUpperCase() + '.' : '' %></div>
+                                <div class="ai-muted">LRN: <%= s.lrn || '-' %></div>
+                            </div>
+                            <span class="ai-pill success"><i class="fa-solid fa-circle-check"></i> <%= s.status || 'active' %></span>
+                        </div>
+                    <% }); } %>
+                </div>
+            </div>
+        </div>
+
+        <div class="ai-card">
+            <div class="ai-card-header">
+                <h3><i class="fa-solid fa-list-check"></i> Uploaded Student Preview</h3>
+            </div>
+            <div class="ai-card-body">
+                <div class="ai-preview-empty" id="previewEmpty">
+                    <div>
+                        <i class="fa-solid fa-file-import"></i>
+                        <strong>No uploaded file yet</strong>
+                        <div style="margin-top:5px;font-size:.82rem;">After upload, imported and skipped rows will appear here.</div>
+                    </div>
+                </div>
+
+                <div class="ai-summary" id="previewSummary">
+                    <div class="ai-summary-card"><strong id="sumTotal">0</strong><span>Total Rows</span></div>
+                    <div class="ai-summary-card"><strong id="sumImported">0</strong><span>Imported</span></div>
+                    <div class="ai-summary-card"><strong id="sumUpdated">0</strong><span>Updated</span></div>
+                    <div class="ai-summary-card"><strong id="sumSkipped">0</strong><span>Skipped</span></div>
+                </div>
+
+                <div class="ai-table-wrap" id="previewTableWrap">
+                    <table class="ai-table">
+                        <thead>
+                            <tr>
+                                <th>Row</th>
+                                <th>Student</th>
+                                <th>LRN</th>
+                                <th>Sex</th>
+                                <th>Guardian Contact</th>
+                                <th>Result</th>
+                            </tr>
+                        </thead>
+                        <tbody id="previewBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+<% } %>
+</div>
+
+<script>
+var fileInput = document.getElementById('adviserImportFile');
+var uploadBtn = document.getElementById('uploadBtn');
+var fileChip = document.getElementById('fileChip');
+var importAlert = document.getElementById('importAlert');
+var importing = false;
+var importTimer = null;
+
+function esc(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function formatBytes(bytes) {
+    bytes = Number(bytes || 0);
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+function setAlert(type, message) {
+    importAlert.className = 'ai-alert ' + (type || '');
+    importAlert.innerHTML = message || '';
+}
+
+function clearImportFile() {
+    if (!fileInput) return;
+    fileInput.value = '';
+    uploadBtn.disabled = true;
+    fileChip.style.display = 'none';
+    setAlert('', '');
+}
+
+if (fileInput) {
+    fileInput.addEventListener('change', function() {
+        var file = fileInput.files[0];
+        if (!file) {
+            clearImportFile();
+            return;
+        }
+        document.getElementById('fileName').textContent = file.name;
+        document.getElementById('fileSize').textContent = formatBytes(file.size);
+        fileChip.style.display = 'flex';
+        uploadBtn.disabled = false;
+        setAlert('ok', '<i class="fa-solid fa-circle-check"></i> File ready: ' + esc(file.name) + '. Uploading now...');
+        clearTimeout(importTimer);
+        importTimer = setTimeout(submitAdviserImport, 250);
+    });
+}
+
+function submitAdviserImport() {
+    if (importing) return;
+    var file = fileInput && fileInput.files[0];
+    if (!file) {
+        setAlert('err', 'Please choose an Excel or CSV file first.');
+        return;
+    }
+    var fd = new FormData();
+    fd.append('file', file);
+
+    importing = true;
+    uploadBtn.disabled = true;
+    uploadBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading...';
+    setAlert('ok', 'Uploading ' + esc(file.name) + '...');
+
+    fetch('/admin/adviser-import-students', { method: 'POST', body: fd })
+        .then(function(response) {
+            return response.json().then(function(data) {
+                if (!response.ok) throw data;
+                return data;
+            });
+        })
+        .then(function(data) {
+            renderPreview(data);
+            var skipped = (data.errors || []).length;
+            var fileName = data.file && data.file.name ? data.file.name : file.name;
+            setAlert(
+                skipped ? 'err' : 'ok',
+                '<strong>' + esc(fileName) + '</strong> uploaded. Imported ' + (data.imported || 0) +
+                ', updated ' + (data.updated || 0) + ', skipped ' + skipped + '.'
+            );
+        })
+        .catch(function(err) {
+            setAlert('err', esc((err && err.error) || 'Upload failed. Please check the file and try again.'));
+        })
+        .finally(function() {
+            importing = false;
+            uploadBtn.disabled = false;
+            uploadBtn.innerHTML = '<i class="fa-solid fa-file-arrow-up"></i> Upload & Import';
+        });
+}
+
+function renderPreview(data) {
+    var rows = data.students || [];
+    document.getElementById('previewEmpty').style.display = 'none';
+    document.getElementById('previewSummary').style.display = 'grid';
+    document.getElementById('previewTableWrap').style.display = 'block';
+    document.getElementById('sumTotal').textContent = data.total || rows.length || 0;
+    document.getElementById('sumImported').textContent = data.imported || 0;
+    document.getElementById('sumUpdated').textContent = data.updated || 0;
+    document.getElementById('sumSkipped').textContent = (data.errors || []).length;
+
+    var body = document.getElementById('previewBody');
+    body.innerHTML = rows.map(function(row) {
+        var ok = row.status !== 'error';
+        var fullName = [row.lastname, row.firstname].filter(Boolean).join(', ');
+        if (row.middlename) fullName += ' ' + String(row.middlename).charAt(0).toUpperCase() + '.';
+        return '<tr>' +
+            '<td>' + esc(row.row || '-') + '</td>' +
+            '<td><div class="ai-student-name">' + esc(fullName || '-') + '</div>' +
+                (row.message ? '<div class="ai-muted">' + esc(row.message) + '</div>' : '') + '</td>' +
+            '<td>' + esc(row.lrn || '-') + '</td>' +
+            '<td>' + esc(row.gender || '-') + '</td>' +
+            '<td>' + esc(row.guardian_contact || '-') + '</td>' +
+            '<td><span class="ai-pill ' + (ok ? 'success' : 'error') + '"><i class="fa-solid ' + (ok ? 'fa-circle-check' : 'fa-triangle-exclamation') + '"></i> ' + esc(row.action || (ok ? 'Imported' : 'Skipped')) + '</span></td>' +
+        '</tr>';
+    }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:28px;">No preview rows returned.</td></tr>';
+}
+</script>
+
+<%- include('partials/footer') %>

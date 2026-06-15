@@ -11,6 +11,8 @@
 }
 .as-header-bar h2 { font-size: 1.125rem; font-weight: 800; margin: 0; }
 .as-header-bar p  { font-size: 0.8125rem; opacity: 0.85; margin: 4px 0 0; }
+.as-header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-left: auto; }
+.as-header-actions .btn { background: #fff; color: var(--primary); font-weight: 700; padding: 9px 18px; border: 0; }
 
 .as-section-badges { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
 .as-badge {
@@ -88,12 +90,14 @@
         <h2><i class="fa-solid fa-users"></i> My Students</h2>
         <p>Manage students enrolled in your section</p>
     </div>
-    <button class="btn" style="background:#fff;color:var(--primary);font-weight:700;padding:9px 18px;" onclick="openAddModal()">
-        <i class="fa-solid fa-user-plus"></i> Add Student
-    </button>
-    <button class="btn" style="background:#fff;color:var(--primary);font-weight:700;padding:9px 18px;" onclick="openImportModal()">
-        <i class="fa-solid fa-file-arrow-up"></i> Import Students
-    </button>
+    <div class="as-header-actions">
+        <button class="btn" onclick="openAddModal()">
+            <i class="fa-solid fa-user-plus"></i> Add Student
+        </button>
+        <a class="btn" href="/admin/adviser-import-students">
+            <i class="fa-solid fa-file-arrow-up"></i> Import Students
+        </a>
+    </div>
 </div>
 
 <div class="as-section-badges">
