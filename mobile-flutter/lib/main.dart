@@ -3488,21 +3488,23 @@ class DashboardPage extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          Text(
+                          FittedDashboardText(
                             api.fullname,
                             maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                            minFontSize: 18,
+                            maxFontSize: 30,
                             style: const TextStyle(
                               color: Color(0xFF111827),
-                              fontSize: 30,
                               fontWeight: FontWeight.w900,
                               height: 1.02,
                             ),
                           ),
                           const SizedBox(height: 8),
-                          Text(
+                          FittedDashboardText(
                             fullDate(),
                             maxLines: 1,
+                            minFontSize: 10,
+                            maxFontSize: 13,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: Color(0xFF5F6F69),
@@ -3734,6 +3736,55 @@ class DashboardPage extends StatelessWidget {
       ),
     );
   }
+}
+
+class FittedDashboardText extends StatelessWidget {
+  const FittedDashboardText(
+    this.text, {
+    super.key,
+    required this.style,
+    required this.maxLines,
+    required this.minFontSize,
+    required this.maxFontSize,
+    this.overflow = TextOverflow.ellipsis,
+  });
+
+  final String text;
+  final TextStyle style;
+  final int maxLines;
+  final double minFontSize;
+  final double maxFontSize;
+  final TextOverflow overflow;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          var selectedSize = maxFontSize;
+          if (width.isFinite && width > 0 && text.trim().isNotEmpty) {
+            selectedSize = minFontSize;
+            for (double size = maxFontSize; size >= minFontSize; size -= 1) {
+              final painter = TextPainter(
+                text: TextSpan(text: text, style: style.copyWith(fontSize: size)),
+                maxLines: maxLines,
+                textDirection: Directionality.of(context),
+              )..layout(maxWidth: width);
+              if (!painter.didExceedMaxLines) {
+                selectedSize = size;
+                break;
+              }
+            }
+          }
+
+          return Text(
+            text,
+            maxLines: maxLines,
+            softWrap: true,
+            overflow: overflow,
+            style: style.copyWith(fontSize: selectedSize),
+          );
+        },
+      );
 }
 
 class KpiPill extends StatelessWidget {

@@ -1057,19 +1057,21 @@ body.edutrack-mobile-app.mobile-dashboard-mode .dashboard-toolbar {
 
 .mobile-greeting-copy strong {
     color: #151b2f;
-    display: block;
-    font-size: 2.05rem;
+    display: -webkit-box;
+    font-size: clamp(1.38rem, 7vw, 2.05rem);
     font-weight: 900;
-    line-height: 1;
+    line-height: 1.02;
     margin: 4px 0 8px;
     max-width: 190px;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
 }
 
 .mobile-greeting-copy small {
-    font-size: 0.83rem;
+    font-size: clamp(0.68rem, 3vw, 0.83rem);
+    white-space: nowrap;
 }
 
 .mobile-school-art {
