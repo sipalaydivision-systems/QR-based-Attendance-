@@ -19,7 +19,7 @@
 </head>
 <body>
     <% if (typeof user !== 'undefined' && user) { %>
-    <nav class="sidebar" id="sidebar">
+    <nav class="sidebar<%= (typeof user !== 'undefined' && user && user.role === 'adviser') ? ' sidebar-adviser' : '' %>" id="sidebar">
         <!-- Brand -->
         <div class="sidebar-brand">
             <div class="brand-icon" id="sidebarLogo">

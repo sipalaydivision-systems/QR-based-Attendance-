@@ -179,6 +179,34 @@ a:hover { color: var(--primary-dark); }
 .sidebar-footer-links .logout-btn { color: #f87171 !important; }
 .sidebar-footer-links .logout-btn:hover { color: #fca5a5 !important; }
 
+/* Adviser-role sidebar — professional blue theme */
+.sidebar-adviser {
+    background: #0d1b2e;
+    --sidebar-bg:     #0d1b2e;
+    --sidebar-hover:  rgba(255,255,255,0.07);
+    --sidebar-active: rgba(59,130,246,0.18);
+    --sidebar-border: rgba(255,255,255,0.07);
+}
+.sidebar-adviser .brand-title { color: #fff; }
+.sidebar-adviser .brand-subtitle { color: #94a3b8; }
+.sidebar-adviser .sidebar-brand { border-bottom-color: rgba(255,255,255,0.07); }
+.sidebar-adviser .sidebar-footer { border-top-color: rgba(255,255,255,0.07); }
+.sidebar-adviser .nav-links li a { color: #94a3b8; }
+.sidebar-adviser .nav-links li a:hover { background: rgba(255,255,255,0.07); color: #fff; }
+.sidebar-adviser .nav-links li a.active {
+    background: rgba(59,130,246,0.18);
+    color: #93c5fd;
+    font-weight: 600;
+}
+.sidebar-adviser .nav-section-label { color: #94a3b8; }
+.sidebar-adviser .user-avatar {
+    background: linear-gradient(135deg, #1d4ed8, #60a5fa);
+}
+.sidebar-adviser .user-details strong { color: #fff; }
+.sidebar-adviser .user-details small { color: #94a3b8; }
+.sidebar-adviser .sidebar-footer-links a { color: #94a3b8; }
+.sidebar-adviser .sidebar-footer-links a:hover { color: #fff; }
+
 /* ============================================================
    MAIN CONTENT
    ============================================================ */
