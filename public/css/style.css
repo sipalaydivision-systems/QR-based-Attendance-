@@ -1024,6 +1024,148 @@ body.edutrack-mobile-app.mobile-dashboard-mode .dashboard-toolbar {
     margin-bottom: 10px;
 }
 
+.mobile-greeting-card {
+    background: #fff;
+    border: 1px solid #e3e9e6;
+    border-radius: 18px;
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.10);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 128px;
+    gap: 8px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    padding: 18px 14px 14px;
+    position: relative;
+}
+
+.mobile-greeting-copy {
+    min-width: 0;
+    position: relative;
+    z-index: 1;
+}
+
+.mobile-greeting-copy span,
+.mobile-greeting-copy small {
+    color: #5b6670;
+    display: block;
+    font-weight: 800;
+}
+
+.mobile-greeting-copy span {
+    font-size: 1rem;
+}
+
+.mobile-greeting-copy strong {
+    color: #151b2f;
+    display: block;
+    font-size: 2.05rem;
+    font-weight: 900;
+    line-height: 1;
+    margin: 4px 0 8px;
+    max-width: 190px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mobile-greeting-copy small {
+    font-size: 0.83rem;
+}
+
+.mobile-school-art {
+    align-self: end;
+    display: flex;
+    height: 98px;
+    justify-content: flex-end;
+    margin-top: -4px;
+    max-width: 132px;
+}
+
+.mobile-school-art img,
+.mobile-school-art svg {
+    height: 100%;
+    max-width: 100%;
+    object-fit: contain;
+    object-position: right bottom;
+}
+
+.mobile-kpi-row {
+    display: grid;
+    gap: 8px;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-top: 12px;
+}
+
+.mobile-kpi-pill {
+    appearance: none;
+    background: #f3faf6;
+    border: 1px solid #dceee5;
+    border-radius: 14px;
+    color: #13362a;
+    display: flex;
+    flex-direction: column;
+    min-height: 96px;
+    padding: 12px 10px;
+    text-align: left;
+}
+
+.mobile-kpi-pill i {
+    align-items: center;
+    background: #fff;
+    border-radius: 50%;
+    color: #138a64;
+    display: inline-flex;
+    font-size: 1rem;
+    height: 34px;
+    justify-content: center;
+    margin-bottom: auto;
+    width: 34px;
+}
+
+.mobile-kpi-pill strong {
+    color: #151b2f;
+    display: block;
+    font-size: 1.6rem;
+    font-weight: 900;
+    line-height: 1;
+    margin-top: 8px;
+}
+
+.mobile-kpi-pill span {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 900;
+    line-height: 1.1;
+    margin-top: 5px;
+}
+
+.mobile-kpi-pill.students span,
+.mobile-kpi-pill.students i {
+    color: #138a64;
+}
+
+.mobile-kpi-pill.teachers {
+    background: #f5f3ff;
+    border-color: #e4defd;
+}
+
+.mobile-kpi-pill.teachers span,
+.mobile-kpi-pill.teachers i {
+    color: #4f46e5;
+}
+
+.mobile-kpi-pill.flagged {
+    background: #fff3f3;
+    border-color: #f5d8d8;
+    cursor: pointer;
+}
+
+.mobile-kpi-pill.flagged span,
+.mobile-kpi-pill.flagged i {
+    color: #dc2626;
+}
+
 .mobile-ring {
     --p: 0;
     width: 142px;

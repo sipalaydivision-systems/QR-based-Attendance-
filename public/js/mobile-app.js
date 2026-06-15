@@ -1,7 +1,16 @@
 (function () {
   var STORAGE_KEY = 'qr_absence_notified_v1';
+  var SCHOOL_ART_KEY = 'edutrack_mobile_dashboard_school_art';
+  var SCHOOL_ART_VERSION_KEY = 'edutrack_mobile_dashboard_school_art_version';
   var CHECK_MS = 60000;
   var permissionAsked = false;
+  var mobileSchoolArtData = '';
+  var mobileSchoolArtVersion = '';
+
+  try {
+    mobileSchoolArtData = localStorage.getItem(SCHOOL_ART_KEY) || '';
+    mobileSchoolArtVersion = localStorage.getItem(SCHOOL_ART_VERSION_KEY) || '';
+  } catch (_) {}
 
   function localDateString(date) {
     var d = date || new Date();
@@ -147,10 +156,19 @@
     shell.className = 'mobile-dashboard-shell';
     shell.innerHTML =
       '<div class="mobile-dash-profile">' +
-      '<div><span id="mobileGreeting">Good Day</span><strong id="mobileUserName">Dashboard</strong><small>Division-Level Monitoring</small></div>' +
+      '<div><span id="mobileGreetingTop">Good Day</span><strong id="mobileUserNameTop">Dashboard</strong><small>Division-Level Monitoring</small></div>' +
       '<button type="button" id="mobileRefreshButton"><i class="fa-solid fa-rotate"></i></button>' +
       '</div>' +
       '<div class="mobile-live-row"><span><i class="fa-solid fa-bolt"></i> Real-time</span><span id="mobileLiveDate"></span><button type="button" id="mobileTestNotify"><i class="fa-solid fa-bell"></i> Test</button></div>' +
+      '<div class="mobile-greeting-card">' +
+      '<div class="mobile-greeting-copy"><span id="mobileGreeting">Good day</span><strong id="mobileUserName">Dashboard</strong><small id="mobileFullDate"></small></div>' +
+      '<div class="mobile-school-art" id="mobileSchoolArtBox"></div>' +
+      '<div class="mobile-kpi-row">' +
+      '<div class="mobile-kpi-pill students"><i class="fa-solid fa-users"></i><strong id="mobileStudentCount">0</strong><span>Students</span></div>' +
+      '<div class="mobile-kpi-pill teachers"><i class="fa-solid fa-graduation-cap"></i><strong id="mobileTeacherCount">0</strong><span>Teachers</span></div>' +
+      '<button type="button" class="mobile-kpi-pill flagged" id="mobileFlaggedButton"><i class="fa-solid fa-triangle-exclamation"></i><strong id="mobileFlaggedCount">0</strong><span>2-Day Flagged Students</span></button>' +
+      '</div>' +
+      '</div>' +
       '<div class="mobile-attendance-card">' +
       '<div class="mobile-ring" style="--p:0"><div><strong id="mobileRate">0%</strong><span>ATTENDANCE</span></div></div>' +
       '<p id="mobilePresentSummary">Loading attendance...</p>' +
@@ -163,18 +181,98 @@
     document.getElementById('mobileTestNotify').addEventListener('click', function() {
       notify('Notification test successful', 'EduTrack mobile notifications are working on this phone.');
     });
+    var flaggedButton = document.getElementById('mobileFlaggedButton');
+    if (flaggedButton) {
+      flaggedButton.addEventListener('click', function() {
+        window.location.href = appPath('/admin/notifications');
+      });
+    }
+    applyMobileSchoolArt();
     updateMobileDashboardShell();
+  }
+
+  function mobileDefaultSchoolArtSvg() {
+    return '<svg viewBox="0 0 210 132" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="School illustration">' +
+      '<ellipse cx="110" cy="118" rx="78" ry="9" fill="#e7f7ed"/>' +
+      '<path d="M19 92c9-13 21-18 36-14 7-17 26-28 45-22 9-16 32-21 49-9 9 6 14 15 15 25 12-2 23 3 29 12 6 9 6 20 0 30H24c-9-5-11-14-5-22z" fill="#eff9f5"/>' +
+      '<circle cx="44" cy="84" r="20" fill="#66b77f"/>' +
+      '<rect x="39" y="84" width="9" height="34" rx="4" fill="#1c7b5a"/>' +
+      '<rect x="77" y="54" width="92" height="61" rx="6" fill="#7bc98d"/>' +
+      '<path d="M68 57l56-33 56 33H68z" fill="#126d51"/>' +
+      '<rect x="111" y="82" width="24" height="34" rx="4" fill="#126d51"/>' +
+      '<rect x="88" y="74" width="19" height="21" rx="3" fill="#f7fff9"/>' +
+      '<rect x="143" y="74" width="19" height="21" rx="3" fill="#f7fff9"/>' +
+      '<circle cx="124" cy="51" r="15" fill="#f7fff9"/>' +
+      '<path d="M124 42v9l7 4" fill="none" stroke="#7bc98d" stroke-width="3" stroke-linecap="round"/>' +
+      '<path d="M124 25V6" stroke="#126d51" stroke-width="4" stroke-linecap="round"/>' +
+      '<path d="M127 7l24 8-24 9V7z" fill="#2fa760"/>' +
+      '<ellipse cx="53" cy="18" rx="24" ry="8" fill="#e8f7ff"/>' +
+      '<ellipse cx="177" cy="30" rx="21" ry="7" fill="#e8f7ff"/>' +
+      '</svg>';
+  }
+
+  function applyMobileSchoolArt(src) {
+    if (typeof src === 'string') mobileSchoolArtData = src;
+    var box = document.getElementById('mobileSchoolArtBox');
+    if (!box) return;
+    var art = (mobileSchoolArtData || '').trim();
+    if (art) {
+      box.innerHTML = '<img src="' + art.replace(/"/g, '&quot;') + '" alt="School illustration">';
+    } else {
+      box.innerHTML = mobileDefaultSchoolArtSvg();
+    }
+  }
+
+  async function syncMobileSchoolArt(dashboardData) {
+    if (!isMobileAppShell() || !isDashboardPage()) return;
+    var version = String((dashboardData && dashboardData.school_art_version) || '').trim();
+    if (!version) {
+      mobileSchoolArtData = '';
+      mobileSchoolArtVersion = '';
+      try {
+        localStorage.removeItem(SCHOOL_ART_KEY);
+        localStorage.removeItem(SCHOOL_ART_VERSION_KEY);
+      } catch (_) {}
+      applyMobileSchoolArt('');
+      return;
+    }
+    if (version === mobileSchoolArtVersion && mobileSchoolArtData) {
+      applyMobileSchoolArt(mobileSchoolArtData);
+      return;
+    }
+    try {
+      var res = await fetch('/api/mobile-branding?_=' + Date.now(), { credentials: 'same-origin', cache: 'no-store' });
+      if (!res.ok) return;
+      var branding = await res.json();
+      var art = String(branding.mobile_dashboard_school_art || '').trim();
+      mobileSchoolArtData = art;
+      mobileSchoolArtVersion = String(branding.school_art_version || version).trim();
+      try {
+        if (art) {
+          localStorage.setItem(SCHOOL_ART_KEY, art);
+          localStorage.setItem(SCHOOL_ART_VERSION_KEY, mobileSchoolArtVersion);
+        } else {
+          localStorage.removeItem(SCHOOL_ART_KEY);
+          localStorage.removeItem(SCHOOL_ART_VERSION_KEY);
+        }
+      } catch (_) {}
+      applyMobileSchoolArt(art);
+    } catch (_) {}
   }
 
   function updateMobileDashboardShell() {
     if (!isMobileAppShell() || !isDashboardPage()) return;
     var rate = numberFromText(text('statRate'));
+    var data = window.__mobileDashboardData || {};
     var present = text('statPresent');
-    var students = text('statStudents');
+    var students = data.active_students || data.total_students || text('statStudents');
+    var teachers = data.active_teachers || data.total_teachers || text('statTeachers');
+    var flagged = data.flagged_absent_2day || text('statFlagged');
     var nameEl = document.querySelector('.topbar-user-details strong') || document.querySelector('.user-details strong');
     var userName = nameEl ? nameEl.textContent.trim() : 'Dashboard';
     var hour = new Date().getHours();
     var greeting = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
+    var fullDate = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
     var ring = document.querySelector('.mobile-ring');
     if (ring) ring.style.setProperty('--p', Math.max(0, Math.min(100, rate)));
@@ -184,8 +282,20 @@
     if (presentEl) presentEl.textContent = present + ' of ' + students + ' students present';
     var gEl = document.getElementById('mobileGreeting');
     if (gEl) gEl.textContent = greeting;
+    var gTopEl = document.getElementById('mobileGreetingTop');
+    if (gTopEl) gTopEl.textContent = greeting;
     var uEl = document.getElementById('mobileUserName');
     if (uEl) uEl.textContent = userName;
+    var uTopEl = document.getElementById('mobileUserNameTop');
+    if (uTopEl) uTopEl.textContent = userName;
+    var fullDateEl = document.getElementById('mobileFullDate');
+    if (fullDateEl) fullDateEl.textContent = fullDate;
+    var studentEl = document.getElementById('mobileStudentCount');
+    if (studentEl) studentEl.textContent = students;
+    var teacherEl = document.getElementById('mobileTeacherCount');
+    if (teacherEl) teacherEl.textContent = teachers;
+    var flaggedEl = document.getElementById('mobileFlaggedCount');
+    if (flaggedEl) flaggedEl.textContent = flagged;
     var dEl = document.getElementById('mobileLiveDate');
     if (dEl) dEl.textContent = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   }
@@ -216,6 +326,7 @@
         if (!res.ok) return;
         var data = await res.json();
         applyDashboardData(data);
+        await syncMobileSchoolArt(data);
         updateMobileDashboardShell();
       } finally {
         refreshing = false;
@@ -253,6 +364,7 @@
   }
 
   function applyDashboardData(data) {
+    window.__mobileDashboardData = data || {};
     set('statSchools', data.total_schools);
     set('statStudents', data.active_students || data.total_students || 0);
     set('statPresent', data.students_present);
