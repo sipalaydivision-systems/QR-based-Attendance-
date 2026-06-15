@@ -20,6 +20,89 @@ class AppConfig {
   static const baseUrl = 'https://school-attendance-qrbased.up.railway.app';
 }
 
+// Live branding pulled from the server (admin-uploaded logo + names). These
+// update the header instantly when the dashboard refreshes — so changing the
+// logo in the Admin Dashboard appears in the app WITHOUT a reinstall. The
+// values are cached on the device so the correct logo shows immediately on the
+// next launch, even before the first network call completes.
+final ValueNotifier<String?> brandLogoData = ValueNotifier<String?>(null);
+final ValueNotifier<String> brandName = ValueNotifier<String>(AppConfig.appName);
+final ValueNotifier<String> brandSubtitle =
+    ValueNotifier<String>(AppConfig.subtitle);
+
+void loadCachedBranding(SharedPreferences prefs) {
+  final logo = prefs.getString('brand_logo');
+  if (logo != null && logo.trim().isNotEmpty) brandLogoData.value = logo.trim();
+  final name = prefs.getString('brand_name');
+  if (name != null && name.trim().isNotEmpty) brandName.value = name.trim();
+  final sub = prefs.getString('brand_subtitle');
+  if (sub != null && sub.trim().isNotEmpty) brandSubtitle.value = sub.trim();
+}
+
+Future<void> applyBrandingNames(
+  Map<String, dynamic> data,
+  SharedPreferences prefs,
+) async {
+  final name = '${data['system_name'] ?? ''}'.trim();
+  if (name.isNotEmpty && name != brandName.value) {
+    brandName.value = name;
+    await prefs.setString('brand_name', name);
+  }
+  final sub = '${data['division_name'] ?? ''}'.trim();
+  if (sub.isNotEmpty && sub != brandSubtitle.value) {
+    brandSubtitle.value = sub;
+    await prefs.setString('brand_subtitle', sub);
+  }
+}
+
+Future<void> applyBranding(
+  Map<String, dynamic> data,
+  SharedPreferences prefs,
+) async {
+  if (data.containsKey('system_logo')) {
+    final logo = '${data['system_logo'] ?? ''}'.trim();
+    if (logo != (brandLogoData.value ?? '')) {
+      brandLogoData.value = logo.isEmpty ? null : logo;
+      if (logo.isEmpty) {
+        await prefs.remove('brand_logo');
+      } else {
+        await prefs.setString('brand_logo', logo);
+      }
+    }
+  }
+  await applyBrandingNames(data, prefs);
+}
+
+// Keeps the header logo in sync cheaply: names update on every poll, but the
+// heavy base64 logo is only re-fetched from /api/mobile-branding when its
+// version actually changes (or has never been cached) — so changing the logo
+// in the Admin Dashboard appears in the app without a reinstall and without
+// re-downloading the image on every 5-second refresh.
+Future<void> syncBranding(
+  Map<String, dynamic> dashboard,
+  ApiService api,
+) async {
+  await applyBrandingNames(dashboard, api.prefs);
+  final version = '${dashboard['logo_version'] ?? ''}'.trim();
+  if (version.isEmpty) {
+    if (brandLogoData.value != null) {
+      brandLogoData.value = null;
+      await api.prefs.remove('brand_logo');
+      await api.prefs.remove('brand_logo_version');
+    }
+    return;
+  }
+  final cachedVersion = api.prefs.getString('brand_logo_version') ?? '';
+  if (version == cachedVersion && brandLogoData.value != null) return;
+  try {
+    final branding = await api.map('/api/mobile-branding');
+    await applyBranding(branding, api.prefs);
+    await api.prefs.setString('brand_logo_version', version);
+  } on Exception {
+    // Keep showing the cached logo on a network/auth hiccup; retry next poll.
+  }
+}
+
 final notifications = FlutterLocalNotificationsPlugin();
 final appNavigatorKey = GlobalKey<NavigatorState>();
 String? startupNotificationPayload;
@@ -34,6 +117,7 @@ const alertsChannel = AndroidNotificationChannel(
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  loadCachedBranding(await SharedPreferences.getInstance());
   await notifications.initialize(
     const InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
@@ -1126,6 +1210,7 @@ class _HomeShellState extends State<HomeShell>
       ]);
       dashboard = results[0] as Map<String, dynamic>;
       flags = results[1] as List<dynamic>;
+      await syncBranding(dashboard, widget.api);
       await notifyAbsenceFlags(flags, widget.api.prefs);
       if (mounted) {
         setState(() {
@@ -2934,91 +3019,180 @@ class Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.fromLTRB(
-        14,
-        MediaQuery.paddingOf(context).top + 6,
-        14,
-        10,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: const Border(bottom: BorderSide(color: Color(0xFFE2E9E5))),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF0C5A3C), Color(0xFF14855A), Color(0xFF0D6347)],
+          stops: [0.0, 0.52, 1.0],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(26)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF111827).withValues(alpha: .06),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
+            color: Color(0x330C5A3C),
+            blurRadius: 16,
+            offset: Offset(0, 6),
           ),
         ],
       ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              const AppLogo(size: 36),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      AppConfig.appName,
-                      style: TextStyle(
-                        color: Color(0xFF0F211B),
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -.2,
-                      ),
-                    ),
-                    const Text(
-                      AppConfig.subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Color(0xFF6D7A74),
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
+      child: ClipRRect(
+        borderRadius:
+            const BorderRadius.vertical(bottom: Radius.circular(26)),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: CustomPaint(painter: _HeaderPatternPainter()),
+            ),
+            Positioned(
+              right: 14,
+              bottom: -18,
+              child: Icon(
+                Icons.school_rounded,
+                size: 104,
+                color: Colors.white.withValues(alpha: .06),
               ),
-              _actionIcon(icon: Icons.logout_rounded, onTap: onLogout),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _chip(
-                const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    LiveDot(color: Color(0xFFFF3B30), size: 8),
-                    SizedBox(width: 6),
-                    Text('LIVE'),
-                  ],
-                ),
+            ),
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                MediaQuery.paddingOf(context).top + 10,
+                16,
+                16,
               ),
-              const SizedBox(width: 8),
-              _chip(Text(shortDate()), dense: true),
-              const SizedBox(width: 8),
-              Flexible(child: _chip(Text(date()), dense: true)),
-            ],
-          ),
-        ],
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      _seal(),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ValueListenableBuilder<String>(
+                              valueListenable: brandName,
+                              builder: (context, value, _) => Text(
+                                value,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: -.3,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            ValueListenableBuilder<String>(
+                              valueListenable: brandSubtitle,
+                              builder: (context, value, _) => Text(
+                                value,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: .85),
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      _headerAction(
+                        icon: Icons.logout_rounded,
+                        onTap: onLogout,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      _chip(
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            LiveDot(color: Color(0xFFFF3B30), size: 9),
+                            SizedBox(width: 6),
+                            Text(
+                              'LIVE',
+                              style: TextStyle(
+                                color: Color(0xFFE5403A),
+                                fontWeight: FontWeight.w900,
+                                fontSize: 11.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _chip(Text(shortDate()), dense: true),
+                      const SizedBox(width: 8),
+                      Flexible(child: _chip(Text(date()), dense: true)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
+  Widget _seal() => Container(
+    width: 52,
+    height: 52,
+    padding: const EdgeInsets.all(6),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      shape: BoxShape.circle,
+      border: Border.all(color: Colors.white.withValues(alpha: .45), width: 3),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF06301F).withValues(alpha: .28),
+          blurRadius: 12,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    child: const ClipOval(child: BrandLogoImage()),
+  );
+
+  Widget _headerAction({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) => Material(
+    color: Colors.white.withValues(alpha: .14),
+    borderRadius: BorderRadius.circular(14),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: SizedBox(
+        width: 44,
+        height: 44,
+        child: Icon(icon, size: 20, color: Colors.white),
+      ),
+    ),
+  );
+
   Widget _chip(Widget child, {bool dense = false}) => Container(
     padding: EdgeInsets.symmetric(
-      horizontal: dense ? 11 : 12,
-      vertical: dense ? 7 : 8,
+      horizontal: dense ? 11 : 13,
+      vertical: dense ? 8 : 9,
     ),
     decoration: BoxDecoration(
-      color: const Color(0xFFF7FAF8),
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: const Color(0xFFDCE6E1)),
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(13),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF06301F).withValues(alpha: .14),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
+        ),
+      ],
     ),
     child: DefaultTextStyle(
       style: const TextStyle(
@@ -3029,22 +3203,26 @@ class Header extends StatelessWidget {
       child: child,
     ),
   );
+}
 
-  Widget _actionIcon({required IconData icon, required VoidCallback onTap}) =>
-      Container(
-        width: 38,
-        height: 38,
-        decoration: BoxDecoration(
-          color: const Color(0xFFEAF7F1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFD7EDE3)),
-        ),
-        child: IconButton(
-          padding: EdgeInsets.zero,
-          onPressed: onTap,
-          icon: Icon(icon, size: 20, color: const Color(0xFF138A64)),
-        ),
-      );
+// Subtle dot-grid pattern for the header, faded toward the bottom edge.
+class _HeaderPatternPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    const gap = 15.0;
+    const radius = 1.15;
+    final paint = Paint();
+    for (double y = 10; y < size.height; y += gap) {
+      final fade = (1 - (y / size.height)).clamp(0.0, 1.0);
+      paint.color = Colors.white.withValues(alpha: 0.14 * fade);
+      for (double x = 10; x < size.width; x += gap) {
+        canvas.drawCircle(Offset(x, y), radius, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _HeaderPatternPainter oldDelegate) => false;
 }
 
 class DashboardPage extends StatelessWidget {
@@ -7239,6 +7417,40 @@ class BackLine extends StatelessWidget {
   );
 }
 
+// Renders the live (admin-uploaded) logo when available, otherwise the bundled
+// asset. Listens to [brandLogoData] so it swaps instantly when the logo changes.
+class BrandLogoImage extends StatelessWidget {
+  const BrandLogoImage({super.key, this.fit = BoxFit.contain});
+  final BoxFit fit;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<String?>(
+      valueListenable: brandLogoData,
+      builder: (context, data, _) {
+        if (data != null && data.trim().isNotEmpty) {
+          try {
+            final value = data.trim();
+            final comma = value.indexOf(',');
+            final encoded = comma != -1 ? value.substring(comma + 1) : value;
+            final bytes = base64Decode(encoded);
+            return Image.memory(
+              bytes,
+              fit: fit,
+              gaplessPlayback: true,
+              errorBuilder: (_, __, ___) =>
+                  Image.asset(AppConfig.logoAsset, fit: fit),
+            );
+          } on FormatException {
+            // Malformed data URL — fall back to the bundled asset below.
+          }
+        }
+        return Image.asset(AppConfig.logoAsset, fit: fit);
+      },
+    );
+  }
+}
+
 class AppLogo extends StatelessWidget {
   const AppLogo({super.key, required this.size});
   final double size;
@@ -7259,7 +7471,7 @@ class AppLogo extends StatelessWidget {
         ),
       ],
     ),
-    child: Image.asset(AppConfig.logoAsset, fit: BoxFit.contain),
+    child: const BrandLogoImage(),
   );
 }
 

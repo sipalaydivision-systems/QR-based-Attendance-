@@ -338,6 +338,18 @@ function normalizeKioskScanTime(value) {
     };
 }
 
+// Outage forgiveness: the desktop scanner sends grace_anchor_time = the moment a
+// power/app outage began. For a person's FIRST scan we judge late/half-day
+// against this anchor (the last time they could have scanned) instead of the
+// catch-up scan time. Must be the same day and not in the future to be honored.
+function normalizeKioskGraceAnchor(value, today, now) {
+    const parsed = normalizeKioskScanTime(value);
+    if (!parsed) return null;
+    if (parsed.date !== today) return null;
+    if (compareDateTime(parsed.dateTime, now) > 0) return null;
+    return parsed.dateTime;
+}
+
 // POST /api/scanner-admin-login
 // Validates admin credentials from the desktop scanner settings screen.
 // Uses the same accounts as the Web Admin Dashboard — no separate kiosk accounts.
@@ -1023,6 +1035,7 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
         const queuedScanTime = scannerKioskAuthorized ? normalizeKioskScanTime(req.body.scan_time) : null;
         const today = queuedScanTime ? queuedScanTime.date : todayDate();
         const now = queuedScanTime ? queuedScanTime.dateTime : nowDateTime();
+        const graceAnchor = scannerKioskAuthorized ? normalizeKioskGraceAnchor(req.body.grace_anchor_time, today, now) : null;
         const requireTimeOutConfirmation = req.body.require_time_out_confirmation === true || req.body.require_time_out_confirmation === 'true' || req.body.require_time_out_confirmation === '1';
         const confirmedTimeOut = req.body.confirm_time_out === true || req.body.confirm_time_out === 'true' || req.body.confirm_time_out === '1';
 
@@ -1147,15 +1160,24 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
 
         if (existing.length === 0) {
             // ── First scan of the day = AM Time In (PRESENT on/before cutoff, LATE after) ──
+            // Outage forgiveness: judge late/half-day against the outage anchor (the
+            // last moment this person could have scanned) when the scanner is
+            // recovering from a power interruption, while still recording the real
+            // scan time. Never makes a status worse — the anchor is always earlier.
+            const outageForgiven = !!graceAnchor && compareDateTime(graceAnchor, now) < 0;
+            const statusTime = outageForgiven ? graceAnchor : now;
             const schedule = await getAttendanceScheduleTimes(today);
-            const baseStatus = await getBaseAttendanceStatus(personType, today, now);
-            const resolvedStatus = computeDailyAttendanceStatus({
-                timeIn: now,
-                lastTimeIn: now,
+            const baseStatus = await getBaseAttendanceStatus(personType, today, statusTime);
+            const computedStatus = computeDailyAttendanceStatus({
+                timeIn: statusTime,
+                lastTimeIn: statusTime,
                 timeOut: null,
                 schedule,
                 baseStatus
             });
+            const resolvedStatus = outageForgiven && !computedStatus.remarks
+                ? { ...computedStatus, remarks: 'Credited on-time — scanner power interruption' }
+                : computedStatus;
             const attendanceStatus = resolvedStatus.status;
             const displayStatus = attendanceStatus === 'half_day'
                 ? 'PM PRESENT'
@@ -1174,9 +1196,11 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
                 display_status: displayStatus,
                 ...responseAttendanceMeta(resolvedStatus),
                 monitoring_status: displayStatus,
-                message: attendanceStatus === 'half_day'
-                    ? 'PM time in recorded - marked as HALF-DAY.'
-                    : attendanceStatus === 'late' ? 'Attendance recorded - marked as LATE' : 'Attendance recorded successfully',
+                message: outageForgiven
+                    ? 'Attendance recorded - credited on-time despite scanner power interruption.'
+                    : attendanceStatus === 'half_day'
+                        ? 'PM time in recorded - marked as HALF-DAY.'
+                        : attendanceStatus === 'late' ? 'Attendance recorded - marked as LATE' : 'Attendance recorded successfully',
                 person: personInfo,
                 time: formatTime12(now),
                 time_in: formatTime12(now)
@@ -1420,8 +1444,24 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
         const nonSchoolDayReason = schoolDayResult.reason;
         const nonSchoolDayType = schoolDayResult.type;
 
+        // Branding so the mobile app can render the admin-uploaded logo / names
+        // dynamically (updates without an app reinstall). Only a short version
+        // hash travels in this frequently-polled response — the heavy base64
+        // logo is fetched separately from /mobile-branding, and only when this
+        // version changes, to avoid re-downloading it on every poll.
+        const [brandingRows] = await db.query(
+            "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('system_logo', 'system_name', 'division_name')"
+        );
+        const branding = Object.fromEntries(brandingRows.map(r => [r.setting_key, r.setting_value]));
+        const logoVersion = branding.system_logo
+            ? crypto.createHash('md5').update(String(branding.system_logo)).digest('hex').slice(0, 12)
+            : '';
+
         const data = {
             date,
+            system_name: branding.system_name || '',
+            division_name: branding.division_name || '',
+            logo_version: logoVersion,
             total_schools: schoolRows[0].count,
             total_students: allStudents[0].count,
             active_students: totalActive,
@@ -1461,6 +1501,34 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
     } catch (err) {
         console.error('Dashboard data error:', err);
         return res.status(500).json({ error: 'Failed to load dashboard data.' });
+    }
+});
+
+// =============================================
+// GET /api/mobile-branding
+// Full branding (admin-uploaded logo data URL + names) for the mobile app.
+// Fetched only when the logo_version from /dashboard-data changes, so the
+// heavy base64 logo is not re-downloaded on every poll.
+// =============================================
+router.get('/mobile-branding', requireAuth, async (req, res) => {
+    try {
+        const [rows] = await db.query(
+            "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('system_logo', 'system_name', 'division_name')"
+        );
+        const branding = Object.fromEntries(rows.map(r => [r.setting_key, r.setting_value]));
+        const logo = branding.system_logo || '';
+        const logoVersion = logo
+            ? crypto.createHash('md5').update(String(logo)).digest('hex').slice(0, 12)
+            : '';
+        return res.json({
+            system_logo: logo,
+            system_name: branding.system_name || '',
+            division_name: branding.division_name || '',
+            logo_version: logoVersion
+        });
+    } catch (err) {
+        console.error('Mobile branding error:', err);
+        return res.status(500).json({ error: 'Failed to load branding.' });
     }
 });
 
