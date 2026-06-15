@@ -804,12 +804,16 @@ async function getAttendanceStatusCounts(personType, dateStr, filters = {}) {
     const isTeacher = personType === 'teacher';
     const table = isTeacher ? 'teachers' : 'students';
     const alias = isTeacher ? 't' : 's';
+    // Half-day attendees are counted as PRESENT (they showed up) and counted toward
+    // the attendance rate, while their per-record status stays 'half_day' so reports
+    // and badges can still identify them. The half_day tally below is therefore a
+    // subset of present, kept for the dashboard's half-day indicator.
     let query = `
         SELECT
-            COUNT(DISTINCT CASE WHEN a.status = 'present' THEN a.person_id END) AS present,
+            COUNT(DISTINCT CASE WHEN a.status IN ('present','half_day') THEN a.person_id END) AS present,
             COUNT(DISTINCT CASE WHEN a.status = 'late' THEN a.person_id END) AS late,
             COUNT(DISTINCT CASE WHEN a.status = 'half_day' THEN a.person_id END) AS half_day,
-            COUNT(DISTINCT CASE WHEN a.status IN ('present','late') THEN a.person_id END) AS full_day,
+            COUNT(DISTINCT CASE WHEN a.status IN ('present','late','half_day') THEN a.person_id END) AS full_day,
             COUNT(DISTINCT CASE WHEN a.time_in IS NOT NULL THEN a.person_id END) AS timed_in,
             COUNT(DISTINCT CASE WHEN a.time_out IS NOT NULL THEN a.person_id END) AS timed_out
         FROM attendance a
@@ -3545,11 +3549,11 @@ router.get('/monthly-attendance', requireAuth, async (req, res) => {
         const startDate = `${year}-${String(month).padStart(2,'0')}-01`;
         const endDate   = new Date(year, month, 0).toISOString().slice(0,10);
 
-        // Present counts per day
+        // Present counts per day (half-day attendees count as present)
         let pQuery = `SELECT DATE(a.date) as day, COUNT(DISTINCT a.person_id) as present
                       FROM attendance a
                       INNER JOIN students s ON a.person_id = s.id AND s.status = 'active'
-                      WHERE a.person_type = 'student' AND a.date BETWEEN ? AND ? AND a.status IN ('present','late')`;
+                      WHERE a.person_type = 'student' AND a.date BETWEEN ? AND ? AND a.status IN ('present','late','half_day')`;
         const pParams = [startDate, endDate];
         if (schoolId) { pQuery += ' AND a.school_id = ?'; pParams.push(schoolId); }
         pQuery += ' GROUP BY DATE(a.date)';
