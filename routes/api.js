@@ -1279,7 +1279,10 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
         }
 
         // ── Time In again after a Time Out (return from outside / PM session) ──
-        const label = timeInLabelFor(now, schedule);
+        // Returning from a lunch-out always counts as the afternoon session, so
+        // it is labeled PM PRESENT even when scanned before the PM start time.
+        const wasLunchOut = String(attendanceRow.monitoring_status || '').toUpperCase() === 'LUNCH OUT';
+        const label = wasLunchOut ? 'PM PRESENT' : timeInLabelFor(now, schedule);
         const resolvedStatus = await resolveAttendanceStatus(personType, today, {
             ...attendanceRow,
             last_time_in: now
