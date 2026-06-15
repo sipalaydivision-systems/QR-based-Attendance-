@@ -27,6 +27,11 @@ const APP_TITLE = 'EduTrack Scanner';
 const APP_USER_MODEL_ID = 'ph.gov.sipalay.edutrack.scanner';
 const APP_ICON_PNG = path.join(__dirname, 'assets', 'edutrack-scanner.png');
 const DEFAULT_SERVER_URL = 'https://sdo-sipalay-edutrack.up.railway.app';
+// Retired server domains. Any saved serverUrl pointing at one of these is
+// auto-migrated to DEFAULT_SERVER_URL on load, so existing installs (whose
+// serverUrl persists in settings.json across reinstalls) connect to the live
+// server without the user editing anything.
+const LEGACY_SERVER_HOSTS = ['school-attendance-qrbased.up.railway.app'];
 const NO_INTERNET_MESSAGE = "Can't connect to server due to no internet connection.";
 const OFFLINE_MODE_MESSAGE = 'Offline Mode Enabled - Attendance records are being stored locally.';
 const CONNECTION_RESTORED_MESSAGE = 'Connection Restored - Synchronizing attendance records.';
@@ -158,10 +163,15 @@ function writeJson(filePath, value) {
 }
 
 function normalizeServerUrl(value) {
-  const raw = String(value || DEFAULT_SERVER_URL).trim().replace(/\/+$/, '');
+  let raw = String(value || DEFAULT_SERVER_URL).trim().replace(/\/+$/, '');
   if (!raw) return DEFAULT_SERVER_URL;
-  if (/^https?:\/\//i.test(raw)) return raw;
-  return `https://${raw}`;
+  if (!/^https?:\/\//i.test(raw)) raw = `https://${raw}`;
+  // Migrate any retired domain to the current server.
+  const lower = raw.toLowerCase();
+  if (LEGACY_SERVER_HOSTS.some((host) => lower.includes(host))) {
+    return DEFAULT_SERVER_URL;
+  }
+  return raw;
 }
 
 function pad(value) {
@@ -494,7 +504,19 @@ function nonSchoolDayScanMessage(schoolDay) {
 }
 
 function loadSettings() {
-  return { ...defaultSettings(), ...readJson(settingsPath(), {}) };
+  const merged = { ...defaultSettings(), ...readJson(settingsPath(), {}) };
+  // Auto-migrate a retired serverUrl to the live server and persist it once,
+  // so reinstalls and updates connect without any manual settings edit.
+  const migratedUrl = normalizeServerUrl(merged.serverUrl);
+  if (migratedUrl !== merged.serverUrl) {
+    merged.serverUrl = migratedUrl;
+    try {
+      writeJson(settingsPath(), merged);
+    } catch (err) {
+      console.warn('Unable to persist serverUrl migration:', err.message);
+    }
+  }
+  return merged;
 }
 
 function saveSettings(nextSettings, options = {}) {
