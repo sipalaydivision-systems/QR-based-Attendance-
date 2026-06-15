@@ -1171,7 +1171,7 @@ class _LoginScreenState extends State<LoginScreen>
                       const SizedBox(height: 18),
                       const Center(
                         child: Text(
-                          '${AppConfig.monitoringLabel}\nv2.1.16',
+                          '${AppConfig.monitoringLabel}\nv2.1.17',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Color(0xFF77847E),
@@ -8248,7 +8248,8 @@ String _readableReportDate(DateTime now) {
   return '${_weekdayShortName(now.weekday)}, ${months[now.month - 1]} ${now.day}';
 }
 
-const _kDailyReportTitle = '🤖 SDO Sipalay AI · Daily Report';
+const _kAiAssistantName = 'SDO Sipalay AI Assistant';
+const _kDailyReportTitle = '$_kAiAssistantName · Daily Report';
 
 // Decodes the admin-uploaded notification icon (a base64 data URL cached in
 // prefs as 'ai_report_icon') to a file and returns it as a notification large
@@ -8302,7 +8303,7 @@ Future<void> _showDailyReportNotification(
             'No classes today ($dayName).<br>'
             'Attendance reports resume on Monday.',
             htmlFormatBigText: true,
-            contentTitle: '<b>🤖 SDO Sipalay AI · Weekend</b>',
+            contentTitle: '<b>$_kAiAssistantName · Weekend</b>',
             htmlFormatContentTitle: true,
             summaryText: dateLine,
             htmlFormatSummaryText: true,
