@@ -1310,6 +1310,7 @@ class _HomeShellState extends State<HomeShell>
         error: error,
         onRefresh: load,
         onOpenTab: (value) => setState(() => tab = value.clamp(0, 4).toInt()),
+        onTestReport: () => testEveningReportNotification(dashboard, widget.api.prefs),
       ),
       AttendancePage(api: widget.api),
       SchoolsPage(api: widget.api),
@@ -3340,6 +3341,7 @@ class DashboardPage extends StatelessWidget {
     required this.error,
     required this.onRefresh,
     required this.onOpenTab,
+    this.onTestReport,
   });
   final ApiService api;
   final Map<String, dynamic> dashboard;
@@ -3348,6 +3350,7 @@ class DashboardPage extends StatelessWidget {
   final String? error;
   final Future<void> Function({bool silent}) onRefresh;
   final ValueChanged<int> onOpenTab;
+  final VoidCallback? onTestReport;
 
   @override
   Widget build(BuildContext context) {
@@ -3739,6 +3742,30 @@ class DashboardPage extends StatelessWidget {
                 if (sortedSchools.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   SchoolLeaderboard(schools: sortedSchools),
+                ],
+                if (onTestReport != null) ...[
+                  const SizedBox(height: 24),
+                  Center(
+                    child: OutlinedButton.icon(
+                      onPressed: onTestReport,
+                      icon: const Icon(Icons.notifications_active_outlined, size: 15),
+                      label: const Text('Test 7PM Notification'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF6B7280),
+                        side: const BorderSide(color: Color(0xFFD1D5DB)),
+                        textStyle: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -8278,6 +8305,71 @@ Future<void> checkAndShowEveningReport(
     await notifications.show(
       _kDailySummaryId,
       '📊 Daily Report · $day, $month/$dayNum',
+      bigText,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          dailySummaryChannel.id,
+          dailySummaryChannel.name,
+          importance: Importance.high,
+          priority: Priority.high,
+          visibility: NotificationVisibility.public,
+          styleInformation: BigTextStyleInformation(bigText),
+        ),
+      ),
+    );
+  }
+}
+
+// Bypasses the 7 PM time check and the daily dedup key so you can fire the
+// notification immediately for testing without waiting until actual 7 PM.
+Future<void> testEveningReportNotification(
+  Map<String, dynamic> dashboardData,
+  SharedPreferences prefs,
+) async {
+  final granted = await ensureNotificationPermission();
+  if (!granted) return;
+  await notifications.cancel(_kDailySummaryFallbackId);
+  final now = DateTime.now();
+  final isWeekend =
+      now.weekday == DateTime.saturday || now.weekday == DateTime.sunday;
+  if (isWeekend) {
+    final dayName =
+        now.weekday == DateTime.saturday ? 'Saturday' : 'Sunday';
+    await notifications.show(
+      _kDailySummaryId,
+      '📅 EduTrack · Weekend — No Report [TEST]',
+      'No school today ($dayName). Attendance reports resume on Monday.',
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          dailySummaryChannel.id,
+          dailySummaryChannel.name,
+          importance: Importance.high,
+          priority: Priority.high,
+          visibility: NotificationVisibility.public,
+          styleInformation: BigTextStyleInformation(
+            'No school today ($dayName). Attendance reports resume on Monday.',
+          ),
+        ),
+      ),
+    );
+  } else {
+    final day = _weekdayShortName(now.weekday);
+    final month = ('${now.month}'.padLeft(2, '0'));
+    final dayNum = ('${now.day}'.padLeft(2, '0'));
+    final studPresent = intValue(dashboardData['students_present']);
+    final studAbsent  = intValue(dashboardData['students_absent']);
+    final studLate    = intValue(dashboardData['students_late']);
+    final studHalfDay = intValue(dashboardData['students_half_day']);
+    final tchPresent  = intValue(dashboardData['teachers_present']);
+    final tchAbsent   = intValue(dashboardData['teachers_absent']);
+    final rate        = intValue(dashboardData['attendance_rate']);
+    final bigText =
+        'Students: $studPresent present · $studAbsent absent · $studLate late · $studHalfDay half-day\n'
+        'Teachers: $tchPresent present · $tchAbsent absent\n'
+        'Attendance Rate: $rate%';
+    await notifications.show(
+      _kDailySummaryId,
+      '📊 Daily Report · $day, $month/$dayNum [TEST]',
       bigText,
       NotificationDetails(
         android: AndroidNotificationDetails(
