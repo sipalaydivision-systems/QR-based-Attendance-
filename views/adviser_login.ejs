@@ -10,6 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="manifest" href="/manifest.webmanifest">
     <style>
     .adv-login-page {
         min-height: 100vh; display: flex; align-items: center; justify-content: center;
@@ -86,11 +87,12 @@
         display: inline-flex; align-items: center; gap: 6px;
         margin-top: 10px; padding: 8px 18px;
         background: #f0fdf4; border: 1.5px solid #bbf7d0;
-        border-radius: 20px; color: #16a34a !important;
-        font-size: 0.8125rem; font-weight: 700; text-decoration: none !important;
-        transition: background 0.2s, box-shadow 0.2s;
+        border-radius: 20px; color: #16a34a;
+        font-size: 0.8125rem; font-weight: 700; font-family: inherit;
+        cursor: pointer; transition: background 0.2s, box-shadow 0.2s;
     }
     .adv-install-btn:hover { background: #dcfce7; box-shadow: 0 2px 8px rgba(22,163,74,0.15); }
+    .adv-install-btn:disabled { opacity: 0.6; cursor: default; }
     </style>
 </head>
 <body class="adv-login-page">
@@ -139,9 +141,9 @@
 
         <div class="adv-footer">
             <p><i class="fa-solid fa-shield-halved"></i> For registered teachers/advisers only</p>
-            <a href="/mobile-app" class="adv-install-btn">
+            <button type="button" id="advInstallBtn" class="adv-install-btn" onclick="triggerInstall()">
                 <i class="fa-solid fa-mobile-screen-button"></i> Install EduTrack
-            </a>
+            </button>
         </div>
     </div>
 
@@ -224,6 +226,37 @@
         var email = document.getElementById('advEmail').value.trim();
         if (email) checkEmail(email);
     })();
+
+    // PWA install prompt
+    var _pwaPrompt = null;
+    window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        _pwaPrompt = e;
+    });
+
+    function triggerInstall() {
+        if (_pwaPrompt) {
+            _pwaPrompt.prompt();
+            _pwaPrompt.userChoice.then(function(result) {
+                _pwaPrompt = null;
+                if (result.outcome === 'accepted') {
+                    var btn = document.getElementById('advInstallBtn');
+                    if (btn) {
+                        btn.innerHTML = '<i class="fa-solid fa-circle-check"></i> Installed!';
+                        btn.disabled = true;
+                    }
+                }
+            });
+        } else {
+            // iOS Safari or already installed — show manual instructions
+            alert('To add to home screen:\n\niPhone/iPad: Tap the Share button ↗ then "Add to Home Screen"\n\nAndroid: Tap the browser menu ⋮ then "Add to Home screen"');
+        }
+    }
+
+    // Register service worker for PWA support
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js');
+    }
     </script>
 </body>
 </html>
