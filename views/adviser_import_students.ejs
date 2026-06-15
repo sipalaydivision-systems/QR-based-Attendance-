@@ -134,6 +134,27 @@
 .ai-pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: .68rem; font-weight: 800; }
 .ai-pill.success { background: #dcfce7; color: #15803d; }
 .ai-pill.error { background: #fee2e2; color: #dc2626; }
+.ai-pill.pending { background: #eff6ff; color: #1d4ed8; }
+
+.ai-confirm-bar {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+    padding: 14px 18px;
+    background: #eff6ff;
+    border: 1.5px solid #bfdbfe;
+    border-radius: 14px;
+}
+.ai-confirm-bar p { margin: 0; font-size: .85rem; color: #1e40af; font-weight: 700; }
+.ai-confirm-bar p span { font-weight: 400; color: #3b82f6; }
+.ai-confirm-actions { display: flex; gap: 10px; }
+.btn-confirm { background: var(--primary); color: #fff; border: 0; padding: 9px 20px; border-radius: 10px; font-size: .85rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 7px; }
+.btn-confirm:hover { background: #15803d; }
+.btn-cancel-import { background: #fff; color: var(--gray-600); border: 1.5px solid var(--gray-200); padding: 9px 16px; border-radius: 10px; font-size: .85rem; font-weight: 700; cursor: pointer; }
+.btn-cancel-import:hover { background: var(--gray-50); }
 
 .ai-current { margin-top: 18px; }
 .ai-current-list { max-height: 260px; overflow: auto; }
@@ -250,6 +271,15 @@
             </div>
         </div>
 
+        <div>
+        <div class="ai-confirm-bar" id="confirmBar">
+            <p><i class="fa-solid fa-circle-info"></i> Preview ready — <span id="confirmSummaryText">review the rows below</span>. Nothing has been saved yet.</p>
+            <div class="ai-confirm-actions">
+                <button class="btn-cancel-import" type="button" onclick="cancelImport()"><i class="fa-solid fa-xmark"></i> Cancel</button>
+                <button class="btn-confirm" type="button" id="confirmBtn" onclick="confirmImport()"><i class="fa-solid fa-check"></i> Confirm & Save Import</button>
+            </div>
+        </div>
+
         <div class="ai-card">
             <div class="ai-card-header">
                 <h3><i class="fa-solid fa-list-check"></i> Uploaded Student Preview</h3>
@@ -265,8 +295,8 @@
 
                 <div class="ai-summary" id="previewSummary">
                     <div class="ai-summary-card"><strong id="sumTotal">0</strong><span>Total Rows</span></div>
-                    <div class="ai-summary-card"><strong id="sumImported">0</strong><span>Imported</span></div>
-                    <div class="ai-summary-card"><strong id="sumUpdated">0</strong><span>Updated</span></div>
+                    <div class="ai-summary-card"><strong id="sumImported">0</strong><span>New / Imported</span></div>
+                    <div class="ai-summary-card"><strong id="sumUpdated">0</strong><span>Updates</span></div>
                     <div class="ai-summary-card"><strong id="sumSkipped">0</strong><span>Skipped</span></div>
                 </div>
 
@@ -287,6 +317,7 @@
                 </div>
             </div>
         </div>
+        </div><!-- end confirm+preview wrapper -->
     </div>
 <% } %>
 </div>
@@ -296,28 +327,23 @@ var fileInput = document.getElementById('adviserImportFile');
 var uploadBtn = document.getElementById('uploadBtn');
 var fileChip = document.getElementById('fileChip');
 var importAlert = document.getElementById('importAlert');
-var importing = false;
-var importTimer = null;
+var confirmBar = document.getElementById('confirmBar');
+var confirmBtn = document.getElementById('confirmBtn');
+var working = false;
+var hasPendingImport = false;
 
-function esc(value) {
-    return String(value == null ? '' : value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+function esc(v) {
+    return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
-
-function formatBytes(bytes) {
-    bytes = Number(bytes || 0);
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+function formatBytes(b) {
+    b = Number(b||0);
+    if (b < 1024) return b+' B';
+    if (b < 1048576) return (b/1024).toFixed(1)+' KB';
+    return (b/1048576).toFixed(2)+' MB';
 }
-
-function setAlert(type, message) {
-    importAlert.className = 'ai-alert ' + (type || '');
-    importAlert.innerHTML = message || '';
+function setAlert(type, msg) {
+    importAlert.className = 'ai-alert '+(type||'');
+    importAlert.innerHTML = msg||'';
 }
 
 function clearImportFile() {
@@ -325,93 +351,147 @@ function clearImportFile() {
     fileInput.value = '';
     uploadBtn.disabled = true;
     fileChip.style.display = 'none';
+    setAlert('','');
+    hideConfirmBar();
+    clearPreview();
+    hasPendingImport = false;
+}
+
+function hideConfirmBar() {
+    confirmBar.style.display = 'none';
+}
+
+function showConfirmBar(willImport, willUpdate) {
+    var total = willImport + willUpdate;
+    var parts = [];
+    if (willImport) parts.push(willImport + ' new student' + (willImport !== 1 ? 's' : '') + ' to add');
+    if (willUpdate) parts.push(willUpdate + ' existing to update');
+    document.getElementById('confirmSummaryText').textContent = parts.join(', ') || 'no valid rows';
+    confirmBar.style.display = total ? 'flex' : 'none';
+}
+
+function clearPreview() {
+    document.getElementById('previewEmpty').style.display = '';
+    document.getElementById('previewSummary').style.display = 'none';
+    document.getElementById('previewTableWrap').style.display = 'none';
+}
+
+function cancelImport() {
+    clearImportFile();
     setAlert('', '');
 }
 
 if (fileInput) {
     fileInput.addEventListener('change', function() {
         var file = fileInput.files[0];
-        if (!file) {
-            clearImportFile();
-            return;
-        }
+        if (!file) { clearImportFile(); return; }
         document.getElementById('fileName').textContent = file.name;
         document.getElementById('fileSize').textContent = formatBytes(file.size);
         fileChip.style.display = 'flex';
         uploadBtn.disabled = false;
-        setAlert('ok', '<i class="fa-solid fa-circle-check"></i> File ready: ' + esc(file.name) + '. Uploading now...');
-        clearTimeout(importTimer);
-        importTimer = setTimeout(submitAdviserImport, 250);
+        hasPendingImport = false;
+        hideConfirmBar();
+        clearPreview();
+        setAlert('ok','<i class="fa-solid fa-spinner fa-spin"></i> Reading file...');
+        setTimeout(submitPreview, 150);
     });
 }
 
-function submitAdviserImport() {
-    if (importing) return;
+function submitPreview() {
+    if (working) return;
     var file = fileInput && fileInput.files[0];
-    if (!file) {
-        setAlert('err', 'Please choose an Excel or CSV file first.');
-        return;
-    }
+    if (!file) { setAlert('err','Please choose a file first.'); return; }
+
     var fd = new FormData();
     fd.append('file', file);
-
-    importing = true;
+    working = true;
     uploadBtn.disabled = true;
-    uploadBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading...';
-    setAlert('ok', 'Uploading ' + esc(file.name) + '...');
+    uploadBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Reading...';
+    setAlert('ok','Parsing <strong>'+esc(file.name)+'</strong>...');
 
-    fetch('/admin/adviser-import-students', { method: 'POST', body: fd })
-        .then(function(response) {
-            return response.json().then(function(data) {
-                if (!response.ok) throw data;
-                return data;
-            });
-        })
+    fetch('/admin/adviser-import-students', { method:'POST', body: fd })
+        .then(function(r){ return r.json().then(function(d){ if(!r.ok) throw d; return d; }); })
         .then(function(data) {
-            renderPreview(data);
+            var willImport = data.willImport || 0;
+            var willUpdate = data.willUpdate || 0;
             var skipped = (data.errors || []).length;
-            var fileName = data.file && data.file.name ? data.file.name : file.name;
-            setAlert(
-                skipped ? 'err' : 'ok',
-                '<strong>' + esc(fileName) + '</strong> uploaded. Imported ' + (data.imported || 0) +
-                ', updated ' + (data.updated || 0) + ', skipped ' + skipped + '.'
-            );
+            renderPreview(data, true);
+            showConfirmBar(willImport, willUpdate);
+            hasPendingImport = (willImport + willUpdate) > 0;
+            if (hasPendingImport) {
+                setAlert('ok', '<i class="fa-solid fa-eye"></i> Preview ready — <strong>' + (willImport+willUpdate) + '</strong> row(s) ready to save, <strong>' + skipped + '</strong> skipped. Click <strong>Confirm & Save Import</strong> to proceed.');
+            } else if (skipped) {
+                setAlert('err', 'All ' + skipped + ' row(s) were skipped. Fix the errors and re-upload.');
+            } else {
+                setAlert('err', 'No valid rows found in this file.');
+            }
         })
-        .catch(function(err) {
-            setAlert('err', esc((err && err.error) || 'Upload failed. Please check the file and try again.'));
-        })
-        .finally(function() {
-            importing = false;
+        .catch(function(err){ setAlert('err', esc((err&&err.error)||'Failed to read file.')); hideConfirmBar(); })
+        .finally(function(){
+            working = false;
             uploadBtn.disabled = false;
             uploadBtn.innerHTML = '<i class="fa-solid fa-file-arrow-up"></i> Upload & Import';
         });
 }
 
-function renderPreview(data) {
+function confirmImport() {
+    if (working || !hasPendingImport) return;
+    working = true;
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+    setAlert('ok','<i class="fa-solid fa-spinner fa-spin"></i> Saving students...');
+
+    fetch('/admin/adviser-confirm-import', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}) })
+        .then(function(r){ return r.json().then(function(d){ if(!r.ok) throw d; return d; }); })
+        .then(function(data) {
+            renderPreview(data, false);
+            hideConfirmBar();
+            hasPendingImport = false;
+            var skipped = (data.errors || []).length;
+            setAlert(
+                skipped && !data.imported && !data.updated ? 'err' : 'ok',
+                '<i class="fa-solid fa-circle-check"></i> Done! Imported <strong>'+(data.imported||0)+'</strong>, updated <strong>'+(data.updated||0)+'</strong>, skipped <strong>'+skipped+'</strong>.'
+            );
+            if (data.imported || data.updated) {
+                document.getElementById('sumImported').textContent = data.imported || 0;
+                document.getElementById('sumUpdated').textContent = data.updated || 0;
+            }
+        })
+        .catch(function(err){ setAlert('err', esc((err&&err.error)||'Save failed. Please try again.')); })
+        .finally(function(){
+            working = false;
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<i class="fa-solid fa-check"></i> Confirm & Save Import';
+        });
+}
+
+function renderPreview(data, isPending) {
     var rows = data.students || [];
     document.getElementById('previewEmpty').style.display = 'none';
     document.getElementById('previewSummary').style.display = 'grid';
     document.getElementById('previewTableWrap').style.display = 'block';
     document.getElementById('sumTotal').textContent = data.total || rows.length || 0;
-    document.getElementById('sumImported').textContent = data.imported || 0;
-    document.getElementById('sumUpdated').textContent = data.updated || 0;
+    document.getElementById('sumImported').textContent = isPending ? (data.willImport || 0) : (data.imported || 0);
+    document.getElementById('sumUpdated').textContent = isPending ? (data.willUpdate || 0) : (data.updated || 0);
     document.getElementById('sumSkipped').textContent = (data.errors || []).length;
 
     var body = document.getElementById('previewBody');
     body.innerHTML = rows.map(function(row) {
-        var ok = row.status !== 'error';
+        var isPend = row.status === 'pending';
+        var isErr = row.status === 'error';
+        var pillClass = isPend ? 'pending' : (isErr ? 'error' : 'success');
+        var icon = isPend ? 'fa-clock' : (isErr ? 'fa-triangle-exclamation' : 'fa-circle-check');
         var fullName = [row.lastname, row.firstname].filter(Boolean).join(', ');
         if (row.middlename) fullName += ' ' + String(row.middlename).charAt(0).toUpperCase() + '.';
         return '<tr>' +
-            '<td>' + esc(row.row || '-') + '</td>' +
-            '<td><div class="ai-student-name">' + esc(fullName || '-') + '</div>' +
-                (row.message ? '<div class="ai-muted">' + esc(row.message) + '</div>' : '') + '</td>' +
-            '<td>' + esc(row.lrn || '-') + '</td>' +
-            '<td>' + esc(row.gender || '-') + '</td>' +
-            '<td>' + esc(row.guardian_contact || '-') + '</td>' +
-            '<td><span class="ai-pill ' + (ok ? 'success' : 'error') + '"><i class="fa-solid ' + (ok ? 'fa-circle-check' : 'fa-triangle-exclamation') + '"></i> ' + esc(row.action || (ok ? 'Imported' : 'Skipped')) + '</span></td>' +
+            '<td>'+esc(row.row||'-')+'</td>' +
+            '<td><div class="ai-student-name">'+esc(fullName||'-')+'</div>'+(row.message?'<div class="ai-muted">'+esc(row.message)+'</div>':'')+'</td>' +
+            '<td>'+esc(row.lrn||'-')+'</td>' +
+            '<td>'+esc(row.gender||'-')+'</td>' +
+            '<td>'+esc(row.guardian_contact||'-')+'</td>' +
+            '<td><span class="ai-pill '+pillClass+'"><i class="fa-solid '+icon+'"></i> '+esc(row.action||(isErr?'Skipped':'OK'))+'</span></td>' +
         '</tr>';
-    }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:28px;">No preview rows returned.</td></tr>';
+    }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:28px;">No preview rows.</td></tr>';
 }
 </script>
 
