@@ -414,13 +414,14 @@
       var res = await fetch('/api/absence-flags?' + params, { credentials: 'same-origin', cache: 'no-store' });
       if (!res.ok) return;
       var flags = await res.json();
-      if (!Array.isArray(flags) || !flags.length) return;
+      if (!Array.isArray(flags)) return;
 
       var today = getTodayKey();
       var notifiedMap = loadNotifiedMap();
       if (!notifiedMap[today]) notifiedMap[today] = {};
 
       var newlyFlagged = [];
+      var currentKeys = {};
       for (var i = 0; i < flags.length; i++) {
         var st = flags[i];
         var fingerprint = [
@@ -438,11 +439,20 @@
           st.absent_days || 2
         ].map(function(v) { return String(v || '').trim(); }).join('|');
         var key = String(st.person_type || 'student') + '|' + String(st.id || '') + '|' + fingerprint;
+        currentKeys[key] = 1;
         if (!notifiedMap[today][key]) {
           st.__notifyKey = key;
           newlyFlagged.push(st);
         }
       }
+
+      var removedAny = false;
+      Object.keys(notifiedMap[today]).forEach(function(key) {
+        if (!currentKeys[key]) {
+          delete notifiedMap[today][key];
+          removedAny = true;
+        }
+      });
 
       if (newlyFlagged.length > 0) {
         var deliveredAny = false;
@@ -477,7 +487,9 @@
             deliveredAny = true;
           }
         }
-        if (deliveredAny) saveNotifiedMap(notifiedMap);
+        if (deliveredAny || removedAny) saveNotifiedMap(notifiedMap);
+      } else if (removedAny) {
+        saveNotifiedMap(notifiedMap);
       }
     } catch (_) {}
   }

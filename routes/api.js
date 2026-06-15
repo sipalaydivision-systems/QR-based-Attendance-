@@ -970,7 +970,7 @@ async function getConsecutiveAbsenceFlags({ baseDate, schoolId, days = 2, includ
 
     const allDatesSql = schoolDates.map(() => '?').join(',');
     const attendanceParams = [...schoolDates];
-    let attendanceQuery = `SELECT person_type, person_id, date, time_in
+    let attendanceQuery = `SELECT person_type, person_id, date, time_in, status
         FROM attendance
         WHERE date IN (${allDatesSql}) AND person_type IN ('student', 'teacher')`;
     if (schoolId) {
@@ -978,7 +978,8 @@ async function getConsecutiveAbsenceFlags({ baseDate, schoolId, days = 2, includ
         attendanceParams.push(schoolId);
     }
     const [attendanceRows] = await db.query(attendanceQuery, attendanceParams);
-    const presentSet = new Set(attendanceRows.filter(r => r.time_in).map(r => {
+    const attendedStatuses = new Set(['present', 'late', 'half_day']);
+    const presentSet = new Set(attendanceRows.filter(r => r.time_in || attendedStatuses.has(String(r.status || '').toLowerCase())).map(r => {
         const d = r.date instanceof Date ? r.date.toISOString().slice(0, 10) : String(r.date).slice(0, 10);
         return `${r.person_type}-${r.person_id}-${d}`;
     }));
@@ -1577,6 +1578,15 @@ router.get('/mobile-branding', requireAuth, async (req, res) => {
 // =============================================
 const weeklyAbsenceCache = { data: null, timestamp: 0, key: '' };
 
+function invalidateLiveDashboardCaches() {
+    dashboardCache.data = null;
+    dashboardCache.timestamp = 0;
+    dashboardCache.key = '';
+    weeklyAbsenceCache.data = null;
+    weeklyAbsenceCache.timestamp = 0;
+    weeklyAbsenceCache.key = '';
+}
+
 router.get('/weekly-absence', requireAuth, async (req, res) => {
     try {
         const baseDate = req.query.date || todayDate();
@@ -1785,8 +1795,31 @@ router.get('/realtime-poll', requireAuth, async (req, res) => {
             `SELECT COUNT(*) as cnt, MAX(created_at) as latest FROM notifications WHERE 1=1` + schoolWhere,
             schoolParams
         );
+        const [settingsRows] = await db.query(
+            `SELECT COUNT(*) as cnt,
+                    COALESCE(SUM(CRC32(CONCAT_WS('|', setting_key, COALESCE(setting_value, '')))), 0) as checksum
+             FROM settings
+             WHERE setting_key IN (
+                'system_name',
+                'division_name',
+                'system_logo',
+                'mobile_dashboard_school_art',
+                'am_time_in_end',
+                'am_late_time',
+                'lunch_break_start',
+                'pm_time_in_start',
+                'pm_late_time',
+                'pm_time_out_end',
+                'absence_cutoff_time',
+                'late_threshold',
+                'teacher_duty_start_time',
+                'teacher_duty_end_time',
+                'teacher_late_threshold',
+                'auto_activate_on_scan'
+             )`
+        );
 
-        const raw = `${absenceCountingActive ? 'closed' : 'open'}-${countRows[0].cnt}-${latestRows[0].latest || ''}-${studentRows[0].cnt}-${studentRows[0].active}-${studentRows[0].inactive}-${studentRows[0].checksum}-${teacherRows[0].cnt}-${teacherRows[0].checksum}-${schoolRows[0].cnt}-${schoolRows[0].checksum}-${gradeRows[0].cnt}-${gradeRows[0].checksum}-${sectionRows[0].cnt}-${sectionRows[0].checksum}-${notificationRows[0].cnt}-${notificationRows[0].latest || ''}`;
+        const raw = `${absenceCountingActive ? 'closed' : 'open'}-${countRows[0].cnt}-${latestRows[0].latest || ''}-${studentRows[0].cnt}-${studentRows[0].active}-${studentRows[0].inactive}-${studentRows[0].checksum}-${teacherRows[0].cnt}-${teacherRows[0].checksum}-${schoolRows[0].cnt}-${schoolRows[0].checksum}-${gradeRows[0].cnt}-${gradeRows[0].checksum}-${sectionRows[0].cnt}-${sectionRows[0].checksum}-${notificationRows[0].cnt}-${notificationRows[0].latest || ''}-${settingsRows[0].cnt}-${settingsRows[0].checksum}`;
         const hash = crypto.createHash('md5').update(raw).digest('hex').substring(0, 12);
         const changed = hash !== clientHash;
 
@@ -2371,6 +2404,7 @@ router.post('/settings', requireRole('super_admin'), async (req, res) => {
                 [key, value, value]
             );
         }
+        invalidateLiveDashboardCaches();
         return res.json({ success: true });
     } catch (err) {
         return res.status(500).json({ error: 'Failed to save settings.' });
@@ -2386,6 +2420,7 @@ router.put('/settings', requireRole('super_admin'), async (req, res) => {
                 [key, value, value]
             );
         }
+        invalidateLiveDashboardCaches();
         return res.json({ success: true });
     } catch (err) {
         return res.status(500).json({ error: 'Failed to save settings.' });
@@ -2414,6 +2449,7 @@ router.post('/settings/logo', requireRole('super_admin'), (req, res) => {
                 "INSERT INTO settings (setting_key, setting_value) VALUES ('system_logo', ?) ON DUPLICATE KEY UPDATE setting_value = ?",
                 [logoPath, logoPath]
             );
+            invalidateLiveDashboardCaches();
             return res.json({ success: true, logo: logoPath });
         } catch (e) {
             return res.status(500).json({ error: 'Failed to save logo.' });
@@ -2430,6 +2466,7 @@ router.delete('/settings/logo', requireRole('super_admin'), async (req, res) => 
             if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         }
         await db.query("DELETE FROM settings WHERE setting_key='system_logo'");
+        invalidateLiveDashboardCaches();
         return res.json({ success: true });
     } catch (e) {
         return res.status(500).json({ error: 'Failed to remove logo.' });
@@ -2447,6 +2484,7 @@ router.post('/settings/mobile-dashboard-art', requireRole('super_admin'), (req, 
                 "INSERT INTO settings (setting_key, setting_value) VALUES ('mobile_dashboard_school_art', ?) ON DUPLICATE KEY UPDATE setting_value = ?",
                 [art, art]
             );
+            invalidateLiveDashboardCaches();
             return res.json({ success: true, art });
         } catch (e) {
             return res.status(500).json({ error: 'Failed to save mobile dashboard school art.' });
@@ -2457,6 +2495,7 @@ router.post('/settings/mobile-dashboard-art', requireRole('super_admin'), (req, 
 router.delete('/settings/mobile-dashboard-art', requireRole('super_admin'), async (req, res) => {
     try {
         await db.query("DELETE FROM settings WHERE setting_key='mobile_dashboard_school_art'");
+        invalidateLiveDashboardCaches();
         return res.json({ success: true });
     } catch (e) {
         return res.status(500).json({ error: 'Failed to remove mobile dashboard school art.' });
@@ -2484,6 +2523,7 @@ router.post('/settings/platform-logo/:platform', requireRole('super_admin'), (re
                 'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
                 [settingKey, logoPath, logoPath]
             );
+            invalidateLiveDashboardCaches();
             return res.json({ success: true, logo: logoPath });
         } catch (e) {
             return res.status(500).json({ error: 'Failed to save platform logo.' });
@@ -2496,6 +2536,7 @@ router.delete('/settings/platform-logo/:platform', requireRole('super_admin'), a
     if (!settingKey) return res.status(400).json({ error: 'Unsupported platform logo.' });
     try {
         await db.query('DELETE FROM settings WHERE setting_key = ?', [settingKey]);
+        invalidateLiveDashboardCaches();
         return res.json({ success: true });
     } catch (e) {
         return res.status(500).json({ error: 'Failed to remove platform logo.' });

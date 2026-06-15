@@ -1222,6 +1222,7 @@ class _HomeShellState extends State<HomeShell>
   Timer? timer;
   late final AnimationController backgroundController;
   Map<String, dynamic>? alertIntent;
+  bool headerCompact = false;
 
   @override
   void initState() {
@@ -1251,7 +1252,9 @@ class _HomeShellState extends State<HomeShell>
     if (!silent) setState(() => loading = true);
     try {
       final results = await Future.wait([
-        widget.api.map('/api/dashboard-data?date=${date()}'),
+        widget.api.map(
+          '/api/dashboard-data?date=${date()}&_=${DateTime.now().millisecondsSinceEpoch}',
+        ),
         widget.api.list('/api/absence-flags?days=2&include_teachers=0'),
       ]);
       dashboard = results[0] as Map<String, dynamic>;
@@ -1357,6 +1360,7 @@ class _HomeShellState extends State<HomeShell>
           children: [
             Header(
               api: widget.api,
+              compact: headerCompact,
               onLogout: () async {
                 final navigator = Navigator.of(context);
                 await widget.api.logout();
@@ -1370,9 +1374,21 @@ class _HomeShellState extends State<HomeShell>
               },
             ),
             Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                child: pages[selectedTab],
+              child: NotificationListener<ScrollNotification>(
+                onNotification: (notification) {
+                  if (notification.metrics.axis != Axis.vertical) {
+                    return false;
+                  }
+                  final compact = notification.metrics.pixels > 24;
+                  if (compact != headerCompact) {
+                    setState(() => headerCompact = compact);
+                  }
+                  return false;
+                },
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  child: pages[selectedTab],
+                ),
               ),
             ),
           ],
@@ -1454,7 +1470,9 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
     }
     try {
       final results = await Future.wait([
-        widget.api.map('/api/dashboard-data?date=${date()}'),
+        widget.api.map(
+          '/api/dashboard-data?date=${date()}&_=${DateTime.now().millisecondsSinceEpoch}',
+        ),
         widget.api.list('/api/users'),
         widget.api.list('/api/holidays'),
       ]);
@@ -3057,13 +3075,24 @@ class ActivityRow extends StatelessWidget {
 }
 
 class Header extends StatelessWidget {
-  const Header({super.key, required this.api, required this.onLogout});
+  const Header({
+    super.key,
+    required this.api,
+    required this.onLogout,
+    this.compact = false,
+  });
   final ApiService api;
   final VoidCallback onLogout;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final logoSize = compact ? 42.0 : 52.0;
+    final titleSize = compact ? 17.0 : 20.0;
+    final subtitleSize = compact ? 10.5 : 11.5;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
       width: double.infinity,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -3091,29 +3120,31 @@ class Header extends StatelessWidget {
             ),
             Positioned(
               right: 14,
-              bottom: -18,
+              bottom: compact ? -34 : -18,
               child: Icon(
                 Icons.school_rounded,
-                size: 104,
+                size: compact ? 78 : 104,
                 color: Colors.white.withValues(alpha: .06),
               ),
             ),
             Padding(
               padding: EdgeInsets.fromLTRB(
                 16,
-                MediaQuery.paddingOf(context).top + 10,
+                MediaQuery.paddingOf(context).top + (compact ? 6 : 10),
                 16,
-                16,
+                compact ? 9 : 16,
               ),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Row(
                     children: [
-                      _seal(),
+                      _seal(logoSize),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             ValueListenableBuilder<String>(
                               valueListenable: brandName,
@@ -3121,11 +3152,11 @@ class Header extends StatelessWidget {
                                 value,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: 20,
+                                  fontSize: titleSize,
                                   fontWeight: FontWeight.w900,
-                                  letterSpacing: -.3,
+                                  letterSpacing: -.2,
                                 ),
                               ),
                             ),
@@ -3138,7 +3169,7 @@ class Header extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   color: Colors.white.withValues(alpha: .85),
-                                  fontSize: 11.5,
+                                  fontSize: subtitleSize,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -3153,31 +3184,46 @@ class Header extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      _chip(
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: const [
-                            LiveDot(color: Color(0xFFFF3B30), size: 9),
-                            SizedBox(width: 6),
-                            Text(
-                              'LIVE',
-                              style: TextStyle(
-                                color: Color(0xFFE5403A),
-                                fontWeight: FontWeight.w900,
-                                fontSize: 11.5,
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    child: compact
+                        ? const SizedBox.shrink()
+                        : Column(
+                            children: [
+                              const SizedBox(height: 14),
+                              Row(
+                                children: [
+                                  _chip(
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: const [
+                                        LiveDot(
+                                          color: Color(0xFFFF3B30),
+                                          size: 9,
+                                        ),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'LIVE',
+                                          style: TextStyle(
+                                            color: Color(0xFFE5403A),
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 11.5,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _chip(Text(shortDate()), dense: true),
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: _chip(Text(date()), dense: true),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      _chip(Text(shortDate()), dense: true),
-                      const SizedBox(width: 8),
-                      Flexible(child: _chip(Text(date()), dense: true)),
-                    ],
+                            ],
+                          ),
                   ),
                 ],
               ),
@@ -3188,10 +3234,12 @@ class Header extends StatelessWidget {
     );
   }
 
-  Widget _seal() => Container(
-    width: 52,
-    height: 52,
-    padding: const EdgeInsets.all(6),
+  Widget _seal(double size) => AnimatedContainer(
+    duration: const Duration(milliseconds: 220),
+    curve: Curves.easeOutCubic,
+    width: size,
+    height: size,
+    padding: EdgeInsets.all(size * .115),
     decoration: BoxDecoration(
       color: Colors.white,
       shape: BoxShape.circle,
@@ -3321,6 +3369,7 @@ class DashboardPage extends StatelessWidget {
     );
     final present = intValue(dashboard['students_present']);
     final absent = intValue(dashboard['students_absent']);
+    final halfDay = intValue(dashboard['students_half_day']);
     final teachers = intValue(
       dashboard['active_teachers'] ?? dashboard['total_teachers'],
     );
@@ -3543,7 +3592,9 @@ class DashboardPage extends StatelessWidget {
                           ),
                           const SizedBox(height: 10),
                           Text(
-                            '$present of $analyticsBase students present',
+                            halfDay > 0
+                                ? '$present of $analyticsBase students attended - $halfDay half-day'
+                                : '$present of $analyticsBase students present',
                             style: const TextStyle(
                               fontWeight: FontWeight.w900,
                               color: Color(0xFF1F2A26),
@@ -3552,7 +3603,7 @@ class DashboardPage extends StatelessWidget {
                           ),
                           const SizedBox(height: 12),
                           RateBar(
-                            'Live Attendance Rate',
+                            'Live Attendance Rate (Half-Day counted)',
                             rate,
                             color: scoreColor,
                           ),
@@ -3594,7 +3645,9 @@ class DashboardPage extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: AnalyticsMetric(
-                        label: 'Present Students',
+                        label: halfDay > 0
+                            ? 'Attended Students'
+                            : 'Present Students',
                         value: '$present',
                         color: const Color(0xFF138A64),
                       ),
@@ -3616,9 +3669,13 @@ class DashboardPage extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: AnalyticsMetric(
-                        label: 'Attendance Percentage',
-                        value: '$rate%',
-                        color: scoreColor,
+                        label: halfDay > 0
+                            ? 'Half-Day'
+                            : 'Attendance Percentage',
+                        value: halfDay > 0 ? '$halfDay' : '$rate%',
+                        color: halfDay > 0
+                            ? const Color(0xFFEA580C)
+                            : scoreColor,
                       ),
                     ),
                   ],
@@ -7859,11 +7916,22 @@ Future<void> contactAdviserAlertViaEmail(
 }
 
 Future<void> notifyAbsenceFlags(List flags, SharedPreferences prefs) async {
-  if (flags.isEmpty) return;
   final today = date();
   final storeKey = 'absence_notified_flags_$today';
   final notified = (prefs.getStringList(storeKey) ?? <String>[]).toSet();
+  final currentKeys = <String>{};
   var changed = false;
+
+  for (final item in flags) {
+    final row = Map<String, dynamic>.from(item as Map);
+    currentKeys.add(absenceFlagNotificationKey(row, today));
+  }
+
+  for (final staleKey in notified.difference(currentKeys).toList()) {
+    await notifications.cancel(stableNotificationId(staleKey));
+    notified.remove(staleKey);
+    changed = true;
+  }
 
   for (final item in flags) {
     final row = Map<String, dynamic>.from(item as Map);
