@@ -156,8 +156,7 @@
 .btn-cancel-import { background: #fff; color: var(--gray-600); border: 1.5px solid var(--gray-200); padding: 9px 16px; border-radius: 10px; font-size: .85rem; font-weight: 700; cursor: pointer; }
 .btn-cancel-import:hover { background: var(--gray-50); }
 
-.ai-current { margin-top: 18px; }
-.ai-current-list { max-height: 260px; overflow: auto; }
+.ai-current-list { max-height: 420px; overflow: auto; }
 .ai-current-row {
     display: grid;
     grid-template-columns: 1fr auto;
@@ -167,6 +166,7 @@
     font-size: .8rem;
 }
 .ai-current-row:last-child { border-bottom: 0; }
+.ai-preview-row { display: grid; grid-template-columns: 1fr 260px; gap: 14px; align-items: start; }
 
 .ai-no-section {
     background: #fef3c7;
@@ -180,6 +180,7 @@
 
 @media (max-width: 980px) {
     .ai-grid { grid-template-columns: 1fr; }
+    .ai-preview-row { grid-template-columns: 1fr; }
     .ai-summary { grid-template-columns: repeat(2, minmax(100px, 1fr)); }
 }
 </style>
@@ -238,10 +239,7 @@
                     </div>
 
                     <div class="ai-actions">
-                        <button class="btn btn-secondary" type="button" onclick="clearImportFile()">Clear</button>
-                        <button class="btn btn-primary" type="button" id="uploadBtn" onclick="submitAdviserImport()" disabled>
-                            <i class="fa-solid fa-file-arrow-up"></i> Upload & Import
-                        </button>
+                        <button class="btn btn-secondary" type="button" onclick="clearImportFile()">Clear File</button>
                     </div>
 
                     <div class="ai-note">
@@ -251,24 +249,6 @@
                 </div>
             </div>
 
-            <div class="ai-card ai-current">
-                <div class="ai-card-header">
-                    <h3><i class="fa-solid fa-users"></i> Current Students</h3>
-                </div>
-                <div class="ai-card-body ai-current-list">
-                    <% if (!students.length) { %>
-                        <div style="color:var(--gray-400);font-size:.83rem;text-align:center;padding:20px;">No students in this section yet.</div>
-                    <% } else { students.slice(0, 80).forEach(function(s) { %>
-                        <div class="ai-current-row">
-                            <div>
-                                <div class="ai-student-name"><%= s.lastname %>, <%= s.firstname %><%= s.middlename ? ' ' + s.middlename.charAt(0).toUpperCase() + '.' : '' %></div>
-                                <div class="ai-muted">LRN: <%= s.lrn || '-' %></div>
-                            </div>
-                            <span class="ai-pill success"><i class="fa-solid fa-circle-check"></i> <%= s.status || 'active' %></span>
-                        </div>
-                    <% }); } %>
-                </div>
-            </div>
         </div>
 
         <div>
@@ -276,10 +256,11 @@
             <p><i class="fa-solid fa-circle-info"></i> Preview ready — <span id="confirmSummaryText">review the rows below</span>. Nothing has been saved yet.</p>
             <div class="ai-confirm-actions">
                 <button class="btn-cancel-import" type="button" onclick="cancelImport()"><i class="fa-solid fa-xmark"></i> Cancel</button>
-                <button class="btn-confirm" type="button" id="confirmBtn" onclick="confirmImport()"><i class="fa-solid fa-check"></i> Confirm & Save Import</button>
+                <button class="btn-confirm" type="button" id="confirmBtn" onclick="confirmImport()"><i class="fa-solid fa-check"></i> Confirm &amp; Save Import</button>
             </div>
         </div>
 
+        <div class="ai-preview-row">
         <div class="ai-card">
             <div class="ai-card-header">
                 <h3><i class="fa-solid fa-list-check"></i> Uploaded Student Preview</h3>
@@ -288,15 +269,15 @@
                 <div class="ai-preview-empty" id="previewEmpty">
                     <div>
                         <i class="fa-solid fa-file-import"></i>
-                        <strong>No uploaded file yet</strong>
-                        <div style="margin-top:5px;font-size:.82rem;">After upload, imported and skipped rows will appear here.</div>
+                        <strong>No file uploaded yet</strong>
+                        <div style="margin-top:5px;font-size:.82rem;">Select a file on the left — a preview of each row will appear here automatically.</div>
                     </div>
                 </div>
 
                 <div class="ai-summary" id="previewSummary">
                     <div class="ai-summary-card"><strong id="sumTotal">0</strong><span>Total Rows</span></div>
-                    <div class="ai-summary-card"><strong id="sumImported">0</strong><span>New / Imported</span></div>
-                    <div class="ai-summary-card"><strong id="sumUpdated">0</strong><span>Updates</span></div>
+                    <div class="ai-summary-card"><strong id="sumImported">0</strong><span>Ready to Add</span></div>
+                    <div class="ai-summary-card"><strong id="sumUpdated">0</strong><span>Will Update</span></div>
                     <div class="ai-summary-card"><strong id="sumSkipped">0</strong><span>Skipped</span></div>
                 </div>
 
@@ -317,6 +298,26 @@
                 </div>
             </div>
         </div>
+
+        <div class="ai-card">
+            <div class="ai-card-header">
+                <h3><i class="fa-solid fa-users"></i> Current Students</h3>
+            </div>
+            <div class="ai-card-body ai-current-list">
+                <% if (!students.length) { %>
+                    <div style="color:var(--gray-400);font-size:.83rem;text-align:center;padding:20px;">No students in this section yet.</div>
+                <% } else { students.slice(0, 80).forEach(function(s) { %>
+                    <div class="ai-current-row">
+                        <div>
+                            <div class="ai-student-name"><%= s.lastname %>, <%= s.firstname %><%= s.middlename ? ' ' + s.middlename.charAt(0).toUpperCase() + '.' : '' %></div>
+                            <div class="ai-muted">LRN: <%= s.lrn || '-' %></div>
+                        </div>
+                        <span class="ai-pill success"><i class="fa-solid fa-circle-check"></i> <%= s.status || 'active' %></span>
+                    </div>
+                <% }); } %>
+            </div>
+        </div>
+        </div><!-- end ai-preview-row -->
         </div><!-- end confirm+preview wrapper -->
     </div>
 <% } %>

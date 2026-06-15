@@ -987,7 +987,7 @@ router.post('/adviser-import-students', upload.single('file'), async (req, res) 
                 const guardianContact = getRowValue(row, ['Guardian Contact', 'Guardian Phone', 'Contact Number', 'guardian_contact']) || null;
 
                 if (!fn || !ln) {
-                    const message = 'Missing student name';
+                    const message = 'Student name is missing — check the Name column';
                     errors.push({ row: rowNum, message });
                     previewStudents.push({ row: rowNum, action: 'Skipped', status: 'error', message, lrn: lrnVal || '', firstname: fn || '', lastname: ln || '', middlename: mn || '', gender: sex || sexRaw || '', guardian_contact: guardianContact || '' });
                     continue;
@@ -1006,8 +1006,8 @@ router.post('/adviser-import-students', upload.single('file'), async (req, res) 
                         [lrnVal, 'deleted']
                     );
                     if (existing.length && Number(existing[0].section_id) !== Number(t.section_id)) {
-                        errors.push({ row: rowNum, message: 'LRN already belongs to another section' });
-                        previewStudents.push({ row: rowNum, action: 'Skipped', status: 'error', message: 'LRN already belongs to another section', lrn: lrnVal || '', firstname: fn || '', lastname: ln || '', middlename: mn || '', gender: sex || '', guardian_contact: guardianContact || '' });
+                        errors.push({ row: rowNum, message: 'This student is already enrolled in a different section' });
+                        previewStudents.push({ row: rowNum, action: 'Skipped', status: 'error', message: 'This student is already enrolled in a different section', lrn: lrnVal || '', firstname: fn || '', lastname: ln || '', middlename: mn || '', gender: sex || '', guardian_contact: guardianContact || '' });
                         continue;
                     }
                     if (existing.length) existingId = existing[0].id;
@@ -1553,7 +1553,7 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
                 const { firstname, lastname, middlename } = parseName(rawName);
                 const fn = firstname || row.firstname || '';
                 const ln = lastname || row.lastname || '';
-                if (!fn && !ln) { entry.status = 'error'; entry.error = 'Missing student name'; }
+                if (!fn && !ln) { entry.status = 'error'; entry.error = 'Student name is missing — check the Name column'; }
 
                 const sexRaw = getRowValue(row, ['Sex', 'Gender', 'sex', 'gender']);
                 const sex = parseSexValue(sexRaw);

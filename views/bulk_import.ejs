@@ -326,14 +326,24 @@ function showPreview(data) {
     document.getElementById('previewBody').innerHTML = bodyHtml;
 
     // Valid count
-    document.getElementById('validCount').textContent = data.validCount;
-    document.getElementById('confirmBtn').disabled = data.validCount === 0;
+    var validCount = data.validCount || 0;
+    var confirmBtn = document.getElementById('confirmBtn');
+    var importResult = document.getElementById('importResult');
+    if (validCount === 0) {
+        confirmBtn.style.display = 'none';
+        importResult.innerHTML = '<div class="alert alert-warning"><i class="fa-solid fa-triangle-exclamation"></i> All rows were skipped — fix the errors listed above and upload the file again.</div>';
+    } else {
+        confirmBtn.style.display = '';
+        confirmBtn.disabled = false;
+        document.getElementById('validCount').textContent = validCount;
+    }
 }
 
 function cancelPreview() {
     document.getElementById('previewStep').style.display = 'none';
     document.getElementById('uploadStep').style.display = 'block';
     document.getElementById('importResult').innerHTML = '';
+    document.getElementById('confirmBtn').style.display = '';
     previewData = null;
     savedFormData = null;
 }
