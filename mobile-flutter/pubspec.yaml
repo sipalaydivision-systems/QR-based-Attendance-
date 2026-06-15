@@ -12,6 +12,7 @@ dependencies:
   http: ^1.6.0
   shared_preferences: ^2.5.4
   flutter_local_notifications: ^19.5.0
+  timezone: ^0.9.4
   url_launcher: ^6.3.2
   cupertino_icons: ^1.0.8
 

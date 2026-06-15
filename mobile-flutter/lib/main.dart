@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timezone/data/latest_all.dart' as tz_data;
+import 'package:timezone/timezone.dart' as tz;
 import 'package:url_launcher/url_launcher.dart';
 
 class AppConfig {
@@ -160,9 +162,17 @@ const alertsChannel = AndroidNotificationChannel(
   description: 'Attendance monitoring alerts',
   importance: Importance.high,
 );
+const dailySummaryChannel = AndroidNotificationChannel(
+  'edutrack_daily_summary',
+  'Daily Attendance Summary',
+  description: 'Daily 7:00 PM attendance report for SDS/ASDS',
+  importance: Importance.high,
+);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  tz_data.initializeTimeZones();
+  tz.setLocalLocation(tz.getLocation('Asia/Manila'));
   loadCachedBranding(await SharedPreferences.getInstance());
   await notifications.initialize(
     const InitializationSettings(
@@ -175,11 +185,10 @@ Future<void> main() async {
       );
     },
   );
-  await notifications
-      .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin
-      >()
-      ?.createNotificationChannel(alertsChannel);
+  final androidPlugin = notifications
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+  await androidPlugin?.createNotificationChannel(alertsChannel);
+  await androidPlugin?.createNotificationChannel(dailySummaryChannel);
   final launchDetails = await notifications.getNotificationAppLaunchDetails();
   if (launchDetails?.didNotificationLaunchApp == true) {
     startupNotificationPayload = launchDetails?.notificationResponse?.payload;
@@ -1234,6 +1243,7 @@ class _HomeShellState extends State<HomeShell>
       duration: const Duration(seconds: 9),
     )..repeat();
     load();
+    scheduleDailyFallbackNotification();
     // Poll often so edited student and absence details show quickly.
     timer = Timer.periodic(
       const Duration(seconds: 5),
@@ -1261,6 +1271,7 @@ class _HomeShellState extends State<HomeShell>
       flags = results[1] as List<dynamic>;
       await syncBranding(dashboard, widget.api);
       await notifyAbsenceFlags(flags, widget.api.prefs);
+      await checkAndShowEveningReport(dashboard, widget.api.prefs);
       if (mounted) {
         setState(() {
           loading = false;
@@ -8158,6 +8169,128 @@ String absenceBody(Map<String, dynamic> row, {int count = 1}) {
   final school = '${row['school_name'] ?? '-'}';
   final days = absenceDays(row);
   return '$student\n$gradeSection | $school\n$days Absent';
+}
+
+// ── Daily 7 PM Summary Notification ─────────────────────────────────────────
+
+const _kDailySummaryId = 9001;
+const _kDailySummaryFallbackId = 9002;
+const _kPhManila = 'Asia/Manila';
+
+tz.TZDateTime _nextSevenPM() {
+  final loc = tz.getLocation(_kPhManila);
+  final now = tz.TZDateTime.now(loc);
+  var target = tz.TZDateTime(loc, now.year, now.month, now.day, 19, 0, 0);
+  if (!target.isAfter(now)) target = target.add(const Duration(days: 1));
+  return target;
+}
+
+String _weekdayShortName(int weekday) =>
+    const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][weekday - 1];
+
+Future<void> scheduleDailyFallbackNotification() async {
+  final granted = await ensureNotificationPermission();
+  if (!granted) return;
+  try {
+    // Fires every day at 7 PM as a fallback when the app is closed.
+    // When the app IS open at 7 PM, checkAndShowEveningReport() cancels this
+    // and replaces it with a rich notification that includes live counts.
+    await notifications.zonedSchedule(
+      _kDailySummaryFallbackId,
+      '📊 EduTrack Daily Report',
+      'Today\'s attendance summary is ready. Open the app to view details.',
+      _nextSevenPM(),
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          dailySummaryChannel.id,
+          dailySummaryChannel.name,
+          channelDescription: dailySummaryChannel.description,
+          importance: Importance.high,
+          priority: Priority.high,
+          visibility: NotificationVisibility.public,
+          styleInformation: const BigTextStyleInformation(
+            'Today\'s attendance summary is ready. Open the app to view details.',
+          ),
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      matchDateTimeComponents: DateTimeComponents.time,
+    );
+  } catch (_) {}
+}
+
+Future<void> checkAndShowEveningReport(
+  Map<String, dynamic> dashboardData,
+  SharedPreferences prefs,
+) async {
+  final now = DateTime.now();
+  if (now.hour != 19 || now.minute != 0) return;
+
+  final todayKey =
+      'evening_report_${now.year}_${('${now.month}'.padLeft(2, '0'))}_${('${now.day}'.padLeft(2, '0'))}';
+  if (prefs.getBool(todayKey) == true) return;
+  await prefs.setBool(todayKey, true);
+
+  // Cancel the static fallback — we'll show a richer notification instead.
+  await notifications.cancel(_kDailySummaryFallbackId);
+
+  final isWeekend =
+      now.weekday == DateTime.saturday || now.weekday == DateTime.sunday;
+
+  if (isWeekend) {
+    final dayName =
+        now.weekday == DateTime.saturday ? 'Saturday' : 'Sunday';
+    await notifications.show(
+      _kDailySummaryId,
+      '📅 EduTrack · Weekend — No Report',
+      'No school today ($dayName). Attendance reports resume on Monday.',
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          dailySummaryChannel.id,
+          dailySummaryChannel.name,
+          importance: Importance.high,
+          priority: Priority.high,
+          visibility: NotificationVisibility.public,
+          styleInformation: BigTextStyleInformation(
+            'No school today ($dayName). Attendance reports resume on Monday.',
+          ),
+        ),
+      ),
+    );
+  } else {
+    final day = _weekdayShortName(now.weekday);
+    final month = ('${now.month}'.padLeft(2, '0'));
+    final dayNum = ('${now.day}'.padLeft(2, '0'));
+
+    final studPresent  = intValue(dashboardData['students_present']);
+    final studAbsent   = intValue(dashboardData['students_absent']);
+    final studLate     = intValue(dashboardData['students_late']);
+    final studHalfDay  = intValue(dashboardData['students_half_day']);
+    final tchPresent   = intValue(dashboardData['teachers_present']);
+    final tchAbsent    = intValue(dashboardData['teachers_absent']);
+    final rate         = intValue(dashboardData['attendance_rate']);
+
+    final bigText =
+        'Students: $studPresent present · $studAbsent absent · $studLate late · $studHalfDay half-day\n'
+        'Teachers: $tchPresent present · $tchAbsent absent\n'
+        'Attendance Rate: $rate%';
+
+    await notifications.show(
+      _kDailySummaryId,
+      '📊 Daily Report · $day, $month/$dayNum',
+      bigText,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          dailySummaryChannel.id,
+          dailySummaryChannel.name,
+          importance: Importance.high,
+          priority: Priority.high,
+          visibility: NotificationVisibility.public,
+          styleInformation: BigTextStyleInformation(bigText),
+        ),
+      ),
+    );
+  }
 }
 
 String absenceFlagNotificationKey(Map<String, dynamic> row, String day) {
