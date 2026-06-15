@@ -3427,6 +3427,20 @@ class DashboardPage extends StatelessWidget {
       );
     }
 
+    Future<void> openAttendanceDetails(String tab) async {
+      if (!context.mounted) return;
+      await showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => DateAttendanceModal(
+          api: api,
+          targetDate: date(),
+          initialTab: tab,
+        ),
+      );
+    }
+
     Future<void> openFlaggedStudents() async {
       if (!context.mounted) return;
       await showModalBottomSheet(
@@ -3650,6 +3664,7 @@ class DashboardPage extends StatelessWidget {
                             : 'Present Students',
                         value: '$present',
                         color: const Color(0xFF138A64),
+                        onTap: () => openAttendanceDetails('present'),
                       ),
                     ),
                   ],
@@ -3676,6 +3691,9 @@ class DashboardPage extends StatelessWidget {
                         color: halfDay > 0
                             ? const Color(0xFFEA580C)
                             : scoreColor,
+                        onTap: halfDay > 0
+                            ? () => openAttendanceDetails('half_day')
+                            : null,
                       ),
                     ),
                   ],
@@ -4723,15 +4741,17 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
   String? error;
   bool isSchoolDay = true;
   int presentCount = 0;
+  int halfDayCount = 0;
   int absentCount = 0;
   List<Map<String, dynamic>> presentRows = [];
+  List<Map<String, dynamic>> halfDayRows = [];
   List<Map<String, dynamic>> absentRows = [];
   late String activeTab;
 
   @override
   void initState() {
     super.initState();
-    activeTab = widget.initialTab == 'absent' ? 'absent' : 'present';
+    activeTab = _cleanInitialTab(widget.initialTab);
     load();
   }
 
@@ -4746,15 +4766,19 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
       final absent = ((data['absent_students'] as List?) ?? [])
           .map((row) => Map<String, dynamic>.from(row as Map))
           .toList();
+      final halfDay = present.where(_isHalfDayRow).toList();
       if (!mounted) return;
       setState(() {
         isSchoolDay = data['is_school_day'] == true;
         presentRows = present;
+        halfDayRows = halfDay;
         absentRows = absent;
-        presentCount = intValue((data['totals'] as Map?)?['present']);
-        absentCount = intValue((data['totals'] as Map?)?['absent']);
-        activeTab = widget.initialTab == 'absent'
-            ? 'absent'
+        presentCount = present.length;
+        halfDayCount = halfDay.length;
+        absentCount = absent.length;
+        final requestedTab = _cleanInitialTab(widget.initialTab);
+        activeTab = requestedTab != 'present'
+            ? requestedTab
             : (presentCount > 0 ? 'present' : 'absent');
         loading = false;
       });
@@ -4769,6 +4793,16 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
       });
     }
   }
+
+  static String _cleanInitialTab(String value) {
+    final key = statusKey(value);
+    if (key == 'absent') return 'absent';
+    if (key == 'half_day') return 'half_day';
+    return 'present';
+  }
+
+  static bool _isHalfDayRow(Map<String, dynamic> row) =>
+      statusKey(row['attendance_status'] ?? row['att_status']) == 'half_day';
 
   @override
   Widget build(BuildContext context) => DraggableScrollableSheet(
@@ -4857,7 +4891,18 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
                                   setState(() => activeTab = 'present'),
                             ),
                           ),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _countTile(
+                              label: 'Half-Day',
+                              value: halfDayCount,
+                              color: const Color(0xFFEA580C),
+                              selected: activeTab == 'half_day',
+                              onTap: () =>
+                                  setState(() => activeTab = 'half_day'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: _countTile(
                               label: 'Absent',
@@ -4871,9 +4916,7 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        activeTab == 'present'
-                            ? 'Present Students'
-                            : 'Absent Students',
+                        _activeTitle,
                         style: const TextStyle(
                           fontWeight: FontWeight.w900,
                           fontSize: 15,
@@ -4891,8 +4934,17 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
     ),
   );
 
-  List<Map<String, dynamic>> get _activeRows =>
-      activeTab == 'present' ? presentRows : absentRows;
+  List<Map<String, dynamic>> get _activeRows {
+    if (activeTab == 'half_day') return halfDayRows;
+    if (activeTab == 'absent') return absentRows;
+    return presentRows;
+  }
+
+  String get _activeTitle {
+    if (activeTab == 'half_day') return 'Half-Day Students';
+    if (activeTab == 'absent') return 'Absent Students';
+    return 'Present Students';
+  }
 
   Widget _countTile({
     required String label,
@@ -4948,11 +5000,14 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
     final lrn = '${row['lrn'] ?? '-'}';
     final adviser = '${row['adviser'] ?? '-'}'.trim();
     final status = formatStatusLabel(row['attendance_status']);
-    final isAbsent = status == 'Absent';
+    final statusValue = statusKey(status);
+    final isAbsent = statusValue == 'absent';
+    final isHalfDay = statusValue == 'half_day';
     final absentDays = intValue(row['absent_days']);
     final absentFromDate = '${row['absent_from_date'] ?? ''}'.trim();
-    final statusColor =
-        isAbsent ? const Color(0xFFDC2626) : const Color(0xFF15803D);
+    final statusColor = isAbsent
+        ? const Color(0xFFDC2626)
+        : (isHalfDay ? const Color(0xFFEA580C) : const Color(0xFF15803D));
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: PremiumCard(
@@ -8225,16 +8280,23 @@ String attendanceScoreLabel(int rate) {
   return 'Poor Attendance';
 }
 
+String statusKey(dynamic value) => '${value ?? ''}'
+    .trim()
+    .toLowerCase()
+    .replaceAll(RegExp(r'[\s-]+'), '_');
+
 String formatStatusLabel(dynamic value) {
   final raw = '${value ?? ''}'.trim();
   if (raw.isEmpty || raw.toLowerCase() == 'null') return '-';
-  switch (raw.toLowerCase().replaceAll('_', ' ')) {
+  switch (statusKey(raw).replaceAll('_', ' ')) {
     case 'present':
       return 'Present';
     case 'absent':
       return 'Absent';
     case 'late':
       return 'Late';
+    case 'half day':
+      return 'Half-Day';
     case 'inactive':
       return 'Inactive';
     case 'active':

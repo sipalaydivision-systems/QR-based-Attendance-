@@ -804,13 +804,12 @@ async function getAttendanceStatusCounts(personType, dateStr, filters = {}) {
     const isTeacher = personType === 'teacher';
     const table = isTeacher ? 'teachers' : 'students';
     const alias = isTeacher ? 't' : 's';
-    // Half-day attendees are counted as PRESENT (they showed up) and counted toward
-    // the attendance rate, while their per-record status stays 'half_day' so reports
-    // and badges can still identify them. The half_day tally below is therefore a
-    // subset of present, kept for the dashboard's half-day indicator.
+    // Any timed-in attendee is counted in the shared present/attended total.
+    // Late and half-day remain separate tallies so dashboards can still show
+    // those badges without treating the person as absent.
     let query = `
         SELECT
-            COUNT(DISTINCT CASE WHEN a.status IN ('present','half_day') THEN a.person_id END) AS present,
+            COUNT(DISTINCT CASE WHEN a.status IN ('present','late','half_day') THEN a.person_id END) AS present,
             COUNT(DISTINCT CASE WHEN a.status = 'late' THEN a.person_id END) AS late,
             COUNT(DISTINCT CASE WHEN a.status = 'half_day' THEN a.person_id END) AS half_day,
             COUNT(DISTINCT CASE WHEN a.status IN ('present','late','half_day') THEN a.person_id END) AS full_day,
@@ -942,6 +941,15 @@ async function getConsecutiveAbsenceFlags({ baseDate, schoolId, days = 2, includ
     }
     if (schoolDates.length < threshold) return [];
 
+    // Today may not be absence-countable yet, but a real scan today should still
+    // break a previous absence streak immediately.
+    const schoolDateSet = new Set(schoolDates);
+    const breakDates = [...schoolDates];
+    if (!schoolDateSet.has(cappedBaseDate)) {
+        const baseSchoolDay = await checkSchoolDay(cappedBaseDate, schoolId);
+        if (baseSchoolDay.isSchoolDay) breakDates.unshift(cappedBaseDate);
+    }
+
     let studentQuery = `SELECT s.id, s.firstname, s.lastname, s.lrn, s.school_id, s.section_id, s.created_at, s.active_from, sc.name as school_name,
             sc.logo as school_logo, sc.contact as school_contact, gl.name as grade_name, sec.name as section_name,
             COALESCE(NULLIF(sec.adviser, ''), TRIM(CONCAT_WS(' ', at.firstname, at.middlename, at.lastname))) as adviser,
@@ -968,8 +976,9 @@ async function getConsecutiveAbsenceFlags({ baseDate, schoolId, days = 2, includ
         includeTeachers ? db.query(teacherQuery, teacherParams).then(r => r[0]) : Promise.resolve([])
     ]);
 
-    const allDatesSql = schoolDates.map(() => '?').join(',');
-    const attendanceParams = [...schoolDates];
+    const attendanceDates = [...new Set(breakDates)];
+    const allDatesSql = attendanceDates.map(() => '?').join(',');
+    const attendanceParams = [...attendanceDates];
     let attendanceQuery = `SELECT person_type, person_id, date, time_in, status
         FROM attendance
         WHERE date IN (${allDatesSql}) AND person_type IN ('student', 'teacher')`;
@@ -995,10 +1004,11 @@ async function getConsecutiveAbsenceFlags({ baseDate, schoolId, days = 2, includ
 
     function consecutiveDaysAbsent(type, person) {
         let count = 0;
-        for (const d of schoolDates) {
+        for (const d of breakDates) {
             if (wasCreatedOnOrAfterDate(person, d)) break;
             const key = `${type}-${person.id}-${d}`;
             if (presentSet.has(key)) break;
+            if (!schoolDateSet.has(d)) continue;
             count++;
         }
         return count;
@@ -3025,6 +3035,9 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
                 totals: {
                     students_total: totalRow.cnt,
                     present: 0,
+                    attended: 0,
+                    late: 0,
+                    half_day: 0,
                     absent: 0
                 },
                 present_students: [],
@@ -3130,6 +3143,9 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
             monitoring_status: 'No Time In',
             attendance_date: targetDate
         }));
+        const statusKey = value => String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+        const lateCount = presentStudents.filter(s => statusKey(s.attendance_status || s.att_status) === 'late').length;
+        const halfDayCount = presentStudents.filter(s => statusKey(s.attendance_status || s.att_status) === 'half_day').length;
 
         return res.json({
             date: targetDate,
@@ -3138,9 +3154,10 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
             non_school_day_reason: schoolDay.reason,
             totals: {
                 students_total: totalRow.cnt,
-                present: presentStudents.filter(s => s.att_status === 'present').length,
-                late: presentStudents.filter(s => s.att_status === 'late').length,
-                half_day: presentStudents.filter(s => s.att_status === 'half_day').length,
+                present: presentStudents.length,
+                attended: presentStudents.length,
+                late: lateCount,
+                half_day: halfDayCount,
                 absent: absentStudents.length
             },
             present_students: presentStudents,
@@ -3497,7 +3514,7 @@ router.get('/adviser-dashboard', requireAuth, async (req, res) => {
         );
 
         const activeStudents = students.filter(s => s.status === 'active');
-        const present = activeStudents.filter(s => s.att_status === 'present');
+        const present = activeStudents.filter(s => ['present', 'late', 'half_day'].includes(s.att_status));
         const late = activeStudents.filter(s => s.att_status === 'late');
         const halfDay = activeStudents.filter(s => s.att_status === 'half_day');
         const absent = activeStudents.filter(s => !s.att_status);
