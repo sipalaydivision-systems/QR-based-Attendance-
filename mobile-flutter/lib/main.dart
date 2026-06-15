@@ -90,6 +90,14 @@ Future<void> applyBranding(
       }
     }
   }
+  if (data.containsKey('ai_report_icon')) {
+    final icon = '${data['ai_report_icon'] ?? ''}'.trim();
+    if (icon.isEmpty) {
+      await prefs.remove('ai_report_icon');
+    } else {
+      await prefs.setString('ai_report_icon', icon);
+    }
+  }
   await applyBrandingNames(data, prefs);
 }
 
@@ -105,6 +113,7 @@ Future<void> syncBranding(
   await applyBrandingNames(dashboard, api.prefs);
   final version = '${dashboard['logo_version'] ?? ''}'.trim();
   final schoolArtVersion = '${dashboard['school_art_version'] ?? ''}'.trim();
+  final aiIconVersion = '${dashboard['ai_report_icon_version'] ?? ''}'.trim();
   var shouldFetchBranding = false;
   if (version.isEmpty) {
     if (brandLogoData.value != null) {
@@ -133,6 +142,19 @@ Future<void> syncBranding(
         schoolArtVersion != cachedArtVersion ||
         dashboardSchoolArtData.value == null;
   }
+  if (aiIconVersion.isEmpty) {
+    if ((api.prefs.getString('ai_report_icon') ?? '').isNotEmpty) {
+      await api.prefs.remove('ai_report_icon');
+      await api.prefs.remove('ai_report_icon_version');
+    }
+  } else {
+    final cachedAiIconVersion =
+        api.prefs.getString('ai_report_icon_version') ?? '';
+    shouldFetchBranding =
+        shouldFetchBranding ||
+        aiIconVersion != cachedAiIconVersion ||
+        (api.prefs.getString('ai_report_icon') ?? '').isEmpty;
+  }
   if (!shouldFetchBranding) return;
   try {
     final branding = await api.map('/api/mobile-branding');
@@ -145,6 +167,9 @@ Future<void> syncBranding(
         'dashboard_school_art_version',
         schoolArtVersion,
       );
+    }
+    if (aiIconVersion.isNotEmpty) {
+      await api.prefs.setString('ai_report_icon_version', aiIconVersion);
     }
   } on Exception {
     // Keep showing the cached logo on a network/auth hiccup; retry next poll.
@@ -1146,7 +1171,7 @@ class _LoginScreenState extends State<LoginScreen>
                       const SizedBox(height: 18),
                       const Center(
                         child: Text(
-                          '${AppConfig.monitoringLabel}\nv2.1.15',
+                          '${AppConfig.monitoringLabel}\nv2.1.16',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Color(0xFF77847E),
@@ -8215,16 +8240,136 @@ tz.TZDateTime _nextSevenPM() {
 String _weekdayShortName(int weekday) =>
     const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][weekday - 1];
 
+String _readableReportDate(DateTime now) {
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  return '${_weekdayShortName(now.weekday)}, ${months[now.month - 1]} ${now.day}';
+}
+
+const _kDailyReportTitle = '🤖 SDO Sipalay AI · Daily Report';
+
+// Decodes the admin-uploaded notification icon (a base64 data URL cached in
+// prefs as 'ai_report_icon') to a file and returns it as a notification large
+// icon. Returns null when no icon is set, so the app icon is used instead.
+Future<AndroidBitmap<Object>?> _aiReportLargeIcon(
+  SharedPreferences prefs,
+) async {
+  final dataUrl = (prefs.getString('ai_report_icon') ?? '').trim();
+  if (dataUrl.isEmpty) return null;
+  try {
+    final commaIdx = dataUrl.indexOf(',');
+    final b64 = commaIdx >= 0 ? dataUrl.substring(commaIdx + 1) : dataUrl;
+    final bytes = base64Decode(b64);
+    final file = File('${Directory.systemTemp.path}/ai_report_icon.png');
+    await file.writeAsBytes(bytes, flush: true);
+    return FilePathAndroidBitmap(file.path);
+  } on Exception {
+    return null;
+  }
+}
+
+// Builds and shows the daily attendance report notification. Shared by the
+// live 7 PM trigger and the in-app test button so the layout stays identical.
+Future<void> _showDailyReportNotification(
+  Map<String, dynamic> data,
+  SharedPreferences prefs, {
+  bool isTest = false,
+}) async {
+  final now = DateTime.now();
+  final largeIcon = await _aiReportLargeIcon(prefs);
+  final suffix = isTest ? ' · TEST' : '';
+  final dateLine = _readableReportDate(now);
+  final isWeekend =
+      now.weekday == DateTime.saturday || now.weekday == DateTime.sunday;
+
+  if (isWeekend) {
+    final dayName = now.weekday == DateTime.saturday ? 'Saturday' : 'Sunday';
+    await notifications.show(
+      _kDailySummaryId,
+      '$_kDailyReportTitle$suffix',
+      'No classes today ($dayName) — attendance reports resume Monday.',
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          dailySummaryChannel.id,
+          dailySummaryChannel.name,
+          importance: Importance.high,
+          priority: Priority.high,
+          visibility: NotificationVisibility.public,
+          largeIcon: largeIcon,
+          styleInformation: BigTextStyleInformation(
+            'No classes today ($dayName).<br>'
+            'Attendance reports resume on Monday.',
+            htmlFormatBigText: true,
+            contentTitle: '<b>🤖 SDO Sipalay AI · Weekend</b>',
+            htmlFormatContentTitle: true,
+            summaryText: dateLine,
+            htmlFormatSummaryText: true,
+          ),
+        ),
+      ),
+    );
+    return;
+  }
+
+  final studPresent = intValue(data['students_present']);
+  final studAbsent = intValue(data['students_absent']);
+  final studLate = intValue(data['students_late']);
+  final studHalfDay = intValue(data['students_half_day']);
+  final tchPresent = intValue(data['teachers_present']);
+  final tchAbsent = intValue(data['teachers_absent']);
+  final rate = intValue(data['attendance_rate']);
+
+  final collapsed =
+      '$rate% attendance · $studPresent present, $studAbsent absent';
+  final bigText =
+      '<b>👨‍🎓 Students</b><br>'
+      'Present: $studPresent&nbsp;&nbsp;Absent: $studAbsent<br>'
+      'Late: $studLate&nbsp;&nbsp;Half-day: $studHalfDay<br>'
+      '<br>'
+      '<b>🧑‍🏫 Teachers</b><br>'
+      'Present: $tchPresent&nbsp;&nbsp;Absent: $tchAbsent<br>'
+      '<br>'
+      '<b>📈 Attendance Rate: $rate%</b>';
+
+  await notifications.show(
+    _kDailySummaryId,
+    '$_kDailyReportTitle$suffix',
+    collapsed,
+    NotificationDetails(
+      android: AndroidNotificationDetails(
+        dailySummaryChannel.id,
+        dailySummaryChannel.name,
+        importance: Importance.high,
+        priority: Priority.high,
+        visibility: NotificationVisibility.public,
+        largeIcon: largeIcon,
+        styleInformation: BigTextStyleInformation(
+          bigText,
+          htmlFormatBigText: true,
+          contentTitle: '<b>$_kDailyReportTitle</b>',
+          htmlFormatContentTitle: true,
+          summaryText: dateLine,
+          htmlFormatSummaryText: true,
+        ),
+      ),
+    ),
+  );
+}
+
 Future<void> scheduleDailyFallbackNotification() async {
   final granted = await ensureNotificationPermission();
   if (!granted) return;
   try {
+    final prefs = await SharedPreferences.getInstance();
+    final largeIcon = await _aiReportLargeIcon(prefs);
     // Fires every day at 7 PM as a fallback when the app is closed.
     // When the app IS open at 7 PM, checkAndShowEveningReport() cancels this
     // and replaces it with a rich notification that includes live counts.
     await notifications.zonedSchedule(
       _kDailySummaryFallbackId,
-      '📊 EduTrack Daily Report',
+      _kDailyReportTitle,
       'Today\'s attendance summary is ready. Open the app to view details.',
       _nextSevenPM(),
       NotificationDetails(
@@ -8235,6 +8380,7 @@ Future<void> scheduleDailyFallbackNotification() async {
           importance: Importance.high,
           priority: Priority.high,
           visibility: NotificationVisibility.public,
+          largeIcon: largeIcon,
           styleInformation: const BigTextStyleInformation(
             'Today\'s attendance summary is ready. Open the app to view details.',
           ),
@@ -8260,64 +8406,7 @@ Future<void> checkAndShowEveningReport(
 
   // Cancel the static fallback — we'll show a richer notification instead.
   await notifications.cancel(_kDailySummaryFallbackId);
-
-  final isWeekend =
-      now.weekday == DateTime.saturday || now.weekday == DateTime.sunday;
-
-  if (isWeekend) {
-    final dayName =
-        now.weekday == DateTime.saturday ? 'Saturday' : 'Sunday';
-    await notifications.show(
-      _kDailySummaryId,
-      '📅 EduTrack · Weekend — No Report',
-      'No school today ($dayName). Attendance reports resume on Monday.',
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          dailySummaryChannel.id,
-          dailySummaryChannel.name,
-          importance: Importance.high,
-          priority: Priority.high,
-          visibility: NotificationVisibility.public,
-          styleInformation: BigTextStyleInformation(
-            'No school today ($dayName). Attendance reports resume on Monday.',
-          ),
-        ),
-      ),
-    );
-  } else {
-    final day = _weekdayShortName(now.weekday);
-    final month = ('${now.month}'.padLeft(2, '0'));
-    final dayNum = ('${now.day}'.padLeft(2, '0'));
-
-    final studPresent  = intValue(dashboardData['students_present']);
-    final studAbsent   = intValue(dashboardData['students_absent']);
-    final studLate     = intValue(dashboardData['students_late']);
-    final studHalfDay  = intValue(dashboardData['students_half_day']);
-    final tchPresent   = intValue(dashboardData['teachers_present']);
-    final tchAbsent    = intValue(dashboardData['teachers_absent']);
-    final rate         = intValue(dashboardData['attendance_rate']);
-
-    final bigText =
-        'Students: $studPresent present · $studAbsent absent · $studLate late · $studHalfDay half-day\n'
-        'Teachers: $tchPresent present · $tchAbsent absent\n'
-        'Attendance Rate: $rate%';
-
-    await notifications.show(
-      _kDailySummaryId,
-      '📊 Daily Report · $day, $month/$dayNum',
-      bigText,
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          dailySummaryChannel.id,
-          dailySummaryChannel.name,
-          importance: Importance.high,
-          priority: Priority.high,
-          visibility: NotificationVisibility.public,
-          styleInformation: BigTextStyleInformation(bigText),
-        ),
-      ),
-    );
-  }
+  await _showDailyReportNotification(dashboardData, prefs);
 }
 
 // Bypasses the 7 PM time check and the daily dedup key so you can fire the
@@ -8329,60 +8418,7 @@ Future<void> testEveningReportNotification(
   final granted = await ensureNotificationPermission();
   if (!granted) return;
   await notifications.cancel(_kDailySummaryFallbackId);
-  final now = DateTime.now();
-  final isWeekend =
-      now.weekday == DateTime.saturday || now.weekday == DateTime.sunday;
-  if (isWeekend) {
-    final dayName =
-        now.weekday == DateTime.saturday ? 'Saturday' : 'Sunday';
-    await notifications.show(
-      _kDailySummaryId,
-      '📅 EduTrack · Weekend — No Report [TEST]',
-      'No school today ($dayName). Attendance reports resume on Monday.',
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          dailySummaryChannel.id,
-          dailySummaryChannel.name,
-          importance: Importance.high,
-          priority: Priority.high,
-          visibility: NotificationVisibility.public,
-          styleInformation: BigTextStyleInformation(
-            'No school today ($dayName). Attendance reports resume on Monday.',
-          ),
-        ),
-      ),
-    );
-  } else {
-    final day = _weekdayShortName(now.weekday);
-    final month = ('${now.month}'.padLeft(2, '0'));
-    final dayNum = ('${now.day}'.padLeft(2, '0'));
-    final studPresent = intValue(dashboardData['students_present']);
-    final studAbsent  = intValue(dashboardData['students_absent']);
-    final studLate    = intValue(dashboardData['students_late']);
-    final studHalfDay = intValue(dashboardData['students_half_day']);
-    final tchPresent  = intValue(dashboardData['teachers_present']);
-    final tchAbsent   = intValue(dashboardData['teachers_absent']);
-    final rate        = intValue(dashboardData['attendance_rate']);
-    final bigText =
-        'Students: $studPresent present · $studAbsent absent · $studLate late · $studHalfDay half-day\n'
-        'Teachers: $tchPresent present · $tchAbsent absent\n'
-        'Attendance Rate: $rate%';
-    await notifications.show(
-      _kDailySummaryId,
-      '📊 Daily Report · $day, $month/$dayNum [TEST]',
-      bigText,
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          dailySummaryChannel.id,
-          dailySummaryChannel.name,
-          importance: Importance.high,
-          priority: Priority.high,
-          visibility: NotificationVisibility.public,
-          styleInformation: BigTextStyleInformation(bigText),
-        ),
-      ),
-    );
-  }
+  await _showDailyReportNotification(dashboardData, prefs, isTest: true);
 }
 
 String absenceFlagNotificationKey(Map<String, dynamic> row, String day) {

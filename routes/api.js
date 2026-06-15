@@ -1489,7 +1489,7 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
         // logo is fetched separately from /mobile-branding, and only when this
         // version changes, to avoid re-downloading it on every poll.
         const [brandingRows] = await db.query(
-            "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('system_logo', 'system_name', 'division_name', 'mobile_dashboard_school_art')"
+            "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('system_logo', 'system_name', 'division_name', 'mobile_dashboard_school_art', 'ai_report_icon')"
         );
         const branding = Object.fromEntries(brandingRows.map(r => [r.setting_key, r.setting_value]));
         const logoVersion = branding.system_logo
@@ -1498,6 +1498,9 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
         const schoolArtVersion = branding.mobile_dashboard_school_art
             ? crypto.createHash('md5').update(String(branding.mobile_dashboard_school_art)).digest('hex').slice(0, 12)
             : '';
+        const aiReportIconVersion = branding.ai_report_icon
+            ? crypto.createHash('md5').update(String(branding.ai_report_icon)).digest('hex').slice(0, 12)
+            : '';
 
         const data = {
             date,
@@ -1505,6 +1508,7 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
             division_name: branding.division_name || '',
             logo_version: logoVersion,
             school_art_version: schoolArtVersion,
+            ai_report_icon_version: aiReportIconVersion,
             total_schools: schoolRows[0].count,
             total_students: allStudents[0].count,
             active_students: totalActive,
@@ -1556,16 +1560,20 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
 router.get('/mobile-branding', requireAuth, async (req, res) => {
     try {
         const [rows] = await db.query(
-            "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('system_logo', 'system_name', 'division_name', 'mobile_dashboard_school_art')"
+            "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('system_logo', 'system_name', 'division_name', 'mobile_dashboard_school_art', 'ai_report_icon')"
         );
         const branding = Object.fromEntries(rows.map(r => [r.setting_key, r.setting_value]));
         const logo = branding.system_logo || '';
         const schoolArt = branding.mobile_dashboard_school_art || '';
+        const aiReportIcon = branding.ai_report_icon || '';
         const logoVersion = logo
             ? crypto.createHash('md5').update(String(logo)).digest('hex').slice(0, 12)
             : '';
         const schoolArtVersion = schoolArt
             ? crypto.createHash('md5').update(String(schoolArt)).digest('hex').slice(0, 12)
+            : '';
+        const aiReportIconVersion = aiReportIcon
+            ? crypto.createHash('md5').update(String(aiReportIcon)).digest('hex').slice(0, 12)
             : '';
         return res.json({
             system_logo: logo,
@@ -1573,7 +1581,9 @@ router.get('/mobile-branding', requireAuth, async (req, res) => {
             division_name: branding.division_name || '',
             logo_version: logoVersion,
             mobile_dashboard_school_art: schoolArt,
-            school_art_version: schoolArtVersion
+            school_art_version: schoolArtVersion,
+            ai_report_icon: aiReportIcon,
+            ai_report_icon_version: aiReportIconVersion
         });
     } catch (err) {
         console.error('Mobile branding error:', err);
@@ -2509,6 +2519,38 @@ router.delete('/settings/mobile-dashboard-art', requireRole('super_admin'), asyn
         return res.json({ success: true });
     } catch (e) {
         return res.status(500).json({ error: 'Failed to remove mobile dashboard school art.' });
+    }
+});
+
+// ---- AI Daily Report Notification Icon ----
+// The image the mobile app shows as the large icon on the 7 PM daily report
+// notification (e.g. a robot icon). Stored as a base64 data URL setting and
+// delivered to the app via /mobile-branding.
+router.post('/settings/ai-report-icon', requireRole('super_admin'), (req, res) => {
+    logoUpload.single('logo')(req, res, async function(err) {
+        if (err) return res.status(400).json({ error: err.message });
+        if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+        try {
+            const icon = uploadedFileToDataUrl(req.file);
+            await db.query(
+                "INSERT INTO settings (setting_key, setting_value) VALUES ('ai_report_icon', ?) ON DUPLICATE KEY UPDATE setting_value = ?",
+                [icon, icon]
+            );
+            invalidateLiveDashboardCaches();
+            return res.json({ success: true, icon });
+        } catch (e) {
+            return res.status(500).json({ error: 'Failed to save AI report icon.' });
+        }
+    });
+});
+
+router.delete('/settings/ai-report-icon', requireRole('super_admin'), async (req, res) => {
+    try {
+        await db.query("DELETE FROM settings WHERE setting_key='ai_report_icon'");
+        invalidateLiveDashboardCaches();
+        return res.json({ success: true });
+    } catch (e) {
+        return res.status(500).json({ error: 'Failed to remove AI report icon.' });
     }
 });
 

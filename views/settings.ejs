@@ -112,6 +112,23 @@
     </div>
 </div>
 
+<!-- AI Daily Report Notification Icon -->
+<div class="settings-section">
+    <h3><i class="fa-solid fa-robot"></i> AI Daily Report Icon</h3>
+    <p class="section-desc">The icon shown on the mobile 7:00 PM "SDO Sipalay AI · Daily Report" notification. Upload a robot icon (or any image) and mobile devices update automatically after refresh. Square PNG with transparent background works best.</p>
+    <div style="display:flex; align-items:center; gap:1.25rem; flex-wrap:wrap;">
+        <div class="logo-preview" id="aiReportIconPreview" style="width:96px;height:96px;border-radius:18px;">
+            <i class="fa-solid fa-robot" style="font-size:2rem;color:var(--gray-300);"></i>
+        </div>
+        <div>
+            <input type="file" id="aiReportIconFile" accept="image/*" style="display:none">
+            <button class="btn btn-primary btn-sm" onclick="document.getElementById('aiReportIconFile').click()"><i class="fa-solid fa-upload"></i> Upload Icon</button>
+            <button class="btn btn-secondary btn-sm" onclick="removeAiReportIcon()">Remove</button>
+            <p style="margin-top:0.5rem;font-size:0.75rem;color:var(--gray-400);">PNG/JPG/WebP, max 2MB. Square transparent PNG recommended.</p>
+        </div>
+    </div>
+</div>
+
 <!-- Daily Schedule & Session Times -->
 <div class="settings-section">
     <h3><i class="fa-solid fa-clock"></i> Daily Schedule &amp; Session Times</h3>
@@ -620,6 +637,34 @@ function removeMobileSchoolArt() {
     }).catch(function(){ alert('Remove failed'); });
 }
 
+function setAiReportIconPreview(src) {
+    var preview = document.getElementById('aiReportIconPreview');
+    if (!preview) return;
+    if (src) {
+        var imageSrc = src.indexOf('data:image/') === 0 ? src : (src + '?' + Date.now());
+        preview.innerHTML = '<img src="' + imageSrc + '" alt="AI Report Icon" style="max-width:100%;max-height:100%;object-fit:contain;">';
+    } else {
+        preview.innerHTML = '<i class="fa-solid fa-robot" style="font-size:2rem;color:var(--gray-300);"></i>';
+    }
+}
+
+function loadAiReportIcon() {
+    fetch('/api/settings').then(function(r){ return r.json(); }).then(function(data){
+        setAiReportIconPreview(data.ai_report_icon || null);
+    }).catch(function(){});
+}
+
+function removeAiReportIcon() {
+    if (!confirm('Remove the AI daily report icon?')) return;
+    fetch('/api/settings/ai-report-icon', { method: 'DELETE' }).then(function(r){ return r.json(); }).then(function(data){
+        if (data.success) {
+            setAiReportIconPreview(null);
+        } else {
+            alert(data.error || 'Remove failed');
+        }
+    }).catch(function(){ alert('Remove failed'); });
+}
+
 document.getElementById('logoFile').addEventListener('change', function() {
     var file = this.files[0];
     if (!file) return;
@@ -644,6 +689,21 @@ document.getElementById('mobileSchoolArtFile').addEventListener('change', functi
     fetch('/api/settings/mobile-dashboard-art', { method: 'POST', body: fd }).then(function(r){ return r.json(); }).then(function(data){
         if (data.success) {
             setMobileSchoolArtPreview(data.art);
+        } else {
+            alert(data.error || 'Upload failed');
+        }
+    }).catch(function(){ alert('Upload failed'); });
+    this.value = '';
+});
+
+document.getElementById('aiReportIconFile').addEventListener('change', function() {
+    var file = this.files[0];
+    if (!file) return;
+    var fd = new FormData();
+    fd.append('logo', file);
+    fetch('/api/settings/ai-report-icon', { method: 'POST', body: fd }).then(function(r){ return r.json(); }).then(function(data){
+        if (data.success) {
+            setAiReportIconPreview(data.icon);
         } else {
             alert(data.error || 'Upload failed');
         }
@@ -810,6 +870,7 @@ loadHolidays();
 loadStatusCounts();
 loadLogo();
 loadMobileSchoolArt();
+loadAiReportIcon();
 loadAdmins();
 loadSchoolDropdowns();
 </script>
