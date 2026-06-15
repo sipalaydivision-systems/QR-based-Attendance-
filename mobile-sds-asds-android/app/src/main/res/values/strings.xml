@@ -1,5 +1,5 @@
 <resources>
     <string name="app_name">Edutrack</string>
-    <string name="base_url">https://school-attendance-qrbased.up.railway.app</string>
+    <string name="base_url">https://sdo-sipalay-edutrack.up.railway.app</string>
     <string name="config_url">https://raw.githubusercontent.com/sipalaydivision-systems/QR-based-Attendance-/main/public/mobile-config.json</string>
 </resources>

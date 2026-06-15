@@ -26,7 +26,7 @@ const {
 const APP_TITLE = 'EduTrack Scanner';
 const APP_USER_MODEL_ID = 'ph.gov.sipalay.edutrack.scanner';
 const APP_ICON_PNG = path.join(__dirname, 'assets', 'edutrack-scanner.png');
-const DEFAULT_SERVER_URL = 'https://school-attendance-qrbased.up.railway.app';
+const DEFAULT_SERVER_URL = 'https://sdo-sipalay-edutrack.up.railway.app';
 const NO_INTERNET_MESSAGE = "Can't connect to server due to no internet connection.";
 const OFFLINE_MODE_MESSAGE = 'Offline Mode Enabled - Attendance records are being stored locally.';
 const CONNECTION_RESTORED_MESSAGE = 'Connection Restored - Synchronizing attendance records.';
@@ -39,9 +39,11 @@ const ADMIN_SYNCED_SETTING_KEYS = new Set([
   'divisionName',
   'systemLogo',
   'timeInStart',
+  'amLateTime',
   'timeOutOpen',
   'lunchBreakStart',
   'pmTimeInStart',
+  'pmLateTime',
   'lateGraceMinutes',
   'teacherDutyStart',
   'teacherDutyEnd',
@@ -82,7 +84,12 @@ const runtimeState = {
     currentLabel: ''
   },
   directoryLastRefreshedAt: null,
-  lastSuccessfulSyncAt: null
+  lastSuccessfulSyncAt: null,
+  // When the scanner recovers from a same-day power/app outage, this holds
+  // { anchor, graceUntil } — the window during which a person's first scan is
+  // credited to the moment the outage began (so an on-time arrival who could
+  // not scan during the blackout is not wrongly marked LATE / HALF-DAY).
+  outageRecovery: null
 };
 
 function defaultSettings() {
@@ -100,9 +107,11 @@ function defaultSettings() {
     divisionName: 'Schools Division of Sipalay City',
     systemLogo: '',
     timeInStart: '07:00',
+    amLateTime: '',
     timeOutOpen: '17:00',
     lunchBreakStart: '11:30',
     pmTimeInStart: '13:00',
+    pmLateTime: '',
     lateGraceMinutes: 0,
     teacherDutyStart: '07:00',
     teacherDutyEnd: '17:00',
@@ -260,12 +269,28 @@ function offlineScheduleForDate(attendanceDate, settings) {
   return {
     lunchStart: combineDateAndTime(attendanceDate, settings.lunchBreakStart, '11:30'),
     pmInStart: combineDateAndTime(attendanceDate, settings.pmTimeInStart, '13:00'),
+    // PM Late Start Time is opt-in: null unless explicitly configured.
+    pmLateStart: settings.pmLateTime ? combineDateAndTime(attendanceDate, settings.pmLateTime, '13:15') : null,
     pmOutStart: combineDateAndTime(attendanceDate, settings.timeOutOpen, '16:00')
   };
 }
 
+// A PM time-in at/after the PM Late Start Time is shown as "PM LATE" instead of
+// "PM PRESENT". Display-only — the stored daily status is unchanged.
+function offlinePmLabelFor(label, scanTime, schedule) {
+  if (label !== 'PM PRESENT') return label;
+  if (schedule.pmLateStart && compareSqlDateTimes(scanTime, schedule.pmLateStart) >= 0) return 'PM LATE';
+  return label;
+}
+
 function baseAttendanceStatusFor(person, attendanceDate, timeIn, settings) {
   const isTeacher = person.personType === 'teacher';
+  // An explicit AM Late Start Time is the exact late line (no extra grace) for
+  // students; teachers and unset students fall back to "start + grace".
+  if (!isTeacher && settings.amLateTime) {
+    const amLine = combineDateAndTime(attendanceDate, settings.amLateTime, '07:15');
+    return compareSqlDateTimes(timeIn, amLine) >= 0 ? 'late' : 'present';
+  }
   const lateThreshold = combineDateAndTime(
     attendanceDate,
     isTeacher ? settings.teacherDutyStart : settings.timeInStart,
@@ -278,6 +303,118 @@ function baseAttendanceStatusFor(person, attendanceDate, timeIn, settings) {
   const lateBoundary = parseSqlDateTime(lateThreshold);
   const lateCutoff = lateBoundary ? toLocalSqlDateTime(new Date(lateBoundary.getTime() + graceMinutes * 60000)) : lateThreshold;
   return compareSqlDateTimes(timeIn, lateCutoff) >= 0 ? 'late' : 'present';
+}
+
+// ── Power / outage recovery ────────────────────────────────────────────────
+// A school power interruption takes the scanner computer down. When power and
+// the app come back, anyone who arrived ON TIME but could not scan during the
+// blackout would otherwise be wrongly marked LATE / HALF-DAY at their first
+// post-recovery scan. We persist a heartbeat (the last moment the app was
+// alive) and, on startup, detect a same-day gap. For a bounded recovery window
+// we anchor each person's FIRST scan status to the moment the outage began —
+// the last time they actually could have scanned.
+const HEARTBEAT_INTERVAL_MS = 30 * 1000;
+const OUTAGE_DETECT_THRESHOLD_MS = 3 * 60 * 1000;   // gap > 3 min ⇒ treat as an outage
+const OUTAGE_GRACE_MIN_MS = 30 * 60 * 1000;          // forgive ≥ 30 min after recovery
+const OUTAGE_GRACE_MAX_MS = 120 * 60 * 1000;         // …but never more than 2 hours
+
+let _heartbeatTimer = null;
+
+function heartbeatFilePath() {
+  return path.join(app.getPath('userData'), 'scanner-heartbeat');
+}
+
+// Marker written on a graceful quit. Its presence on next startup means the app
+// was closed deliberately (not a power cut), so the gap is NOT an outage. A real
+// power interruption never reaches the quit handler, so the marker is absent.
+function cleanExitFilePath() {
+  return path.join(app.getPath('userData'), 'scanner-clean-exit');
+}
+
+function markCleanExit() {
+  try { fs.writeFileSync(cleanExitFilePath(), toLocalSqlDateTime()); } catch (_) {}
+}
+
+function writeHeartbeat() {
+  // Best-effort, tiny, durable write so a power cut leaves a usable last-alive
+  // marker without re-serializing the whole offline database.
+  try { fs.writeFileSync(heartbeatFilePath(), toLocalSqlDateTime()); } catch (_) {}
+}
+
+function readLastHeartbeat() {
+  try { return parseSqlDateTime(fs.readFileSync(heartbeatFilePath(), 'utf8')); }
+  catch (_) { return null; }
+}
+
+function startHeartbeat() {
+  writeHeartbeat();
+  if (_heartbeatTimer) clearInterval(_heartbeatTimer);
+  _heartbeatTimer = setInterval(writeHeartbeat, HEARTBEAT_INTERVAL_MS);
+  if (_heartbeatTimer.unref) _heartbeatTimer.unref();
+}
+
+// Detect a same-day outage on startup and, if found, arm a bounded forgiveness
+// window. A still-active window persisted from a prior boot (e.g. power flickers
+// twice) is carried over so recovery survives repeated restarts.
+function initOutageRecovery() {
+  const now = new Date();
+  const settings = loadSettings();
+  const today = localDateString(now);
+  const schoolStart = parseSqlDateTime(combineDateAndTime(today, settings.timeInStart, '07:00'));
+
+  let anchor = null;
+  let graceUntil = null;
+
+  // A clean-exit marker means the previous stop was a deliberate quit, not a
+  // power cut — consume it and skip fresh outage detection for this boot.
+  const wasCleanExit = fs.existsSync(cleanExitFilePath());
+  try { fs.unlinkSync(cleanExitFilePath()); } catch (_) {}
+
+  const lastAlive = readLastHeartbeat();
+  if (!wasCleanExit && lastAlive && localDateString(lastAlive) === today) {
+    const gapMs = now.getTime() - lastAlive.getTime();
+    if (gapMs > OUTAGE_DETECT_THRESHOLD_MS) {
+      // Anchor to the later of (last alive) and (school-day start) so an outage
+      // that began before classes does not credit a pre-school arrival time.
+      const anchorDate = (schoolStart && schoolStart.getTime() > lastAlive.getTime()) ? schoolStart : lastAlive;
+      anchor = toLocalSqlDateTime(anchorDate);
+      const graceMs = Math.max(OUTAGE_GRACE_MIN_MS, Math.min(OUTAGE_GRACE_MAX_MS, gapMs));
+      graceUntil = toLocalSqlDateTime(new Date(now.getTime() + graceMs));
+    }
+  }
+
+  // Carry over a recovery window still active from a previous boot.
+  const savedUntil = getMeta('outageGraceUntil');
+  const savedAnchor = getMeta('outageAnchor');
+  if (savedUntil && savedAnchor && compareSqlDateTimes(toLocalSqlDateTime(now), savedUntil) < 0) {
+    if (!anchor || compareSqlDateTimes(savedAnchor, anchor) < 0) anchor = savedAnchor;
+    if (!graceUntil || compareSqlDateTimes(savedUntil, graceUntil) > 0) graceUntil = savedUntil;
+  }
+
+  if (anchor && graceUntil) {
+    runtimeState.outageRecovery = { anchor, graceUntil };
+    setMeta('outageAnchor', anchor);
+    setMeta('outageGraceUntil', graceUntil);
+    console.warn(`Outage recovery armed: first-scans credited to ${anchor} until ${graceUntil}.`);
+  } else {
+    runtimeState.outageRecovery = null;
+  }
+}
+
+// Returns the grace-anchor datetime to apply to a first-scan happening at
+// `scanTime`, or null when we are not in an active recovery window.
+function activeGraceAnchor(scanTime) {
+  const recovery = runtimeState.outageRecovery;
+  if (!recovery || !recovery.anchor || !recovery.graceUntil) return null;
+  const when = scanTime || toLocalSqlDateTime();
+  if (compareSqlDateTimes(when, recovery.graceUntil) >= 0) {
+    // Window has elapsed — disarm so normal rules resume.
+    runtimeState.outageRecovery = null;
+    return null;
+  }
+  // Only meaningful when the anchor is genuinely earlier than the scan time.
+  if (compareSqlDateTimes(recovery.anchor, when) >= 0) return null;
+  return recovery.anchor;
 }
 
 function computeOfflineDailyAttendanceStatus(input = {}) {
@@ -622,9 +759,11 @@ async function refreshDesktopConfig() {
     divisionName: data.settings?.division_name || settings.divisionName,
     systemLogo: data.settings?.system_logo || settings.systemLogo,
     timeInStart: String(data.settings?.am_time_in_end || settings.timeInStart || '07:00').slice(0, 5),
+    amLateTime: String(data.settings?.am_late_time ?? settings.amLateTime ?? '').slice(0, 5),
     timeOutOpen: String(data.settings?.pm_time_out_end || settings.timeOutOpen || '17:00').slice(0, 5),
     lunchBreakStart: String(data.settings?.lunch_break_start || settings.lunchBreakStart || '11:30').slice(0, 5),
     pmTimeInStart: String(data.settings?.pm_time_in_start || settings.pmTimeInStart || '13:00').slice(0, 5),
+    pmLateTime: String(data.settings?.pm_late_time ?? settings.pmLateTime ?? '').slice(0, 5),
     lateGraceMinutes: Number(data.settings?.late_threshold || settings.lateGraceMinutes || 0) || 0,
     teacherDutyStart: String(data.settings?.teacher_duty_start_time || data.settings?.am_time_in_end || settings.teacherDutyStart || '07:00').slice(0, 5),
     teacherDutyEnd: String(data.settings?.teacher_duty_end_time || data.settings?.pm_time_out_end || settings.teacherDutyEnd || '17:00').slice(0, 5),
@@ -752,6 +891,8 @@ async function postScan(payload, timeoutMs = 6000) {
     confirm_time_out: !!payload.confirmTimeOut
   };
   if (payload.scanTime) body.scan_time = payload.scanTime;
+  // Outage forgiveness: the server applies this only to a person's first scan.
+  if (payload.graceAnchor) body.grace_anchor_time = payload.graceAnchor;
 
   const res = await fetchWithTimeout(`${serverUrl}/api/scan-attendance`, {
     method: 'POST',
@@ -907,16 +1048,25 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
   if (!lastEvent) {
     const settings = loadSettings();
     const schedule = offlineScheduleForDate(attendanceDate, settings);
-    const baseStatus = baseAttendanceStatusFor(person, attendanceDate, scanTime, settings);
-    const resolvedStatus = computeOfflineDailyAttendanceStatus({
-      timeIn: scanTime,
-      lastTimeIn: scanTime,
+    // Outage forgiveness: if we are recovering from a same-day blackout, judge
+    // late/half-day against the moment the outage began (the last time this
+    // person could have scanned) instead of the actual catch-up scan time.
+    const graceAnchor = activeGraceAnchor(scanTime);
+    const outageForgiven = !!graceAnchor;
+    const effectiveTime = outageForgiven ? graceAnchor : scanTime;
+    const baseStatus = baseAttendanceStatusFor(person, attendanceDate, effectiveTime, settings);
+    const computed = computeOfflineDailyAttendanceStatus({
+      timeIn: effectiveTime,
+      lastTimeIn: effectiveTime,
       schedule,
       baseStatus
     });
+    const resolvedStatus = outageForgiven && !computed.remarks
+      ? { ...computed, remarks: 'Credited on-time — scanner power interruption' }
+      : computed;
     const attendanceStatus = resolvedStatus.status;
     const displayStatus = attendanceStatus === 'half_day'
-      ? 'PM PRESENT'
+      ? offlinePmLabelFor('PM PRESENT', scanTime, schedule)
       : (attendanceStatus === 'late' ? 'LATE' : 'PRESENT');
 
     insertAttendanceEvent({
@@ -936,6 +1086,7 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
       eventAction: 'TIME_IN',
       attendanceStatus,
       timeIn: scanTime,
+      graceAnchor: outageForgiven ? graceAnchor : null,
       category: person.category || null,
       displayStatus: displayStatus,
       syncStatus: 'pending',
@@ -1058,7 +1209,16 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
   }
 
   // ── Time In again after a Time Out (return from outside / PM session) ──
-  const label = compareSqlDateTimes(scanTime, pmInStart) >= 0 ? 'PM PRESENT' : 'RETURNED';
+  // Returning from a lunch-out always counts as the afternoon session, so it is
+  // labeled PM PRESENT even when scanned before the PM start time.
+  const wasLunchOut = String(lastEvent.displayStatus || '').toUpperCase() === 'LUNCH OUT';
+  const label = offlinePmLabelFor(
+    wasLunchOut
+      ? 'PM PRESENT'
+      : (compareSqlDateTimes(scanTime, pmInStart) >= 0 ? 'PM PRESENT' : 'RETURNED'),
+    scanTime,
+    schedule
+  );
   const resolvedStatus = computeOfflineDailyAttendanceStatus({
     timeIn: firstTimeIn,
     lastTimeIn: scanTime,
@@ -1175,6 +1335,7 @@ async function submitScan(payload) {
     const data = await postScan({
       qrCode,
       scanTime,
+      graceAnchor: activeGraceAnchor(scanTime),
       requireTimeOutConfirmation: payload?.requireTimeOutConfirmation !== false,
       confirmTimeOut: !!payload?.confirmTimeOut
     }, 6000);
@@ -1248,6 +1409,7 @@ async function syncOfflineQueue(options = {}) {
       const result = await postScan({
         qrCode: event.qrCode,
         scanTime: event.scanTime,
+        graceAnchor: event.graceAnchor || null,
         requireTimeOutConfirmation: false,
         confirmTimeOut: false
       });
@@ -1514,6 +1676,13 @@ if (!hasSingleInstanceLock) {
     await initOfflineStore(app.getPath('userData'));
     runtimeState.directoryLastRefreshedAt = getMeta('directoryRefreshedAt') || null;
     runtimeState.lastSuccessfulSyncAt = getDashboard({ today: localDateString() }).lastSuccessfulSyncAt || null;
+    // Detect a same-day power/app outage from the last heartbeat, then begin
+    // heartbeating so the next interruption is detectable too. Must run before
+    // the first scans so the recovery window is armed in time.
+    try { initOutageRecovery(); } catch (outageError) {
+      console.warn('Outage recovery init skipped:', outageError.message);
+    }
+    startHeartbeat();
     try {
       await migrateLegacyOfflineQueue();
     } catch (migrationError) {
@@ -1549,6 +1718,9 @@ app.on('before-quit', () => {
   } catch (err) {
     console.warn('Flush on quit failed:', err.message);
   }
+  // Record that this was a graceful shutdown so the next startup does not
+  // mistake a deliberate quit for a power interruption.
+  markCleanExit();
 });
 
 app.on('window-all-closed', () => {

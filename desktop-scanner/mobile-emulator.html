@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EduTrack Mobile Emulator Preview</title>
+  <style>
+    :root {
+      --green: #079662;
+      --green-dark: #065f46;
+      --bg: #eef7f3;
+      --ink: #10231b;
+      --muted: #64748b;
+      --line: #d7e8df;
+      --phone-w: min(390px, calc(100vw - 28px));
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(260px, 330px) minmax(0, 1fr);
+      gap: 28px;
+      align-items: center;
+      padding: 28px;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(7, 150, 98, 0.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(7, 150, 98, 0.045) 1px, transparent 1px),
+        radial-gradient(circle at 30% 10%, rgba(22, 163, 74, 0.13), transparent 32%),
+        var(--bg);
+      background-size: 28px 28px, 28px 28px, auto, auto;
+    }
+
+    .control-panel {
+      align-self: stretch;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 18px;
+      max-width: 330px;
+    }
+
+    .brand {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .brand-mark {
+      width: 54px;
+      height: 54px;
+      display: grid;
+      place-items: center;
+      border-radius: 16px;
+      background: #dcfce7;
+      color: var(--green-dark);
+      font-size: 28px;
+      box-shadow: 0 12px 28px rgba(6, 95, 70, 0.12);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 26px;
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    .eyebrow {
+      margin: 0 0 4px;
+      color: var(--green-dark);
+      font-size: 12px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .note {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .route-buttons {
+      display: grid;
+      gap: 10px;
+    }
+
+    button, a.open-link {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--green-dark);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+    }
+
+    button.primary {
+      border-color: transparent;
+      background: linear-gradient(135deg, var(--green), #16a34a);
+      color: #fff;
+    }
+
+    button:hover, a.open-link:hover { transform: translateY(-1px); }
+
+    .url-chip {
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.72);
+      color: #476155;
+      font-size: 12px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .preview-zone {
+      min-width: 0;
+      display: grid;
+      place-items: center;
+    }
+
+    .phone {
+      width: var(--phone-w);
+      height: min(844px, calc(100vh - 56px));
+      min-height: 620px;
+      border-radius: 42px;
+      padding: 12px;
+      background: #111827;
+      box-shadow: 0 32px 70px rgba(15, 23, 42, 0.34);
+      position: relative;
+    }
+
+    .phone::before {
+      content: "";
+      position: absolute;
+      top: 11px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 108px;
+      height: 24px;
+      border-radius: 0 0 18px 18px;
+      background: #111827;
+      z-index: 3;
+    }
+
+    .screen {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      border-radius: 32px;
+      background: #fff;
+      border: 1px solid rgba(255,255,255,0.08);
+      position: relative;
+    }
+
+    .statusbar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 34px;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 22px 0;
+      color: #0f172a;
+      font-size: 11px;
+      font-weight: 900;
+      pointer-events: none;
+    }
+
+    .signal {
+      letter-spacing: 1px;
+      color: #0f172a;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+      background: #f8fafc;
+    }
+
+    @media (max-width: 840px) {
+      body {
+        grid-template-columns: 1fr;
+        padding: 18px;
+      }
+
+      .control-panel {
+        max-width: var(--phone-w);
+        margin: 0 auto;
+      }
+
+      .phone {
+        height: 760px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <section class="control-panel">
+    <div class="brand">
+      <div class="brand-mark">▣</div>
+      <div>
+        <p class="eyebrow">Mobile App Preview</p>
+        <h1>EduTrack Android WebView</h1>
+      </div>
+    </div>
+    <p class="note">
+      This previews the same Railway web system opened by the Android APK, inside a phone-sized frame.
+    </p>
+
+    <div class="route-buttons">
+      <button class="primary" data-path="/app?app=1">Open Mobile App</button>
+      <button data-path="/login?app=1">Login Screen</button>
+      <button data-path="/admin/dashboard?app=1">Dashboard</button>
+      <button data-path="/admin/reports?app=1">Reports</button>
+      <button data-path="/mobile-app">Download Page</button>
+      <a class="open-link" id="openFull" href="#" target="_blank" rel="noopener">Open Full Page</a>
+    </div>
+
+    <div class="url-chip" id="urlText"></div>
+  </section>
+
+  <main class="preview-zone">
+    <div class="phone" aria-label="Android phone emulator preview">
+      <div class="screen">
+        <div class="statusbar">
+          <span id="clock">09:41</span>
+          <span class="signal">●●● 5G ▰</span>
+        </div>
+        <iframe id="mobileFrame" title="EduTrack mobile app emulator"></iframe>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const BASE = 'https://sdo-sipalay-edutrack.up.railway.app';
+    const frame = document.getElementById('mobileFrame');
+    const urlText = document.getElementById('urlText');
+    const openFull = document.getElementById('openFull');
+
+    function setRoute(path) {
+      const url = BASE + path;
+      frame.src = url;
+      urlText.textContent = url;
+      openFull.href = url;
+    }
+
+    document.querySelectorAll('[data-path]').forEach((button) => {
+      button.addEventListener('click', () => setRoute(button.dataset.path));
+    });
+
+    function updateClock() {
+      document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+    }
+
+    updateClock();
+    setInterval(updateClock, 30000);
+    setRoute('/app?app=1');
+  </script>
+</body>
+</html>

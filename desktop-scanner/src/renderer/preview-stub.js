@@ -59,7 +59,7 @@
   ];
 
   var SETTINGS = {
-    serverUrl:                 'https://school-attendance-qrbased.up.railway.app',
+    serverUrl:                 'https://sdo-sipalay-edutrack.up.railway.app',
     scannerMode:               'usb',
     selectedSchoolId:          '1',
     duplicateIntervalSeconds:  5,

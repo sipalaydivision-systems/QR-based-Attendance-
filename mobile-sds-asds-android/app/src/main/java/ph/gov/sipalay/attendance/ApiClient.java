@@ -192,7 +192,7 @@ final class ApiClient {
 
     private static List<String> getKnownBaseUrlCandidates() {
         return Arrays.asList(
-                "https://school-attendance-qrbased.up.railway.app"
+                "https://sdo-sipalay-edutrack.up.railway.app"
         );
     }
 

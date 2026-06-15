@@ -19,7 +19,7 @@ class AppConfig {
   static const noInternetMessage =
       "Can't connect to server due to no internet connection.";
   static const logoAsset = 'assets/images/app_logo.png';
-  static const baseUrl = 'https://school-attendance-qrbased.up.railway.app';
+  static const baseUrl = 'https://sdo-sipalay-edutrack.up.railway.app';
 }
 
 // Live branding pulled from the server (admin-uploaded logo + names). These
