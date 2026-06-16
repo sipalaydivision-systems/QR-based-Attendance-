@@ -325,7 +325,6 @@
 
 <script>
 var fileInput = document.getElementById('adviserImportFile');
-var uploadBtn = document.getElementById('uploadBtn');
 var fileChip = document.getElementById('fileChip');
 var importAlert = document.getElementById('importAlert');
 var confirmBar = document.getElementById('confirmBar');
@@ -350,7 +349,6 @@ function setAlert(type, msg) {
 function clearImportFile() {
     if (!fileInput) return;
     fileInput.value = '';
-    uploadBtn.disabled = true;
     fileChip.style.display = 'none';
     setAlert('','');
     hideConfirmBar();
@@ -389,7 +387,6 @@ if (fileInput) {
         document.getElementById('fileName').textContent = file.name;
         document.getElementById('fileSize').textContent = formatBytes(file.size);
         fileChip.style.display = 'flex';
-        uploadBtn.disabled = false;
         hasPendingImport = false;
         hideConfirmBar();
         clearPreview();
@@ -406,8 +403,6 @@ function submitPreview() {
     var fd = new FormData();
     fd.append('file', file);
     working = true;
-    uploadBtn.disabled = true;
-    uploadBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Reading...';
     setAlert('ok','Parsing <strong>'+esc(file.name)+'</strong>...');
 
     fetch('/admin/adviser-import-students', { method:'POST', body: fd })
@@ -430,8 +425,6 @@ function submitPreview() {
         .catch(function(err){ setAlert('err', esc((err&&err.error)||'Failed to read file.')); hideConfirmBar(); })
         .finally(function(){
             working = false;
-            uploadBtn.disabled = false;
-            uploadBtn.innerHTML = '<i class="fa-solid fa-file-arrow-up"></i> Upload & Import';
         });
 }
 
