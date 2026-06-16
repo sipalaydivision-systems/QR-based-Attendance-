@@ -173,13 +173,23 @@
     max-height: 120px !important;
     flex: 0 0 120px;
 }
-.qr-name {
+.qr-card .qr-name {
     width: 100%;
-    min-height: 28px;
-    max-height: 28px;
-    line-height: 1.3;
+    margin-top: 2px;
+    min-height: 34px;
+    max-height: 34px;
+    line-height: 1.2;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--gray-800);
     text-align: center;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     overflow: hidden;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 .qr-detail {
     width: 100%;
@@ -269,11 +279,20 @@
         max-height: 21mm !important;
         flex-basis: 21mm !important;
     }
-    .qr-name {
-        font-size: 8.5pt !important;
+    .qr-card .qr-name {
+        font-size: 8pt !important;
         font-weight: 700 !important;
-        min-height: 7.5mm !important;
-        max-height: 7.5mm !important;
+        line-height: 1.15 !important;
+        margin-top: 0 !important;
+        min-height: 8mm !important;
+        max-height: 8mm !important;
+        display: -webkit-box !important;
+        -webkit-box-orient: vertical !important;
+        -webkit-line-clamp: 2 !important;
+        line-clamp: 2 !important;
+        overflow: hidden !important;
+        overflow-wrap: anywhere !important;
+        word-break: break-word !important;
     }
     .qr-detail {
         font-size: 7.1pt !important;
