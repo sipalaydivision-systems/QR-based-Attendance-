@@ -1951,6 +1951,25 @@ router.put('/students/:id', requireAuth, async (req, res) => {
     }
 });
 
+// POST /api/students/bulk-delete  { ids: [1, 2, 3] }
+router.post('/students/bulk-delete', requireAuth, async (req, res) => {
+    try {
+        const ids = Array.isArray(req.body.ids)
+            ? req.body.ids.map((n) => parseInt(n, 10)).filter(Number.isFinite)
+            : [];
+        if (!ids.length) return res.status(400).json({ error: 'No students selected.' });
+        const placeholders = ids.map(() => '?').join(',');
+        const [result] = await db.query(
+            `UPDATE students SET status = 'deleted' WHERE id IN (${placeholders})`,
+            ids
+        );
+        return res.json({ success: true, deleted: result.affectedRows });
+    } catch (err) {
+        console.error('Bulk delete students error:', err);
+        return res.status(500).json({ error: 'Failed to delete selected students.' });
+    }
+});
+
 // DELETE /api/students/:id
 router.delete('/students/:id', requireAuth, async (req, res) => {
     try {
