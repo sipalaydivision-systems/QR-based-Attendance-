@@ -12,6 +12,7 @@
 </div>
 
 <div class="filter-bar">
+    <% if (user.role !== 'principal') { %>
     <div class="filter-item">
         <label>School</label>
         <select id="filterSchool" onchange="loadTeachers()">
@@ -21,6 +22,9 @@
             <% }) %>
         </select>
     </div>
+    <% } else { %>
+    <input type="hidden" id="filterSchool" value="">
+    <% } %>
     <div class="filter-item">
         <label>Type</label>
         <select id="filterCategory" onchange="loadTeachers()">

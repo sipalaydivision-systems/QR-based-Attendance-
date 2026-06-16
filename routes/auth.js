@@ -74,10 +74,43 @@ router.get('/logout', (req, res) => {
     });
 });
 
-// GET /change-password
+// Render the "My Account" page (profile + password) with the user's current info.
+async function renderAccount(req, res, opts) {
+    let profile = { fullname: req.session.user.fullname, email: req.session.user.email || '' };
+    try {
+        const [rows] = await db.query('SELECT fullname, email FROM users WHERE id = ?', [req.session.user.id]);
+        if (rows.length) profile = { fullname: rows[0].fullname, email: rows[0].email || '' };
+    } catch (e) { /* fall back to session values */ }
+    res.render('change_password', Object.assign({
+        title: 'My Account', page: 'account', error: null, success: null,
+        profileError: null, profileSuccess: null,
+        user: req.session.user, profile
+    }, opts || {}));
+}
+
+// GET /change-password (My Account)
 router.get('/change-password', (req, res) => {
     if (!req.session.user) return res.redirect('/login');
-    res.render('change_password', { title: 'Change Password', error: null, success: null, user: req.session.user });
+    return renderAccount(req, res);
+});
+
+// POST /update-profile — edit own name/email (all admin-side roles)
+router.post('/update-profile', async (req, res) => {
+    if (!req.session.user) return res.redirect('/login');
+    const fullname = (req.body.fullname || '').trim();
+    const email = (req.body.email || '').trim();
+    if (!fullname) {
+        return renderAccount(req, res, { profileError: 'Name is required.' });
+    }
+    try {
+        await db.query('UPDATE users SET fullname = ?, email = ? WHERE id = ?', [fullname, email || null, req.session.user.id]);
+        req.session.user.fullname = fullname;
+        req.session.user.email = email || null;
+        return renderAccount(req, res, { profileSuccess: 'Your information was updated successfully.' });
+    } catch (err) {
+        console.error('Update profile error:', err);
+        return renderAccount(req, res, { profileError: 'A server error occurred.' });
+    }
 });
 
 // POST /change-password
@@ -85,29 +118,29 @@ router.post('/change-password', async (req, res) => {
     if (!req.session.user) return res.redirect('/login');
     const { current_password, new_password, confirm_password } = req.body;
     if (!current_password || !new_password || !confirm_password) {
-        return res.render('change_password', { title: 'Change Password', error: 'All fields are required.', success: null, user: req.session.user });
+        return renderAccount(req, res, { error: 'All password fields are required.' });
     }
     if (new_password !== confirm_password) {
-        return res.render('change_password', { title: 'Change Password', error: 'New passwords do not match.', success: null, user: req.session.user });
+        return renderAccount(req, res, { error: 'New passwords do not match.' });
     }
     if (new_password.length < 6) {
-        return res.render('change_password', { title: 'Change Password', error: 'Password must be at least 6 characters.', success: null, user: req.session.user });
+        return renderAccount(req, res, { error: 'Password must be at least 6 characters.' });
     }
     try {
         const [rows] = await db.query('SELECT password FROM users WHERE id = ?', [req.session.user.id]);
         if (rows.length === 0) {
-            return res.render('change_password', { title: 'Change Password', error: 'User not found.', success: null, user: req.session.user });
+            return renderAccount(req, res, { error: 'User not found.' });
         }
         const match = await bcrypt.compare(current_password, rows[0].password);
         if (!match) {
-            return res.render('change_password', { title: 'Change Password', error: 'Current password is incorrect.', success: null, user: req.session.user });
+            return renderAccount(req, res, { error: 'Current password is incorrect.' });
         }
         const hashed = await bcrypt.hash(new_password, 10);
         await db.query('UPDATE users SET password = ? WHERE id = ?', [hashed, req.session.user.id]);
-        return res.render('change_password', { title: 'Change Password', error: null, success: 'Password changed successfully.', user: req.session.user });
+        return renderAccount(req, res, { success: 'Password changed successfully.' });
     } catch (err) {
         console.error('Change password error:', err);
-        return res.render('change_password', { title: 'Change Password', error: 'A server error occurred.', success: null, user: req.session.user });
+        return renderAccount(req, res, { error: 'A server error occurred.' });
     }
 });
 

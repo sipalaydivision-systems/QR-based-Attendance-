@@ -1219,15 +1219,28 @@ router.post('/adviser-change-password', express.json(), async (req, res) => {
     }
 });
 
+// Schools list scoped to the current user. Principals only ever see their own
+// school; all other roles get every active school.
+async function schoolsForUser(req) {
+    const u = req.session.user;
+    if (u && u.role === 'principal') {
+        if (!u.school_id) return [];
+        const [rows] = await db.query("SELECT * FROM schools WHERE id = ? AND status = 'active'", [u.school_id]);
+        return rows;
+    }
+    const [rows] = await db.query("SELECT * FROM schools WHERE status = 'active' ORDER BY name");
+    return rows;
+}
+
 // ---- Attendance ----
 router.get('/attendance', async (req, res) => {
-    const [schools] = await db.query("SELECT * FROM schools WHERE status = 'active' ORDER BY name");
+    const schools = await schoolsForUser(req);
     res.render('attendance', { title: 'Attendance', page: 'attendance', schools });
 });
 
 // ---- Students ----
 router.get('/students', async (req, res) => {
-    const [schools] = await db.query("SELECT * FROM schools WHERE status = 'active' ORDER BY name");
+    const schools = await schoolsForUser(req);
     const [gradeLevels] = await db.query('SELECT * FROM grade_levels ORDER BY name');
     const [sections] = await db.query('SELECT * FROM sections ORDER BY name');
     res.render('students', { title: 'Students', page: 'students', schools, gradeLevels, sections });
@@ -1235,7 +1248,7 @@ router.get('/students', async (req, res) => {
 
 // ---- Teachers ----
 router.get('/teachers', async (req, res) => {
-    const [schools] = await db.query("SELECT * FROM schools WHERE status = 'active' ORDER BY name");
+    const schools = await schoolsForUser(req);
     res.render('teachers', { title: 'Teachers', page: 'teachers', schools });
 });
 
@@ -1285,7 +1298,7 @@ router.get('/manage-schools', requireRole('super_admin'), async (req, res) => {
 
 // ---- SHS Students ----
 router.get('/shs-students', async (req, res) => {
-    const [schools] = await db.query("SELECT * FROM schools WHERE status = 'active' ORDER BY name");
+    const schools = await schoolsForUser(req);
     const [gradeLevels] = await db.query('SELECT * FROM grade_levels ORDER BY name');
     const [sections] = await db.query('SELECT * FROM sections ORDER BY name');
     res.render('shs_students', { title: 'SHS Students', page: 'shs_students', schools, gradeLevels, sections });
@@ -1293,7 +1306,7 @@ router.get('/shs-students', async (req, res) => {
 
 // ---- Sections ----
 router.get('/sections', async (req, res) => {
-    const [schools] = await db.query("SELECT * FROM schools WHERE status = 'active' ORDER BY name");
+    const schools = await schoolsForUser(req);
     const [gradeLevels] = await db.query('SELECT * FROM grade_levels ORDER BY name');
     res.render('sections', { title: 'Sections', page: 'sections', schools, gradeLevels });
 });

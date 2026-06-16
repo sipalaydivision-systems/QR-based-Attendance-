@@ -2220,7 +2220,10 @@ router.get('/sections', requireAuth, async (req, res) => {
             LEFT JOIN teachers at ON sec.adviser_teacher_id = at.id
             LEFT JOIN schools s ON sec.school_id = s.id WHERE 1=1`;
         const params = [];
-        if (req.query.school_id) { query += ' AND sec.school_id = ?'; params.push(req.query.school_id); }
+        // Principals are hard-scoped to their own school; everyone else may filter by param.
+        const scopedSchool = applySchoolFilter(req);
+        const schoolId = scopedSchool || req.query.school_id || null;
+        if (schoolId) { query += ' AND sec.school_id = ?'; params.push(schoolId); }
         if (req.query.grade_level_id) { query += ' AND sec.grade_level_id = ?'; params.push(req.query.grade_level_id); }
         query += ' ORDER BY sec.name';
         const [rows] = await db.query(query, params);
@@ -2230,13 +2233,30 @@ router.get('/sections', requireAuth, async (req, res) => {
     }
 });
 
+// Principals may only act within their assigned school. Returns the principal's
+// school_id, or null for non-principal roles (no extra restriction).
+function principalSchoolId(req) {
+    const u = req.session && req.session.user;
+    return u && u.role === 'principal' ? (u.school_id || -1) : null;
+}
+// True when the given section belongs to the user's scope (always true for non-principals).
+async function sectionInUserScope(req, sectionId) {
+    const ps = principalSchoolId(req);
+    if (ps === null) return true;
+    const [rows] = await db.query('SELECT school_id FROM sections WHERE id = ?', [sectionId]);
+    return rows.length > 0 && Number(rows[0].school_id) === Number(ps);
+}
+
 router.post('/sections', requireAuth, async (req, res) => {
     const { name, grade_level_id, school_id, adviser } = req.body;
     if (!name) return res.status(400).json({ error: 'Section name is required.' });
+    const ps = principalSchoolId(req);
+    if (ps !== null && ps <= 0) return res.status(403).json({ error: 'No school is assigned to your account.' });
+    const finalSchool = ps !== null ? ps : (school_id || null);
     try {
         const [result] = await db.query(
             'INSERT INTO sections (name, grade_level_id, school_id, adviser) VALUES (?, ?, ?, ?)',
-            [name, grade_level_id || null, school_id || null, adviser || null]
+            [name, grade_level_id || null, finalSchool, adviser || null]
         );
         return res.json({ success: true, id: result.insertId });
     } catch (err) {
@@ -2247,9 +2267,12 @@ router.post('/sections', requireAuth, async (req, res) => {
 router.put('/sections/:id', requireAuth, async (req, res) => {
     const { name, grade_level_id, school_id, adviser, status } = req.body;
     if (!name) return res.status(400).json({ error: 'Section name is required.' });
+    if (!(await sectionInUserScope(req, req.params.id))) return res.status(403).json({ error: 'You can only edit sections in your school.' });
+    const ps = principalSchoolId(req);
+    const finalSchool = ps !== null ? ps : (school_id || null);
     try {
         const fields = ['name = ?', 'grade_level_id = ?', 'school_id = ?', 'adviser = ?'];
-        const params = [name, grade_level_id || null, school_id || null, adviser || null];
+        const params = [name, grade_level_id || null, finalSchool, adviser || null];
         if (status) { fields.push('status = ?'); params.push(status); }
         params.push(req.params.id);
         await db.query('UPDATE sections SET ' + fields.join(', ') + ' WHERE id = ?', params);
@@ -2264,6 +2287,7 @@ router.patch('/sections/:id/status', requireAuth, async (req, res) => {
     if (!status || !['active', 'inactive'].includes(status)) {
         return res.status(400).json({ error: 'Invalid status.' });
     }
+    if (!(await sectionInUserScope(req, req.params.id))) return res.status(403).json({ error: 'You can only change sections in your school.' });
     try {
         await db.query('UPDATE sections SET status = ? WHERE id = ?', [status, req.params.id]);
         return res.json({ success: true });
@@ -2274,6 +2298,7 @@ router.patch('/sections/:id/status', requireAuth, async (req, res) => {
 
 router.delete('/sections/:id', requireAuth, async (req, res) => {
     try {
+        if (!(await sectionInUserScope(req, req.params.id))) return res.status(403).json({ error: 'You can only delete sections in your school.' });
         // Check for students in this section
         const [students] = await db.query('SELECT COUNT(*) as cnt FROM students WHERE section_id = ? AND status != ?', [req.params.id, 'deleted']);
         if (students[0].cnt > 0) {

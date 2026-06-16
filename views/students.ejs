@@ -11,6 +11,7 @@
 </div>
 
 <div class="filter-bar">
+    <% if (user.role !== 'principal') { %>
     <div class="filter-item">
         <label>School</label>
         <select id="filterSchool">
@@ -20,6 +21,9 @@
             <% }) %>
         </select>
     </div>
+    <% } else { %>
+    <input type="hidden" id="filterSchool" value="">
+    <% } %>
     <div class="filter-item">
         <label>Grade Level</label>
         <select id="filterGrade">
