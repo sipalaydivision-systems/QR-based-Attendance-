@@ -276,7 +276,7 @@ function cellHtml(s, d) {
     </tr>
 
     <!-- ═══ MALE ═══ -->
-    <% males.forEach(function(s, idx) { var t = studentTotals(s); var autoRemark = (s.enrolled_from > firstFriday && s.enrolled_from <= endDate) ? 'Late enrolled (' + s.enrolled_from + ')' : ''; var savedRemark = remarksMap[s.id] !== undefined ? remarksMap[s.id] : null; var displayRemark = savedRemark !== null ? savedRemark : autoRemark; %>
+    <% males.forEach(function(s, idx) { var t = studentTotals(s); var savedRemark = remarksMap[s.id] !== undefined ? remarksMap[s.id] : null; var displayRemark = savedRemark !== null ? savedRemark : ''; %>
     <tr>
         <td class="num-cell"><%= idx + 1 %>.</td>
         <td class="name-cell"><%= fmtName(s) %></td>
@@ -285,7 +285,7 @@ function cellHtml(s, d) {
         <td class="day-cell"><%= t.present || '' %></td>
         <td class="remark-cell">
             <span class="remark-display"><%= displayRemark %></span>
-            <input class="remark-input" type="text" data-student-id="<%= s.id %>" value="<%= displayRemark %>" placeholder="<%= autoRemark %>">
+            <input class="remark-input" type="text" data-student-id="<%= s.id %>" value="<%= displayRemark %>" placeholder="">
         </td>
     </tr>
     <% }); %>
@@ -301,7 +301,7 @@ function cellHtml(s, d) {
     </tr>
 
     <!-- ═══ FEMALE ═══ -->
-    <% females.forEach(function(s, idx) { var t = studentTotals(s); var autoRemark = (s.enrolled_from > firstFriday && s.enrolled_from <= endDate) ? 'Late enrolled (' + s.enrolled_from + ')' : ''; var savedRemark = remarksMap[s.id] !== undefined ? remarksMap[s.id] : null; var displayRemark = savedRemark !== null ? savedRemark : autoRemark; %>
+    <% females.forEach(function(s, idx) { var t = studentTotals(s); var savedRemark = remarksMap[s.id] !== undefined ? remarksMap[s.id] : null; var displayRemark = savedRemark !== null ? savedRemark : ''; %>
     <tr>
         <td class="num-cell"><%= idx + 1 %>.</td>
         <td class="name-cell"><%= fmtName(s) %></td>
@@ -310,7 +310,7 @@ function cellHtml(s, d) {
         <td class="day-cell"><%= t.present || '' %></td>
         <td class="remark-cell">
             <span class="remark-display"><%= displayRemark %></span>
-            <input class="remark-input" type="text" data-student-id="<%= s.id %>" value="<%= displayRemark %>" placeholder="<%= autoRemark %>">
+            <input class="remark-input" type="text" data-student-id="<%= s.id %>" value="<%= displayRemark %>" placeholder="">
         </td>
     </tr>
     <% }); %>
@@ -335,7 +335,7 @@ function cellHtml(s, d) {
         <td class="day-cell"><%= t.present || '' %></td>
         <td class="remark-cell">
             <span class="remark-display"><%= displayRemark %></span>
-            <input class="remark-input" type="text" data-student-id="<%= s.id %>" value="<%= displayRemark %>" placeholder="<%= autoRemark %>">
+            <input class="remark-input" type="text" data-student-id="<%= s.id %>" value="<%= displayRemark %>" placeholder="">
         </td>
     </tr>
     <% }); %>
