@@ -48,9 +48,11 @@ function requireRole(...roles) {
 // Apply school filter based on role
 function applySchoolFilter(req) {
     const user = req.session.user;
-    // Principals can only see their own school
-    if (user.role === 'principal' && user.school_id) {
-        return user.school_id;
+    // Principals are hard-scoped to their own school and may NOT override via params.
+    if (user.role === 'principal') {
+        // Assigned school wins. If a principal has no school assigned, return a
+        // sentinel that matches no rows so they see nothing instead of every school.
+        return user.school_id ? user.school_id : -1;
     }
     // Other roles can filter by query param
     const schoolParam = req.query.school || req.body.school;

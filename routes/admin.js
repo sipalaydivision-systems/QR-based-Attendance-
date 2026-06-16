@@ -409,11 +409,18 @@ router.get('/principal-dashboard', async (req, res) => {
     if (role !== 'principal') {
         return res.redirect(getDashboardUrl(role));
     }
-    const schoolId = req.session.user.school_id;
+    const schoolId = req.session.user.school_id || null;
+    // A principal is scoped strictly to their assigned school. Never load other schools.
     const [schools] = schoolId
         ? await db.query("SELECT * FROM schools WHERE id = ? AND status = 'active'", [schoolId])
-        : await db.query("SELECT * FROM schools WHERE status = 'active' ORDER BY name");
-    res.render('principal_dashboard', { title: 'Principal Dashboard', page: 'principal_dashboard', schools });
+        : [[]];
+    res.render('principal_dashboard', {
+        title: 'Principal Dashboard',
+        page: 'principal_dashboard',
+        schools,
+        principalSchoolId: schoolId,
+        principalSchoolName: schools[0] ? schools[0].name : null
+    });
 });
 
 router.get('/sds-dashboard', async (req, res) => {
