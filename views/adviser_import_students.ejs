@@ -153,6 +153,7 @@
 .ai-confirm-actions { display: flex; gap: 10px; }
 .btn-confirm { background: var(--primary); color: #fff; border: 0; padding: 9px 20px; border-radius: 10px; font-size: .85rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 7px; }
 .btn-confirm:hover { background: #15803d; }
+.btn-confirm:disabled { background: var(--gray-300); color: var(--gray-500); cursor: not-allowed; }
 .btn-cancel-import { background: #fff; color: var(--gray-600); border: 1.5px solid var(--gray-200); padding: 9px 16px; border-radius: 10px; font-size: .85rem; font-weight: 700; cursor: pointer; }
 .btn-cancel-import:hover { background: var(--gray-50); }
 
@@ -365,8 +366,13 @@ function showConfirmBar(willImport, willUpdate) {
     var parts = [];
     if (willImport) parts.push(willImport + ' new student' + (willImport !== 1 ? 's' : '') + ' to add');
     if (willUpdate) parts.push(willUpdate + ' existing to update');
-    document.getElementById('confirmSummaryText').textContent = parts.join(', ') || 'no valid rows';
-    confirmBar.style.display = total ? 'flex' : 'none';
+    document.getElementById('confirmSummaryText').textContent = parts.join(', ') || 'no valid rows to import yet';
+    // Always show the bar once a preview has loaded, so the Confirm button is visible.
+    confirmBar.style.display = 'flex';
+    confirmBtn.disabled = total === 0;
+    confirmBtn.innerHTML = total > 0
+        ? '<i class="fa-solid fa-check"></i> Confirm &amp; Save Import (' + total + ')'
+        : '<i class="fa-solid fa-check"></i> Confirm &amp; Save Import';
 }
 
 function clearPreview() {
