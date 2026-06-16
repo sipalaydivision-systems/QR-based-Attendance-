@@ -56,7 +56,11 @@
                     <input type="date" id="importDate" class="form-control">
                     <small style="color:var(--gray-500);">Newly imported students are excluded from absence counting on this date to prevent false same-day absences.</small>
                 </div>
-                <button type="submit" class="btn btn-primary btn-block" id="previewBtn"><i class="fa-solid fa-magnifying-glass"></i> Preview Data</button>
+                <div style="display:flex;gap:0.5rem;">
+                    <button type="submit" class="btn btn-primary" id="previewBtn" style="flex:1;"><i class="fa-solid fa-magnifying-glass"></i> Preview Data</button>
+                    <button type="button" class="btn btn-outline" id="clearBtn" onclick="clearFile()" style="display:none;"><i class="fa-solid fa-xmark"></i> Clear</button>
+                </div>
+                <small style="display:block;margin-top:0.5rem;color:var(--gray-400);">The preview runs automatically right after you choose a file.</small>
             </form>
         </div>
 
@@ -185,13 +189,29 @@ function switchTab(cat) {
 }
 
 function fileSelected(input) {
-    if (input.files[0]) {
-        document.getElementById('fileName').innerHTML = '<i class="fa-solid fa-file"></i> ' + input.files[0].name;
-    }
+    var file = input.files[0];
+    if (!file) { clearFile(); return; }
+    document.getElementById('fileName').innerHTML = '<i class="fa-solid fa-file"></i> ' + file.name;
+    document.getElementById('clearBtn').style.display = '';
+    // Automatic preview right after the file is chosen (like the adviser import page)
+    doPreview();
+}
+
+function clearFile() {
+    var input = document.getElementById('csvFile');
+    input.value = '';
+    document.getElementById('fileName').innerHTML = '';
+    document.getElementById('clearBtn').style.display = 'none';
+    document.getElementById('previewStep').style.display = 'none';
+    document.getElementById('uploadStep').style.display = 'block';
+    document.getElementById('importResult').innerHTML = '';
+    document.getElementById('confirmBtn').style.display = '';
+    previewData = null;
+    savedFormData = null;
 }
 
 async function doPreview(e) {
-    e.preventDefault();
+    if (e) e.preventDefault();
     var file = document.getElementById('csvFile').files[0];
     if (!file) { alert('Please select a file.'); return; }
     var btn = document.getElementById('previewBtn');
@@ -327,11 +347,15 @@ function showPreview(data) {
 
     // Valid count
     var validCount = data.validCount || 0;
+    var totalRows = data.total || 0;
     var confirmBtn = document.getElementById('confirmBtn');
     var importResult = document.getElementById('importResult');
-    if (validCount === 0) {
+    if (totalRows === 0) {
         confirmBtn.style.display = 'none';
-        importResult.innerHTML = '<div class="alert alert-warning"><i class="fa-solid fa-triangle-exclamation"></i> All rows were skipped — fix the errors listed above and upload the file again.</div>';
+        importResult.innerHTML = '<div class="alert alert-warning"><i class="fa-solid fa-triangle-exclamation"></i> No data rows were found in this file. Make sure your students are listed <strong>below the header row</strong> and that you uploaded the right file, then try again.</div>';
+    } else if (validCount === 0) {
+        confirmBtn.style.display = 'none';
+        importResult.innerHTML = '<div class="alert alert-warning"><i class="fa-solid fa-triangle-exclamation"></i> All ' + totalRows + ' row(s) were skipped — fix the errors shown in the table above and upload the file again.</div>';
     } else {
         confirmBtn.style.display = '';
         confirmBtn.disabled = false;
@@ -340,12 +364,7 @@ function showPreview(data) {
 }
 
 function cancelPreview() {
-    document.getElementById('previewStep').style.display = 'none';
-    document.getElementById('uploadStep').style.display = 'block';
-    document.getElementById('importResult').innerHTML = '';
-    document.getElementById('confirmBtn').style.display = '';
-    previewData = null;
-    savedFormData = null;
+    clearFile();
 }
 
 async function doConfirmImport() {
@@ -393,5 +412,33 @@ function localDateString(date) {
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 document.getElementById('importDate').value = localDateString();
+
+// Drag and drop support for the upload area
+(function() {
+    var area = document.getElementById('uploadArea');
+    var input = document.getElementById('csvFile');
+    if (!area || !input) return;
+    ['dragenter', 'dragover'].forEach(function(ev) {
+        area.addEventListener(ev, function(e) {
+            e.preventDefault(); e.stopPropagation();
+            area.style.borderColor = 'var(--primary)';
+            area.style.background = 'var(--gray-50)';
+        });
+    });
+    ['dragleave', 'drop'].forEach(function(ev) {
+        area.addEventListener(ev, function(e) {
+            e.preventDefault(); e.stopPropagation();
+            area.style.borderColor = '';
+            area.style.background = '';
+        });
+    });
+    area.addEventListener('drop', function(e) {
+        var files = e.dataTransfer && e.dataTransfer.files;
+        if (files && files.length) {
+            input.files = files;
+            fileSelected(input);
+        }
+    });
+})();
 </script>
 <%- include('partials/footer') %>
