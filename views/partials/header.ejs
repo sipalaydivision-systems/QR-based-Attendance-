@@ -19,7 +19,7 @@
 </head>
 <body>
     <% if (typeof user !== 'undefined' && user) { %>
-    <nav class="sidebar<%= (typeof user !== 'undefined' && user && user.role === 'adviser') ? ' sidebar-adviser' : '' %>" id="sidebar">
+    <nav class="sidebar<%= (typeof user !== 'undefined' && user && (user.role === 'adviser' || user.role === 'principal')) ? ' sidebar-blue' : '' %>" id="sidebar">
         <!-- Brand -->
         <div class="sidebar-brand">
             <div class="brand-icon" id="sidebarLogo">
@@ -177,36 +177,22 @@
 
         <!-- Sidebar Footer -->
         <div class="sidebar-footer">
-            <% if (user.role === 'adviser') { %>
-            <div class="user-info" style="cursor:pointer;" onclick="openAdviserProfileModal('profile')" title="View Profile">
+            <div class="user-info" style="cursor:pointer;" onclick="openAdviserProfileModal('profile')" title="View / edit profile">
                 <div class="user-avatar" id="sidebarAvatar"><%= user.fullname ? user.fullname.charAt(0).toUpperCase() : 'U' %></div>
                 <div class="user-details">
                     <strong><%= user.fullname %></strong>
-                    <small>Adviser</small>
+                    <small><%= user.role === 'adviser' ? 'Adviser' : user.role.replace(/_/g, ' ') %></small>
                 </div>
             </div>
-            <% } else { %>
-            <div class="user-info">
-                <div class="user-avatar"><%= user.fullname ? user.fullname.charAt(0).toUpperCase() : 'U' %></div>
-                <div class="user-details">
-                    <strong><%= user.fullname %></strong>
-                    <small><%= user.role.replace(/_/g, ' ') %></small>
-                </div>
-            </div>
-            <% } %>
             <div class="sidebar-footer-links">
-                <% if (user.role === 'adviser') { %>
-                <a href="#" onclick="openAdviserProfileModal('password');return false;"><i class="fa-solid fa-key"></i> Password</a>
-                <% } else { %>
-                <a href="/change-password"><i class="fa-solid fa-user-gear"></i> My Account</a>
-                <% } %>
+                <a href="#" onclick="openAdviserProfileModal('password');return false;"><i class="fa-solid fa-user-gear"></i> My Account</a>
                 <a href="/logout" class="logout-btn"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
             </div>
         </div>
     </nav>
 
-    <% if (typeof user !== 'undefined' && user && user.role === 'adviser') { %>
-    <!-- Adviser Profile Modal -->
+    <% if (typeof user !== 'undefined' && user) { %>
+    <!-- Account Profile Modal -->
     <div id="adviserProfileModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:1rem;">
         <div style="background:#fff;border-radius:14px;width:min(98vw,460px);max-height:92vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.3);">
 
@@ -299,6 +285,12 @@
     </div>
 
     <script>
+    // Advisers act on the teachers table; all other roles on the users table.
+    var ACCOUNT = <%- JSON.stringify(
+        user.role === 'adviser'
+            ? { data: '/admin/adviser-profile-data', profile: '/admin/adviser-update-profile', password: '/admin/adviser-change-password', photo: '/admin/adviser-upload-photo' }
+            : { data: '/admin/account-data', profile: '/admin/account-update-profile', password: '/admin/account-change-password', photo: '/admin/account-upload-photo' }
+    ) %>;
     function openAdviserProfileModal(mode) {
         var m = document.getElementById('adviserProfileModal');
         var profilePanel = document.getElementById('pmProfilePanel');
@@ -336,7 +328,7 @@
         var sessionName = '<%= user && user.fullname ? user.fullname.replace(/'/g, "\\'") : "" %>';
         document.getElementById('pmFullNameInput').value = sessionName;
         try {
-            var res = await fetch('/admin/adviser-profile-data');
+            var res = await fetch(ACCOUNT.data);
             if (!res.ok) return;
             var t = await res.json();
             if (t.error) return;
@@ -344,11 +336,13 @@
             if (t.profile_photo) {
                 document.getElementById('pmAvatarInner').innerHTML =
                     '<img src="' + t.profile_photo + '" alt="Photo" style="width:100%;height:100%;object-fit:cover;">';
+                var sav = document.getElementById('sidebarAvatar');
+                if (sav) sav.innerHTML = '<img src="' + t.profile_photo + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
             }
-            // name: build from DB parts; fall back to session name
+            // name: use fullname directly, or build from parts (teachers), fall back to session name
             var parts = [t.firstname, t.middlename, t.lastname].filter(function(p){ return p && p.trim(); });
-            var combinedName = parts.join(' ').trim();
-            document.getElementById('pmFullNameInput').value = combinedName || sessionName;
+            var combinedName = (t.fullname && t.fullname.trim()) ? t.fullname.trim() : parts.join(' ').trim();
+            document.getElementById('pmFullNameInput').value = combinedName || t.session_fullname || sessionName;
             document.getElementById('pmEmail').value   = t.email   || '';
             document.getElementById('pmContact').value = t.contact || '';
         } catch(e) {
@@ -373,7 +367,7 @@
         btn.disabled = true;
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
         try {
-            var res = await fetch('/admin/adviser-update-profile', {
+            var res = await fetch(ACCOUNT.profile, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ fullname, email, contact })
@@ -434,7 +428,7 @@
         btn.disabled = true;
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
         try {
-            var res = await fetch('/admin/adviser-change-password', {
+            var res = await fetch(ACCOUNT.password, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ current_password: cur, new_password: nw, confirm_password: conf })
@@ -465,7 +459,7 @@
         var form = new FormData();
         form.append('photo', file);
         try {
-            var res = await fetch('/admin/adviser-upload-photo', { method: 'POST', body: form });
+            var res = await fetch(ACCOUNT.photo, { method: 'POST', body: form });
             var data = await res.json();
             if (data.success) {
                 document.getElementById('pmAvatarInner').innerHTML = '<img src="' + data.photo + '" alt="Photo" style="width:100%;height:100%;object-fit:cover;">';

@@ -1219,6 +1219,79 @@ router.post('/adviser-change-password', express.json(), async (req, res) => {
     }
 });
 
+// ---- Account self-service for users-table roles (super_admin, principal, superintendent, asst_superintendent) ----
+async function ensureUserProfileColumns() {
+    await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo MEDIUMTEXT DEFAULT NULL`).catch(() => {});
+    await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS contact VARCHAR(50) DEFAULT NULL`).catch(() => {});
+}
+
+router.get('/account-data', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: 'Not authenticated' });
+    try {
+        await ensureUserProfileColumns();
+        const [[u]] = await db.query('SELECT id, fullname, email, contact, profile_photo FROM users WHERE id = ?', [req.session.user.id]);
+        if (!u) return res.status(404).json({ error: 'Not found' });
+        u.session_fullname = req.session.user.fullname || '';
+        res.json(u);
+    } catch (err) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+router.post('/account-update-profile', express.json(), async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: 'Not authenticated' });
+    const { fullname, email, contact } = req.body;
+    if (!fullname || !fullname.trim()) return res.status(400).json({ error: 'Name is required.' });
+    try {
+        await ensureUserProfileColumns();
+        await db.query(
+            'UPDATE users SET fullname = ?, email = ?, contact = ? WHERE id = ?',
+            [fullname.trim(), (email || '').trim() || null, (contact || '').trim() || null, req.session.user.id]
+        );
+        req.session.user.fullname = fullname.trim();
+        req.session.user.email = (email || '').trim() || null;
+        res.json({ success: true, fullname: fullname.trim() });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to update profile.' });
+    }
+});
+
+router.post('/account-upload-photo', upload.single('photo'), async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: 'Not authenticated' });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowed.includes(req.file.mimetype)) return res.status(400).json({ error: 'Only image files are allowed.' });
+    try {
+        await ensureUserProfileColumns();
+        const dataUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+        await db.query('UPDATE users SET profile_photo = ? WHERE id = ?', [dataUrl, req.session.user.id]);
+        res.json({ success: true, photo: dataUrl });
+    } catch (err) {
+        console.error('Account photo upload error:', err);
+        res.status(500).json({ error: 'Upload failed.' });
+    }
+});
+
+router.post('/account-change-password', express.json(), async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: 'Not authenticated' });
+    const { current_password, new_password, confirm_password } = req.body;
+    if (!current_password || !new_password || !confirm_password) return res.status(400).json({ error: 'All fields are required.' });
+    if (new_password !== confirm_password) return res.status(400).json({ error: 'New passwords do not match.' });
+    if (new_password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    try {
+        const [[u]] = await db.query('SELECT password FROM users WHERE id = ?', [req.session.user.id]);
+        if (!u) return res.status(404).json({ error: 'Account not found.' });
+        const match = await bcrypt.compare(current_password, u.password);
+        if (!match) return res.status(400).json({ error: 'Current password is incorrect.' });
+        const hashed = await bcrypt.hash(new_password, 10);
+        await db.query('UPDATE users SET password = ? WHERE id = ?', [hashed, req.session.user.id]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Account change password error:', err);
+        res.status(500).json({ error: 'A server error occurred.' });
+    }
+});
+
 // Schools list scoped to the current user. Principals only ever see their own
 // school; all other roles get every active school.
 async function schoolsForUser(req) {

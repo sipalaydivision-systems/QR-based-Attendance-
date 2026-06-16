@@ -54,6 +54,8 @@ CREATE TABLE IF NOT EXISTS users (
     password VARCHAR(255) NOT NULL,
     fullname VARCHAR(255) NOT NULL,
     email VARCHAR(255),
+    contact VARCHAR(50),
+    profile_photo MEDIUMTEXT,
     role ENUM('super_admin','principal','superintendent','asst_superintendent','adviser') NOT NULL DEFAULT 'principal',
     teacher_id INT,
     school_id INT,
