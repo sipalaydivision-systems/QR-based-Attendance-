@@ -1171,7 +1171,7 @@ class _LoginScreenState extends State<LoginScreen>
                       const SizedBox(height: 18),
                       const Center(
                         child: Text(
-                          '${AppConfig.monitoringLabel}\nv2.1.17',
+                          '${AppConfig.monitoringLabel}\nv2.1.18',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Color(0xFF77847E),
@@ -3725,16 +3725,10 @@ class DashboardPage extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: AnalyticsMetric(
-                        label: halfDay > 0
-                            ? 'Half-Day'
-                            : 'Attendance Percentage',
-                        value: halfDay > 0 ? '$halfDay' : '$rate%',
-                        color: halfDay > 0
-                            ? const Color(0xFFEA580C)
-                            : scoreColor,
-                        onTap: halfDay > 0
-                            ? () => openAttendanceDetails('half_day')
-                            : null,
+                        label: 'Half-Day',
+                        value: '$halfDay',
+                        color: const Color(0xFFEA580C),
+                        onTap: () => openAttendanceDetails('half_day'),
                       ),
                     ),
                   ],
