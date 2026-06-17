@@ -11,6 +11,19 @@
     </div>
 </div>
 
+<% if (user.role === 'principal' && schools && schools[0]) { %>
+<div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:18px;">
+    <span style="display:inline-flex; align-items:center; gap:8px; padding:7px 16px; border-radius:20px; background:#eef2ff; color:#4f46e5; font-size:0.8125rem; font-weight:600; box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+        <% if (schools[0].logo) { %>
+        <img src="<%= schools[0].logo %>" alt="" style="width:20px;height:20px;object-fit:contain;border-radius:50%;background:#fff;padding:2px;box-shadow:0 0 0 1px rgba(79,70,229,0.12);" onerror="this.onerror=null;this.style.display='none';">
+        <% } else { %>
+        <i class="fa-solid fa-school"></i>
+        <% } %>
+        <%= schools[0].name %>
+    </span>
+</div>
+<% } %>
+
 <div class="filter-bar">
     <% if (user.role !== 'principal') { %>
     <div class="filter-item">
