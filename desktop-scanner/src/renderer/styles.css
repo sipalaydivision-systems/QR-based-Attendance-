@@ -1048,10 +1048,9 @@ body.settings-open .side-panel {
   font-weight: 900;
 }
 
-.time-arrow::before {
-  content: '>';
-  font-size: 16px;
-  line-height: 1;
+.time-arrow svg {
+  width: 14px;
+  height: 14px;
 }
 
 .time-badge.time-out .time-arrow {
