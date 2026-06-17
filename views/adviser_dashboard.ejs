@@ -101,6 +101,8 @@
 .ad-status-pill.inside  { background: #dbeafe; color: #2563eb; }
 .ad-status-pill.outside { background: #fce7f3; color: #db2777; }
 .ad-status-pill.inactive { background: var(--gray-100); color: var(--gray-400); }
+.ad-edit-btn { width: 32px; height: 32px; border: 1px solid var(--gray-200); background: #fff; color: var(--primary); border-radius: 8px; cursor: pointer; transition: background .15s, border-color .15s; }
+.ad-edit-btn:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
 .ad-status-pill.flagged { background: #fef2f2; color: #b91c1c; }
 
 .ad-flag-badge {
@@ -230,10 +232,11 @@
                         <th>Time In</th>
                         <th>Time Out</th>
                         <th>Guardian Contact</th>
+                        <th style="text-align:center;">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="adStudentBody">
-                    <tr><td colspan="6" class="ad-empty"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</td></tr>
+                    <tr><td colspan="7" class="ad-empty"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -246,6 +249,26 @@
 <script>
 (function() {
     var allStudents = [];
+    // Section transfer state lives on window so the window-scoped edit modal
+    // handlers below can read it.
+    window.adviserSections = [];
+    window.adviserSectionId = <%= teacher.section_id ? teacher.section_id : 'null' %>;
+
+    window.populateAdviserSectionSelect = function() {
+        var sel = document.getElementById('esSection');
+        if (!sel) return;
+        sel.innerHTML = window.adviserSections.map(function(s) {
+            var label = (s.grade_name ? s.grade_name + ' — ' : '') + s.name;
+            return '<option value="' + s.id + '">' + label + '</option>';
+        }).join('');
+    };
+
+    function loadAdviserSections() {
+        fetch('/admin/adviser-sections')
+            .then(function(r) { return r.json(); })
+            .then(function(rows) { window.adviserSections = Array.isArray(rows) ? rows : []; window.populateAdviserSectionSelect(); })
+            .catch(function() { /* dropdown stays empty; transfer simply unavailable */ });
+    }
     var currentFilter = 'all';
 
     function localDateString() {
@@ -331,7 +354,7 @@
             });
         }
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="ad-empty"><i class="fa-solid fa-user-slash"></i> No students found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="ad-empty"><i class="fa-solid fa-user-slash"></i> No students found</td></tr>';
             return;
         }
         var html = '';
@@ -347,6 +370,12 @@
             html += '<td>' + timeCell(s.time_in) + '</td>';
             html += '<td>' + timeCell(s.time_out) + '</td>';
             html += '<td style="font-size:0.8125rem;color:var(--gray-500);">' + (s.guardian_contact || '--') + '</td>';
+            var enc = encodeURIComponent(JSON.stringify({
+                id: s.id, firstname: s.firstname, lastname: s.lastname,
+                middlename: s.middlename || '', lrn: s.lrn || '',
+                gender: s.gender || '', guardian_contact: s.guardian_contact || ''
+            })).replace(/'/g, '%27');
+            html += '<td style="text-align:center;"><button class="ad-edit-btn" title="Edit / Transfer Section" onclick="openEditStudent(\'' + enc + '\')"><i class="fa-solid fa-user-pen"></i></button></td>';
             html += '</tr>';
         });
         tbody.innerHTML = html;
@@ -357,7 +386,7 @@
             var res = await fetch('/api/adviser-dashboard?date=' + encodeURIComponent(date));
             var data = await res.json();
             if (data.error) {
-                document.getElementById('adStudentBody').innerHTML = '<tr><td colspan="6" class="ad-empty"><i class="fa-solid fa-triangle-exclamation"></i> ' + data.error + '</td></tr>';
+                document.getElementById('adStudentBody').innerHTML = '<tr><td colspan="7" class="ad-empty"><i class="fa-solid fa-triangle-exclamation"></i> ' + data.error + '</td></tr>';
                 return;
             }
             document.getElementById('adTotal').textContent = data.kpi.total;
@@ -369,11 +398,14 @@
             allStudents = data.students;
             renderStudents();
         } catch (err) {
-            document.getElementById('adStudentBody').innerHTML = '<tr><td colspan="6" class="ad-empty"><i class="fa-solid fa-triangle-exclamation"></i> Failed to load data</td></tr>';
+            document.getElementById('adStudentBody').innerHTML = '<tr><td colspan="7" class="ad-empty"><i class="fa-solid fa-triangle-exclamation"></i> Failed to load data</td></tr>';
         }
     }
 
+    // Exposed so the window-scoped edit/transfer modal handlers can refresh the list.
+    window.loadDashboard = loadDashboard;
     loadDashboard(dateInput.value);
+    loadAdviserSections();
 })();
 
 window.openEditStudent = function(encoded) {
@@ -385,6 +417,9 @@ window.openEditStudent = function(encoded) {
     document.getElementById('esLrn').value = s.lrn;
     document.getElementById('esGender').value = s.gender || '';
     document.getElementById('esGuardian').value = s.guardian_contact;
+    if (!window.adviserSections.length && window.populateAdviserSectionSelect) window.populateAdviserSectionSelect();
+    var secSel = document.getElementById('esSection');
+    if (secSel && window.adviserSectionId) secSel.value = window.adviserSectionId;
     document.getElementById('esError').style.display = 'none';
     document.getElementById('esError').textContent = '';
     document.getElementById('editStudentModal').style.display = 'flex';
@@ -404,6 +439,13 @@ window.submitEditStudent = function() {
         errEl.style.display = '';
         return;
     }
+    var secEl = document.getElementById('esSection');
+    var newSection = secEl ? secEl.value : '';
+    if (newSection && window.adviserSectionId && String(newSection) !== String(window.adviserSectionId)) {
+        var secName = secEl.options[secEl.selectedIndex] ? secEl.options[secEl.selectedIndex].text : 'another section';
+        if (!confirm('Transfer ' + fn + ' ' + ln + ' to "' + secName + '"?\n\nThey will be moved out of your class list.')) return;
+    }
+
     var btn = document.getElementById('esSaveBtn');
     btn.disabled = true;
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
@@ -418,14 +460,15 @@ window.submitEditStudent = function() {
             middlename: document.getElementById('esMiddlename').value.trim(),
             lrn: document.getElementById('esLrn').value.trim(),
             gender: document.getElementById('esGender').value,
-            guardian_contact: document.getElementById('esGuardian').value.trim()
+            guardian_contact: document.getElementById('esGuardian').value.trim(),
+            section_id: newSection || null
         })
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.success) {
             closeEditStudent();
-            loadDashboard(dateInput.value);
+            window.loadDashboard(document.getElementById('adDate').value);
         } else {
             errEl.textContent = data.error || 'Save failed.';
             errEl.style.display = '';
@@ -497,6 +540,11 @@ function generateSF2() {
                     <label style="font-size:0.75rem;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px;">Guardian Contact</label>
                     <input type="text" id="esGuardian" class="form-control" placeholder="09XXXXXXXXX" style="width:100%;box-sizing:border-box;">
                 </div>
+            </div>
+            <div class="form-group" style="margin-bottom:14px;">
+                <label style="font-size:0.75rem;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px;">Section <span style="color:var(--gray-400);font-weight:600;text-transform:none;letter-spacing:0;">— transfer</span></label>
+                <select id="esSection" class="form-control" style="width:100%;box-sizing:border-box;"></select>
+                <div style="font-size:0.72rem;color:var(--gray-500);margin-top:5px;"><i class="fa-solid fa-circle-info"></i> Moving a student to another section transfers them out of your class list.</div>
             </div>
             <div id="esError" style="color:#dc2626;font-size:0.8125rem;margin-bottom:10px;display:none;"></div>
             <div style="display:flex;gap:10px;justify-content:flex-end;">

@@ -755,7 +755,7 @@ router.post('/adviser-edit-student', express.json(), async (req, res) => {
     const teacherId = req.session.user.teacher_id;
     if (!teacherId) return res.status(400).json({ error: 'No teacher record' });
 
-    const { student_id, firstname, lastname, middlename, lrn, gender, guardian_contact } = req.body;
+    const { student_id, firstname, lastname, middlename, lrn, gender, guardian_contact, section_id } = req.body;
     const sid = parseInt(student_id, 10);
     if (!sid || sid <= 0) return res.status(400).json({ error: 'Invalid student' });
 
@@ -773,7 +773,7 @@ router.post('/adviser-edit-student', express.json(), async (req, res) => {
 
     try {
         // Security: ensure the student belongs to this teacher's section
-        const [[t]] = await db.query(`SELECT section_id FROM teachers WHERE id = ?`, [teacherId]);
+        const [[t]] = await db.query(`SELECT section_id, school_id FROM teachers WHERE id = ?`, [teacherId]);
         if (!t) return res.status(403).json({ error: 'Teacher not found' });
 
         const [[s]] = await db.query(`SELECT id FROM students WHERE id = ? AND section_id = ? AND status != 'deleted'`, [sid, t.section_id]);
@@ -785,14 +785,55 @@ router.post('/adviser-edit-student', express.json(), async (req, res) => {
             if (dup.length > 0) return res.status(400).json({ error: 'LRN already used by another student' });
         }
 
+        // Optional section transfer. Only allowed within the adviser's own school;
+        // moving to a section in another grade also updates the student's grade.
+        const reqSection = parseInt(section_id, 10);
+        let transferSet = '';
+        const transferParams = [];
+        if (reqSection && reqSection !== Number(t.section_id)) {
+            const [[dest]] = await db.query(
+                `SELECT id, school_id, grade_level_id FROM sections WHERE id = ? AND (status IS NULL OR status != 'deleted')`,
+                [reqSection]
+            );
+            if (!dest) return res.status(400).json({ error: 'Destination section was not found.' });
+            if (Number(dest.school_id) !== Number(t.school_id)) {
+                return res.status(403).json({ error: 'You can only transfer students within your own school.' });
+            }
+            transferSet = ', section_id=?, grade_level_id=?';
+            transferParams.push(dest.id, dest.grade_level_id || null);
+        }
+
         await db.query(
-            `UPDATE students SET firstname=?, lastname=?, middlename=?, lrn=?, gender=?, guardian_contact=? WHERE id=?`,
-            [fn, ln, mn, lrnVal || null, gNorm, gc, sid]
+            `UPDATE students SET firstname=?, lastname=?, middlename=?, lrn=?, gender=?, guardian_contact=?${transferSet} WHERE id=?`,
+            [fn, ln, mn, lrnVal || null, gNorm, gc, ...transferParams, sid]
         );
-        res.json({ success: true });
+        res.json({ success: true, transferred: transferParams.length > 0 });
     } catch (err) {
         console.error('Adviser edit student error:', err);
         res.status(500).json({ error: 'Update failed' });
+    }
+});
+
+// ---- Adviser: sections in their school (destinations for a student transfer) ----
+router.get('/adviser-sections', async (req, res) => {
+    if (!req.session.user || req.session.user.role !== 'adviser') return res.status(403).json({ error: 'Unauthorized' });
+    const teacherId = req.session.user.teacher_id;
+    if (!teacherId) return res.status(400).json({ error: 'No teacher record' });
+    try {
+        const [[t]] = await db.query(`SELECT school_id FROM teachers WHERE id = ?`, [teacherId]);
+        if (!t) return res.status(403).json({ error: 'Teacher not found' });
+        const [rows] = await db.query(
+            `SELECT sec.id, sec.name, gl.name AS grade_name
+             FROM sections sec
+             LEFT JOIN grade_levels gl ON sec.grade_level_id = gl.id
+             WHERE sec.school_id = ? AND (sec.status IS NULL OR sec.status != 'deleted')
+             ORDER BY gl.name, sec.name`,
+            [t.school_id]
+        );
+        res.json(rows);
+    } catch (err) {
+        console.error('Adviser sections error:', err);
+        res.status(500).json({ error: 'Failed to load sections' });
     }
 });
 
