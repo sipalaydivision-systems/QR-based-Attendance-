@@ -64,6 +64,20 @@ app.use(async (req, res, next) => {
     } catch (e) {
         res.locals.settings = {};
     }
+    // Header school context for adviser & principal (name + logo, shown big in the topbar)
+    res.locals.headerSchool = null;
+    try {
+        const u = req.session.user;
+        if (u && (u.role === 'adviser' || u.role === 'principal') && u.school_id) {
+            const [[school]] = await db.query(
+                "SELECT name, logo FROM schools WHERE id = ? AND status = 'active'",
+                [u.school_id]
+            );
+            if (school) res.locals.headerSchool = { name: school.name, logo: school.logo || null };
+        }
+    } catch (e) {
+        res.locals.headerSchool = null;
+    }
     next();
 });
 

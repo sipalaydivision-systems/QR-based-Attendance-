@@ -100,20 +100,6 @@
 </style>
 
 <div class="pd-wrap">
-    <!-- School context tile -->
-    <% if (principalSchoolName) { %>
-    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; background:#fff; border-radius:var(--radius-lg); border:1px solid var(--gray-200); box-shadow:var(--shadow); padding:14px 20px; margin-bottom:16px;">
-        <span style="display:inline-flex; align-items:center; gap:8px; padding:6px 14px; border-radius:20px; background:#eef2ff; color:#4f46e5; font-size:0.8125rem; font-weight:600;">
-            <% if (schools && schools[0] && schools[0].logo) { %>
-            <img src="<%= schools[0].logo %>" alt="" style="width:20px;height:20px;object-fit:contain;border-radius:50%;background:#fff;padding:2px;box-shadow:0 0 0 1px rgba(79,70,229,0.12);" onerror="this.onerror=null;this.style.display='none';">
-            <% } else { %>
-            <i class="fa-solid fa-school"></i>
-            <% } %>
-            <%= principalSchoolName %>
-        </span>
-    </div>
-    <% } %>
-
     <!-- Welcome Banner -->
     <div class="welcome-banner">
         <div class="wb-left">
