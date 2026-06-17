@@ -1,6 +1,6 @@
 {
   "name": "edutrack-desktop-scanner",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "EduTrack Scanner desktop attendance application",
   "main": "src/main.js",
   "author": "Wesley Hans Platil",

@@ -615,7 +615,7 @@ function bannerHeadingFor(data, tone, fallbackTitle) {
   if (tone === 'error') return 'Scan needs attention'.toUpperCase();
   const action = String(data.action || '');
   const ds = displayStatusOf(data);
-  if (data.status === 'half_day') return 'Half-day attendance'.toUpperCase();
+  if (data.status === 'half_day') return (data.late_half_day ? 'Half-day · Late' : 'Half-day attendance').toUpperCase();
   if (data.offline) return action === 'TIME_OUT' ? 'Time out saved offline'.toUpperCase() : 'Time in saved offline'.toUpperCase();
   if (action === 'TIME_IN') {
     if (ds === 'RETURNED') return 'Welcome back!'.toUpperCase();
@@ -676,11 +676,11 @@ function heroConfigFor(data) {
   if (action === 'TIME_OUT') {
     if (data.status === 'half_day') {
       return {
-        label: 'Half-Day',
+        label: data.late_half_day ? 'Half-Day (Late)' : 'Half-Day',
         value: data.time_out || data.time || '---',
         variant: 'out',
         pill: data.remarks || 'Partial Day',
-        pillClass: 'out'
+        pillClass: data.late_half_day ? 'late' : 'out'
       };
     }
     const pills = {
@@ -705,11 +705,11 @@ function heroConfigFor(data) {
   const late = ds ? ds === 'LATE' : data.status === 'late';
   if (data.status === 'half_day') {
     return {
-      label: 'Half-Day',
+      label: data.late_half_day ? 'Half-Day (Late)' : 'Half-Day',
       value: data.time_in || data.time || '---',
       variant: 'out',
       pill: data.remarks || 'Partial Day',
-      pillClass: 'out'
+      pillClass: data.late_half_day ? 'late' : 'out'
     };
   }
   if (data.offline) {

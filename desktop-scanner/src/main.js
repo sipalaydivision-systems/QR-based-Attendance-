@@ -280,7 +280,7 @@ function offlineScheduleForDate(attendanceDate, settings) {
     lunchStart: combineDateAndTime(attendanceDate, settings.lunchBreakStart, '11:30'),
     pmInStart: combineDateAndTime(attendanceDate, settings.pmTimeInStart, '13:00'),
     // PM Late Start Time is opt-in: null unless explicitly configured.
-    pmLateStart: settings.pmLateTime ? combineDateAndTime(attendanceDate, settings.pmLateTime, '13:15') : null,
+    pmLateStart: combineDateAndTime(attendanceDate, settings.pmLateTime, '13:15'),
     pmOutStart: combineDateAndTime(attendanceDate, settings.timeOutOpen, '16:00')
   };
 }
@@ -439,11 +439,13 @@ function computeOfflineDailyAttendanceStatus(input = {}) {
   const timeOut = input.timeOut || null;
 
   if (schedule.pmInStart && compareSqlDateTimes(timeIn, schedule.pmInStart) >= 0) {
+    const late = !!schedule.pmLateStart && compareSqlDateTimes(timeIn, schedule.pmLateStart) >= 0;
     return {
       status: 'half_day',
-      label: 'Half-Day',
-      halfDayType: 'pm_only',
-      remarks: 'Afternoon Session Only'
+      label: late ? 'Half-Day (Late)' : 'Half-Day',
+      halfDayType: late ? 'pm_late' : 'pm_only',
+      lateHalfDay: late,
+      remarks: late ? 'Afternoon Session Only (Late)' : 'Afternoon Session Only'
     };
   }
 
@@ -472,6 +474,7 @@ function responseAttendanceMeta(status) {
   return {
     attendance_status: status.label || statusLabel(status.status),
     half_day_type: status.halfDayType || null,
+    late_half_day: !!status.lateHalfDay,
     remarks: status.remarks || ''
   };
 }
