@@ -534,7 +534,7 @@ function renderStudents() {
             timeOutHtml = '<span style="color:var(--warning);font-weight:600"><i class="fa fa-hourglass-half" style="margin-right:4px"></i>Pending Time Out</span>';
         }
 
-        var statusLabel = formatStatusLabel(status);
+        var statusLabel = formatStatusLabel(status, att && att.late_half_day);
         var badgeClass = isStudentInactive
             ? 'badge badge-inactive'
             : (status === 'not recorded'

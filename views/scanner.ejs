@@ -523,9 +523,9 @@
 
         var ds = String(data.display_status || '').toUpperCase();
         if (data.status === 'half_day') {
-            banner.className = 'status-banner time-out';
+            banner.className = data.late_half_day ? 'status-banner late' : 'status-banner time-out';
             icon.innerHTML = '<i class="fas fa-circle-half-stroke"></i>';
-            label.textContent = 'HALF-DAY';
+            label.textContent = data.late_half_day ? 'HALF-DAY · LATE' : 'HALF-DAY';
             fill.className = 'fill orange';
         } else if (data.action === 'TIME_IN' && (ds === 'LATE' || (!ds && data.status === 'late'))) {
             banner.className = 'status-banner late';

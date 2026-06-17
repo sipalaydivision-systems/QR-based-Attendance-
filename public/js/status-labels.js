@@ -40,9 +40,14 @@
             .join(' ');
     }
 
-    function statusLabel(value) {
+    // `lateHalfDay` (boolean, or an options object { lateHalfDay }) refines a
+    // half-day into "Half-Day (Late)". It stays a half-day everywhere else —
+    // this is a label-only distinction, so totals/filters are unaffected.
+    function statusLabel(value, lateHalfDay) {
         var normalized = normalizeStatus(value);
         if (!normalized) return '-';
+        var isLate = lateHalfDay === true || (lateHalfDay && lateHalfDay.lateHalfDay);
+        if (isLate && (normalized === 'half day' || normalized === 'half_day')) return 'Half-Day (Late)';
         var underscoreKey = normalized.replace(/\s+/g, '_');
         return STATUS_LABELS[normalized] || STATUS_LABELS[underscoreKey] || titleCase(value);
     }

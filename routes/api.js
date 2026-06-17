@@ -17,7 +17,7 @@ const {
     secondsBetween,
     formatTime12
 } = require('../utils/appTime');
-const { computeDailyAttendanceStatus, statusLabel } = require('../utils/attendanceStatus');
+const { computeDailyAttendanceStatus, statusLabel, decorateLateHalfDays, isLateHalfDay } = require('../utils/attendanceStatus');
 
 function requireAuthOrScannerKiosk(req, res, next) {
     if (req.session && req.session.user) return next();
@@ -613,6 +613,13 @@ async function getAttendanceLateThreshold(personType, dateStr) {
     return addMinutes(new Date(dateStr + 'T' + baseTime + '+08:00'), graceMinutes);
 }
 
+// The PM Late cutoff ("HH:MM:SS"). A PM-only arrival on/after this is a late
+// half-day. Defaults to 13:15 so the rule is active even before it is saved.
+async function getPmLateTime() {
+    const [rows] = await db.query("SELECT setting_value FROM settings WHERE setting_key = 'pm_late_time'");
+    return normalizeTimeSetting(rows[0] && rows[0].setting_value, '13:15:00');
+}
+
 async function getSchoolDayEndDateTime(dateStr) {
     const [rows] = await db.query("SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('absence_cutoff_time', 'pm_time_out_end')");
     const settings = Object.fromEntries(rows.map(row => [row.setting_key, row.setting_value]));
@@ -630,9 +637,10 @@ async function getAttendanceScheduleTimes(dateStr) {
     return {
         lunchStart: sqlDateTime(dateStr, normalizeTimeSetting(settings.lunch_break_start, '11:30:00')),
         pmInStart: sqlDateTime(dateStr, normalizeTimeSetting(settings.pm_time_in_start, '13:00:00')),
-        // PM Late Start Time is opt-in: null unless explicitly configured, so existing
-        // setups keep showing plain "PM PRESENT" until the admin sets a PM late line.
-        pmLateStart: settings.pm_late_time ? sqlDateTime(dateStr, normalizeTimeSetting(settings.pm_late_time, '13:15:00')) : null,
+        // PM Late Start Time: a PM-only arrival on/after this time is a late half-day
+        // ("Half-Day (Late)"). Defaults to 13:15 (matching the settings UI default) so
+        // the rule is active out of the box; admins can change it in Settings.
+        pmLateStart: sqlDateTime(dateStr, normalizeTimeSetting(settings.pm_late_time, '13:15:00')),
         pmOutStart: sqlDateTime(dateStr, normalizeTimeSetting(settings.pm_time_out_end, '16:00:00'))
     };
 }
@@ -695,6 +703,7 @@ function responseAttendanceMeta(resolved) {
     return {
         attendance_status: status.label || statusLabel(status.status),
         half_day_type: status.halfDayType || null,
+        late_half_day: !!status.lateHalfDay,
         remarks: status.remarks || ''
     };
 }
@@ -2441,6 +2450,7 @@ router.get('/attendance', requireAuth, async (req, res) => {
 
         query += ' ORDER BY a.time_in DESC';
         const [rows] = await db.query(query, params);
+        decorateLateHalfDays(rows, await getPmLateTime());
         return res.json(rows);
     } catch (err) {
         return res.status(500).json({ error: 'Failed to fetch attendance.' });
@@ -3143,6 +3153,7 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
                     ELSE 'Present'
                 END as attendance_status,
                 MAX(a.status) as att_status,
+                MAX(a.time_in) as time_in,
                 MAX(a.monitoring_status) as monitoring_status
             FROM attendance a
             INNER JOIN students s ON a.person_id = s.id
@@ -3201,15 +3212,22 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
             streakFlags.map(item => [String(item.id), item])
         );
 
-        const presentStudents = presentRows.map(row => ({
-            ...row,
-            name: `${row.firstname || ''} ${row.lastname || ''}`.trim() || 'Student',
-            attendance_status: row.attendance_status || 'Present',
-            monitoring_status: row.monitoring_status || 'Inside School',
-            attendance_date: targetDate,
-            absent_days: 0,
-            absent_from_date: null
-        }));
+        const pmLateTime = await getPmLateTime();
+        const presentStudents = presentRows.map(row => {
+            const lateHalf = isLateHalfDay(row.att_status, row.time_in, pmLateTime);
+            return {
+                ...row,
+                name: `${row.firstname || ''} ${row.lastname || ''}`.trim() || 'Student',
+                late_half_day: lateHalf,
+                // Keep attendance_status filter/count-stable ('Half-Day'); views append
+                // "(Late)" using late_half_day so the Half-Day filter still matches.
+                attendance_status: row.attendance_status || 'Present',
+                monitoring_status: row.monitoring_status || 'Inside School',
+                attendance_date: targetDate,
+                absent_days: 0,
+                absent_from_date: null
+            };
+        });
         const absentStudents = absentRows.map(row => ({
             ...(() => {
                 const streak = streakByStudentId.get(String(row.id));
@@ -3230,8 +3248,8 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
             attendance_date: targetDate
         }));
         const statusKey = value => String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
-        const lateCount = presentStudents.filter(s => statusKey(s.attendance_status || s.att_status) === 'late').length;
-        const halfDayCount = presentStudents.filter(s => statusKey(s.attendance_status || s.att_status) === 'half_day').length;
+        const lateCount = presentStudents.filter(s => statusKey(s.att_status || s.attendance_status) === 'late').length;
+        const halfDayCount = presentStudents.filter(s => statusKey(s.att_status || s.attendance_status) === 'half_day').length;
 
         return res.json({
             date: targetDate,
@@ -3599,6 +3617,7 @@ router.get('/adviser-dashboard', requireAuth, async (req, res) => {
              ORDER BY s.lastname, s.firstname`, [date, sectionId]
         );
 
+        const pmLateTime = await getPmLateTime();
         const activeStudents = students.filter(s => s.status === 'active');
         const present = activeStudents.filter(s => ['present', 'late', 'half_day'].includes(s.att_status));
         const late = activeStudents.filter(s => s.att_status === 'late');
@@ -3635,6 +3654,7 @@ router.get('/adviser-dashboard', requireAuth, async (req, res) => {
                 last_time_in: s.last_time_in ? formatTime12(s.last_time_in) : null,
                 att_status: s.att_status,
                 monitoring_status: s.monitoring_status,
+                late_half_day: isLateHalfDay(s.att_status, s.time_in, pmLateTime),
                 attendance_status: statusLabel(s.att_status),
                 flagged: flaggedIds.includes(s.id)
             })),

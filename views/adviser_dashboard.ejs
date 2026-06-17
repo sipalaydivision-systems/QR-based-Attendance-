@@ -290,10 +290,10 @@
         renderStudents();
     };
 
-    function statusPill(attStatus) {
+    function statusPill(attStatus, lateHalfDay) {
         if (!attStatus) return '<span class="ad-status-pill absent"><i class="fa-solid fa-circle-xmark"></i> Absent</span>';
         if (attStatus === 'late') return '<span class="ad-status-pill late"><i class="fa-solid fa-clock"></i> Late</span>';
-        if (attStatus === 'half_day') return '<span class="ad-status-pill half_day"><i class="fa-solid fa-circle-half-stroke"></i> Half-Day</span>';
+        if (attStatus === 'half_day') return '<span class="ad-status-pill half_day"><i class="fa-solid fa-circle-half-stroke"></i> ' + (lateHalfDay ? 'Half-Day (Late)' : 'Half-Day') + '</span>';
         return '<span class="ad-status-pill present"><i class="fa-solid fa-circle-check"></i> Present</span>';
     }
 
@@ -343,7 +343,7 @@
             if (inactive) html += ' <span class="ad-status-pill inactive">Inactive</span>';
             if (s.flagged) html += ' <span class="ad-flag-badge"><i class="fa-solid fa-flag"></i> 2-Day</span>';
             html += '</div><div class="ad-student-lrn">LRN: ' + (s.lrn || 'N/A') + '</div></td>';
-            html += '<td>' + (inactive ? '<span class="ad-status-pill inactive">--</span>' : statusPill(s.att_status)) + '</td>';
+            html += '<td>' + (inactive ? '<span class="ad-status-pill inactive">--</span>' : statusPill(s.att_status, s.late_half_day)) + '</td>';
             html += '<td>' + timeCell(s.time_in) + '</td>';
             html += '<td>' + timeCell(s.time_out) + '</td>';
             html += '<td style="font-size:0.8125rem;color:var(--gray-500);">' + (s.guardian_contact || '--') + '</td>';

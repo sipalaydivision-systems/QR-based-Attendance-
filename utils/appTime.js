@@ -136,6 +136,7 @@ module.exports = {
     timestampForFilename,
     normalizeTime,
     sqlDateTime,
+    parseDateTime,
     compareDateTime,
     secondsBetween,
     formatTime12
