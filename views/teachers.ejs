@@ -273,10 +273,16 @@ function togglePwdVisibility(inputId, btn) {
     }
 }
 
+// When a principal changes an existing teacher's section it becomes a request
+// the teacher must confirm, rather than an instant change (super_admin stays instant).
+var IS_PRINCIPAL = <%= (typeof user !== 'undefined' && user && user.role === 'principal') ? 'true' : 'false' %>;
+var teacherOrigSection = '';
+
 async function editTeacherById(id) {
     await loadLookups();
     var t = allTeachers.find(function(x) { return x.id === id; });
     if (!t) return;
+    teacherOrigSection = t.section_id ? String(t.section_id) : '';
     document.getElementById('teacherModalTitle').textContent = 'Edit Teacher';
     document.getElementById('teacherId').value = t.id;
     document.getElementById('teacherEmpId').value = t.employee_id || '';
@@ -323,12 +329,29 @@ async function saveTeacher(e) {
         new_password: document.getElementById('teacherNewPassword').value.trim() || undefined,
         confirm_password: document.getElementById('teacherConfirmPassword').value.trim() || undefined
     };
+    var newSection = document.getElementById('teacherSection').value || '';
+    // Principal reassigning an existing teacher from one section to another:
+    // keep the current section on save and send a confirmation request instead.
+    var reassign = id && IS_PRINCIPAL && teacherOrigSection && newSection && newSection !== teacherOrigSection;
+    if (reassign) body.section_id = teacherOrigSection;
+
     var url = id ? '/api/teachers/' + id : '/api/teachers';
     var method = id ? 'PUT' : 'POST';
     var res = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     var data = await res.json();
-    if (data.success || data.id) { lookupsLoaded = false; closeTeacherModal(); loadTeachers(); }
-    else document.getElementById('teacherMsg').innerHTML = '<div class="alert alert-danger">' + esc(data.error || 'Failed to save teacher.') + '</div>';
+    if (!(data.success || data.id)) {
+        document.getElementById('teacherMsg').innerHTML = '<div class="alert alert-danger">' + esc(data.error || 'Failed to save teacher.') + '</div>';
+        return;
+    }
+    if (reassign) {
+        var tr = await fetch('/api/transfers/teacher', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ teacher_id: id, section_id: newSection })
+        }).then(function(r){ return r.json(); }).catch(function(){ return { error: 'Network error.' }; });
+        if (tr.success) { alert('Reassignment request sent — the teacher must accept it before the section changes.'); }
+        else { document.getElementById('teacherMsg').innerHTML = '<div class="alert alert-danger">' + esc(tr.error || 'Could not send reassignment request.') + '</div>'; return; }
+    }
+    lookupsLoaded = false; closeTeacherModal(); loadTeachers();
 }
 
 async function deleteTeacher(id) {
