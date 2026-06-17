@@ -1171,7 +1171,7 @@ class _LoginScreenState extends State<LoginScreen>
                       const SizedBox(height: 18),
                       const Center(
                         child: Text(
-                          '${AppConfig.monitoringLabel}\nv2.1.18',
+                          '${AppConfig.monitoringLabel}\nv2.1.19',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Color(0xFF77847E),
@@ -5107,8 +5107,16 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
     final section = '${row['section_name'] ?? '-'}';
     final lrn = '${row['lrn'] ?? '-'}';
     final adviser = '${row['adviser'] ?? '-'}'.trim();
-    final status = formatStatusLabel(row['attendance_status']);
-    final statusValue = statusKey(status);
+    // Derive the status key from the raw status so chip colour/grouping stay
+    // correct, then show "Half-Day (Late)" when the server flags a late
+    // half-day (PM-only arrival after the PM Late cutoff).
+    final lateHalfDay = row['late_half_day'] == true;
+    final statusValue = statusKey(
+      row['att_status'] ?? row['attendance_status'],
+    );
+    final status = lateHalfDay && statusValue == 'half_day'
+        ? 'Half-Day (Late)'
+        : formatStatusLabel(row['attendance_status']);
     final isAbsent = statusValue == 'absent';
     final isHalfDay = statusValue == 'half_day';
     final absentDays = intValue(row['absent_days']);
