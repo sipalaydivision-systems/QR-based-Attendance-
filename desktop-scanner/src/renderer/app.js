@@ -444,33 +444,42 @@ function humanizeAction(value) {
   return 'Scan';
 }
 
-function humanizeStatus(status, eventAction) {
-  const s = String(status || '').toUpperCase();
-  if (s === 'LATE') return 'Late';
-  if (s === 'HALF_DAY' || s === 'HALF-DAY') return 'Half-Day';
-  if (s === 'RETURNED') return 'Returned';
-  if (s === 'LUNCH OUT') return 'Lunch Out';
-  if (s === 'PM PRESENT') return 'PM Present';
-  if (s === 'COMPLETED') return 'Completed';
-  if (s === 'OUT') return 'Out';
-  if (s === 'PRESENT' || s === '') {
-    const a = String(eventAction || '').toUpperCase();
-    if (a === 'TIME_OUT') return 'Out';
-    return 'Present';
-  }
-  return 'Present';
-}
+// Resolve the small badge shown under each log row's time. The per-event
+// display label (PM PRESENT, PM LATE, RETURNED, LUNCH OUT, OUT, COMPLETED) is
+// the most specific signal; the daily status (present/late/half_day/absent)
+// refines a plain time-out into an early dismissal and acts as the fallback for
+// legacy rows saved before the display label was recorded.
+//
+// Deliberately NOT shown as separate badges: "AM Only" / "PM Only" half-day
+// subtypes (they are conveyed by the time-in vs time-out label already), and a
+// raw "half_day" on a PM time-in (shown as PM Present / PM Late instead).
+function resolveLogBadge(scan) {
+  const ds = String(scan && scan.displayStatus || '').toUpperCase().trim();
+  const daily = String(scan && scan.attendanceStatus || '').toLowerCase().trim();
+  const isTimeOut = String(scan && scan.eventAction || '').toUpperCase() === 'TIME_OUT';
 
-function statusClassFor(status, eventAction) {
-  const s = String(status || '').toUpperCase();
-  if (s === 'HALF_DAY' || s === 'HALF-DAY') return 'half-day';
-  if (s === 'LATE') return 'late';
-  if (s === 'RETURNED' || s === 'PM PRESENT') return 'returned';
-  if (s === 'LUNCH OUT' || s === 'OUT') return 'out';
-  if (s === 'COMPLETED') return 'completed';
-  const a = String(eventAction || '').toUpperCase();
-  if (a === 'TIME_OUT') return 'out';
-  return 'present';
+  switch (ds) {
+    case 'PRESENT':    return { label: 'Present',    cls: 'present' };
+    case 'LATE':       return { label: 'Late',       cls: 'late' };
+    case 'PM PRESENT': return { label: 'PM Present', cls: 'pm-present' };
+    case 'PM LATE':    return { label: 'PM Late',    cls: 'pm-late' };
+    case 'RETURNED':   return { label: 'Returned',   cls: 'returned' };
+    case 'LUNCH OUT':  return { label: 'Lunch Out',  cls: 'lunch-out' };
+    case 'COMPLETED':  return { label: 'Completed',  cls: 'completed' };
+    case 'OUT':
+      // A time-out that already makes the whole day a half-day means the person
+      // left the afternoon session early — surface it as an early dismissal.
+      return daily === 'half_day'
+        ? { label: 'Early Dismissal', cls: 'early-out' }
+        : { label: 'Out', cls: 'out' };
+    default: break;
+  }
+
+  // Legacy rows without a display label: fall back to the daily status.
+  if (daily === 'half_day') return { label: 'Half-Day', cls: 'half-day' };
+  if (daily === 'late')     return { label: 'Late',     cls: 'late' };
+  if (daily === 'absent')   return { label: 'Absent',   cls: 'absent' };
+  return isTimeOut ? { label: 'Out', cls: 'out' } : { label: 'Present', cls: 'present' };
 }
 
 function humanizeSync(value) {
@@ -897,9 +906,9 @@ function renderLocalScans(scans = []) {
     const isTeacherLog = personType === 'teacher' || personCategory === 'shs_teacher';
     const personBadgeLabel = isTeacherLog ? 'Teacher' : '';
 
-    const status = scan.displayStatus || scan.attendanceStatus || '';
-    const statusLabel = humanizeStatus(status, scan.eventAction);
-    const statusClass = statusClassFor(status, scan.eventAction);
+    const badge = resolveLogBadge(scan);
+    const statusLabel = badge.label;
+    const statusClass = badge.cls;
 
     tr.innerHTML = `
       <td data-label="Name">

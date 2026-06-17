@@ -951,12 +951,17 @@ body.settings-open .side-panel {
   letter-spacing: 0.3px;
   white-space: nowrap;
 }
-.log-status-badge.present   { background: #dcfce7; color: #166534; }
-.log-status-badge.late      { background: #fef3c7; color: #92400e; }
-.log-status-badge.half-day  { background: #ffedd5; color: #c2410c; }
-.log-status-badge.out       { background: #ffedd5; color: #9a3412; }
-.log-status-badge.returned  { background: #dbeafe; color: #1e40af; }
-.log-status-badge.completed { background: #dcfce7; color: #166534; }
+.log-status-badge.present    { background: #dcfce7; color: #166534; }
+.log-status-badge.late       { background: #fef3c7; color: #92400e; }
+.log-status-badge.half-day   { background: #ffedd5; color: #c2410c; }
+.log-status-badge.out        { background: #ffedd5; color: #9a3412; }
+.log-status-badge.returned   { background: #dbeafe; color: #1e40af; }
+.log-status-badge.completed  { background: #dcfce7; color: #166534; }
+.log-status-badge.pm-present { background: #cffafe; color: #0e7490; }
+.log-status-badge.pm-late    { background: #fde68a; color: #92400e; }
+.log-status-badge.early-out  { background: #f3e8ff; color: #7e22ce; }
+.log-status-badge.lunch-out  { background: #e2e8f0; color: #475569; }
+.log-status-badge.absent     { background: #fee2e2; color: #b91c1c; }
 
 /* Empty state */
 .table-empty {
