@@ -103,6 +103,8 @@
 .ad-status-pill.inactive { background: var(--gray-100); color: var(--gray-400); }
 .ad-edit-btn { width: 32px; height: 32px; border: 1px solid var(--gray-200); background: #fff; color: var(--primary); border-radius: 8px; cursor: pointer; transition: background .15s, border-color .15s; }
 .ad-edit-btn:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
+.adv-options summary::-webkit-details-marker { display: none; }
+.adv-options[open] summary { border-bottom: 1px solid var(--gray-200); }
 .ad-status-pill.flagged { background: #fef2f2; color: #b91c1c; }
 
 .ad-flag-badge {
@@ -541,11 +543,14 @@ function generateSF2() {
                     <input type="text" id="esGuardian" class="form-control" placeholder="09XXXXXXXXX" style="width:100%;box-sizing:border-box;">
                 </div>
             </div>
-            <div class="form-group" style="margin-bottom:14px;">
-                <label style="font-size:0.75rem;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px;">Section <span style="color:var(--gray-400);font-weight:600;text-transform:none;letter-spacing:0;">— transfer</span></label>
-                <select id="esSection" class="form-control" style="width:100%;box-sizing:border-box;"></select>
-                <div style="font-size:0.72rem;color:var(--gray-500);margin-top:5px;"><i class="fa-solid fa-circle-info"></i> Moving a student to another section transfers them out of your class list.</div>
-            </div>
+            <details class="adv-options" style="margin-bottom:14px;border:1px solid var(--gray-200);border-radius:10px;background:#f9fafb;">
+                <summary style="cursor:pointer;padding:11px 14px;font-weight:700;font-size:0.75rem;color:var(--gray-600);text-transform:uppercase;letter-spacing:.04em;list-style:none;display:flex;align-items:center;gap:8px;"><i class="fa-solid fa-sliders"></i> Advanced Options</summary>
+                <div style="padding:4px 14px 14px;">
+                    <label style="font-size:0.75rem;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px;">Transfer to Section</label>
+                    <select id="esSection" class="form-control" style="width:100%;box-sizing:border-box;"></select>
+                    <div style="font-size:0.72rem;color:var(--gray-500);margin-top:5px;"><i class="fa-solid fa-circle-info"></i> Moving a student to another section transfers them out of your class list.</div>
+                </div>
+            </details>
             <div id="esError" style="color:#dc2626;font-size:0.8125rem;margin-bottom:10px;display:none;"></div>
             <div style="display:flex;gap:10px;justify-content:flex-end;">
                 <button class="btn btn-secondary" onclick="closeEditStudent()">Cancel</button>
