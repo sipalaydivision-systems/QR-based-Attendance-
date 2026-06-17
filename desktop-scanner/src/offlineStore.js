@@ -35,7 +35,11 @@ function saveDatabase() {
   }
   ensureParentDir(databaseFile);
   const data = db.export();
-  fs.writeFileSync(databaseFile, Buffer.from(data));
+  // Write to a temp file first, then rename atomically so a power cut mid-write
+  // cannot corrupt the main database file (rename is atomic on NTFS/ext4).
+  const tmpFile = databaseFile + '.tmp';
+  fs.writeFileSync(tmpFile, Buffer.from(data));
+  fs.renameSync(tmpFile, databaseFile);
 }
 
 // Coalesce non-critical writes (e.g. person-cache upserts) so we don't
@@ -189,6 +193,12 @@ function migrate() {
   try { db.exec(`ALTER TABLE people_cache ADD COLUMN category TEXT`); } catch (_) {}
   try { db.exec(`ALTER TABLE attendance_events ADD COLUMN category TEXT`); } catch (_) {}
   try { db.exec(`ALTER TABLE attendance_events ADD COLUMN display_status TEXT`); } catch (_) {}
+  // grace_anchor: when a scan happens during recovery from a scanner/power
+  // outage, this holds the "effective time" (the moment the outage began) used
+  // to compute late/half-day status, so a person who couldn't scan during the
+  // outage is not wrongly penalized. Persisted so the value survives the
+  // offline-queue → server-sync cycle.
+  try { db.exec(`ALTER TABLE attendance_events ADD COLUMN grace_anchor TEXT`); } catch (_) {}
   saveDatabase();
 }
 
@@ -232,6 +242,7 @@ function normalizeEvent(event) {
     attendanceStatus: String(event.attendanceStatus || event.attendance_status || '').trim() || null,
     timeIn: String(event.timeIn || event.time_in || '').trim() || null,
     timeOut: String(event.timeOut || event.time_out || '').trim() || null,
+    graceAnchor: String(event.graceAnchor || event.grace_anchor || '').trim() || null,
     syncStatus: String(event.syncStatus || event.sync_status || 'pending').trim().toLowerCase(),
     serverMessage: String(event.serverMessage || event.server_message || '').trim() || null,
     lastError: String(event.lastError || event.last_error || '').trim() || null,
@@ -262,6 +273,7 @@ function hydrateEvent(row) {
     attendanceStatus: row.attendance_status || null,
     timeIn: row.time_in || null,
     timeOut: row.time_out || null,
+    graceAnchor: row.grace_anchor || null,
     category: row.category || null,
     displayStatus: row.display_status || null,
     syncStatus: row.sync_status,
@@ -297,7 +309,17 @@ async function initOfflineStore(userDataPath) {
   databaseFile = path.join(userDataPath, 'edutrack-offline.sqlite');
 
   if (fs.existsSync(databaseFile)) {
-    db = new SQL.Database(fs.readFileSync(databaseFile));
+    try {
+      db = new SQL.Database(fs.readFileSync(databaseFile));
+    } catch (err) {
+      // File is corrupted (e.g. power cut during write). Rename it for diagnosis
+      // and start with a clean database. Pending scans from before the cut that
+      // reached disk are lost, but the app stays functional and won't crash.
+      const corruptPath = databaseFile + '.corrupt-' + Date.now();
+      try { fs.renameSync(databaseFile, corruptPath); } catch (_) {}
+      console.error('Offline database corrupted, starting fresh. Corrupt file saved to:', corruptPath, err.message);
+      db = new SQL.Database();
+    }
   } else {
     db = new SQL.Database();
   }
@@ -449,9 +471,10 @@ function insertAttendanceEvent(eventInput) {
         name, school_id, school_name, grade_level, section_name,
         attendance_date, scan_time, event_action, attendance_status,
         time_in, time_out, sync_status, server_message, last_error,
-        sync_attempts, created_at, updated_at, synced_at, category, display_status
+        sync_attempts, created_at, updated_at, synced_at, category, display_status,
+        grace_anchor
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       event.localEventId,
       event.syncEventId,
@@ -478,7 +501,8 @@ function insertAttendanceEvent(eventInput) {
       event.updatedAt,
       event.syncedAt,
       event.category || null,
-      event.displayStatus || null
+      event.displayStatus || null,
+      event.graceAnchor || null
     ]);
   });
 
@@ -533,6 +557,7 @@ function updateAttendanceEvent(localEventId, patch) {
         attendance_status = ?,
         time_in = ?,
         time_out = ?,
+        grace_anchor = ?,
         category = ?,
         display_status = ?,
         sync_status = ?,
@@ -559,6 +584,7 @@ function updateAttendanceEvent(localEventId, patch) {
       next.attendanceStatus,
       next.timeIn,
       next.timeOut,
+      next.graceAnchor || null,
       next.category,
       next.displayStatus,
       next.syncStatus,
