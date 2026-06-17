@@ -82,7 +82,7 @@ async function renderAccount(req, res, opts) {
         if (rows.length) profile = { fullname: rows[0].fullname, email: rows[0].email || '' };
     } catch (e) { /* fall back to session values */ }
     res.render('change_password', Object.assign({
-        title: 'My Account', page: 'account', error: null, success: null,
+        title: 'Password', page: 'account', error: null, success: null,
         profileError: null, profileSuccess: null,
         user: req.session.user, profile
     }, opts || {}));
