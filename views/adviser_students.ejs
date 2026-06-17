@@ -292,6 +292,11 @@
                     <input type="text" id="editGuardian" class="form-control" style="width:100%;box-sizing:border-box;">
                 </div>
             </div>
+            <div class="form-group" style="margin-bottom:20px;">
+                <label class="form-label">Section <span style="color:var(--gray-400);font-weight:400;">— transfer</span></label>
+                <select id="editSection" class="form-control" style="width:100%;box-sizing:border-box;"></select>
+                <div style="font-size:0.72rem;color:var(--gray-500);margin-top:5px;"><i class="fa-solid fa-circle-info"></i> Moving a student to another section transfers them out of your class list.</div>
+            </div>
             <div id="editError" style="color:#dc2626;font-size:0.8125rem;margin-bottom:12px;display:none;"></div>
             <div style="display:flex;gap:10px;justify-content:flex-end;">
                 <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
@@ -323,6 +328,22 @@
 </div>
 
 <script>
+// Section transfer: destination sections in the adviser's own school.
+var advSections = [];
+var advSectionId = <%= teacher.section_id ? teacher.section_id : 'null' %>;
+function populateEditSections() {
+    var sel = document.getElementById('editSection');
+    if (!sel) return;
+    sel.innerHTML = advSections.map(function(s) {
+        var label = (s.grade_name ? s.grade_name + ' — ' : '') + s.name;
+        return '<option value="' + s.id + '">' + label + '</option>';
+    }).join('');
+}
+fetch('/admin/adviser-sections')
+    .then(function(r) { return r.json(); })
+    .then(function(rows) { advSections = Array.isArray(rows) ? rows : []; populateEditSections(); })
+    .catch(function() { /* transfer dropdown stays empty if this fails */ });
+
 function openImportModal() {
     document.getElementById('importFile').value = '';
     document.getElementById('importResult').style.display = 'none';
@@ -434,6 +455,11 @@ function openEditModal(s) {
     document.getElementById('editLrn').value = s.lrn;
     document.getElementById('editGender').value = s.gender || '';
     document.getElementById('editGuardian').value = s.guardian_contact;
+    var secSel = document.getElementById('editSection');
+    if (secSel) {
+        if (!advSections.length) populateEditSections();
+        if (advSectionId) secSel.value = advSectionId;
+    }
     document.getElementById('editError').style.display = 'none';
     document.getElementById('editModal').style.display = 'flex';
     document.getElementById('editLastname').focus();
@@ -446,6 +472,13 @@ function submitEdit() {
     var errEl = document.getElementById('editError');
     if (!fn || !ln) { errEl.textContent = 'First name and last name are required.'; errEl.style.display = ''; return; }
 
+    var secSel = document.getElementById('editSection');
+    var newSection = secSel ? secSel.value : '';
+    if (newSection && advSectionId && String(newSection) !== String(advSectionId)) {
+        var secName = secSel.options[secSel.selectedIndex] ? secSel.options[secSel.selectedIndex].text : 'another section';
+        if (!confirm('Transfer ' + fn + ' ' + ln + ' to "' + secName + '"?\n\nThey will be moved out of your class list.')) return;
+    }
+
     var btn = document.getElementById('editSaveBtn');
     btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
 
@@ -457,7 +490,8 @@ function submitEdit() {
             middlename: document.getElementById('editMiddlename').value.trim(),
             lrn: document.getElementById('editLrn').value.trim(),
             gender: document.getElementById('editGender').value,
-            guardian_contact: document.getElementById('editGuardian').value.trim()
+            guardian_contact: document.getElementById('editGuardian').value.trim(),
+            section_id: newSection || null
         })
     })
     .then(function(r) { return r.json(); })
