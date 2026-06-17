@@ -579,7 +579,9 @@ const CELL_ICONS = {
 
 function resIconKey(data, tone) {
   if (tone === 'error') return 'error';
-  if (data?.status === 'half_day') return 'clock';
+  // Half-day: colour/icon follows the actual scan direction (green Time In,
+  // orange Time Out) rather than always reading as a time-out.
+  if (data?.status === 'half_day') return String(data?.action || '') === 'TIME_OUT' ? 'time-out' : 'time-in';
   if (data?.offline) return 'cloud';
   const action = String(data?.action || '');
   if (action === 'TIME_OUT') return 'time-out';
@@ -596,7 +598,9 @@ function displayStatusOf(data) {
 
 function resBannerVariant(data, tone) {
   if (tone === 'error') return 'error';
-  if (data?.status === 'half_day') return 'time-out';
+  // Half-day banner follows the scan direction: green for a Time In, orange
+  // for a Time Out (the "Half-Day"/"Half-Day · Late" heading still labels it).
+  if (data?.status === 'half_day') return String(data?.action || '') === 'TIME_OUT' ? 'time-out' : 'time-in';
   if (data?.offline) return 'offline';
   const action = String(data?.action || '');
   const ds = displayStatusOf(data);
@@ -704,10 +708,12 @@ function heroConfigFor(data) {
   // TIME_IN (and generic)
   const late = ds ? ds === 'LATE' : data.status === 'late';
   if (data.status === 'half_day') {
+    // A half-day recorded on a Time In keeps the green Time-In colour; the pill
+    // still flags the half-day / late nature.
     return {
       label: data.late_half_day ? 'Half-Day (Late)' : 'Half-Day',
       value: data.time_in || data.time || '---',
-      variant: 'out',
+      variant: 'in',
       pill: data.remarks || 'Partial Day',
       pillClass: data.late_half_day ? 'late' : 'out'
     };
@@ -792,8 +798,13 @@ function showScanFeedback(title, message, tone = 'success', data = {}) {
 
     /* ── Hero time card (left) ── */
     const hero = heroConfigFor(data);
+    const heroAction = String(data.action || '');
     $('modalHeroTime').className   = `res-hero-time ${hero.variant}`;
-    $('modalHeroIcon').innerHTML   = hero.variant === 'out' ? RES_ICONS['time-out'] : RES_ICONS['clock'];
+    // Directional icon: green Time-In arrow vs orange Time-Out arrow, matching
+    // the scan direction (falls back to a clock for non-in/out notices).
+    $('modalHeroIcon').innerHTML   = heroAction === 'TIME_OUT' ? RES_ICONS['time-out']
+      : heroAction === 'TIME_IN' ? RES_ICONS['time-in']
+      : (hero.variant === 'out' ? RES_ICONS['time-out'] : RES_ICONS['clock']);
     $('modalHeroLabel').textContent = hero.label;
     $('modalHeroValue').textContent = hero.value;
     const pillEl = $('modalHeroPill');

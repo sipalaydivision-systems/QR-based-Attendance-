@@ -523,10 +523,12 @@
 
         var ds = String(data.display_status || '').toUpperCase();
         if (data.status === 'half_day') {
-            banner.className = data.late_half_day ? 'status-banner late' : 'status-banner time-out';
+            // Colour follows the scan direction (green Time In / orange Time Out);
+            // the HALF-DAY label still marks it as a partial day.
+            banner.className = data.action === 'TIME_OUT' ? 'status-banner time-out' : 'status-banner time-in';
             icon.innerHTML = '<i class="fas fa-circle-half-stroke"></i>';
             label.textContent = data.late_half_day ? 'HALF-DAY · LATE' : 'HALF-DAY';
-            fill.className = 'fill orange';
+            fill.className = data.action === 'TIME_OUT' ? 'fill orange' : 'fill green';
         } else if (data.action === 'TIME_IN' && (ds === 'LATE' || (!ds && data.status === 'late'))) {
             banner.className = 'status-banner late';
             icon.innerHTML = '<i class="fas fa-clock"></i>';
