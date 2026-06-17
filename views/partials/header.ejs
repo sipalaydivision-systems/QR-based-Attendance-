@@ -483,6 +483,127 @@
     <% } %>
     <% } %>
 
+    <% if (typeof user !== 'undefined' && user && (user.role === 'adviser' || user.role === 'principal')) { %>
+    <!-- Transfer / reassignment notifications (advisers approve; requesters see outcomes) -->
+    <div id="trBellWrap" style="position:fixed; right:20px; bottom:20px; z-index:1200;">
+        <button id="trBell" aria-label="Notifications" style="position:relative; width:52px; height:52px; border-radius:50%; border:none; background:var(--primary,#16a34a); color:#fff; box-shadow:0 6px 20px rgba(0,0,0,.18); cursor:pointer; font-size:20px;">
+            <i class="fa-solid fa-bell"></i>
+            <span id="trBadge" style="display:none; position:absolute; top:-3px; right:-3px; min-width:20px; height:20px; padding:0 5px; border-radius:10px; background:#dc2626; color:#fff; font-size:11px; font-weight:700; line-height:20px; box-sizing:border-box;">0</span>
+        </button>
+        <div id="trPanel" style="display:none; position:absolute; right:0; bottom:64px; width:340px; max-height:60vh; overflow:auto; background:#fff; border:1px solid #e5e7eb; border-radius:14px; box-shadow:0 12px 40px rgba(0,0,0,.18);">
+            <div style="padding:12px 14px; font-weight:700; font-size:0.9rem; border-bottom:1px solid #eef0f2; color:#111827;">Notifications</div>
+            <div id="trList"></div>
+        </div>
+    </div>
+    <div id="trModal" style="display:none; position:fixed; inset:0; z-index:1300; background:rgba(15,23,42,.5); align-items:center; justify-content:center; padding:18px;">
+        <div id="trModalCard" style="width:100%; max-width:440px; background:#fff; border-radius:16px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.3);"></div>
+    </div>
+    <div id="trToast" style="display:none; position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:1400; padding:12px 18px; border-radius:10px; font-size:0.85rem; font-weight:600; box-shadow:0 8px 24px rgba(0,0,0,.18);"></div>
+    <script>
+    (function(){
+        var bell=document.getElementById('trBell'), badge=document.getElementById('trBadge'),
+            panel=document.getElementById('trPanel'), list=document.getElementById('trList'),
+            modal=document.getElementById('trModal'), card=document.getElementById('trModalCard'),
+            toast=document.getElementById('trToast');
+        if(!bell) return;
+        var pending=[], autoShown=false, toastTimer=null;
+        function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+        function fmtMove(r){ return esc(r.from_section_name||'—') + ' → ' + esc(r.to_section_name||'—'); }
+        function row(l,v,strong){ return '<div style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid #eef0f2;font-size:0.83rem;"><span style="color:#6b7280;">'+l+'</span><span style="font-weight:'+(strong?'700':'500')+';text-align:right;color:#111827;">'+esc(v)+'</span></div>'; }
+
+        function render(){
+            badge.textContent = pending.length;
+            badge.style.display = pending.length ? 'inline-block' : 'none';
+            if(!pending.length){ list.innerHTML = '<div style="padding:18px 14px;color:#6b7280;font-size:0.82rem;text-align:center;">No pending requests.</div>'; return; }
+            list.innerHTML = pending.map(function(r){
+                var isT = r.request_type==='teacher_section';
+                var title = isT ? 'Section reassignment' : 'Student transfer';
+                var icon = isT ? 'fa-user-gear' : 'fa-user-group';
+                return '<button class="tr-item" data-id="'+r.id+'" style="width:100%;text-align:left;border:none;border-bottom:1px solid #f1f3f5;background:#fff;padding:11px 14px;cursor:pointer;display:flex;gap:10px;align-items:flex-start;">'
+                    +'<span style="width:34px;height:34px;border-radius:9px;background:#eef2ff;color:#4f46e5;display:flex;align-items:center;justify-content:center;flex:0 0 auto;"><i class="fa-solid '+icon+'"></i></span>'
+                    +'<span style="min-width:0;"><span style="display:block;font-weight:700;font-size:0.82rem;color:#111827;">'+title+'</span>'
+                    +'<span style="display:block;font-size:0.76rem;color:#6b7280;">'+esc(r.subject_name||'')+'</span>'
+                    +'<span style="display:block;font-size:0.72rem;color:#9ca3af;margin-top:1px;">'+fmtMove(r)+'</span></span></button>';
+            }).join('');
+            Array.prototype.forEach.call(list.querySelectorAll('.tr-item'), function(b){
+                b.addEventListener('click', function(){ openModal(parseInt(b.getAttribute('data-id'),10)); });
+            });
+        }
+
+        function openModal(id){
+            var r = pending.filter(function(x){return x.id===id;})[0]; if(!r) return;
+            panel.style.display='none';
+            var isT = r.request_type==='teacher_section';
+            var head = isT ? 'Attention — section reassignment' : 'Student transfer request';
+            var bg = isT ? '#fff7ed' : '#eff6ff', tx = isT ? '#9a3412' : '#1e40af', ic = isT ? 'fa-triangle-exclamation' : 'fa-user-group';
+            var msg = isT ? 'Your principal is reassigning your advisory section.' : (esc(r.requester_name||'An adviser')+' wants to move this student into your section.');
+            var rows = isT
+                ? row('Requested by', r.requester_name||'Principal', true) + row('Current section', r.from_section_name||'—') + row('New section', r.to_section_name||'—', true)
+                : row('Student', r.subject_name||'', true) + (r.subject_lrn?row('LRN', r.subject_lrn):'') + row('Requested by', r.requester_name||'Adviser') + row('From', r.from_section_name||'—') + row('Into your section', r.to_section_name||'—', true);
+            card.innerHTML =
+                '<div style="padding:16px 18px;background:'+bg+';display:flex;gap:11px;align-items:center;">'
+                    +'<span style="width:38px;height:38px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;color:'+tx+';font-size:18px;"><i class="fa-solid '+ic+'"></i></span>'
+                    +'<div><div style="font-weight:800;font-size:1rem;color:'+tx+';">'+head+'</div><div style="font-size:0.78rem;color:'+tx+';">'+msg+'</div></div></div>'
+                +'<div style="padding:12px 18px 4px;">'+rows+'</div>'
+                +'<div style="display:flex;gap:10px;padding:14px 18px 18px;justify-content:flex-end;">'
+                    +'<button id="trDecline" style="padding:9px 16px;border-radius:9px;border:1px solid #fecaca;background:#fff;color:#dc2626;font-weight:700;cursor:pointer;"><i class="fa-solid fa-xmark"></i> Decline</button>'
+                    +'<button id="trAccept" style="padding:9px 16px;border-radius:9px;border:none;background:#16a34a;color:#fff;font-weight:700;cursor:pointer;"><i class="fa-solid fa-check"></i> Accept</button>'
+                +'</div>';
+            modal.style.display='flex';
+            document.getElementById('trAccept').addEventListener('click', function(){ respond(id,'accept'); });
+            document.getElementById('trDecline').addEventListener('click', function(){ respond(id,'decline'); });
+        }
+
+        function respond(id, action){
+            var a=document.getElementById('trAccept'), d=document.getElementById('trDecline');
+            if(a) a.disabled=true; if(d) d.disabled=true;
+            fetch('/api/transfers/'+id+'/'+action, { method:'POST' })
+                .then(function(r){ return r.json(); })
+                .then(function(res){
+                    modal.style.display='none';
+                    if(res.success){ showToast(action==='accept', action==='accept'?'Request accepted — records updated.':'Request declined.'); load(); }
+                    else showToast(false, res.error||'Action failed.');
+                })
+                .catch(function(){ modal.style.display='none'; showToast(false,'Network error.'); });
+        }
+
+        function showToast(ok,msg){
+            toast.textContent=msg;
+            toast.style.background = ok ? '#dcfce7' : '#fee2e2';
+            toast.style.color = ok ? '#166534' : '#991b1b';
+            toast.style.display='block';
+            if(toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(function(){ toast.style.display='none'; }, 4000);
+        }
+
+        function load(){
+            fetch('/api/transfers/pending', { headers:{'Accept':'application/json'} })
+                .then(function(r){ return r.ok ? r.json() : {pending:[],updates:[]}; })
+                .then(function(d){
+                    pending = (d && d.pending) || [];
+                    render();
+                    var ups = (d && d.updates) || [];
+                    if(ups.length){
+                        var u = ups[0];
+                        showToast(u.status==='accepted', (u.subject_name||'Your request')+' — transfer '+u.status+'.');
+                        fetch('/api/transfers/seen', { method:'POST' });
+                    }
+                    if(!autoShown){
+                        var urgent = pending.filter(function(x){ return x.request_type==='teacher_section'; })[0];
+                        if(urgent){ autoShown=true; openModal(urgent.id); }
+                    }
+                })
+                .catch(function(){});
+        }
+
+        bell.addEventListener('click', function(){ panel.style.display = panel.style.display==='none'?'block':'none'; });
+        modal.addEventListener('click', function(e){ if(e.target===modal) modal.style.display='none'; });
+        load();
+        setInterval(load, 15000);
+    })();
+    </script>
+    <% } %>
+
     <main class="content<%= (typeof user === 'undefined' || !user) ? ' full-width' : '' %>">
         <% if (typeof user !== 'undefined' && user) { %>
         <header class="topbar">

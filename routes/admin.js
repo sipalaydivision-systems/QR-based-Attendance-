@@ -755,7 +755,7 @@ router.post('/adviser-edit-student', express.json(), async (req, res) => {
     const teacherId = req.session.user.teacher_id;
     if (!teacherId) return res.status(400).json({ error: 'No teacher record' });
 
-    const { student_id, firstname, lastname, middlename, lrn, gender, guardian_contact, section_id } = req.body;
+    const { student_id, firstname, lastname, middlename, lrn, gender, guardian_contact } = req.body;
     const sid = parseInt(student_id, 10);
     if (!sid || sid <= 0) return res.status(400).json({ error: 'Invalid student' });
 
@@ -785,29 +785,14 @@ router.post('/adviser-edit-student', express.json(), async (req, res) => {
             if (dup.length > 0) return res.status(400).json({ error: 'LRN already used by another student' });
         }
 
-        // Optional section transfer. Only allowed within the adviser's own school;
-        // moving to a section in another grade also updates the student's grade.
-        const reqSection = parseInt(section_id, 10);
-        let transferSet = '';
-        const transferParams = [];
-        if (reqSection && reqSection !== Number(t.section_id)) {
-            const [[dest]] = await db.query(
-                `SELECT id, school_id, grade_level_id FROM sections WHERE id = ? AND (status IS NULL OR status != 'deleted')`,
-                [reqSection]
-            );
-            if (!dest) return res.status(400).json({ error: 'Destination section was not found.' });
-            if (Number(dest.school_id) !== Number(t.school_id)) {
-                return res.status(403).json({ error: 'You can only transfer students within your own school.' });
-            }
-            transferSet = ', section_id=?, grade_level_id=?';
-            transferParams.push(dest.id, dest.grade_level_id || null);
-        }
-
+        // Profile fields only. A section change is a separate, approval-based
+        // transfer handled by POST /api/transfers/student (the receiving adviser
+        // confirms), so it is intentionally not applied here.
         await db.query(
-            `UPDATE students SET firstname=?, lastname=?, middlename=?, lrn=?, gender=?, guardian_contact=?${transferSet} WHERE id=?`,
-            [fn, ln, mn, lrnVal || null, gNorm, gc, ...transferParams, sid]
+            `UPDATE students SET firstname=?, lastname=?, middlename=?, lrn=?, gender=?, guardian_contact=? WHERE id=?`,
+            [fn, ln, mn, lrnVal || null, gNorm, gc, sid]
         );
-        res.json({ success: true, transferred: transferParams.length > 0 });
+        res.json({ success: true });
     } catch (err) {
         console.error('Adviser edit student error:', err);
         res.status(500).json({ error: 'Update failed' });

@@ -479,33 +479,44 @@ function submitEdit() {
 
     var secSel = document.getElementById('editSection');
     var newSection = secSel ? secSel.value : '';
-    if (newSection && advSectionId && String(newSection) !== String(advSectionId)) {
+    var sectionChanged = newSection && advSectionId && String(newSection) !== String(advSectionId);
+    if (sectionChanged) {
         var secName = secSel.options[secSel.selectedIndex] ? secSel.options[secSel.selectedIndex].text : 'another section';
-        if (!confirm('Transfer ' + fn + ' ' + ln + ' to "' + secName + '"?\n\nThey will be moved out of your class list.')) return;
+        if (!confirm('Request a transfer for ' + fn + ' ' + ln + ' to "' + secName + '"?\n\nThe receiving adviser must accept it before the student moves.')) return;
     }
+    var studentId = document.getElementById('editId').value;
 
     var btn = document.getElementById('editSaveBtn');
     btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+    function fail(msg) { errEl.textContent = msg; errEl.style.display = ''; btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Changes'; }
 
     fetch('/admin/adviser-edit-student', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            student_id: document.getElementById('editId').value,
+            student_id: studentId,
             firstname: fn, lastname: ln,
             middlename: document.getElementById('editMiddlename').value.trim(),
             lrn: document.getElementById('editLrn').value.trim(),
             gender: document.getElementById('editGender').value,
-            guardian_contact: document.getElementById('editGuardian').value.trim(),
-            section_id: newSection || null
+            guardian_contact: document.getElementById('editGuardian').value.trim()
         })
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-        if (data.success) { window.location.reload(); }
-        else { errEl.textContent = data.error || 'Save failed.'; errEl.style.display = ''; }
+        if (!data.success) { fail(data.error || 'Save failed.'); return; }
+        if (!sectionChanged) { window.location.reload(); return; }
+        return fetch('/api/transfers/student', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ student_id: studentId, section_id: newSection })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(t) {
+            if (!t.success) { fail(t.error || 'Profile saved, but the transfer could not be submitted.'); return; }
+            if (t.requested) alert('Transfer request sent — the receiving adviser must accept it before the student moves.');
+            window.location.reload();
+        });
     })
-    .catch(function() { errEl.textContent = 'Network error — try again.'; errEl.style.display = ''; })
-    .finally(function() { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Changes'; });
+    .catch(function() { fail('Network error — try again.'); });
 }
 
 // ── Delete Modal ──

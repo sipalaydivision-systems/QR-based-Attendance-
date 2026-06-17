@@ -72,8 +72,10 @@ const authRoutes = require('./routes/auth');
 const apiRoutes = require('./routes/api');
 const adminRoutes = require('./routes/admin');
 const exportRoutes = require('./routes/export');
+const transferRoutes = require('./routes/transfers');
 
 app.use('/', authRoutes);
+app.use('/api/transfers', transferRoutes);
 app.use('/api', apiRoutes);
 app.use('/admin', adminRoutes);
 app.use('/export', exportRoutes);
@@ -241,6 +243,37 @@ async function ensureRuntimeSchema() {
         await db.query("ALTER TABLE teachers ADD COLUMN category ENUM('teacher','shs_teacher') DEFAULT 'teacher' AFTER status");
         console.log('Added teachers.category column for SHS teacher distinction.');
     }
+
+    // Section transfer / reassignment approval requests. The approver is always a
+    // teacher (the receiving section's adviser for a student transfer, or the
+    // reassigned teacher for a principal reassignment).
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS transfer_requests (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            request_type ENUM('student_section','teacher_section') NOT NULL,
+            school_id INT NOT NULL,
+            subject_id INT NOT NULL,
+            subject_name VARCHAR(255),
+            subject_lrn VARCHAR(50),
+            from_section_id INT NULL,
+            from_section_name VARCHAR(150),
+            to_section_id INT NULL,
+            to_section_name VARCHAR(150),
+            to_grade_level_id INT NULL,
+            requester_role VARCHAR(30),
+            requester_id INT NULL,
+            requester_name VARCHAR(255),
+            approver_teacher_id INT NULL,
+            status ENUM('pending','accepted','declined','cancelled') DEFAULT 'pending',
+            note VARCHAR(255),
+            requester_seen TINYINT(1) DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            resolved_at TIMESTAMP NULL,
+            INDEX idx_tr_approver (approver_teacher_id, status),
+            INDEX idx_tr_requester (requester_role, requester_id, status),
+            INDEX idx_tr_school (school_id, status)
+        ) ENGINE=InnoDB
+    `);
 }
 
 // Root redirect

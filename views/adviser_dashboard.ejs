@@ -443,47 +443,48 @@ window.submitEditStudent = function() {
     }
     var secEl = document.getElementById('esSection');
     var newSection = secEl ? secEl.value : '';
-    if (newSection && window.adviserSectionId && String(newSection) !== String(window.adviserSectionId)) {
+    var sectionChanged = newSection && window.adviserSectionId && String(newSection) !== String(window.adviserSectionId);
+    if (sectionChanged) {
         var secName = secEl.options[secEl.selectedIndex] ? secEl.options[secEl.selectedIndex].text : 'another section';
-        if (!confirm('Transfer ' + fn + ' ' + ln + ' to "' + secName + '"?\n\nThey will be moved out of your class list.')) return;
+        if (!confirm('Request a transfer for ' + fn + ' ' + ln + ' to "' + secName + '"?\n\nThe receiving adviser must accept it before the student moves.')) return;
     }
+    var studentId = document.getElementById('esStudentId').value;
 
     var btn = document.getElementById('esSaveBtn');
     btn.disabled = true;
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+    function esFail(msg) { errEl.textContent = msg; errEl.style.display = ''; btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Changes'; }
 
     fetch('/admin/adviser-edit-student', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            student_id: document.getElementById('esStudentId').value,
+            student_id: studentId,
             firstname: fn,
             lastname: ln,
             middlename: document.getElementById('esMiddlename').value.trim(),
             lrn: document.getElementById('esLrn').value.trim(),
             gender: document.getElementById('esGender').value,
-            guardian_contact: document.getElementById('esGuardian').value.trim(),
-            section_id: newSection || null
+            guardian_contact: document.getElementById('esGuardian').value.trim()
         })
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-        if (data.success) {
+        if (!data.success) { esFail(data.error || 'Save failed.'); return; }
+        if (!sectionChanged) { closeEditStudent(); window.loadDashboard(document.getElementById('adDate').value); return; }
+        return fetch('/api/transfers/student', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ student_id: studentId, section_id: newSection })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(t) {
+            if (!t.success) { esFail(t.error || 'Profile saved, but the transfer could not be submitted.'); return; }
+            if (t.requested) alert('Transfer request sent — the receiving adviser must accept it before the student moves.');
             closeEditStudent();
             window.loadDashboard(document.getElementById('adDate').value);
-        } else {
-            errEl.textContent = data.error || 'Save failed.';
-            errEl.style.display = '';
-        }
+        });
     })
-    .catch(function() {
-        errEl.textContent = 'Network error — try again.';
-        errEl.style.display = '';
-    })
-    .finally(function() {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Changes';
-    });
+    .catch(function() { esFail('Network error — try again.'); });
 };
 
 function openSF2Modal() {
