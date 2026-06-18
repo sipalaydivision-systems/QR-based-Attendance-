@@ -635,7 +635,9 @@ async function getAttendanceScheduleTimes(dateStr) {
     );
     const settings = Object.fromEntries(rows.map(row => [row.setting_key, row.setting_value]));
     return {
-        lunchStart: sqlDateTime(dateStr, normalizeTimeSetting(settings.lunch_break_start, '11:30:00')),
+        // AM-end / lunch-out boundary: a first arrival on/after this is a PM half-day,
+        // and the lunch-out window runs from here to pmInStart. Default 11:00 (AM 7–11).
+        lunchStart: sqlDateTime(dateStr, normalizeTimeSetting(settings.lunch_break_start, '11:00:00')),
         pmInStart: sqlDateTime(dateStr, normalizeTimeSetting(settings.pm_time_in_start, '13:00:00')),
         // PM Late Start Time: a PM-only arrival on/after this time is a late half-day
         // ("Half-Day (Late)"). Defaults to 13:15 (matching the settings UI default) so

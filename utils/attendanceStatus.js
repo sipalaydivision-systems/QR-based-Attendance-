@@ -68,7 +68,12 @@ function computeDailyAttendanceStatus(input) {
     const lastTimeIn = (input.lastTimeIn || timeIn);
     const timeOut = input.timeOut || null;
 
-    if (schedule.pmInStart && compareDateTime(timeIn, schedule.pmInStart) >= 0) {
+    // A first arrival on/after the AM-end boundary (lunchStart, e.g. 11:00) missed
+    // the morning session entirely, so it is a PM-only (half-day) attendance —
+    // counted present for the afternoon. On/after the PM Late line it is a late
+    // half-day. The lunch window (lunchStart → pmInStart) is the accepted PM
+    // arrival window, so those arrivals are on-time half-days.
+    if (schedule.lunchStart && compareDateTime(timeIn, schedule.lunchStart) >= 0) {
         const late = !!schedule.pmLateStart && compareDateTime(timeIn, schedule.pmLateStart) >= 0;
         return {
             status: 'half_day',
@@ -79,9 +84,20 @@ function computeDailyAttendanceStatus(input) {
         };
     }
 
+    // Left the premises and has not returned — classify by *when* they left.
     const leftAndDidNotReturn = timeOut && compareDateTime(lastTimeIn, timeOut) <= 0;
     if (leftAndDidNotReturn && schedule.pmOutStart && compareDateTime(timeOut, schedule.pmOutStart) < 0) {
-        if (schedule.pmInStart && compareDateTime(timeOut, schedule.pmInStart) < 0) {
+        // Lunch window [lunchStart, pmInStart): a lunch-out is expected to return
+        // for the PM session, so it is NOT an early dismissal — keep the status
+        // they already earned this morning (present/late).
+        if (schedule.lunchStart && schedule.pmInStart &&
+            compareDateTime(timeOut, schedule.lunchStart) >= 0 &&
+            compareDateTime(timeOut, schedule.pmInStart) < 0) {
+            return { status: baseStatus, label: baseLabel, remarks: '' };
+        }
+        // Left during the AM session (before lunchStart) and never came back:
+        // morning-only half-day.
+        if (schedule.lunchStart && compareDateTime(timeOut, schedule.lunchStart) < 0) {
             return {
                 status: 'half_day',
                 label: 'Half-Day',
@@ -89,6 +105,7 @@ function computeDailyAttendanceStatus(input) {
                 remarks: 'Morning Session Only'
             };
         }
+        // Otherwise left during the PM session (pmInStart → dismissal): early dismissal.
         return {
             status: 'half_day',
             label: 'Half-Day',
