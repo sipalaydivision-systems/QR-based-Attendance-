@@ -45,6 +45,28 @@
 .ad-section-badge.section { background: #dcfce7; color: #16a34a; }
 
 
+.ad-analytics-grid {
+    display: grid; gap: 16px; margin-bottom: 20px;
+    grid-template-columns: minmax(300px, 1fr) minmax(0, 1.45fr);
+}
+@media (max-width: 900px) { .ad-analytics-grid { grid-template-columns: 1fr; } }
+.ad-chart-card {
+    background: #fff; border-radius: var(--radius-lg);
+    border: 1px solid var(--gray-200); box-shadow: var(--shadow);
+    display: flex; flex-direction: column; overflow: hidden;
+}
+.ad-chart-head { padding: 15px 18px; border-bottom: 1px solid var(--gray-100); }
+.ad-chart-head h3 { font-size: 0.9375rem; font-weight: 700; color: var(--gray-800); margin: 0; display: flex; align-items: center; gap: 8px; }
+.ad-chart-head h3 i { color: var(--primary); }
+.ad-chart-body { padding: 18px; flex: 1 1 auto; }
+.ad-chart-wrap { position: relative; height: 250px; }
+.ad-donut-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; }
+.ad-donut-center .dc-val { font-size: 1.75rem; font-weight: 800; color: var(--gray-900); line-height: 1; }
+.ad-donut-center .dc-lbl { font-size: 0.6875rem; font-weight: 600; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 3px; }
+.ad-chart-legend { display: flex; justify-content: center; gap: 18px; margin-top: 14px; flex-wrap: wrap; }
+.ad-legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--gray-600); font-weight: 500; }
+.ad-legend-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
+
 .ad-table-card {
     background: #fff; border-radius: var(--radius-lg);
     border: 1px solid var(--gray-200); box-shadow: var(--shadow); overflow: hidden;
@@ -211,6 +233,37 @@
         </div>
     </div>
 
+    <!-- Analytics: donut + 7-day trend (matches principal dashboard) -->
+    <div class="ad-analytics-grid">
+        <div class="ad-chart-card">
+            <div class="ad-chart-head"><h3><i class="fa-solid fa-chart-pie"></i> Today's Attendance Breakdown</h3></div>
+            <div class="ad-chart-body">
+                <div class="ad-chart-wrap">
+                    <canvas id="adDonutChart"></canvas>
+                    <div class="ad-donut-center">
+                        <div class="dc-val" id="adDonutMain">0</div>
+                        <div class="dc-lbl" id="adDonutSub">Present</div>
+                    </div>
+                </div>
+                <div class="ad-chart-legend">
+                    <span class="ad-legend-item"><span class="ad-legend-dot" style="background:#16a34a;"></span> Present</span>
+                    <span class="ad-legend-item"><span class="ad-legend-dot" style="background:#f59e0b;"></span> Late</span>
+                    <span class="ad-legend-item"><span class="ad-legend-dot" style="background:#ea580c;"></span> Half-Day</span>
+                    <span class="ad-legend-item"><span class="ad-legend-dot" style="background:#dc2626;"></span> Absent</span>
+                </div>
+            </div>
+        </div>
+        <div class="ad-chart-card">
+            <div class="ad-chart-head"><h3><i class="fa-solid fa-chart-column"></i> 7-Day Attendance Trend</h3></div>
+            <div class="ad-chart-body">
+                <div class="ad-chart-wrap"><canvas id="adTrendChart"></canvas></div>
+                <div class="ad-chart-legend">
+                    <span class="ad-legend-item"><span class="ad-legend-dot" style="background:#4f46e5;"></span> Students Present</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="ad-table-card">
         <div class="ad-table-header">
             <h3><i class="fa-solid fa-list-check"></i> Student Attendance</h3>
@@ -248,9 +301,79 @@
 </div>
 
 <% if (teacher.section_id) { %>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 (function() {
     var allStudents = [];
+    var donutChart = null, trendChart = null, donutSig = '', trendSig = '';
+
+    function ensureDonut() {
+        if (donutChart || typeof Chart === 'undefined') return;
+        donutChart = new Chart(document.getElementById('adDonutChart').getContext('2d'), {
+            type: 'doughnut',
+            data: { labels: ['Present','Late','Half-Day','Absent'],
+                datasets: [{ data: [0,0,0,0], backgroundColor: ['#16a34a','#f59e0b','#ea580c','#dc2626'], borderWidth: 0, hoverOffset: 6 }] },
+            options: { responsive: true, maintainAspectRatio: false, cutout: '68%',
+                plugins: { legend: { display: false },
+                    tooltip: { callbacks: { label: function(c) {
+                        var t = c.dataset.data.reduce(function(a,b){return a+b;},0);
+                        var pct = t > 0 ? Math.round((c.parsed/t)*100) : 0;
+                        return ' ' + c.label + ': ' + c.parsed + ' (' + pct + '%)';
+                    } } } } }
+        });
+    }
+    function ensureTrend() {
+        if (trendChart || typeof Chart === 'undefined') return;
+        trendChart = new Chart(document.getElementById('adTrendChart').getContext('2d'), {
+            type: 'bar',
+            data: { labels: [], datasets: [{ label: 'Present', data: [], backgroundColor: '#4f46e5', borderRadius: 5, barPercentage: 0.6 }] },
+            options: { responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+                          y: { beginAtZero: true, ticks: { precision: 0, font: { size: 11 } }, grid: { color: '#f1f5f9' } } } }
+        });
+    }
+    function updateDonut(presentOnly, late, halfDay, absent) {
+        var s = [presentOnly, late, halfDay, absent].join(',');
+        if (s === donutSig) return;
+        donutSig = s;
+        ensureDonut();
+        if (!donutChart) return;
+        donutChart.data.datasets[0].data = [presentOnly, late, halfDay, absent];
+        donutChart.update();
+        document.getElementById('adDonutMain').textContent = presentOnly;
+        document.getElementById('adDonutSub').textContent = 'of ' + (presentOnly + late + halfDay + absent) + ' present';
+    }
+    async function loadTrend(date) {
+        var end = new Date(date + 'T00:00:00');
+        var start = new Date(end); start.setDate(start.getDate() - 6);
+        var startStr = start.getFullYear() + '-' + String(start.getMonth()+1).padStart(2,'0') + '-' + String(start.getDate()).padStart(2,'0');
+        try {
+            var res = await fetch('/api/adviser-trend?start_date=' + startStr + '&end_date=' + encodeURIComponent(date), { headers: { 'Accept': 'application/json' } });
+            var data = await res.json();
+            buildTrend(data.days || {}, startStr, date);
+        } catch (e) { /* ignore */ }
+    }
+    function buildTrend(counts, start, end) {
+        var labels = [], pData = [];
+        var d = new Date(start + 'T00:00:00'), endD = new Date(end + 'T00:00:00');
+        while (d <= endD) {
+            var key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+            labels.push(d.toLocaleDateString('en-US', { month:'short', day:'numeric' }));
+            pData.push(counts[key] || 0);
+            d.setDate(d.getDate() + 1);
+        }
+        var s = pData.join(',');
+        if (s === trendSig) return;
+        trendSig = s;
+        ensureTrend();
+        if (!trendChart) return;
+        trendChart.data.labels = labels;
+        trendChart.data.datasets[0].data = pData;
+        trendChart.update();
+    }
+    window.adLoadTrend = loadTrend;
+    window.adUpdateDonut = updateDonut;
     // Section transfer state lives on window so the window-scoped edit modal
     // handlers below can read it.
     window.adviserSections = [];
@@ -301,6 +424,7 @@
     dateInput.addEventListener('change', function() {
         document.getElementById('adDateLabel').textContent = formatDateLabel(this.value);
         loadDashboard(this.value);
+        loadTrend(this.value);
     });
 
     document.getElementById('adSearch').addEventListener('input', function() {
@@ -397,6 +521,12 @@
             document.getElementById('adHalfDay').textContent = data.kpi.half_day || 0;
             document.getElementById('adAbsent').textContent = data.kpi.absent;
             document.getElementById('adFlagged').textContent = data.kpi.flagged || 0;
+
+            // Donut: present-only = everyone who showed up minus late & half-day
+            var late = data.kpi.late || 0, halfDay = data.kpi.half_day || 0;
+            var presentOnly = Math.max(0, (data.kpi.present || 0) - late - halfDay);
+            updateDonut(presentOnly, late, halfDay, data.kpi.absent || 0);
+
             allStudents = data.students;
             renderStudents();
         } catch (err) {
@@ -407,6 +537,7 @@
     // Exposed so the window-scoped edit/transfer modal handlers can refresh the list.
     window.loadDashboard = loadDashboard;
     loadDashboard(dateInput.value);
+    loadTrend(dateInput.value);
     loadAdviserSections();
 })();
 

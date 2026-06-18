@@ -3673,6 +3673,37 @@ router.get('/adviser-dashboard', requireAuth, async (req, res) => {
     }
 });
 
+// ---- Adviser 7-Day Trend (section-scoped present counts) ----
+router.get('/adviser-trend', requireAuth, async (req, res) => {
+    const user = req.session.user;
+    if (user.role !== 'adviser' || !user.teacher_id) {
+        return res.status(403).json({ error: 'Access denied' });
+    }
+    const endDate = req.query.end_date || todayDate();
+    const startDate = req.query.start_date || endDate;
+    try {
+        const [[teacher]] = await db.query('SELECT section_id FROM teachers WHERE id = ?', [user.teacher_id]);
+        if (!teacher || !teacher.section_id) return res.json({ days: [] });
+        const [rows] = await db.query(
+            `SELECT a.date, COUNT(*) AS present
+             FROM attendance a
+             JOIN students s ON s.id = a.person_id AND s.section_id = ?
+             WHERE a.person_type = 'student' AND a.date BETWEEN ? AND ? AND a.time_in IS NOT NULL
+             GROUP BY a.date`,
+            [teacher.section_id, startDate, endDate]
+        );
+        const counts = {};
+        rows.forEach(r => {
+            const key = (r.date instanceof Date) ? r.date.toISOString().slice(0, 10) : String(r.date).slice(0, 10);
+            counts[key] = r.present;
+        });
+        return res.json({ days: counts });
+    } catch (err) {
+        console.error('Adviser trend error:', err);
+        return res.status(500).json({ error: 'Failed to load trend.' });
+    }
+});
+
 // ---- School Logo Upload ----
 router.post('/schools/:id/logo', requireAuth, function(req, res) {
     logoUpload.single('logo')(req, res, async function(err) {
