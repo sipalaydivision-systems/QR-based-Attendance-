@@ -494,10 +494,11 @@
         overlay.classList.add('visible');
 
         if (!data.success) {
+            var failDs = String(data.display_status || '').toUpperCase();
             banner.className = 'status-banner error';
             icon.innerHTML = '<i class="fas fa-exclamation-triangle"></i>';
-            label.textContent = 'ERROR';
-            msg.textContent = data.error;
+            label.textContent = failDs || 'ERROR';
+            msg.textContent = data.message || data.error;
             fill.className = 'fill rose';
 
             if (data.person) {
@@ -527,22 +528,22 @@
             // the HALF-DAY label still marks it as a partial day.
             banner.className = data.action === 'TIME_OUT' ? 'status-banner time-out' : 'status-banner time-in';
             icon.innerHTML = '<i class="fas fa-circle-half-stroke"></i>';
-            label.textContent = data.late_half_day ? 'HALF-DAY · LATE' : 'HALF-DAY';
+            label.textContent = ds || (data.late_half_day ? 'HALF-DAY LATE' : 'HALF-DAY');
             fill.className = data.action === 'TIME_OUT' ? 'fill orange' : 'fill green';
-        } else if (data.action === 'TIME_IN' && (ds === 'LATE' || (!ds && data.status === 'late'))) {
+        } else if (data.action === 'TIME_IN' && (ds === 'LATE TIME IN' || ds === 'LATE' || (!ds && data.status === 'late'))) {
             banner.className = 'status-banner late';
             icon.innerHTML = '<i class="fas fa-clock"></i>';
             label.textContent = 'LATE TIME IN';
             fill.className = 'fill orange';
-        } else if (data.action === 'TIME_IN' && ds === 'RETURNED') {
+        } else if (data.action === 'TIME_IN' && (ds === 'RETURNED' || ds === 'WELCOME BACK')) {
             banner.className = 'status-banner time-in';
             icon.innerHTML = '<i class="fas fa-arrow-right-to-bracket"></i>';
-            label.textContent = 'WELCOME BACK';
+            label.textContent = ds;
             fill.className = 'fill green';
-        } else if (data.action === 'TIME_IN' && ds === 'PM PRESENT') {
+        } else if (data.action === 'TIME_IN' && (ds === 'PM TIME IN' || ds === 'PM LATE TIME IN' || ds === 'PM PRESENT' || ds === 'PM LATE')) {
             banner.className = 'status-banner time-in';
             icon.innerHTML = '<i class="fas fa-arrow-right-to-bracket"></i>';
-            label.textContent = 'PM TIME IN';
+            label.textContent = ds === 'PM PRESENT' ? 'PM TIME IN' : ds === 'PM LATE' ? 'PM LATE TIME IN' : ds;
             fill.className = 'fill green';
         } else if (data.action === 'TIME_IN') {
             banner.className = 'status-banner time-in';
@@ -554,7 +555,7 @@
             icon.innerHTML = '<i class="fas fa-check-circle"></i>';
             label.textContent = 'ALREADY RECORDED';
             fill.className = 'fill orange';
-        } else if (data.action === 'PENDING_TIME_OUT') {
+        } else if (data.action === 'PENDING_TIME_OUT' || data.action === 'CONFIRM_TIME_OUT') {
             banner.className = 'status-banner late';
             icon.innerHTML = '<i class="fas fa-utensils"></i>';
             label.textContent = 'PENDING TIME OUT';
@@ -568,6 +569,11 @@
             banner.className = 'status-banner time-out';
             icon.innerHTML = '<i class="fas fa-flag-checkered"></i>';
             label.textContent = 'COMPLETED';
+            fill.className = 'fill orange';
+        } else if (data.action === 'TIME_OUT' && ds === 'EARLY OUT') {
+            banner.className = 'status-banner time-out';
+            icon.innerHTML = '<i class="fas fa-arrow-right-from-bracket"></i>';
+            label.textContent = 'EARLY OUT';
             fill.className = 'fill orange';
         } else {
             banner.className = 'status-banner time-out';

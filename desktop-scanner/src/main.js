@@ -112,19 +112,19 @@ function defaultSettings() {
     divisionName: 'Schools Division of Sipalay City',
     systemLogo: '',
     timeInStart: '07:00',
-    amLateTime: '',
-    timeOutOpen: '17:00',
-    lunchBreakStart: '11:30',
+    amLateTime: '07:15',
+    timeOutOpen: '16:00',
+    lunchBreakStart: '11:00',
     pmTimeInStart: '13:00',
-    pmLateTime: '',
+    pmLateTime: '13:15',
     lateGraceMinutes: 0,
     teacherDutyStart: '07:00',
-    teacherDutyEnd: '17:00',
+    teacherDutyEnd: '16:00',
     teacherLateGraceMinutes: 0,
     studentAttendanceRule: 'scan_once_time_in',
     teacherAttendanceRule: 'time_in_and_time_out',
     teacherTimeOutRule: 'required',
-    absenceCutoffTime: '17:00',
+    absenceCutoffTime: '16:00',
     attendancePolicy: '',
     schools: []
   };
@@ -275,9 +275,41 @@ function statusLabel(value) {
   return status ? status.replace(/_/g, ' ') : '';
 }
 
+const SCAN_LABELS = Object.freeze({
+  TIME_IN: 'TIME IN',
+  LATE_TIME_IN: 'LATE TIME IN',
+  PM_TIME_IN: 'PM TIME IN',
+  PM_LATE_TIME_IN: 'PM LATE TIME IN',
+  LUNCH_OUT: 'LUNCH OUT',
+  WELCOME_BACK: 'WELCOME BACK',
+  RETURNED: 'RETURNED',
+  EARLY_OUT: 'EARLY OUT',
+  COMPLETED: 'COMPLETED',
+  ALREADY_RECORDED: 'ALREADY RECORDED',
+  ALREADY_COMPLETED: 'ALREADY COMPLETED',
+  ATTENDANCE_CLOSED: 'ATTENDANCE CLOSED'
+});
+
+function normalizeOfflineDisplayLabel(value) {
+  const upper = String(value || '').trim().toUpperCase().replace(/\s+/g, ' ');
+  const legacy = {
+    PRESENT: SCAN_LABELS.TIME_IN,
+    LATE: SCAN_LABELS.LATE_TIME_IN,
+    'PM PRESENT': SCAN_LABELS.PM_TIME_IN,
+    'PM LATE': SCAN_LABELS.PM_LATE_TIME_IN,
+    OUT: SCAN_LABELS.EARLY_OUT,
+    COMPLETE: SCAN_LABELS.COMPLETED,
+    'ALREADY_RECORDED': SCAN_LABELS.ALREADY_RECORDED,
+    'ALREADY COMPLETED': SCAN_LABELS.ALREADY_COMPLETED,
+    'ATTENDANCE_CLOSED': SCAN_LABELS.ATTENDANCE_CLOSED
+  };
+  return legacy[upper] || upper;
+}
+
 function offlineScheduleForDate(attendanceDate, settings) {
   return {
-    lunchStart: combineDateAndTime(attendanceDate, settings.lunchBreakStart, '11:30'),
+    amLateStart: combineDateAndTime(attendanceDate, settings.amLateTime, '07:15'),
+    lunchStart: combineDateAndTime(attendanceDate, settings.lunchBreakStart, '11:00'),
     pmInStart: combineDateAndTime(attendanceDate, settings.pmTimeInStart, '13:00'),
     // PM Late Start Time is opt-in: null unless explicitly configured.
     pmLateStart: combineDateAndTime(attendanceDate, settings.pmLateTime, '13:15'),
@@ -287,17 +319,72 @@ function offlineScheduleForDate(attendanceDate, settings) {
 
 // A PM time-in at/after the PM Late Start Time is shown as "PM LATE" instead of
 // "PM PRESENT". Display-only — the stored daily status is unchanged.
-function offlinePmLabelFor(label, scanTime, schedule) {
-  if (label !== 'PM PRESENT') return label;
-  if (schedule.pmLateStart && compareSqlDateTimes(scanTime, schedule.pmLateStart) >= 0) return 'PM LATE';
-  return label;
+function offlineFirstScanDecision(scanTime, schedule, baseStatus = 'present') {
+  if (compareSqlDateTimes(scanTime, schedule.pmOutStart) >= 0) {
+    return {
+      allowed: false,
+      label: SCAN_LABELS.ATTENDANCE_CLOSED,
+      status: 'absent',
+      finalStatusLabel: 'Attendance Closed',
+      remarks: 'Attendance scanning is closed for today'
+    };
+  }
+  if (compareSqlDateTimes(scanTime, schedule.pmLateStart) >= 0) {
+    return {
+      allowed: true,
+      label: SCAN_LABELS.PM_LATE_TIME_IN,
+      status: 'half_day',
+      finalStatusLabel: 'Half-Day PM Late',
+      halfDayType: 'pm_late',
+      lateHalfDay: true,
+      remarks: 'Afternoon Session Only (Late)'
+    };
+  }
+  if (compareSqlDateTimes(scanTime, schedule.lunchStart) >= 0) {
+    return {
+      allowed: true,
+      label: SCAN_LABELS.PM_TIME_IN,
+      status: 'half_day',
+      finalStatusLabel: 'Half-Day PM',
+      halfDayType: 'pm_only',
+      lateHalfDay: false,
+      remarks: 'Afternoon Session Only'
+    };
+  }
+  const late = baseStatus === 'late' || compareSqlDateTimes(scanTime, schedule.amLateStart) >= 0;
+  return {
+    allowed: true,
+    label: late ? SCAN_LABELS.LATE_TIME_IN : SCAN_LABELS.TIME_IN,
+    status: late ? 'late' : 'present',
+    finalStatusLabel: late ? 'Late' : 'Present',
+    remarks: ''
+  };
+}
+
+function offlineTimeOutLabel(scanTime, schedule) {
+  if (compareSqlDateTimes(scanTime, schedule.pmOutStart) >= 0) return SCAN_LABELS.COMPLETED;
+  if (compareSqlDateTimes(scanTime, schedule.lunchStart) >= 0 && compareSqlDateTimes(scanTime, schedule.pmInStart) < 0) {
+    return SCAN_LABELS.LUNCH_OUT;
+  }
+  return SCAN_LABELS.EARLY_OUT;
+}
+
+function offlineReturnLabel(previousLabel, scanTime, schedule) {
+  const previous = normalizeOfflineDisplayLabel(previousLabel);
+  if (previous === SCAN_LABELS.COMPLETED) return SCAN_LABELS.ALREADY_COMPLETED;
+  if (compareSqlDateTimes(scanTime, schedule.pmOutStart) >= 0) return SCAN_LABELS.ATTENDANCE_CLOSED;
+  if (previous === SCAN_LABELS.LUNCH_OUT) {
+    if (compareSqlDateTimes(scanTime, schedule.pmInStart) < 0) return SCAN_LABELS.WELCOME_BACK;
+    if (compareSqlDateTimes(scanTime, schedule.pmLateStart) < 0) return SCAN_LABELS.PM_TIME_IN;
+    return SCAN_LABELS.PM_LATE_TIME_IN;
+  }
+  return SCAN_LABELS.RETURNED;
 }
 
 function baseAttendanceStatusFor(person, attendanceDate, timeIn, settings) {
   const isTeacher = person.personType === 'teacher';
-  // An explicit AM Late Start Time is the exact late line (no extra grace) for
-  // students; teachers and unset students fall back to "start + grace".
-  if (!isTeacher && settings.amLateTime) {
+  // The official schedule uses one AM Late cutoff for students and teachers.
+  if (settings.amLateTime) {
     const amLine = combineDateAndTime(attendanceDate, settings.amLateTime, '07:15');
     return compareSqlDateTimes(timeIn, amLine) >= 0 ? 'late' : 'present';
   }
@@ -437,37 +524,67 @@ function computeOfflineDailyAttendanceStatus(input = {}) {
   const baseStatus = input.baseStatus || 'present';
   const lastTimeIn = input.lastTimeIn || timeIn;
   const timeOut = input.timeOut || null;
+  const firstDecision = offlineFirstScanDecision(timeIn, schedule, baseStatus);
+  if (!firstDecision.allowed) {
+    return { status: 'absent', label: 'Absent', remarks: firstDecision.remarks };
+  }
 
-  if (schedule.pmInStart && compareSqlDateTimes(timeIn, schedule.pmInStart) >= 0) {
-    const late = !!schedule.pmLateStart && compareSqlDateTimes(timeIn, schedule.pmLateStart) >= 0;
+  if (timeOut && compareSqlDateTimes(timeOut, schedule.pmOutStart) >= 0) {
+    if (firstDecision.status === 'half_day') {
+      return {
+        status: firstDecision.status,
+        label: firstDecision.finalStatusLabel,
+        halfDayType: firstDecision.halfDayType || null,
+        lateHalfDay: !!firstDecision.lateHalfDay,
+        remarks: firstDecision.remarks || ''
+      };
+    }
     return {
-      status: 'half_day',
-      label: late ? 'Half-Day (Late)' : 'Half-Day',
-      halfDayType: late ? 'pm_late' : 'pm_only',
-      lateHalfDay: late,
-      remarks: late ? 'Afternoon Session Only (Late)' : 'Afternoon Session Only'
+      status: firstDecision.status,
+      label: 'Completed',
+      remarks: 'Attendance completed for the day'
     };
   }
 
   const leftAndDidNotReturn = timeOut && compareSqlDateTimes(lastTimeIn, timeOut) <= 0;
   if (leftAndDidNotReturn && schedule.pmOutStart && compareSqlDateTimes(timeOut, schedule.pmOutStart) < 0) {
-    if (schedule.pmInStart && compareSqlDateTimes(timeOut, schedule.pmInStart) < 0) {
+    if (schedule.lunchStart && schedule.pmInStart &&
+        compareSqlDateTimes(timeOut, schedule.lunchStart) >= 0 &&
+        compareSqlDateTimes(timeOut, schedule.pmInStart) < 0) {
       return {
         status: 'half_day',
-        label: 'Half-Day',
+        label: 'Half-Day AM',
         halfDayType: 'am_only',
         remarks: 'Morning Session Only'
       };
     }
+    if (schedule.lunchStart && compareSqlDateTimes(timeOut, schedule.lunchStart) < 0) {
+      return {
+        status: 'half_day',
+        label: 'Half-Day AM Early Out',
+        halfDayType: 'am_early_out',
+        remarks: 'Early Out During AM Session'
+      };
+    }
     return {
       status: 'half_day',
-      label: 'Half-Day',
-      halfDayType: 'early_dismissal',
-      remarks: 'Official Early Dismissal'
+      label: 'Half-Day PM Early Out',
+      halfDayType: 'pm_early_out',
+      remarks: 'Early Out During PM Session'
     };
   }
 
-  return { status: baseStatus, label: statusLabel(baseStatus), remarks: '' };
+  if (timeOut && compareSqlDateTimes(lastTimeIn, timeOut) > 0 && firstDecision.status !== 'half_day') {
+    return { status: firstDecision.status, label: 'Returned', remarks: 'Returned after Time Out' };
+  }
+
+  return {
+    status: firstDecision.status,
+    label: firstDecision.finalStatusLabel || statusLabel(firstDecision.status),
+    halfDayType: firstDecision.halfDayType || null,
+    lateHalfDay: !!firstDecision.lateHalfDay,
+    remarks: firstDecision.remarks || ''
+  };
 }
 
 function responseAttendanceMeta(status) {
@@ -784,19 +901,19 @@ async function refreshDesktopConfig() {
     divisionName: data.settings?.division_name || settings.divisionName,
     systemLogo: data.settings?.system_logo || settings.systemLogo,
     timeInStart: String(data.settings?.am_time_in_end || settings.timeInStart || '07:00').slice(0, 5),
-    amLateTime: String(data.settings?.am_late_time ?? settings.amLateTime ?? '').slice(0, 5),
-    timeOutOpen: String(data.settings?.pm_time_out_end || settings.timeOutOpen || '17:00').slice(0, 5),
-    lunchBreakStart: String(data.settings?.lunch_break_start || settings.lunchBreakStart || '11:30').slice(0, 5),
+    amLateTime: String(data.settings?.am_late_time ?? settings.amLateTime ?? '07:15').slice(0, 5),
+    timeOutOpen: String(data.settings?.pm_time_out_end || settings.timeOutOpen || '16:00').slice(0, 5),
+    lunchBreakStart: String(data.settings?.lunch_break_start || settings.lunchBreakStart || '11:00').slice(0, 5),
     pmTimeInStart: String(data.settings?.pm_time_in_start || settings.pmTimeInStart || '13:00').slice(0, 5),
-    pmLateTime: String(data.settings?.pm_late_time ?? settings.pmLateTime ?? '').slice(0, 5),
+    pmLateTime: String(data.settings?.pm_late_time ?? settings.pmLateTime ?? '13:15').slice(0, 5),
     lateGraceMinutes: Number(data.settings?.late_threshold || settings.lateGraceMinutes || 0) || 0,
     teacherDutyStart: String(data.settings?.teacher_duty_start_time || data.settings?.am_time_in_end || settings.teacherDutyStart || '07:00').slice(0, 5),
-    teacherDutyEnd: String(data.settings?.teacher_duty_end_time || data.settings?.pm_time_out_end || settings.teacherDutyEnd || '17:00').slice(0, 5),
+    teacherDutyEnd: String(data.settings?.teacher_duty_end_time || data.settings?.pm_time_out_end || settings.teacherDutyEnd || '16:00').slice(0, 5),
     teacherLateGraceMinutes: Number(data.settings?.teacher_late_threshold ?? data.settings?.late_threshold ?? settings.teacherLateGraceMinutes ?? 0) || 0,
     studentAttendanceRule: data.settings?.student_attendance_rule || settings.studentAttendanceRule || 'scan_once_time_in',
     teacherAttendanceRule: data.settings?.teacher_attendance_rule || settings.teacherAttendanceRule || 'time_in_and_time_out',
     teacherTimeOutRule: data.settings?.teacher_time_out_rule || settings.teacherTimeOutRule || 'required',
-    absenceCutoffTime: String(data.settings?.absence_cutoff_time || data.settings?.pm_time_out_end || settings.absenceCutoffTime || '17:00').slice(0, 5),
+    absenceCutoffTime: String(data.settings?.absence_cutoff_time || data.settings?.pm_time_out_end || settings.absenceCutoffTime || '16:00').slice(0, 5),
     attendancePolicy: data.settings?.attendance_policy || settings.attendancePolicy || '',
     schools: Array.isArray(data.schools) ? data.schools : settings.schools
   }, { allowAdminSyncedSettings: true });
@@ -1079,7 +1196,23 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
     const graceAnchor = activeGraceAnchor(scanTime);
     const outageForgiven = !!graceAnchor;
     const effectiveTime = outageForgiven ? graceAnchor : scanTime;
+    const closedDecision = offlineFirstScanDecision(scanTime, schedule, 'absent');
+    if (!closedDecision.allowed) {
+      return {
+        success: false,
+        offline: true,
+        action: 'ATTENDANCE_CLOSED',
+        status: 'absent',
+        display_status: SCAN_LABELS.ATTENDANCE_CLOSED,
+        attendance_status: 'Attendance Closed',
+        monitoring_status: SCAN_LABELS.ATTENDANCE_CLOSED,
+        message: 'Attendance is already closed for today.',
+        person: personResponseFromCache(person),
+        time: formatTime12(scanTime)
+      };
+    }
     const baseStatus = baseAttendanceStatusFor(person, attendanceDate, effectiveTime, settings);
+    const scanDecision = offlineFirstScanDecision(effectiveTime, schedule, baseStatus);
     const computed = computeOfflineDailyAttendanceStatus({
       timeIn: effectiveTime,
       lastTimeIn: effectiveTime,
@@ -1090,9 +1223,7 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
       ? { ...computed, remarks: 'Credited on-time — scanner power interruption' }
       : computed;
     const attendanceStatus = resolvedStatus.status;
-    const displayStatus = attendanceStatus === 'half_day'
-      ? offlinePmLabelFor('PM PRESENT', scanTime, schedule)
-      : (attendanceStatus === 'late' ? 'LATE' : 'PRESENT');
+    const displayStatus = scanDecision.label;
 
     insertAttendanceEvent({
       localEventId: createId(),
@@ -1132,10 +1263,10 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
       monitoring_status: displayStatus,
       ...responseAttendanceMeta(resolvedStatus),
       message: attendanceStatus === 'half_day'
-        ? `PM time in recorded offline - marked as HALF-DAY (${resolvedStatus.remarks}).`
+        ? `${resolvedStatus.label || 'Half-Day'} recorded offline.`
         : attendanceStatus === 'late'
-          ? 'Attendance recorded offline - marked as LATE.'
-          : 'Attendance recorded offline.',
+          ? 'Late time in recorded offline.'
+          : 'Time in recorded offline.',
       person: personResponseFromCache(person),
       time: formatTime12(scanTime),
       time_in: formatTime12(scanTime)
@@ -1143,13 +1274,38 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
   }
 
   // ── Subsequent scans toggle Time Out / Time In (multiple allowed per day) ──
+  if (normalizeOfflineDisplayLabel(lastEvent.displayStatus) === SCAN_LABELS.COMPLETED) {
+    return {
+      success: false,
+      offline: true,
+      action: 'ALREADY_COMPLETED',
+      status: lastEvent.attendanceStatus || 'present',
+      display_status: SCAN_LABELS.ALREADY_COMPLETED,
+      attendance_status: 'Already Completed',
+      monitoring_status: SCAN_LABELS.COMPLETED,
+      message: 'Attendance for today is already completed. No more scans are needed.',
+      person: personResponseFromCache(person),
+      time: formatTime12(scanTime),
+      time_in: formatTime12(lastEvent.timeIn || lastEvent.scanTime),
+      time_out: lastEvent.timeOut ? formatTime12(lastEvent.timeOut) : formatTime12(lastEvent.scanTime)
+    };
+  }
   const elapsedSec = secondsBetween(lastEvent.scanTime, scanTime);
   if (elapsedSec < 60) {
     return {
       success: false,
       offline: true,
-      error: `Scan rejected - too soon after the previous scan (${Math.round(elapsedSec)}s). Please wait at least 1 minute.`,
-      person: personResponseFromCache(person)
+      action: 'ALREADY_RECORDED',
+      status: lastEvent.attendanceStatus || 'present',
+      display_status: SCAN_LABELS.ALREADY_RECORDED,
+      attendance_status: 'Already Recorded',
+      monitoring_status: normalizeOfflineDisplayLabel(lastEvent.displayStatus) || SCAN_LABELS.ALREADY_RECORDED,
+      error: 'Already recorded. Please wait at least 1 minute before scanning again.',
+      message: 'Already recorded. Please wait at least 1 minute before scanning again.',
+      person: personResponseFromCache(person),
+      time: formatTime12(scanTime),
+      time_in: lastEvent.timeIn ? formatTime12(lastEvent.timeIn) : null,
+      time_out: lastEvent.timeOut ? formatTime12(lastEvent.timeOut) : null
     };
   }
 
@@ -1169,9 +1325,7 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
 
   if (lastEvent.eventAction === 'TIME_IN') {
     // ── Time Out (leave premises / lunch out / end of day) ──
-    let label = 'OUT';
-    if (compareSqlDateTimes(scanTime, pmOutStart) >= 0) label = 'COMPLETED';
-    else if (compareSqlDateTimes(scanTime, lunchStart) >= 0 && compareSqlDateTimes(scanTime, pmInStart) < 0) label = 'LUNCH OUT';
+    const label = offlineTimeOutLabel(scanTime, schedule);
     const resolvedStatus = computeOfflineDailyAttendanceStatus({
       timeIn: firstTimeIn,
       lastTimeIn: lastEvent.timeIn || lastEvent.scanTime,
@@ -1209,9 +1363,9 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
     });
 
     const outMessages = {
-      'COMPLETED': 'Time out recorded offline - attendance for today is complete.',
-      'LUNCH OUT': 'Lunch time out recorded offline. Scan again when you return.',
-      'OUT': 'Time out recorded offline. Scan again when you return to school.'
+      [SCAN_LABELS.COMPLETED]: 'Completed offline - attendance for today is complete.',
+      [SCAN_LABELS.LUNCH_OUT]: 'Lunch out recorded offline. Scan again when you return.',
+      [SCAN_LABELS.EARLY_OUT]: 'Early out recorded offline. Scan again if you return before the session ends.'
     };
     return {
       success: true,
@@ -1222,9 +1376,9 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
       display_status: label,
       monitoring_status: label,
       ...responseAttendanceMeta(resolvedStatus),
-      completed: label === 'COMPLETED',
+      completed: label === SCAN_LABELS.COMPLETED,
       message: dailyStatus === 'half_day'
-        ? `Time out recorded offline - marked as HALF-DAY (${resolvedStatus.remarks}).`
+        ? `${resolvedStatus.label || 'Half-Day'} recorded offline. ${resolvedStatus.remarks || ''}`
         : outMessages[label],
       person: personResponseFromCache(person),
       time: formatTime12(scanTime),
@@ -1236,14 +1390,23 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
   // ── Time In again after a Time Out (return from outside / PM session) ──
   // Returning from a lunch-out always counts as the afternoon session, so it is
   // labeled PM PRESENT even when scanned before the PM start time.
-  const wasLunchOut = String(lastEvent.displayStatus || '').toUpperCase() === 'LUNCH OUT';
-  const label = offlinePmLabelFor(
-    wasLunchOut
-      ? 'PM PRESENT'
-      : (compareSqlDateTimes(scanTime, pmInStart) >= 0 ? 'PM PRESENT' : 'RETURNED'),
-    scanTime,
-    schedule
-  );
+  const label = offlineReturnLabel(lastEvent.displayStatus, scanTime, schedule);
+  if (label === SCAN_LABELS.ATTENDANCE_CLOSED) {
+    return {
+      success: false,
+      offline: true,
+      action: 'ATTENDANCE_CLOSED',
+      status: lastEvent.attendanceStatus || 'present',
+      display_status: SCAN_LABELS.ATTENDANCE_CLOSED,
+      attendance_status: 'Attendance Closed',
+      monitoring_status: normalizeOfflineDisplayLabel(lastEvent.displayStatus),
+      message: 'Attendance is already closed for today. This return scan was not recorded.',
+      person: personResponseFromCache(person),
+      time: formatTime12(scanTime),
+      time_in: lastEvent.timeIn ? formatTime12(lastEvent.timeIn) : null,
+      time_out: lastEvent.timeOut ? formatTime12(lastEvent.timeOut) : formatTime12(lastEvent.scanTime)
+    };
+  }
   const resolvedStatus = computeOfflineDailyAttendanceStatus({
     timeIn: firstTimeIn,
     lastTimeIn: scanTime,
@@ -1289,9 +1452,13 @@ function resolveOfflineAttendance(qrCode, scanTime, options = {}) {
     display_status: label,
     monitoring_status: label,
     ...responseAttendanceMeta(resolvedStatus),
-    message: label === 'PM PRESENT'
-      ? 'PM time in recorded offline. Welcome back!'
-      : 'Return time in recorded offline. Welcome back!',
+    message: label === SCAN_LABELS.WELCOME_BACK
+      ? 'Welcome back. Lunch return recorded offline.'
+      : label === SCAN_LABELS.PM_LATE_TIME_IN
+        ? 'PM late time in recorded offline.'
+        : label === SCAN_LABELS.PM_TIME_IN
+          ? 'PM time in recorded offline.'
+          : 'Returned. Attendance scan recorded offline.',
     person: personResponseFromCache(person),
     time: formatTime12(scanTime),
     time_in: formatTime12(scanTime),

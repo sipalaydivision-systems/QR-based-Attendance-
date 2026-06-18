@@ -17,7 +17,18 @@ const {
     secondsBetween,
     formatTime12
 } = require('../utils/appTime');
-const { computeDailyAttendanceStatus, statusLabel, decorateLateHalfDays, isLateHalfDay } = require('../utils/attendanceStatus');
+const {
+    ATTENDANCE_SCAN_LABELS,
+    computeDailyAttendanceStatus,
+    computeDailyAttendanceStatusFromEvents,
+    decorateLateHalfDays,
+    firstScanDecision,
+    isLateHalfDay,
+    normalizeEventLabel,
+    returnScanLabel,
+    statusLabel,
+    timeOutScanLabel
+} = require('../utils/attendanceStatus');
 
 function requireAuthOrScannerKiosk(req, res, next) {
     if (req.session && req.session.user) return next();
@@ -597,9 +608,9 @@ async function getAttendanceLateThreshold(personType, dateStr) {
     );
     const settings = Object.fromEntries(rows.map(row => [row.setting_key, row.setting_value]));
     const isTeacher = personType === 'teacher';
-    // An explicit AM Late Start Time wins as the exact late line (no extra grace).
-    // Falls back to "school start + grace" only when no explicit time is configured.
-    if (!isTeacher && settings.am_late_time) {
+    // The official attendance logic uses one AM late line for students and
+    // teachers. Falls back to role-specific grace only when no exact line exists.
+    if (settings.am_late_time) {
         return new Date(dateStr + 'T' + normalizeTimeSetting(settings.am_late_time, '07:15:00') + '+08:00');
     }
     const baseTime = normalizeTimeSetting(
@@ -623,7 +634,7 @@ async function getPmLateTime() {
 async function getSchoolDayEndDateTime(dateStr) {
     const [rows] = await db.query("SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('absence_cutoff_time', 'pm_time_out_end')");
     const settings = Object.fromEntries(rows.map(row => [row.setting_key, row.setting_value]));
-    return sqlDateTime(dateStr, normalizeTimeSetting(settings.absence_cutoff_time || settings.pm_time_out_end, '17:00:00'));
+    return sqlDateTime(dateStr, normalizeTimeSetting(settings.absence_cutoff_time || settings.pm_time_out_end, '16:00:00'));
 }
 
 // Daily attendance schedule boundaries used to label time-in/time-out transactions.
@@ -631,10 +642,11 @@ async function getAttendanceScheduleTimes(dateStr) {
     const [rows] = await db.query(
         `SELECT setting_key, setting_value
          FROM settings
-         WHERE setting_key IN ('lunch_break_start', 'pm_time_in_start', 'pm_late_time', 'pm_time_out_end')`
+         WHERE setting_key IN ('am_late_time', 'lunch_break_start', 'pm_time_in_start', 'pm_late_time', 'pm_time_out_end')`
     );
     const settings = Object.fromEntries(rows.map(row => [row.setting_key, row.setting_value]));
     return {
+        amLateStart: sqlDateTime(dateStr, normalizeTimeSetting(settings.am_late_time, '07:15:00')),
         // AM-end / lunch-out boundary: a first arrival on/after this is a PM half-day,
         // and the lunch-out window runs from here to pmInStart. Default 11:00 (AM 7–11).
         lunchStart: sqlDateTime(dateStr, normalizeTimeSetting(settings.lunch_break_start, '11:00:00')),
@@ -650,30 +662,19 @@ async function getAttendanceScheduleTimes(dateStr) {
 // A return/PM time-in that lands on or after the PM Late Start Time is shown as
 // "PM LATE" instead of "PM PRESENT". Display-only — the stored daily status
 // (present / late / half_day) is unchanged, so report totals are unaffected.
-function pmLabelFor(label, now, schedule) {
-    if (label !== 'PM PRESENT') return label;
-    if (schedule.pmLateStart && compareDateTime(now, schedule.pmLateStart) >= 0) return 'PM LATE';
-    return label;
-}
-
 // Statuses that mean the person is currently OUTSIDE the school after a time-out scan.
-const OUTSIDE_MONITORING_STATUSES = ['OUT', 'LUNCH OUT', 'COMPLETED'];
+const OUTSIDE_MONITORING_STATUSES = [
+    'OUT',
+    ATTENDANCE_SCAN_LABELS.EARLY_OUT,
+    ATTENDANCE_SCAN_LABELS.LUNCH_OUT,
+    ATTENDANCE_SCAN_LABELS.COMPLETED
+];
 
 function isCurrentlyInside(attendanceRow) {
     const monitoring = String(attendanceRow.monitoring_status || '').toUpperCase();
     if (monitoring) return !OUTSIDE_MONITORING_STATUSES.includes(monitoring);
     // Legacy rows without monitoring_status: inside unless a time_out was recorded.
     return !attendanceRow.time_out;
-}
-
-function timeOutLabelFor(now, schedule) {
-    if (compareDateTime(now, schedule.pmOutStart) >= 0) return 'COMPLETED';
-    if (compareDateTime(now, schedule.lunchStart) >= 0 && compareDateTime(now, schedule.pmInStart) < 0) return 'LUNCH OUT';
-    return 'OUT';
-}
-
-function timeInLabelFor(now, schedule) {
-    return compareDateTime(now, schedule.pmInStart) >= 0 ? 'PM PRESENT' : 'RETURNED';
 }
 
 async function getBaseAttendanceStatus(personType, dateStr, timeIn) {
@@ -722,6 +723,38 @@ async function logAttendanceEvent(attendanceId, personType, personId, schoolId, 
         // The audit log must never block attendance recording itself.
         console.error('Attendance event log error:', err);
     }
+}
+
+async function getAttendanceEvents(attendanceId) {
+    const [events] = await db.query(
+        `SELECT event, event_label, event_time
+         FROM attendance_events
+         WHERE attendance_id = ?
+         ORDER BY event_time, id`,
+        [attendanceId]
+    );
+    return events;
+}
+
+async function resolveAttendanceStatusFromEvents(personType, dateStr, attendanceId, firstTimeIn) {
+    const [baseStatus, schedule, storedEvents] = await Promise.all([
+        getBaseAttendanceStatus(personType, dateStr, firstTimeIn),
+        getAttendanceScheduleTimes(dateStr),
+        getAttendanceEvents(attendanceId)
+    ]);
+    const events = [...storedEvents];
+    if (firstTimeIn && !events.some(event => String(event.event || '').toLowerCase() === 'time_in')) {
+        events.unshift({
+            event: 'time_in',
+            event_label: ATTENDANCE_SCAN_LABELS.TIME_IN,
+            event_time: firstTimeIn
+        });
+    }
+    return computeDailyAttendanceStatusFromEvents({
+        events,
+        schedule,
+        baseStatus
+    });
 }
 
 async function hasSchoolDayEnded(dateStr) {
@@ -815,15 +848,14 @@ async function getAttendanceStatusCounts(personType, dateStr, filters = {}) {
     const isTeacher = personType === 'teacher';
     const table = isTeacher ? 'teachers' : 'students';
     const alias = isTeacher ? 't' : 's';
-    // Any timed-in attendee is counted in the shared present/attended total.
-    // Late and half-day remain separate tallies so dashboards can still show
-    // those badges without treating the person as absent.
+    // Official dashboard totals keep full-day and half-day separate:
+    // Present = full-day on-time, Late = full-day late, Half-Day = partial day.
     let query = `
         SELECT
-            COUNT(DISTINCT CASE WHEN a.status IN ('present','late','half_day') THEN a.person_id END) AS present,
+            COUNT(DISTINCT CASE WHEN a.status = 'present' THEN a.person_id END) AS present,
             COUNT(DISTINCT CASE WHEN a.status = 'late' THEN a.person_id END) AS late,
             COUNT(DISTINCT CASE WHEN a.status = 'half_day' THEN a.person_id END) AS half_day,
-            COUNT(DISTINCT CASE WHEN a.status IN ('present','late','half_day') THEN a.person_id END) AS full_day,
+            COUNT(DISTINCT CASE WHEN a.status IN ('present','late') THEN a.person_id END) AS full_day,
             COUNT(DISTINCT CASE WHEN a.time_in IS NOT NULL THEN a.person_id END) AS timed_in,
             COUNT(DISTINCT CASE WHEN a.time_out IS NOT NULL THEN a.person_id END) AS timed_out
         FROM attendance a
@@ -1212,7 +1244,23 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
             const outageForgiven = !!graceAnchor && compareDateTime(graceAnchor, now) < 0;
             const statusTime = outageForgiven ? graceAnchor : now;
             const schedule = await getAttendanceScheduleTimes(today);
+            const closedDecision = firstScanDecision(now, schedule, 'absent');
+            if (!closedDecision.allowed) {
+                return res.json({
+                    success: false,
+                    action: 'ATTENDANCE_CLOSED',
+                    status: 'absent',
+                    display_status: ATTENDANCE_SCAN_LABELS.ATTENDANCE_CLOSED,
+                    attendance_status: 'Attendance Closed',
+                    remarks: closedDecision.remarks,
+                    monitoring_status: ATTENDANCE_SCAN_LABELS.ATTENDANCE_CLOSED,
+                    message: 'Attendance is already closed for today.',
+                    person: personInfo,
+                    time: formatTime12(now)
+                });
+            }
             const baseStatus = await getBaseAttendanceStatus(personType, today, statusTime);
+            const scanDecision = firstScanDecision(statusTime, schedule, baseStatus);
             const computedStatus = computeDailyAttendanceStatus({
                 timeIn: statusTime,
                 lastTimeIn: statusTime,
@@ -1224,9 +1272,7 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
                 ? { ...computedStatus, remarks: 'Credited on-time — scanner power interruption' }
                 : computedStatus;
             const attendanceStatus = resolvedStatus.status;
-            const displayStatus = attendanceStatus === 'half_day'
-                ? pmLabelFor('PM PRESENT', now, schedule)
-                : attendanceStatus === 'late' ? 'LATE' : 'PRESENT';
+            const displayStatus = scanDecision.label;
 
             const [insertResult] = await db.query(
                 'INSERT INTO attendance (person_type, person_id, school_id, date, time_in, last_time_in, status, monitoring_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
@@ -1244,8 +1290,8 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
                 message: outageForgiven
                     ? 'Attendance recorded - credited on-time despite scanner power interruption.'
                     : attendanceStatus === 'half_day'
-                        ? 'PM time in recorded - marked as HALF-DAY.'
-                        : attendanceStatus === 'late' ? 'Attendance recorded - marked as LATE' : 'Attendance recorded successfully',
+                        ? (resolvedStatus.label || 'Half-Day') + ' recorded.'
+                        : attendanceStatus === 'late' ? 'Late time in recorded.' : 'Time in recorded.',
                 person: personInfo,
                 time: formatTime12(now),
                 time_in: formatTime12(now)
@@ -1254,6 +1300,21 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
 
         // ── Subsequent scans toggle between Time Out and Time In (multiple allowed per day) ──
         const attendanceRow = existing[0];
+        if (normalizeEventLabel(attendanceRow.monitoring_status) === ATTENDANCE_SCAN_LABELS.COMPLETED) {
+            return res.json({
+                success: false,
+                action: 'ALREADY_COMPLETED',
+                status: attendanceRow.status,
+                display_status: ATTENDANCE_SCAN_LABELS.ALREADY_COMPLETED,
+                attendance_status: 'Already Completed',
+                monitoring_status: ATTENDANCE_SCAN_LABELS.COMPLETED,
+                message: 'Attendance for today is already completed. No more scans are needed.',
+                person: personInfo,
+                time: formatTime12(now),
+                time_in: attendanceRow.last_time_in || attendanceRow.time_in ? formatTime12(attendanceRow.last_time_in || attendanceRow.time_in) : null,
+                time_out: attendanceRow.time_out ? formatTime12(attendanceRow.time_out) : null
+            });
+        }
         const transactionTimes = [attendanceRow.last_time_in || attendanceRow.time_in, attendanceRow.time_out].filter(Boolean);
         let lastTransactionAt = transactionTimes[0];
         transactionTimes.forEach(value => {
@@ -1265,8 +1326,17 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
         if (elapsedSec < 60) {
             return res.json({
                 success: false,
-                error: 'Scan rejected - too soon after the previous scan (' + Math.round(elapsedSec) + 's). Please wait at least 1 minute.',
-                person: personInfo
+                action: 'ALREADY_RECORDED',
+                status: attendanceRow.status,
+                display_status: ATTENDANCE_SCAN_LABELS.ALREADY_RECORDED,
+                attendance_status: 'Already Recorded',
+                monitoring_status: attendanceRow.monitoring_status || ATTENDANCE_SCAN_LABELS.ALREADY_RECORDED,
+                error: 'Already recorded. Please wait at least 1 minute before scanning again.',
+                message: 'Already recorded. Please wait at least 1 minute before scanning again.',
+                person: personInfo,
+                time: formatTime12(now),
+                time_in: attendanceRow.last_time_in || attendanceRow.time_in ? formatTime12(attendanceRow.last_time_in || attendanceRow.time_in) : null,
+                time_out: attendanceRow.time_out ? formatTime12(attendanceRow.time_out) : null
             });
         }
 
@@ -1274,36 +1344,40 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
 
         if (isCurrentlyInside(attendanceRow)) {
             // ── Time Out (leave premises / lunch out / end of day) ──
-            const label = timeOutLabelFor(now, schedule);
+            const label = timeOutScanLabel(now, schedule);
 
             if (requireTimeOutConfirmation && !confirmedTimeOut) {
                 return res.json({
                     success: true,
                     action: 'CONFIRM_TIME_OUT',
                     status: attendanceRow.status,
+                    display_status: ATTENDANCE_SCAN_LABELS.PENDING_TIME_OUT,
+                    attendance_status: 'Pending Time Out',
                     message: 'Already timed in. Please confirm before recording Time Out.',
                     person: personInfo,
                     time_in: formatTime12(attendanceRow.last_time_in || attendanceRow.time_in),
                     time_out: 'Pending Time Out',
-                    monitoring_status: 'Pending Time Out'
+                    monitoring_status: ATTENDANCE_SCAN_LABELS.PENDING_TIME_OUT
                 });
             }
 
-            const resolvedStatus = await resolveAttendanceStatus(personType, today, {
-                ...attendanceRow,
-                time_out: now
-            });
+            await logAttendanceEvent(attendanceRow.id, personType, person.id, person.school_id, today, 'time_out', label, now);
+            const resolvedStatus = await resolveAttendanceStatusFromEvents(
+                personType,
+                today,
+                attendanceRow.id,
+                attendanceRow.time_in
+            );
 
             await db.query(
                 'UPDATE attendance SET time_out = ?, status = ?, monitoring_status = ?, updated_at = ? WHERE id = ?',
                 [now, resolvedStatus.status, label, now, attendanceRow.id]
             );
-            await logAttendanceEvent(attendanceRow.id, personType, person.id, person.school_id, today, 'time_out', label, now);
 
             const outMessages = {
-                'COMPLETED': 'Time out recorded - attendance for today is complete.',
-                'LUNCH OUT': 'Lunch time out recorded. Scan again when you return.',
-                'OUT': 'Time out recorded. Scan again when you return to school.'
+                [ATTENDANCE_SCAN_LABELS.COMPLETED]: 'Completed. Attendance for today is complete.',
+                [ATTENDANCE_SCAN_LABELS.LUNCH_OUT]: 'Lunch out recorded. Scan again when you return.',
+                [ATTENDANCE_SCAN_LABELS.EARLY_OUT]: 'Early out recorded. Scan again if you return before the session ends.'
             };
             return res.json({
                 success: true,
@@ -1312,9 +1386,9 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
                 display_status: label,
                 ...responseAttendanceMeta(resolvedStatus),
                 monitoring_status: label,
-                completed: label === 'COMPLETED',
+                completed: label === ATTENDANCE_SCAN_LABELS.COMPLETED,
                 message: resolvedStatus.status === 'half_day'
-                    ? 'Time out recorded - marked as HALF-DAY (' + resolvedStatus.remarks + ').'
+                    ? (resolvedStatus.label || 'Half-Day') + ' recorded. ' + (resolvedStatus.remarks || '')
                     : outMessages[label],
                 person: personInfo,
                 time: formatTime12(now),
@@ -1326,17 +1400,33 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
         // ── Time In again after a Time Out (return from outside / PM session) ──
         // Returning from a lunch-out always counts as the afternoon session, so
         // it is labeled PM PRESENT even when scanned before the PM start time.
-        const wasLunchOut = String(attendanceRow.monitoring_status || '').toUpperCase() === 'LUNCH OUT';
-        const label = pmLabelFor(wasLunchOut ? 'PM PRESENT' : timeInLabelFor(now, schedule), now, schedule);
-        const resolvedStatus = await resolveAttendanceStatus(personType, today, {
-            ...attendanceRow,
-            last_time_in: now
-        });
+        const label = returnScanLabel(attendanceRow.monitoring_status, now, schedule);
+        if (label === ATTENDANCE_SCAN_LABELS.ATTENDANCE_CLOSED) {
+            return res.json({
+                success: false,
+                action: 'ATTENDANCE_CLOSED',
+                status: attendanceRow.status,
+                display_status: ATTENDANCE_SCAN_LABELS.ATTENDANCE_CLOSED,
+                attendance_status: 'Attendance Closed',
+                monitoring_status: attendanceRow.monitoring_status,
+                message: 'Attendance is already closed for today. This return scan was not recorded.',
+                person: personInfo,
+                time: formatTime12(now),
+                time_in: attendanceRow.last_time_in || attendanceRow.time_in ? formatTime12(attendanceRow.last_time_in || attendanceRow.time_in) : null,
+                time_out: attendanceRow.time_out ? formatTime12(attendanceRow.time_out) : null
+            });
+        }
+        await logAttendanceEvent(attendanceRow.id, personType, person.id, person.school_id, today, 'time_in', label, now);
+        const resolvedStatus = await resolveAttendanceStatusFromEvents(
+            personType,
+            today,
+            attendanceRow.id,
+            attendanceRow.time_in
+        );
         await db.query(
             'UPDATE attendance SET last_time_in = ?, status = ?, monitoring_status = ?, updated_at = ? WHERE id = ?',
             [now, resolvedStatus.status, label, now, attendanceRow.id]
         );
-        await logAttendanceEvent(attendanceRow.id, personType, person.id, person.school_id, today, 'time_in', label, now);
 
         return res.json({
             success: true,
@@ -1345,11 +1435,13 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
             display_status: label,
             ...responseAttendanceMeta(resolvedStatus),
             monitoring_status: label,
-            message: label === 'PM LATE'
-                ? 'PM time in recorded - marked PM LATE. Welcome back!'
-                : label === 'PM PRESENT'
-                    ? 'PM time in recorded. Welcome back!'
-                    : 'Return time in recorded. Welcome back!',
+            message: label === ATTENDANCE_SCAN_LABELS.WELCOME_BACK
+                ? 'Welcome back. Lunch return recorded.'
+                : label === ATTENDANCE_SCAN_LABELS.PM_LATE_TIME_IN
+                    ? 'PM late time in recorded.'
+                    : label === ATTENDANCE_SCAN_LABELS.PM_TIME_IN
+                        ? 'PM time in recorded.'
+                        : 'Returned. Attendance scan recorded.',
             person: personInfo,
             time: formatTime12(now),
             time_in: formatTime12(now),
@@ -2453,6 +2545,19 @@ router.get('/attendance', requireAuth, async (req, res) => {
         query += ' ORDER BY a.time_in DESC';
         const [rows] = await db.query(query, params);
         decorateLateHalfDays(rows, await getPmLateTime());
+        await Promise.all(rows.map(async (row) => {
+            if (!row.time_in) {
+                row.attendance_status = 'Absent';
+                return;
+            }
+            const rowDate = row.date instanceof Date ? row.date.toISOString().slice(0, 10) : String(row.date).slice(0, 10);
+            const resolved = await resolveAttendanceStatusFromEvents(row.person_type, rowDate, row.id, row.time_in);
+            row.status = resolved.status || row.status;
+            row.attendance_status = resolved.label || statusLabel(row.status);
+            row.half_day_type = resolved.halfDayType || null;
+            row.late_half_day = !!resolved.lateHalfDay || !!row.late_half_day;
+            row.remarks = resolved.remarks || '';
+        }));
         return res.json(rows);
     } catch (err) {
         return res.status(500).json({ error: 'Failed to fetch attendance.' });
@@ -2958,7 +3063,7 @@ router.get('/reports', requireAuth, async (req, res) => {
     const type = req.query.type || 'student';
     const schoolId = applySchoolFilter(req);
     try {
-        let query = `SELECT a.date, a.person_type, a.time_in, a.time_out, a.status,
+        let query = `SELECT a.id, a.date, a.person_type, a.time_in, a.time_out, a.status, a.monitoring_status,
             CASE WHEN a.person_type = 'student' THEN (SELECT CONCAT(firstname, ' ', lastname) FROM students WHERE id = a.person_id)
                  ELSE (SELECT CONCAT(firstname, ' ', lastname) FROM teachers WHERE id = a.person_id)
             END as person_name,
@@ -2969,11 +3074,20 @@ router.get('/reports', requireAuth, async (req, res) => {
         if (schoolId) { query += ' AND a.school_id = ?'; params.push(schoolId); }
         query += ' ORDER BY a.date DESC, a.time_in DESC';
         const [rows] = await db.query(query, params);
-        const records = rows.map(row => ({
-            ...row,
-            monitoring_status: row.person_type === 'student'
-                ? (row.time_in ? 'Inside School' : 'No Time In')
-                : (row.time_in && !row.time_out ? 'Pending Time Out' : (row.time_out ? 'Complete' : 'No Time In'))
+        const records = await Promise.all(rows.map(async row => {
+            const rowDate = row.date instanceof Date ? row.date.toISOString().slice(0, 10) : String(row.date).slice(0, 10);
+            const resolved = row.time_in
+                ? await resolveAttendanceStatusFromEvents(row.person_type, rowDate, row.id, row.time_in)
+                : null;
+            return {
+                ...row,
+                attendance_status: resolved ? (resolved.label || statusLabel(resolved.status)) : statusLabel(row.status),
+                half_day_type: resolved && resolved.halfDayType || null,
+                remarks: resolved && resolved.remarks || '',
+                monitoring_status: row.monitoring_status || (row.person_type === 'student'
+                    ? (row.time_in ? 'Inside School' : 'No Time In')
+                    : (row.time_in && !row.time_out ? 'Pending Time Out' : (row.time_out ? 'Complete' : 'No Time In')))
+            };
         }));
 
         // Stats summary
@@ -3154,8 +3268,11 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
                     WHEN SUM(CASE WHEN a.status = 'late' THEN 1 ELSE 0 END) > 0 THEN 'Late'
                     ELSE 'Present'
                 END as attendance_status,
+                MAX(a.id) as attendance_id,
                 MAX(a.status) as att_status,
                 MAX(a.time_in) as time_in,
+                MAX(a.time_out) as time_out,
+                MAX(a.last_time_in) as last_time_in,
                 MAX(a.monitoring_status) as monitoring_status
             FROM attendance a
             INNER JOIN students s ON a.person_id = s.id
@@ -3215,21 +3332,24 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
         );
 
         const pmLateTime = await getPmLateTime();
-        const presentStudents = presentRows.map(row => {
+        const presentStudents = await Promise.all(presentRows.map(async row => {
             const lateHalf = isLateHalfDay(row.att_status, row.time_in, pmLateTime);
+            const resolved = row.attendance_id
+                ? await resolveAttendanceStatusFromEvents('student', targetDate, row.attendance_id, row.time_in)
+                : null;
             return {
                 ...row,
                 name: `${row.firstname || ''} ${row.lastname || ''}`.trim() || 'Student',
-                late_half_day: lateHalf,
-                // Keep attendance_status filter/count-stable ('Half-Day'); views append
-                // "(Late)" using late_half_day so the Half-Day filter still matches.
-                attendance_status: row.attendance_status || 'Present',
+                late_half_day: !!(resolved && resolved.lateHalfDay) || lateHalf,
+                attendance_status: (resolved && resolved.label) || row.attendance_status || 'Present',
+                half_day_type: resolved && resolved.halfDayType || null,
+                remarks: resolved && resolved.remarks || '',
                 monitoring_status: row.monitoring_status || 'Inside School',
                 attendance_date: targetDate,
                 absent_days: 0,
                 absent_from_date: null
             };
-        });
+        }));
         const absentStudents = absentRows.map(row => ({
             ...(() => {
                 const streak = streakByStudentId.get(String(row.id));
@@ -3250,6 +3370,7 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
             attendance_date: targetDate
         }));
         const statusKey = value => String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+        const presentOnlyCount = presentStudents.filter(s => statusKey(s.att_status || s.attendance_status) === 'present').length;
         const lateCount = presentStudents.filter(s => statusKey(s.att_status || s.attendance_status) === 'late').length;
         const halfDayCount = presentStudents.filter(s => statusKey(s.att_status || s.attendance_status) === 'half_day').length;
 
@@ -3260,7 +3381,7 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
             non_school_day_reason: schoolDay.reason,
             totals: {
                 students_total: totalRow.cnt,
-                present: presentStudents.length,
+                present: presentOnlyCount,
                 attended: presentStudents.length,
                 late: lateCount,
                 half_day: halfDayCount,
@@ -3612,7 +3733,7 @@ router.get('/adviser-dashboard', requireAuth, async (req, res) => {
         const [students] = await db.query(
             `SELECT s.id, s.lrn, s.firstname, s.lastname, s.middlename, s.guardian_contact, s.category, s.status,
                     s.active_from, s.created_at,
-                    a.time_in, a.time_out, a.last_time_in, a.status as att_status, a.monitoring_status
+                    a.id as attendance_id, a.time_in, a.time_out, a.last_time_in, a.status as att_status, a.monitoring_status
              FROM students s
              LEFT JOIN attendance a ON a.person_type = 'student' AND a.person_id = s.id AND a.date = ?
              WHERE s.section_id = ? AND s.status != 'deleted'
@@ -3621,7 +3742,7 @@ router.get('/adviser-dashboard', requireAuth, async (req, res) => {
 
         const pmLateTime = await getPmLateTime();
         const activeStudents = students.filter(s => s.status === 'active');
-        const present = activeStudents.filter(s => ['present', 'late', 'half_day'].includes(s.att_status));
+        const present = activeStudents.filter(s => s.att_status === 'present');
         const late = activeStudents.filter(s => s.att_status === 'late');
         const halfDay = activeStudents.filter(s => s.att_status === 'half_day');
         const absent = activeStudents.filter(s => !s.att_status);
@@ -3640,25 +3761,32 @@ router.get('/adviser-dashboard', requireAuth, async (req, res) => {
 
         return res.json({
             teacher: teacher[0],
-            students: students.map(s => ({
-                id: s.id,
-                lrn: s.lrn,
-                firstname: s.firstname,
-                lastname: s.lastname,
-                middlename: s.middlename || '',
-                gender: s.gender || '',
-                name: (s.lastname && s.firstname) ? s.lastname + ', ' + s.firstname + (s.middlename ? ' ' + s.middlename.charAt(0) + '.' : '') : s.firstname || s.lastname,
-                guardian_contact: s.guardian_contact,
-                category: s.category,
-                student_status: s.status,
-                time_in: s.time_in ? formatTime12(s.time_in) : null,
-                time_out: s.time_out ? formatTime12(s.time_out) : null,
-                last_time_in: s.last_time_in ? formatTime12(s.last_time_in) : null,
-                att_status: s.att_status,
-                monitoring_status: s.monitoring_status,
-                late_half_day: isLateHalfDay(s.att_status, s.time_in, pmLateTime),
-                attendance_status: statusLabel(s.att_status),
-                flagged: flaggedIds.includes(s.id)
+            students: await Promise.all(students.map(async s => {
+                const resolved = s.attendance_id && s.time_in
+                    ? await resolveAttendanceStatusFromEvents('student', date, s.attendance_id, s.time_in)
+                    : null;
+                return {
+                    id: s.id,
+                    lrn: s.lrn,
+                    firstname: s.firstname,
+                    lastname: s.lastname,
+                    middlename: s.middlename || '',
+                    gender: s.gender || '',
+                    name: (s.lastname && s.firstname) ? s.lastname + ', ' + s.firstname + (s.middlename ? ' ' + s.middlename.charAt(0) + '.' : '') : s.firstname || s.lastname,
+                    guardian_contact: s.guardian_contact,
+                    category: s.category,
+                    student_status: s.status,
+                    time_in: s.time_in ? formatTime12(s.time_in) : null,
+                    time_out: s.time_out ? formatTime12(s.time_out) : null,
+                    last_time_in: s.last_time_in ? formatTime12(s.last_time_in) : null,
+                    att_status: s.att_status,
+                    monitoring_status: s.monitoring_status,
+                    late_half_day: !!(resolved && resolved.lateHalfDay) || isLateHalfDay(s.att_status, s.time_in, pmLateTime),
+                    attendance_status: resolved ? (resolved.label || statusLabel(resolved.status)) : statusLabel(s.att_status),
+                    half_day_type: resolved && resolved.halfDayType || null,
+                    remarks: resolved && resolved.remarks || '',
+                    flagged: flaggedIds.includes(s.id)
+                };
             })),
             kpi: {
                 total: activeStudents.length,
@@ -3746,11 +3874,12 @@ router.get('/monthly-attendance', requireAuth, async (req, res) => {
         const startDate = `${year}-${String(month).padStart(2,'0')}-01`;
         const endDate   = new Date(year, month, 0).toISOString().slice(0,10);
 
-        // Present counts per day (half-day attendees count as present)
+        // Full-day attendance counts per day. Half-day is tracked separately,
+        // not mislabeled as full-day present.
         let pQuery = `SELECT DATE(a.date) as day, COUNT(DISTINCT a.person_id) as present
                       FROM attendance a
                       INNER JOIN students s ON a.person_id = s.id AND s.status = 'active'
-                      WHERE a.person_type = 'student' AND a.date BETWEEN ? AND ? AND a.status IN ('present','late','half_day')`;
+                      WHERE a.person_type = 'student' AND a.date BETWEEN ? AND ? AND a.status IN ('present','late')`;
         const pParams = [startDate, endDate];
         if (schoolId) { pQuery += ' AND a.school_id = ?'; pParams.push(schoolId); }
         pQuery += ' GROUP BY DATE(a.date)';

@@ -149,7 +149,7 @@
         </div>
         <div class="form-group">
             <label>Lunch Break Start</label>
-            <input type="time" id="lunch_break_start" class="form-control sched-input" value="11:30">
+            <input type="time" id="lunch_break_start" class="form-control sched-input" value="11:00">
             <small class="fld-note">A Time Out from here until PM start is a <strong>LUNCH OUT</strong> (expected to return).</small>
         </div>
         <div class="form-group">
@@ -160,7 +160,7 @@
         <div class="form-group">
             <label>PM Late Start Time <span class="lbl-hint">PM late line</span></label>
             <input type="time" id="pm_late_time" class="form-control sched-input" value="13:15">
-            <small class="fld-note">An afternoon time-in at/after this shows <strong>PM LATE</strong> (label only &mdash; report totals unchanged).</small>
+            <small class="fld-note">An afternoon time-in at/after this shows <strong>PM LATE TIME IN</strong>.</small>
         </div>
         <div class="form-group">
             <label>Official School Day End</label>
@@ -169,7 +169,7 @@
         </div>
         <div class="form-group">
             <label>Absence Cutoff Time</label>
-            <input type="time" id="absence_cutoff_time" class="form-control sched-input" value="17:00">
+            <input type="time" id="absence_cutoff_time" class="form-control sched-input" value="16:00">
             <small class="fld-note">No Time In by this time → counted <strong>ABSENT</strong> for the day.</small>
         </div>
     </div>
@@ -207,7 +207,7 @@
         </div>
         <div class="form-group">
             <label>Duty End Time</label>
-            <input type="time" id="teacher_duty_end_time" class="form-control" value="17:00">
+            <input type="time" id="teacher_duty_end_time" class="form-control" value="16:00">
         </div>
         <div class="form-group">
             <label>Late Arrival Grace (minutes)</label>
@@ -482,11 +482,11 @@ function scenCard(cls, icon, title, flow) {
 }
 function renderSchedulePreview() {
     var start  = schedTime('am_time_in_end', '07:00');
-    var lunch  = schedTime('lunch_break_start', '11:30');
+    var lunch  = schedTime('lunch_break_start', '11:00');
     var pmIn   = schedTime('pm_time_in_start', '13:00');
     var pmLate = schedTime('pm_late_time', '13:15');
     var end    = schedTime('pm_time_out_end', '16:00');
-    var absent = schedTime('absence_cutoff_time', '17:00');
+    var absent = schedTime('absence_cutoff_time', '16:00');
     var grace  = (document.getElementById('late_threshold') || {}).value || '0';
     // Explicit AM Late Start Time is the late line; otherwise school start + grace.
     var amLateEl = document.getElementById('am_late_time');
@@ -511,11 +511,11 @@ function renderSchedulePreview() {
             scenCard('late', 'fa-clock', 'Late student',
                 'First scan <strong>' + to12(addMin(lateLine, 30)) + '</strong> (after ' + to12(lateLine) + ') &rarr; <span class="s-pill late">LATE</span>') +
             scenCard('ok', 'fa-utensils', 'Lunch out &amp; back',
-                'Out <strong>' + to12(addMin(lunch, 10)) + '</strong>, back <strong>' + to12(addMin(pmIn, -20)) + '</strong> &rarr; <span class="s-pill present">PM PRESENT</span>, stays full day') +
+                'Out <strong>' + to12(addMin(lunch, 10)) + '</strong>, back <strong>' + to12(addMin(pmIn, -20)) + '</strong> &rarr; <span class="s-pill present">WELCOME BACK</span>, stays full day') +
             scenCard('half', 'fa-circle-half-stroke', 'Afternoon only',
                 'First scan <strong>' + to12(addMin(pmIn, 5)) + '</strong> &rarr; <span class="s-pill half">HALF-DAY</span> (PM only)') +
             scenCard('late', 'fa-clock', 'Late PM return',
-                'Back from lunch <strong>' + to12(addMin(pmLate, 20)) + '</strong> (after ' + to12(pmLate) + ') &rarr; <span class="s-pill late">PM LATE</span> label') +
+                'Back from lunch <strong>' + to12(addMin(pmLate, 20)) + '</strong> (after ' + to12(pmLate) + ') &rarr; <span class="s-pill late">PM LATE TIME IN</span>') +
             scenCard('half', 'fa-right-from-bracket', 'Early dismissal',
                 'Leaves <strong>' + to12(addMin(end, -30)) + '</strong>, no return &rarr; <span class="s-pill half">HALF-DAY</span>') +
             scenCard('absent', 'fa-user-xmark', 'No-show',

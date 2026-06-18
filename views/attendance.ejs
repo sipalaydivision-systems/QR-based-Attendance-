@@ -101,8 +101,8 @@ async function loadAttendance() {
             : rawStatus === 'late' ? 'badge-late'
             : rawStatus === 'half_day' ? 'badge-half-day'
             : 'badge-inactive';
-        var statusText = formatStatusLabel(r.status, r.late_half_day);
-        var timeOutText = r.time_out ? new Date(r.time_out).toLocaleTimeString() : (r.monitoring_status === 'Pending Time Out' ? 'Pending Time Out' : '-');
+        var statusText = r.attendance_status || formatStatusLabel(r.status, r.late_half_day);
+        var timeOutText = r.time_out ? new Date(r.time_out).toLocaleTimeString() : (r.monitoring_status === 'PENDING TIME OUT' || r.monitoring_status === 'Pending Time Out' ? 'Pending Time Out' : '-');
         return '<tr>' +
             '<td><strong>' + (r.person_name || 'N/A') + '</strong></td>' +
             '<td>' + (r.lrn || r.employee_id || '-') + '</td>' +

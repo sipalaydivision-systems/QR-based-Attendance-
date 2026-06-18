@@ -325,9 +325,14 @@ INSERT INTO settings (setting_key, setting_value) VALUES
 ('school_year', '2025-2026'),
 ('late_time', '08:00:00'),
 ('absent_time', '10:00:00'),
+('am_time_in_end', '07:00:00'),
+('am_late_time', '07:15:00'),
+('late_threshold', '15'),
 ('lunch_break_start', '11:00:00'),
 ('pm_time_in_start', '13:00:00'),
 ('pm_late_time', '13:15:00'),
 ('pm_time_out_end', '16:00:00'),
+('absence_cutoff_time', '16:00:00'),
+('teacher_duty_end_time', '16:00:00'),
 ('auto_activate_on_scan', '1')
 ON DUPLICATE KEY UPDATE setting_value = setting_value;

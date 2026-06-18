@@ -7,7 +7,8 @@ const ExcelJS = require('exceljs');
 const router = express.Router();
 const db = require('../config/database');
 const { requireAuth, requireRole, applySchoolFilter } = require('../middleware/auth');
-const { todayDate } = require('../utils/appTime');
+const { todayDate, normalizeTime, sqlDateTime, compareDateTime } = require('../utils/appTime');
+const { computeDailyAttendanceStatusFromEvents, statusLabel, ATTENDANCE_SCAN_LABELS } = require('../utils/attendanceStatus');
 
 router.use(requireAuth);
 
@@ -24,6 +25,15 @@ function formatStatusLabel(value) {
         late: 'Late',
         half_day: 'Half-Day',
         'half day': 'Half-Day',
+        'half day pm': 'Half-Day PM',
+        'half day pm late': 'Half-Day PM Late',
+        'half day am': 'Half-Day AM',
+        'half day am early out': 'Half-Day AM Early Out',
+        'half day pm early out': 'Half-Day PM Early Out',
+        completed: 'Completed',
+        returned: 'Returned',
+        'lunch out': 'Lunch Out',
+        'early out': 'Early Out',
         flagged: 'Flagged',
         pending: 'Pending',
         sent: 'Sent',
@@ -39,6 +49,45 @@ function formatStatusLabel(value) {
 
 function labelRowStatuses(rows) {
     return rows.map(row => ({ ...row, status: formatStatusLabel(row.status) }));
+}
+
+async function getReportSchedule(dateStr) {
+    const [rows] = await db.query(
+        `SELECT setting_key, setting_value
+         FROM settings
+         WHERE setting_key IN ('am_late_time', 'lunch_break_start', 'pm_time_in_start', 'pm_late_time', 'pm_time_out_end')`
+    );
+    const settings = Object.fromEntries(rows.map(row => [row.setting_key, row.setting_value]));
+    return {
+        amLateStart: sqlDateTime(dateStr, normalizeTime(settings.am_late_time, '07:15:00')),
+        lunchStart: sqlDateTime(dateStr, normalizeTime(settings.lunch_break_start, '11:00:00')),
+        pmInStart: sqlDateTime(dateStr, normalizeTime(settings.pm_time_in_start, '13:00:00')),
+        pmLateStart: sqlDateTime(dateStr, normalizeTime(settings.pm_late_time, '13:15:00')),
+        pmOutStart: sqlDateTime(dateStr, normalizeTime(settings.pm_time_out_end, '16:00:00'))
+    };
+}
+
+async function computedReportStatus(row) {
+    if (!row.time_in) return 'Absent';
+    const dateStr = row.date instanceof Date ? row.date.toISOString().slice(0, 10) : String(row.date).slice(0, 10);
+    const [events] = await db.query(
+        `SELECT event, event_label, event_time
+         FROM attendance_events
+         WHERE attendance_id = ?
+         ORDER BY event_time, id`,
+        [row.id]
+    );
+    if (!events.some(event => String(event.event || '').toLowerCase() === 'time_in')) {
+        events.unshift({
+            event: 'time_in',
+            event_label: ATTENDANCE_SCAN_LABELS.TIME_IN,
+            event_time: row.time_in
+        });
+    }
+    const schedule = await getReportSchedule(dateStr);
+    const baseStatus = compareDateTime(row.time_in, schedule.amLateStart) >= 0 ? 'late' : 'present';
+    const resolved = computeDailyAttendanceStatusFromEvents({ events, schedule, baseStatus });
+    return resolved.label || statusLabel(resolved.status || row.status);
 }
 
 async function isAttendanceDay(dateStr, schoolId) {
@@ -64,7 +113,7 @@ router.get('/report', async (req, res) => {
         const schoolId = applySchoolFilter(req);
         const type = req.query.type || 'student';
 
-        let query = `SELECT a.date, a.person_type, a.time_in, a.time_out, a.status,
+        let query = `SELECT a.id, a.date, a.person_type, a.time_in, a.time_out, a.status,
             CASE WHEN a.person_type = 'student'
                 THEN (SELECT CONCAT(lastname, ', ', firstname) FROM students WHERE id = a.person_id)
                 ELSE (SELECT CONCAT(lastname, ', ', firstname) FROM teachers WHERE id = a.person_id)
@@ -82,9 +131,12 @@ router.get('/report', async (req, res) => {
             return res.status(404).json({ error: 'No records found for the selected criteria.' });
         }
 
+        await Promise.all(rows.map(async row => {
+            row.status = await computedReportStatus(row);
+        }));
         const fields = ['date', 'name', 'person_type', 'school_name', 'time_in', 'time_out', 'status'];
         const parser = new Parser({ fields });
-        const csvData = parser.parse(labelRowStatuses(rows));
+        const csvData = parser.parse(rows);
 
         res.header('Content-Type', 'text/csv');
         res.attachment(`attendance_report_${date}_to_${endDate}.csv`);

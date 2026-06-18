@@ -391,6 +391,8 @@ function titleForResult(data) {
   if (data.action === 'TIME_IN') return 'Time in recorded';
   if (data.action === 'TIME_OUT') return 'Time out recorded';
   if (data.action === 'ALREADY_RECORDED') return 'Already recorded today';
+  if (data.action === 'ALREADY_COMPLETED') return 'Already completed';
+  if (data.action === 'ATTENDANCE_CLOSED') return 'Attendance closed';
   if (data.action === 'PENDING_TIME_OUT') return 'Already timed in';
   if (data.action === 'CONFIRM_TIME_OUT') return 'Confirm time out';
   return 'Attendance recorded';
@@ -460,12 +462,18 @@ function resolveLogBadge(scan) {
 
   switch (ds) {
     case 'PRESENT':    return { label: 'Present',    cls: 'present' };
+    case 'TIME IN':    return { label: 'Time In',    cls: 'present' };
     case 'LATE':       return { label: 'Late',       cls: 'late' };
+    case 'LATE TIME IN': return { label: 'Late Time In', cls: 'late' };
     case 'PM PRESENT': return { label: 'PM Present', cls: 'pm-present' };
+    case 'PM TIME IN': return { label: 'PM Time In', cls: 'pm-present' };
     case 'PM LATE':    return { label: 'PM Late',    cls: 'pm-late' };
+    case 'PM LATE TIME IN': return { label: 'PM Late Time In', cls: 'pm-late' };
+    case 'WELCOME BACK': return { label: 'Welcome Back', cls: 'returned' };
     case 'RETURNED':   return { label: 'Returned',   cls: 'returned' };
     case 'LUNCH OUT':  return { label: 'Lunch Out',  cls: 'lunch-out' };
     case 'COMPLETED':  return { label: 'Completed',  cls: 'completed' };
+    case 'EARLY OUT':  return { label: 'Early Out',  cls: 'early-out' };
     case 'OUT':
       // A time-out that already makes the whole day a half-day means the person
       // left the afternoon session early — surface it as an early dismissal.
@@ -593,6 +601,8 @@ function resIconKey(data, tone) {
   const action = String(data?.action || '');
   if (action === 'TIME_OUT') return 'time-out';
   if (action === 'ALREADY_RECORDED') return 'check';
+  if (action === 'ALREADY_COMPLETED') return 'check';
+  if (action === 'ATTENDANCE_CLOSED') return 'error';
   if (action === 'PENDING_TIME_OUT' || action === 'CONFIRM_TIME_OUT') return 'pending';
   if (data?.status === 'late') return 'clock';
   return 'check';
@@ -600,7 +610,15 @@ function resIconKey(data, tone) {
 
 // Attendance display status from the server ('PRESENT','LATE','OUT','RETURNED','LUNCH OUT','PM PRESENT','COMPLETED')
 function displayStatusOf(data) {
-  return String(data?.display_status || '').toUpperCase();
+  const raw = String(data?.display_status || '').toUpperCase().trim();
+  const legacy = {
+    PRESENT: 'TIME IN',
+    LATE: 'LATE TIME IN',
+    'PM PRESENT': 'PM TIME IN',
+    'PM LATE': 'PM LATE TIME IN',
+    OUT: 'EARLY OUT'
+  };
+  return legacy[raw] || raw;
 }
 
 function resBannerVariant(data, tone) {
@@ -613,7 +631,7 @@ function resBannerVariant(data, tone) {
   const ds = displayStatusOf(data);
   if (action === 'TIME_OUT') return 'time-out';
   if (action === 'TIME_IN') {
-    if (ds) return ds === 'LATE' ? 'late' : 'time-in';
+    if (ds) return ds === 'LATE TIME IN' ? 'late' : 'time-in';
     return data?.status === 'late' ? 'late' : 'time-in';
   }
   if (['ALREADY_RECORDED', 'PENDING_TIME_OUT', 'CONFIRM_TIME_OUT'].includes(action)) return 'late';
@@ -623,22 +641,28 @@ function resBannerVariant(data, tone) {
 // Big bold heading shown in the banner (e.g. "TIME IN RECORDED!")
 function bannerHeadingFor(data, tone, fallbackTitle) {
   if (!data?.person) return String(fallbackTitle || 'Notice').toUpperCase();
-  if (tone === 'error') return 'Scan needs attention'.toUpperCase();
   const action = String(data.action || '');
   const ds = displayStatusOf(data);
+  if (action === 'ALREADY_RECORDED') return 'Already recorded today'.toUpperCase();
+  if (action === 'ALREADY_COMPLETED') return 'Already completed'.toUpperCase();
+  if (action === 'ATTENDANCE_CLOSED') return 'Attendance closed'.toUpperCase();
+  if (tone === 'error') return 'Scan needs attention'.toUpperCase();
   if (data.status === 'half_day') return (data.late_half_day ? 'Half-day · Late' : 'Half-day attendance').toUpperCase();
   if (data.offline) return action === 'TIME_OUT' ? 'Time out saved offline'.toUpperCase() : 'Time in saved offline'.toUpperCase();
   if (action === 'TIME_IN') {
-    if (ds === 'RETURNED') return 'Welcome back!'.toUpperCase();
-    if (ds === 'PM PRESENT') return 'PM time in recorded!'.toUpperCase();
-    if (ds === 'LATE' || (!ds && data.status === 'late')) return 'Late time in!'.toUpperCase();
+    if (ds === 'WELCOME BACK') return 'Welcome back!'.toUpperCase();
+    if (ds === 'RETURNED') return 'Returned!'.toUpperCase();
+    if (ds === 'PM TIME IN') return 'PM time in recorded!'.toUpperCase();
+    if (ds === 'PM LATE TIME IN') return 'PM late time in!'.toUpperCase();
+    if (ds === 'LATE TIME IN' || (!ds && data.status === 'late')) return 'Late time in!'.toUpperCase();
     return 'Time in recorded!'.toUpperCase();
   }
   if (action === 'TIME_OUT') {
     if (ds === 'LUNCH OUT') return 'Lunch time out!'.toUpperCase();
+    if (ds === 'EARLY OUT') return 'Early out recorded!'.toUpperCase();
+    if (ds === 'COMPLETED') return 'Completed!'.toUpperCase();
     return 'Time out recorded!'.toUpperCase();
   }
-  if (action === 'ALREADY_RECORDED') return 'Already recorded today'.toUpperCase();
   if (action === 'PENDING_TIME_OUT') return 'Already timed in'.toUpperCase();
   if (action === 'CONFIRM_TIME_OUT') return 'Confirm time out'.toUpperCase();
   return 'Attendance recorded'.toUpperCase();
@@ -658,9 +682,11 @@ function bannerSubFor(data, tone, fallbackMessage) {
   }
   if (data.offline) return 'Saved on this computer — it will sync automatically when internet returns.';
   if (action === 'TIME_IN') {
-    if (ds === 'RETURNED') return 'Return time in recorded. Welcome back to school.';
-    if (ds === 'PM PRESENT') return 'PM session time in recorded. Welcome back.';
-    if (ds === 'LATE' || (!ds && data.status === 'late')) return 'You have timed in, but you are marked late.';
+    if (ds === 'WELCOME BACK') return 'Welcome back. Lunch return recorded.';
+    if (ds === 'RETURNED') return 'Returned after time out.';
+    if (ds === 'PM TIME IN') return 'PM session time in recorded.';
+    if (ds === 'PM LATE TIME IN') return 'PM late time in recorded.';
+    if (ds === 'LATE TIME IN' || (!ds && data.status === 'late')) return 'You have timed in, but you are marked late.';
     return 'You have successfully timed in.';
   }
   if (action === 'TIME_OUT') {
@@ -671,10 +697,12 @@ function bannerSubFor(data, tone, fallbackMessage) {
         ? 'Attendance for today is complete. Enjoy your weekend!'
         : 'Attendance for today is complete. See you tomorrow!';
     }
-    if (ds === 'OUT') return 'You are now marked as out of school. Scan again when you return.';
+    if (ds === 'EARLY OUT') return 'Early out recorded. Scan again if you return before the session ends.';
     return 'You have successfully timed out for the day.';
   }
   if (action === 'ALREADY_RECORDED') return 'You are already marked present for today.';
+  if (action === 'ALREADY_COMPLETED') return 'Attendance for today is already completed.';
+  if (action === 'ATTENDANCE_CLOSED') return 'Attendance is already closed for today.';
   if (action === 'PENDING_TIME_OUT') return 'You are timed in. Time out opens at the end of the school day.';
   if (action === 'CONFIRM_TIME_OUT') return 'Confirm to record your end-of-day time out.';
   return fallbackMessage || 'Attendance recorded.';
@@ -697,7 +725,7 @@ function heroConfigFor(data) {
     const pills = {
       'COMPLETED': { pill: '&#10003; Completed', pillClass: 'out' },
       'LUNCH OUT': { pill: 'Lunch Out', pillClass: 'pending' },
-      'OUT': { pill: 'Out of School', pillClass: 'out' }
+      'EARLY OUT': { pill: 'Early Out', pillClass: 'out' }
     };
     const pillConfig = pills[ds] || { pill: '&#10003; Complete', pillClass: 'out' };
     if (data.offline) return { label: 'Time Out', value: data.time_out || data.time || '—', variant: 'offline', pill: 'Saved Offline', pillClass: 'offline' };
@@ -712,8 +740,14 @@ function heroConfigFor(data) {
   if (action === 'ALREADY_RECORDED') {
     return { label: 'Time In', value: data.time_in || data.time || '—', variant: 'in', pill: '&#10003; Present Today', pillClass: 'in' };
   }
+  if (action === 'ALREADY_COMPLETED') {
+    return { label: 'Completed', value: data.time_out || data.time || '---', variant: 'out', pill: '&#10003; Already Completed', pillClass: 'out' };
+  }
+  if (action === 'ATTENDANCE_CLOSED') {
+    return { label: 'Attendance Closed', value: data.time || '---', variant: 'out', pill: 'Closed', pillClass: 'out' };
+  }
   // TIME_IN (and generic)
-  const late = ds ? ds === 'LATE' : data.status === 'late';
+  const late = ds ? ds === 'LATE TIME IN' : data.status === 'late';
   if (data.status === 'half_day') {
     // A half-day recorded on a Time In keeps the green Time-In colour; the pill
     // still flags the half-day / late nature.
@@ -729,8 +763,10 @@ function heroConfigFor(data) {
     return { label: 'Time In', value: data.time_in || data.time || '—', variant: 'offline', pill: 'Saved Offline', pillClass: 'offline' };
   }
   const inPills = {
+    'WELCOME BACK': { pill: '&#10003; Welcome Back', pillClass: 'in' },
     'RETURNED': { pill: '&#10003; Returned', pillClass: 'in' },
-    'PM PRESENT': { pill: '&#10003; PM Present', pillClass: 'in' }
+    'PM TIME IN': { pill: '&#10003; PM Time In', pillClass: 'in' },
+    'PM LATE TIME IN': { pill: 'PM Late Time In', pillClass: 'late' }
   };
   const inPill = inPills[ds] || { pill: late ? 'Late' : '&#10003; Present Today', pillClass: late ? 'late' : 'in' };
   return {

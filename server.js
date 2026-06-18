@@ -219,13 +219,38 @@ async function ensureRuntimeSchema() {
         ) ENGINE=InnoDB
     `);
 
-    // Attendance schedule defaults (existing production values are preserved by INSERT IGNORE).
+    // Official attendance schedule defaults. Old shipped defaults are migrated
+    // to the current policy, while deliberate custom values are preserved.
     await db.query(`
         INSERT IGNORE INTO settings (setting_key, setting_value) VALUES
-        ('am_time_in_end', '07:30:00'),
-        ('lunch_break_start', '11:30:00'),
+        ('am_time_in_end', '07:00:00'),
+        ('am_late_time', '07:15:00'),
+        ('lunch_break_start', '11:00:00'),
         ('pm_time_in_start', '13:00:00'),
-        ('pm_time_out_end', '16:00:00')
+        ('pm_late_time', '13:15:00'),
+        ('pm_time_out_end', '16:00:00'),
+        ('absence_cutoff_time', '16:00:00'),
+        ('teacher_duty_end_time', '16:00:00')
+    `);
+    await db.query(`
+        UPDATE settings
+        SET setting_value = CASE setting_key
+            WHEN 'am_time_in_end' THEN '07:00:00'
+            WHEN 'am_late_time' THEN '07:15:00'
+            WHEN 'lunch_break_start' THEN '11:00:00'
+            WHEN 'pm_late_time' THEN '13:15:00'
+            WHEN 'pm_time_out_end' THEN '16:00:00'
+            WHEN 'absence_cutoff_time' THEN '16:00:00'
+            WHEN 'teacher_duty_end_time' THEN '16:00:00'
+            ELSE setting_value
+        END
+        WHERE (setting_key = 'am_time_in_end' AND (setting_value IS NULL OR setting_value IN ('', '07:30', '07:30:00')))
+           OR (setting_key = 'am_late_time' AND (setting_value IS NULL OR setting_value = ''))
+           OR (setting_key = 'lunch_break_start' AND (setting_value IS NULL OR setting_value IN ('', '11:30', '11:30:00')))
+           OR (setting_key = 'pm_late_time' AND (setting_value IS NULL OR setting_value = ''))
+           OR (setting_key = 'pm_time_out_end' AND (setting_value IS NULL OR setting_value IN ('', '17:00', '17:00:00')))
+           OR (setting_key = 'absence_cutoff_time' AND (setting_value IS NULL OR setting_value IN ('', '17:00', '17:00:00')))
+           OR (setting_key = 'teacher_duty_end_time' AND (setting_value IS NULL OR setting_value IN ('', '17:00', '17:00:00')))
     `);
 
     // Adviser role support: expand users.role ENUM + add teacher_id link column.
