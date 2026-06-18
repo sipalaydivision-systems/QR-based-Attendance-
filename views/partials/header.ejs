@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="/css/style.css?v=topbar-school-20260617">
+    <link rel="stylesheet" href="/css/style.css?v=topbar-school-natural-20260617b">
     <script src="/js/status-labels.js"></script>
 </head>
 <body>
@@ -610,11 +610,6 @@
             <button class="menu-btn" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">
                 <i class="fa-solid fa-bars"></i>
             </button>
-            <% if (!['dashboard','principal_dashboard','sds_dashboard','asds_dashboard','adviser_dashboard'].includes(page)) { %>
-            <h1><%= title %></h1>
-            <% } else { %>
-            <div style="flex: 1;"></div>
-            <% } %>
             <% if (typeof headerSchool !== 'undefined' && headerSchool) { %>
             <div class="topbar-school" title="<%= headerSchool.name %>">
                 <% if (headerSchool.logo) { %>
@@ -624,6 +619,10 @@
                 <% } %>
                 <span class="topbar-school-name"><%= headerSchool.name %></span>
             </div>
+            <% } else if (!['dashboard','principal_dashboard','sds_dashboard','asds_dashboard','adviser_dashboard'].includes(page)) { %>
+            <h1><%= title %></h1>
+            <% } else { %>
+            <div style="flex: 1;"></div>
             <% } %>
             <div class="topbar-user">
                 <div class="topbar-user-avatar"><%= user.fullname ? user.fullname.charAt(0).toUpperCase() : 'U' %></div>
