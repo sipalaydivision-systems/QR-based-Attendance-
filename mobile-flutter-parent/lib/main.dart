@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -8,11 +9,56 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 const String kBaseUrl = 'https://sdo-sipalay-edutrack.up.railway.app';
+const String kAppName = 'EduTrack';
+const String kSubtitle = 'Schools Division of Sipalay City';
+const String kMonitoringLabel = 'Parent Attendance Monitor';
+const String kNoNet = 'No internet connection. Please check your network.';
+
 const Color kGreen = Color(0xFF16A34A);
 const Color kGreenDark = Color(0xFF15803D);
+const Color kSeal = Color(0xFF0F6E52);
 const Color kInk = Color(0xFF111827);
 const Color kMuted = Color(0xFF6B7280);
-const String kNoNet = 'No internet connection. Please check your network.';
+
+const List<String> _weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const List<String> _wdShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const List<String> _months = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+const List<String> _moShort = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+];
+
+String greeting() {
+  final h = DateTime.now().hour;
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+String fullDateString([DateTime? d]) {
+  final n = d ?? DateTime.now();
+  return '${_weekdays[n.weekday % 7]}, ${_months[n.month - 1]} ${n.day}, ${n.year}';
+}
+
+String shortDateString([DateTime? d]) {
+  final n = d ?? DateTime.now();
+  return '${_wdShort[n.weekday % 7]}, ${_moShort[n.month - 1]} ${n.day}';
+}
+
+String isoDateString([DateTime? d]) {
+  final n = d ?? DateTime.now();
+  return '${n.year}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}';
+}
+
+String attendanceScoreLabel(int pct) {
+  final c = pct.clamp(0, 100);
+  if (c >= 90) return 'Excellent Attendance';
+  if (c >= 75) return 'Good Attendance';
+  if (c >= 50) return 'Fair Attendance';
+  return 'Needs Attention';
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,19 +99,17 @@ class ParentApi {
     await prefs.setString('parent_username', '${p['username'] ?? ''}');
   }
 
-  Exception _netError(Object e) {
-    if (e is SocketException || e is TimeoutException) return Exception(kNoNet);
-    return Exception('Unable to connect to the server right now.');
+  String _netError(Object e) {
+    if (e is SocketException || e is TimeoutException) return kNoNet;
+    return 'Unable to connect to the server right now.';
   }
 
   Future<Map<String, dynamic>> login(String identifier, String password) async {
     try {
       final res = await http
-          .post(
-            Uri.parse('$kBaseUrl/api/parent/login'),
-            headers: const {'Accept': 'application/json'},
-            body: {'identifier': identifier, 'password': password},
-          )
+          .post(Uri.parse('$kBaseUrl/api/parent/login'),
+              headers: const {'Accept': 'application/json'},
+              body: {'identifier': identifier, 'password': password})
           .timeout(const Duration(seconds: 20));
       _captureCookie(res);
       final data = _decode(res.body);
@@ -75,18 +119,15 @@ class ParentApi {
       }
       return {'success': false, 'error': data['error'] ?? 'Login failed.'};
     } catch (e) {
-      return {'success': false, 'error': _netError(e).toString().replaceFirst('Exception: ', '')};
+      return {'success': false, 'error': _netError(e)};
     }
   }
 
   Future<Map<String, dynamic>> register(Map<String, String> body) async {
     try {
       final res = await http
-          .post(
-            Uri.parse('$kBaseUrl/api/parent/register'),
-            headers: const {'Accept': 'application/json'},
-            body: body,
-          )
+          .post(Uri.parse('$kBaseUrl/api/parent/register'),
+              headers: const {'Accept': 'application/json'}, body: body)
           .timeout(const Duration(seconds: 20));
       _captureCookie(res);
       final data = _decode(res.body);
@@ -96,7 +137,7 @@ class ParentApi {
       }
       return {'success': false, 'error': data['error'] ?? 'Registration failed.'};
     } catch (e) {
-      return {'success': false, 'error': _netError(e).toString().replaceFirst('Exception: ', '')};
+      return {'success': false, 'error': _netError(e)};
     }
   }
 
@@ -131,7 +172,7 @@ class ParentApi {
 }
 
 // ---------------------------------------------------------------------------
-// App shell
+// App
 // ---------------------------------------------------------------------------
 class ParentApp extends StatelessWidget {
   const ParentApp({super.key, required this.api});
@@ -144,23 +185,280 @@ class ParentApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF1F5F9),
+        scaffoldBackgroundColor: const Color(0xFFEFF4F1),
         colorScheme: ColorScheme.fromSeed(seedColor: kGreen, primary: kGreen),
         fontFamily: 'Roboto',
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
-          foregroundColor: kInk,
-          elevation: 0,
-          centerTitle: false,
-        ),
       ),
-      home: api.isLoggedIn ? HomeShell(api: api) : LoginScreen(api: api),
+      home: SplashGate(api: api),
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// Login — mirrors the adviser login design (green gradient + white card).
+// Splash / loading screen (same look as the SDS/ASDS app)
+// ---------------------------------------------------------------------------
+class SplashGate extends StatefulWidget {
+  const SplashGate({super.key, required this.api});
+  final ParentApi api;
+  @override
+  State<SplashGate> createState() => _SplashGateState();
+}
+
+class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateMixin {
+  late final AnimationController controller;
+  double progress = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = AnimationController(vsync: this, duration: const Duration(seconds: 4))..repeat(reverse: true);
+    Timer.periodic(const Duration(milliseconds: 30), (timer) {
+      if (!mounted) return timer.cancel();
+      setState(() => progress = math.min(1, progress + .02));
+      if (progress >= 1) {
+        timer.cancel();
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => widget.api.isLoggedIn ? HomeShell(api: widget.api) : LoginScreen(api: widget.api),
+          ),
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: AnimatedBuilder(
+        animation: controller,
+        builder: (context, child) => CustomPaint(
+          painter: LiveMeshPainter(controller.value, intensity: .42, focusY: .36),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(30),
+              child: Column(
+                children: [
+                  const Spacer(),
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [PulseRing(value: controller.value, size: 148), const AppLogo(size: 96)],
+                  ),
+                  const SizedBox(height: 28),
+                  const Text(kAppName, style: TextStyle(fontSize: 38, color: Color(0xFF12201B), fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 8),
+                  const Text(kSubtitle, textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF4D5D56), fontSize: 16)),
+                  const SizedBox(height: 38),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .88),
+                      borderRadius: BorderRadius.circular(99),
+                      border: Border.all(color: const Color(0xFFDCE7E1)),
+                    ),
+                    child: const Text(kMonitoringLabel, style: TextStyle(color: kSeal, fontWeight: FontWeight.w800)),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .94),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: const Color(0xFFDCE7E1)),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            const LiveDot(color: Color(0xFFE53935)),
+                            const SizedBox(width: 8),
+                            const Text('CONNECTING TO SERVER',
+                                style: TextStyle(color: Color(0xFF33423C), fontWeight: FontWeight.w900, letterSpacing: 1.1)),
+                            const Spacer(),
+                            Text('${(progress * 100).round()}%', style: const TextStyle(color: kSeal, fontWeight: FontWeight.w900)),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(99),
+                          child: LinearProgressIndicator(
+                            value: progress,
+                            minHeight: 10,
+                            backgroundColor: const Color(0xFFE5EFEA),
+                            color: const Color(0xFF138A64),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AppLogo extends StatelessWidget {
+  const AppLogo({super.key, required this.size});
+  final double size;
+  @override
+  Widget build(BuildContext context) => Container(
+        width: size,
+        height: size,
+        padding: EdgeInsets.all(size * .12),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .82),
+          borderRadius: BorderRadius.circular(size * .28),
+          border: Border.all(color: const Color(0xFFDCEBE4)),
+          boxShadow: [BoxShadow(color: kSeal.withValues(alpha: .10), blurRadius: size * .18, offset: Offset(0, size * .06))],
+        ),
+        child: Image.asset('assets/images/app_logo.png', fit: BoxFit.contain),
+      );
+}
+
+class PulseRing extends StatelessWidget {
+  const PulseRing({super.key, required this.value, required this.size});
+  final double value;
+  final double size;
+  @override
+  Widget build(BuildContext context) {
+    final pulse = .6 + (math.sin(value * math.pi * 2) + 1) / 2;
+    return SizedBox(width: size, height: size, child: CustomPaint(painter: PulseRingPainter(pulse)));
+  }
+}
+
+class PulseRingPainter extends CustomPainter {
+  PulseRingPainter(this.pulse);
+  final double pulse;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    for (var i = 0; i < 3; i++) {
+      final radius = (size.shortestSide * (.28 + i * .13)) + pulse * 8;
+      final paint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.6
+        ..color = const Color(0xFF138A64).withValues(alpha: (.22 - i * .045) * pulse);
+      canvas.drawCircle(center, radius, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(PulseRingPainter oldDelegate) => oldDelegate.pulse != pulse;
+}
+
+class LiveDot extends StatefulWidget {
+  const LiveDot({super.key, this.color = Colors.white, this.size = 8});
+  final Color color;
+  final double size;
+  @override
+  State<LiveDot> createState() => _LiveDotState();
+}
+
+class _LiveDotState extends State<LiveDot> with SingleTickerProviderStateMixin {
+  late final AnimationController controller;
+  @override
+  void initState() {
+    super.initState();
+    controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hostSize = widget.size + 12;
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, child) {
+        final pulse = .72 + controller.value * .28;
+        return SizedBox(
+          width: hostSize,
+          height: hostSize,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Transform.scale(
+                scale: pulse,
+                child: Container(
+                  width: hostSize,
+                  height: hostSize,
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: widget.color.withValues(alpha: .12)),
+                ),
+              ),
+              Container(
+                width: widget.size,
+                height: widget.size,
+                decoration: BoxDecoration(
+                  color: widget.color,
+                  shape: BoxShape.circle,
+                  boxShadow: [BoxShadow(color: widget.color.withValues(alpha: .55), blurRadius: 10)],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class LiveMeshPainter extends CustomPainter {
+  LiveMeshPainter(this.value, {this.intensity = .5, this.focusY});
+  final double value;
+  final double intensity;
+  final double? focusY;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    canvas.drawRect(rect, Paint()..color = const Color(0xFFEDF7F1));
+
+    void blob(Color color, Offset center, double radius) {
+      final paint = Paint()
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 42)
+        ..color = color.withValues(alpha: intensity);
+      canvas.drawCircle(center, radius, paint);
+    }
+
+    final t = value * math.pi * 2;
+    blob(Colors.white, Offset(size.width * (.08 + .025 * math.sin(t)), size.height * .17), size.width * .36);
+    blob(const Color(0xFFF3FBF7), Offset(size.width * (.88 + .025 * math.cos(t)), size.height * .34), size.width * .40);
+    blob(const Color(0xFFD4F2E5), Offset(size.width * (.48 + .02 * math.sin(t * 1.2)), size.height * .90), size.width * .34);
+    blob(const Color(0xFFE8F8F1), Offset(size.width * (.66 + .02 * math.cos(t * 1.6)), size.height * .08), size.width * .28);
+
+    final ringPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..color = const Color(0xFF138A64).withValues(alpha: .045 + intensity * .04);
+    final radarCenter = Offset(size.width * .50, size.height * (focusY ?? .30));
+    for (var i = 0; i < 5; i++) {
+      final radius = size.width * (.12 + i * .055) + math.sin(t) * 2;
+      canvas.drawCircle(radarCenter, radius, ringPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(LiveMeshPainter oldDelegate) =>
+      oldDelegate.value != value || oldDelegate.intensity != intensity || oldDelegate.focusY != focusY;
+}
+
+// ---------------------------------------------------------------------------
+// Login — mirrors the adviser login design.
 // ---------------------------------------------------------------------------
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, required this.api});
@@ -197,9 +495,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final res = await widget.api.login(id, pw);
     if (!mounted) return;
     if (res['success'] == true) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => HomeShell(api: widget.api)),
-      );
+      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => HomeShell(api: widget.api)));
     } else {
       setState(() {
         _busy = false;
@@ -225,16 +521,9 @@ class _LoginScreenState extends State<LoginScreen> {
               padding: const EdgeInsets.all(20),
               child: AuthCard(
                 subtitle: 'Parent Portal',
-                icon: Icons.family_restroom,
                 children: [
                   if (_error != null) AuthAlert(message: _error!),
-                  AuthField(
-                    controller: _id,
-                    label: 'Mobile Number or Username',
-                    hint: 'e.g. 09171234567',
-                    icon: Icons.person_outline,
-                    keyboardType: TextInputType.text,
-                  ),
+                  AuthField(controller: _id, label: 'Mobile Number or Username', hint: 'e.g. 09171234567', icon: Icons.person_outline),
                   const SizedBox(height: 14),
                   AuthField(
                     controller: _pw,
@@ -245,36 +534,21 @@ class _LoginScreenState extends State<LoginScreen> {
                     onToggleObscure: () => setState(() => _obscure = !_obscure),
                   ),
                   const SizedBox(height: 18),
-                  AuthButton(
-                    label: 'Sign In',
-                    busy: _busy,
-                    onPressed: _busy ? null : _submit,
-                  ),
-                  const SizedBox(height: 14),
+                  AuthButton(label: 'Sign In', busy: _busy, onPressed: _busy ? null : _submit),
+                  const SizedBox(height: 12),
                   TextButton(
                     onPressed: _busy
                         ? null
-                        : () => Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => RegisterScreen(api: widget.api)),
-                            ),
+                        : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => RegisterScreen(api: widget.api))),
                     child: const Text.rich(
                       TextSpan(
                         text: "Don't have an account?  ",
                         style: TextStyle(color: kMuted, fontSize: 13),
-                        children: [
-                          TextSpan(
-                            text: 'Register',
-                            style: TextStyle(color: kGreen, fontWeight: FontWeight.w800),
-                          ),
-                        ],
+                        children: [TextSpan(text: 'Register', style: TextStyle(color: kGreen, fontWeight: FontWeight.w800))],
                       ),
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'For registered parents/guardians only',
-                    style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5),
-                  ),
+                  const Text('For registered parents/guardians only', style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5)),
                 ],
               ),
             ),
@@ -285,9 +559,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Register
-// ---------------------------------------------------------------------------
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key, required this.api});
   final ParentApi api;
@@ -329,10 +600,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
     if (!mounted) return;
     if (res['success'] == true) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => HomeShell(api: widget.api)),
-        (route) => false,
-      );
+      Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => HomeShell(api: widget.api)), (r) => false);
     } else {
       setState(() {
         _busy = false;
@@ -358,52 +626,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
               padding: const EdgeInsets.all(20),
               child: AuthCard(
                 subtitle: 'Create Parent Account',
-                icon: Icons.person_add_alt_1,
                 children: [
                   if (_error != null) AuthAlert(message: _error!),
                   AuthField(controller: _name, label: 'Parent / Guardian Name', hint: 'Full name', icon: Icons.badge_outlined),
                   const SizedBox(height: 12),
-                  AuthField(
-                    controller: _contact,
-                    label: 'Registered Contact Number',
-                    hint: 'e.g. 09171234567',
-                    icon: Icons.phone_outlined,
-                    keyboardType: TextInputType.phone,
-                  ),
+                  AuthField(controller: _contact, label: 'Registered Contact Number', hint: 'e.g. 09171234567', icon: Icons.phone_outlined, keyboardType: TextInputType.phone),
                   const SizedBox(height: 12),
                   AuthField(controller: _username, label: 'Username (optional)', hint: 'Choose a username', icon: Icons.alternate_email),
                   const SizedBox(height: 12),
-                  AuthField(
-                    controller: _pw,
-                    label: 'Password',
-                    hint: 'At least 6 characters',
-                    icon: Icons.lock_outline,
-                    obscure: _obscure,
-                    onToggleObscure: () => setState(() => _obscure = !_obscure),
-                  ),
+                  AuthField(controller: _pw, label: 'Password', hint: 'At least 6 characters', icon: Icons.lock_outline, obscure: _obscure, onToggleObscure: () => setState(() => _obscure = !_obscure)),
                   const SizedBox(height: 12),
-                  AuthField(
-                    controller: _confirm,
-                    label: 'Confirm Password',
-                    hint: 'Re-enter password',
-                    icon: Icons.lock_outline,
-                    obscure: _obscure,
-                  ),
+                  AuthField(controller: _confirm, label: 'Confirm Password', hint: 'Re-enter password', icon: Icons.lock_outline, obscure: _obscure),
                   const SizedBox(height: 18),
                   AuthButton(label: 'Create Account', busy: _busy, onPressed: _busy ? null : _submit),
-                  const SizedBox(height: 10),
-                  TextButton(
-                    onPressed: _busy ? null : () => Navigator.of(context).pop(),
-                    child: const Text('Back to Sign In', style: TextStyle(color: kGreen, fontWeight: FontWeight.w700)),
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.only(top: 4),
-                    child: Text(
-                      'Use the contact number registered with your child’s school.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5),
-                    ),
-                  ),
+                  TextButton(onPressed: _busy ? null : () => Navigator.of(context).pop(), child: const Text('Back to Sign In', style: TextStyle(color: kGreen, fontWeight: FontWeight.w700))),
+                  const Text('Use the contact number registered with your child’s school.', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5)),
                 ],
               ),
             ),
@@ -414,21 +651,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Shared auth widgets
-// ---------------------------------------------------------------------------
 class AuthCard extends StatelessWidget {
-  const AuthCard({super.key, required this.subtitle, required this.icon, required this.children});
+  const AuthCard({super.key, required this.subtitle, required this.children});
   final String subtitle;
-  final IconData icon;
   final List<Widget> children;
-
   @override
   Widget build(BuildContext context) {
     return Container(
       width: 420,
       constraints: const BoxConstraints(maxWidth: 420),
-      padding: const EdgeInsets.fromLTRB(28, 36, 28, 28),
+      padding: const EdgeInsets.fromLTRB(28, 34, 28, 26),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
@@ -437,14 +669,9 @@ class AuthCard extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 78,
-            height: 78,
-            decoration: const BoxDecoration(color: Color(0xFFDCFCE7), shape: BoxShape.circle),
-            child: Icon(icon, color: kGreen, size: 38),
-          ),
+          const AppLogo(size: 76),
           const SizedBox(height: 14),
-          const Text('EduTrack', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: kInk)),
+          const Text(kAppName, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: kInk)),
           const SizedBox(height: 2),
           Text(subtitle, style: const TextStyle(fontSize: 13, color: kMuted, fontWeight: FontWeight.w600)),
           const SizedBox(height: 22),
@@ -463,33 +690,18 @@ class AuthAlert extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFEF2F2),
-        border: Border.all(color: const Color(0xFFFECACA)),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline, color: Color(0xFFDC2626), size: 18),
-          const SizedBox(width: 8),
-          Expanded(child: Text(message, style: const TextStyle(color: Color(0xFFDC2626), fontSize: 12.5))),
-        ],
-      ),
+      decoration: BoxDecoration(color: const Color(0xFFFEF2F2), border: Border.all(color: const Color(0xFFFECACA)), borderRadius: BorderRadius.circular(10)),
+      child: Row(children: [
+        const Icon(Icons.error_outline, color: Color(0xFFDC2626), size: 18),
+        const SizedBox(width: 8),
+        Expanded(child: Text(message, style: const TextStyle(color: Color(0xFFDC2626), fontSize: 12.5))),
+      ]),
     );
   }
 }
 
 class AuthField extends StatelessWidget {
-  const AuthField({
-    super.key,
-    required this.controller,
-    required this.label,
-    required this.icon,
-    this.hint,
-    this.obscure = false,
-    this.keyboardType,
-    this.onToggleObscure,
-  });
+  const AuthField({super.key, required this.controller, required this.label, required this.icon, this.hint, this.obscure = false, this.keyboardType, this.onToggleObscure});
   final TextEditingController controller;
   final String label;
   final IconData icon;
@@ -497,14 +709,12 @@ class AuthField extends StatelessWidget {
   final bool obscure;
   final TextInputType? keyboardType;
   final VoidCallback? onToggleObscure;
-
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label.toUpperCase(),
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: kMuted, letterSpacing: 0.4)),
+        Text(label.toUpperCase(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: kMuted, letterSpacing: 0.4)),
         const SizedBox(height: 6),
         TextField(
           controller: controller,
@@ -517,22 +727,13 @@ class AuthField extends StatelessWidget {
             prefixIcon: Icon(icon, size: 19, color: kMuted),
             suffixIcon: onToggleObscure == null
                 ? null
-                : IconButton(
-                    onPressed: onToggleObscure,
-                    icon: Icon(obscure ? Icons.visibility_off : Icons.visibility, size: 19, color: kMuted),
-                  ),
+                : IconButton(onPressed: onToggleObscure, icon: Icon(obscure ? Icons.visibility_off : Icons.visibility, size: 19, color: kMuted)),
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
             filled: true,
             fillColor: Colors.white,
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Color(0xFFD1D5DB), width: 1.5),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: kGreen, width: 1.6),
-            ),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFD1D5DB), width: 1.5)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: kGreen, width: 1.6)),
           ),
         ),
       ],
@@ -558,14 +759,9 @@ class AuthButton extends StatelessWidget {
         ),
         child: ElevatedButton(
           onPressed: onPressed,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.transparent,
-            shadowColor: Colors.transparent,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
           child: busy
-              ? const SizedBox(
-                  width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
               : Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
         ),
       ),
@@ -574,7 +770,7 @@ class AuthButton extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Home shell with 5 tabs
+// Home shell — SDS/ASDS styled header + 5 tabs
 // ---------------------------------------------------------------------------
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key, required this.api});
@@ -608,8 +804,7 @@ class _HomeShellState extends State<HomeShell> {
   List<dynamic> get _notifications => (_data['notifications'] as List?) ?? const [];
   Map<String, dynamic>? get _selectedChild {
     if (_children.isEmpty) return null;
-    final i = _child.clamp(0, _children.length - 1);
-    return _children[i] as Map<String, dynamic>;
+    return _children[_child.clamp(0, _children.length - 1)] as Map<String, dynamic>;
   }
 
   Future<void> _load({bool silent = false}) async {
@@ -638,62 +833,66 @@ class _HomeShellState extends State<HomeShell> {
   Future<void> _logout() async {
     await widget.api.logout();
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => LoginScreen(api: widget.api)),
-      (route) => false,
-    );
+    Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => LoginScreen(api: widget.api)), (r) => false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final titles = ['Home', 'Attendance', 'Notifications', 'Adviser', 'Profile'];
     return Scaffold(
-      appBar: AppBar(
-        titleSpacing: 16,
-        title: Row(
-          children: [
-            const CircleAvatar(radius: 14, backgroundColor: Color(0xFFDCFCE7), child: Icon(Icons.school, color: kGreen, size: 16)),
-            const SizedBox(width: 8),
-            Text(titles[_tab], style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
-          ],
-        ),
-        actions: [
-          IconButton(onPressed: () => _load(), icon: const Icon(Icons.refresh, color: kMuted)),
+      body: Column(
+        children: [
+          ParentHeader(onLogout: _confirmLogout),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator(color: kGreen))
+                : RefreshIndicator(color: kGreen, onRefresh: _load, child: _buildTab()),
+          ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: kGreen))
-          : RefreshIndicator(
-              color: kGreen,
-              onRefresh: _load,
-              child: _buildTab(),
-            ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
-        height: 64,
-        backgroundColor: Colors.white,
-        indicatorColor: const Color(0xFFDCFCE7),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home, color: kGreen), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment, color: kGreen), label: 'Attendance'),
-          NavigationDestination(icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications, color: kGreen), label: 'Alerts'),
-          NavigationDestination(icon: Icon(Icons.phone_outlined), selectedIcon: Icon(Icons.phone, color: kGreen), label: 'Adviser'),
-          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person, color: kGreen), label: 'Profile'),
-        ],
+      bottomNavigationBar: NavigationBarTheme(
+        data: NavigationBarThemeData(
+          labelTextStyle: WidgetStateProperty.all(const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+        ),
+        child: NavigationBar(
+          selectedIndex: _tab,
+          onDestinationSelected: (i) => setState(() => _tab = i),
+          height: 66,
+          backgroundColor: Colors.white,
+          indicatorColor: const Color(0xFFDCFCE7),
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home, color: kGreen), label: 'Home'),
+            NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment, color: kGreen), label: 'Attendance'),
+            NavigationDestination(icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications, color: kGreen), label: 'Alerts'),
+            NavigationDestination(icon: Icon(Icons.phone_outlined), selectedIcon: Icon(Icons.phone, color: kGreen), label: 'Adviser'),
+            NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person, color: kGreen), label: 'Profile'),
+          ],
+        ),
       ),
     );
   }
 
+  Future<void> _confirmLogout() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Log out?'),
+        content: const Text('You will need to sign in again to view your child’s attendance.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Log out', style: TextStyle(color: Color(0xFFDC2626)))),
+        ],
+      ),
+    );
+    if (ok == true) _logout();
+  }
+
   Widget _buildTab() {
-    if (_error != null && _children.isEmpty) {
-      return ListView(children: [Padding(padding: const EdgeInsets.all(40), child: _emptyState(Icons.wifi_off, _error!))]);
-    }
     if (_children.isEmpty) {
       return ListView(children: [
         Padding(
           padding: const EdgeInsets.all(40),
-          child: _emptyState(Icons.child_care, 'No linked students found for your contact number. Please contact the school adviser.'),
+          child: _emptyState(_error != null ? Icons.wifi_off : Icons.child_care,
+              _error ?? 'No linked students found for your contact number. Please contact the school adviser.'),
         ),
       ]);
     }
@@ -705,16 +904,16 @@ class _HomeShellState extends State<HomeShell> {
       case 3:
         return AdviserTab(child: _selectedChild!, picker: _childPicker());
       case 4:
-        return ProfileTab(api: widget.api, childCount: _children.length, onLogout: _logout);
+        return ProfileTab(api: widget.api, childCount: _children.length, onLogout: _confirmLogout);
       default:
-        return HomeTab(child: _selectedChild!, picker: _childPicker());
+        return HomeTab(parentName: widget.api.parentName, children: _children, selected: _child, picker: _childPicker());
     }
   }
 
   Widget? _childPicker() {
     if (_children.length < 2) return null;
     return SizedBox(
-      height: 44,
+      height: 42,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -737,21 +936,653 @@ class _HomeShellState extends State<HomeShell> {
     );
   }
 
-  Widget _emptyState(IconData icon, String text) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
+  Widget _emptyState(IconData icon, String text) => Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 46, color: const Color(0xFFCBD5E1)),
+          const SizedBox(height: 12),
+          Text(text, textAlign: TextAlign.center, style: const TextStyle(color: kMuted, fontSize: 13.5)),
+        ],
+      );
+}
+
+// ---------------------------------------------------------------------------
+// Green gradient header (same as SDS/ASDS dashboard)
+// ---------------------------------------------------------------------------
+class ParentHeader extends StatelessWidget {
+  const ParentHeader({super.key, required this.onLogout});
+  final VoidCallback onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF0C5A3C), Color(0xFF14855A), Color(0xFF0D6347)],
+          stops: [0.0, 0.52, 1.0],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(26)),
+        boxShadow: [BoxShadow(color: Color(0x330C5A3C), blurRadius: 16, offset: Offset(0, 6))],
+      ),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(26)),
+        child: Stack(
+          children: [
+            Positioned.fill(child: CustomPaint(painter: _HeaderPatternPainter())),
+            Positioned(right: 14, bottom: -18, child: Icon(Icons.school_rounded, size: 104, color: Colors.white.withValues(alpha: .06))),
+            Padding(
+              padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + 10, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      _seal(52),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(kAppName, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: -.2)),
+                            SizedBox(height: 2),
+                            Text(kSubtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white70, fontSize: 11.5, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      _headerAction(Icons.logout_rounded, onLogout),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      _chip(Row(mainAxisSize: MainAxisSize.min, children: const [
+                        LiveDot(color: Color(0xFFFF3B30), size: 9),
+                        SizedBox(width: 6),
+                        Text('LIVE', style: TextStyle(color: Color(0xFFE5403A), fontWeight: FontWeight.w900, fontSize: 11.5)),
+                      ])),
+                      const SizedBox(width: 8),
+                      _chip(Text(shortDateString()), dense: true),
+                      const SizedBox(width: 8),
+                      Flexible(child: _chip(Text(isoDateString()), dense: true)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _seal(double size) => Container(
+        width: size,
+        height: size,
+        padding: EdgeInsets.all(size * .115),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white.withValues(alpha: .45), width: 3),
+          boxShadow: [BoxShadow(color: const Color(0xFF06301F).withValues(alpha: .28), blurRadius: 12, offset: const Offset(0, 4))],
+        ),
+        child: ClipOval(child: Image.asset('assets/images/app_logo.png', fit: BoxFit.contain)),
+      );
+
+  Widget _headerAction(IconData icon, VoidCallback onTap) => Material(
+        color: Colors.white.withValues(alpha: .14),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: SizedBox(width: 44, height: 44, child: Icon(icon, size: 20, color: Colors.white)),
+        ),
+      );
+
+  Widget _chip(Widget child, {bool dense = false}) => Container(
+        padding: EdgeInsets.symmetric(horizontal: dense ? 11 : 13, vertical: dense ? 8 : 9),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(13),
+          boxShadow: [BoxShadow(color: const Color(0xFF06301F).withValues(alpha: .14), blurRadius: 10, offset: const Offset(0, 4))],
+        ),
+        child: DefaultTextStyle(style: const TextStyle(color: kSeal, fontWeight: FontWeight.w900, fontSize: 11.5), child: child),
+      );
+}
+
+class _HeaderPatternPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    const gap = 15.0;
+    final paint = Paint();
+    for (double y = 10; y < size.height; y += gap) {
+      final fade = (1 - (y / size.height)).clamp(0.0, 1.0);
+      paint.color = Colors.white.withValues(alpha: 0.14 * fade);
+      for (double x = 10; x < size.width; x += gap) {
+        canvas.drawCircle(Offset(x, y), 1.15, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _HeaderPatternPainter oldDelegate) => false;
+}
+
+// ---------------------------------------------------------------------------
+// Home tab — greeting card + stat tiles + Today Analytics donut
+// ---------------------------------------------------------------------------
+class HomeTab extends StatelessWidget {
+  const HomeTab({super.key, required this.parentName, required this.children, required this.selected, this.picker});
+  final String parentName;
+  final List<dynamic> children;
+  final int selected;
+  final Widget? picker;
+
+  int _count(bool Function(Map<String, dynamic>) test) =>
+      children.where((c) => test(c as Map<String, dynamic>)).length;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = children.length;
+    final present = _count((c) => '${c['status_key']}' != 'absent' && '${c['today_status']}' != 'Absent');
+    final absent = total - present;
+    final pct = total == 0 ? 0 : ((present / total) * 100).round();
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
-        Icon(icon, size: 46, color: const Color(0xFFCBD5E1)),
-        const SizedBox(height: 12),
-        Text(text, textAlign: TextAlign.center, style: const TextStyle(color: kMuted, fontSize: 13.5)),
+        if (picker != null) ...[picker!, const SizedBox(height: 14)],
+        // Greeting card
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: _cardDecoration(),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(greeting(), style: const TextStyle(color: kMuted, fontSize: 13)),
+                    const SizedBox(height: 2),
+                    Text(parentName, maxLines: 2, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: kInk, fontSize: 24, fontWeight: FontWeight.w900, height: 1.05)),
+                    const SizedBox(height: 8),
+                    Text(fullDateString(), style: const TextStyle(color: kMuted, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const SizedBox(width: 120, height: 92, child: _DefaultSchoolArt()),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        // Stat tiles
+        Row(
+          children: [
+            Expanded(child: _statTile(const Color(0xFFE8FAF0), kGreen, Icons.groups_rounded, '$total', total == 1 ? 'Child' : 'Children')),
+            const SizedBox(width: 12),
+            Expanded(child: _statTile(const Color(0xFFEEF2FF), const Color(0xFF4F46E5), Icons.check_circle_rounded, '$present', 'Present')),
+            const SizedBox(width: 12),
+            Expanded(child: _statTile(const Color(0xFFFDECEC), const Color(0xFFDC2626), Icons.cancel_rounded, '$absent', 'Absent')),
+          ],
+        ),
+        const SizedBox(height: 14),
+        // Today Analytics donut
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: _cardDecoration(),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 120,
+                height: 120,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    CustomPaint(size: const Size(120, 120), painter: RingPainter(total == 0 ? 0.0 : present / total, color: kGreen)),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('$pct%', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: kInk)),
+                        const Text('ATTENDANCE', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: kMuted, letterSpacing: 0.5)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Today Analytics', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: kInk)),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(color: const Color(0xFFE8FAF0), borderRadius: BorderRadius.circular(20)),
+                      child: Text(attendanceScoreLabel(pct), style: const TextStyle(color: kGreenDark, fontWeight: FontWeight.w800, fontSize: 11.5)),
+                    ),
+                    const SizedBox(height: 10),
+                    Text('$present of $total ${total == 1 ? 'child' : 'children'} present today',
+                        style: const TextStyle(fontSize: 13, color: kInk, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        // Child status cards
+        ...children.map((c) => _childRow(c as Map<String, dynamic>)),
+      ],
+    );
+  }
+
+  Widget _childRow(Map<String, dynamic> child) {
+    final status = '${child['current_status'] ?? 'Absent'}';
+    final today = '${child['today_status'] ?? 'Absent'}';
+    final flagged = ((child['consecutive_absences'] as num?)?.toInt() ?? 0) >= 2;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: _cardDecoration(),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              CircleAvatar(radius: 22, backgroundColor: const Color(0xFFEEF2FF), child: Text(_initials('${child['name']}'), style: const TextStyle(color: Color(0xFF4F46E5), fontWeight: FontWeight.w800))),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${child['name']}', style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: kInk)),
+                    const SizedBox(height: 2),
+                    Text('${child['grade_level']} • ${child['section']} • ${child['school_name']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, color: kMuted)),
+                  ],
+                ),
+              ),
+              StatusPill(label: status),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _miniInfo('Today', today, statusColor(today)),
+              const SizedBox(width: 8),
+              _miniInfo('Latest Scan', '${child['latest_scan_time'] ?? '—'}', kInk),
+              const SizedBox(width: 8),
+              _miniInfo('Adviser', '${child['adviser_name']}'.split(' ').first, kInk),
+            ],
+          ),
+          if (flagged) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: const Color(0xFFFEF2F2), border: Border.all(color: const Color(0xFFFECACA)), borderRadius: BorderRadius.circular(10)),
+              child: Row(children: [
+                const Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 18),
+                const SizedBox(width: 8),
+                Expanded(child: Text('${child['consecutive_absences']} consecutive absences — please contact the adviser.', style: const TextStyle(color: Color(0xFF991B1B), fontSize: 11.5, fontWeight: FontWeight.w600))),
+              ]),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _miniInfo(String label, String value, Color color) => Expanded(
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+          decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(9)),
+          child: Column(
+            children: [
+              Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: color)),
+              const SizedBox(height: 1),
+              Text(label, style: const TextStyle(fontSize: 9.5, color: kMuted, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+      );
+
+  Widget _statTile(Color bg, Color fg, IconData icon, String value, String label) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        decoration: _cardDecoration(),
+        child: Column(
+          children: [
+            Container(width: 36, height: 36, decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: fg, size: 19)),
+            const SizedBox(height: 8),
+            Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: kInk)),
+            const SizedBox(height: 1),
+            Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10.5, color: kMuted, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      );
+}
+
+BoxDecoration _cardDecoration() => BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 18, offset: const Offset(0, 6))],
+    );
+
+String _initials(String name) {
+  final parts = name.replaceAll(',', ' ').trim().split(RegExp(r'\s+'));
+  if (parts.isEmpty || parts.first.isEmpty) return 'S';
+  if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+  return (parts.first.substring(0, 1) + parts[1].substring(0, 1)).toUpperCase();
+}
+
+class StatusPill extends StatelessWidget {
+  const StatusPill({super.key, required this.label});
+  final String label;
+  @override
+  Widget build(BuildContext context) {
+    final color = statusColor(label);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+      child: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 10.5)),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Attendance timeline tab
+// ---------------------------------------------------------------------------
+class AttendanceTab extends StatelessWidget {
+  const AttendanceTab({super.key, required this.child, this.picker});
+  final Map<String, dynamic> child;
+  final Widget? picker;
+  @override
+  Widget build(BuildContext context) {
+    final timeline = (child['timeline'] as List?) ?? const [];
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      children: [
+        if (picker != null) ...[picker!, const SizedBox(height: 8)],
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(children: [
+            const Icon(Icons.assignment_rounded, color: kGreen, size: 20),
+            const SizedBox(width: 8),
+            Text("Today’s Scan History — ${'${child['name']}'.split(',').first}",
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: kInk)),
+          ]),
+        ),
+        const SizedBox(height: 6),
+        if (timeline.isEmpty)
+          Container(padding: const EdgeInsets.all(28), decoration: _cardDecoration(), child: const Center(child: Text('No scans recorded yet today.', style: TextStyle(color: kMuted))))
+        else
+          ...timeline.map((e) {
+            final entry = e as Map<String, dynamic>;
+            final tone = '${entry['tone'] ?? 'in'}';
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              decoration: _cardDecoration(),
+              child: ListTile(
+                leading: CircleAvatar(backgroundColor: toneColor(tone).withValues(alpha: 0.12), child: Icon(toneIcon(tone), color: toneColor(tone), size: 20)),
+                title: Text('${entry['label_display'] ?? entry['label']}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: kInk)),
+                subtitle: Text('${entry['time_display'] ?? ''}', style: const TextStyle(fontSize: 12, color: kMuted)),
+              ),
+            );
+          }),
       ],
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// Status helpers
+// Notifications tab
 // ---------------------------------------------------------------------------
+class NotificationsTab extends StatelessWidget {
+  const NotificationsTab({super.key, required this.notifications});
+  final List<dynamic> notifications;
+  @override
+  Widget build(BuildContext context) {
+    if (notifications.isEmpty) {
+      return ListView(children: const [Padding(padding: EdgeInsets.all(40), child: Center(child: Text('No notifications yet.', style: TextStyle(color: kMuted))))]);
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      itemCount: notifications.length,
+      itemBuilder: (_, i) {
+        final n = notifications[i] as Map<String, dynamic>;
+        final tone = '${n['tone'] ?? 'in'}';
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          decoration: _cardDecoration(),
+          child: ListTile(
+            leading: CircleAvatar(backgroundColor: toneColor(tone).withValues(alpha: 0.12), child: Icon(toneIcon(tone), color: toneColor(tone), size: 20)),
+            title: Text('${n['title']}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: kInk)),
+            subtitle: Text('${n['message']}', style: const TextStyle(fontSize: 12, color: kMuted)),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Adviser contact tab
+// ---------------------------------------------------------------------------
+class AdviserTab extends StatelessWidget {
+  const AdviserTab({super.key, required this.child, this.picker});
+  final Map<String, dynamic> child;
+  final Widget? picker;
+
+  Future<void> _launch(BuildContext context, Uri uri) async {
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No app available for this action.')));
+      }
+    } catch (_) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open this action.')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final adviser = '${child['adviser_name'] ?? 'No adviser assigned'}';
+    final contact = '${child['adviser_contact'] ?? ''}'.trim();
+    final email = '${child['adviser_email'] ?? ''}'.trim();
+    final phone = contact.replaceAll(RegExp(r'[^0-9+]'), '');
+    final body = Uri.encodeComponent('Good day Teacher, this is the parent/guardian of ${child['name']} (${child['grade_level']} - ${child['section']}). ');
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      children: [
+        if (picker != null) ...[picker!, const SizedBox(height: 8)],
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: _cardDecoration(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                const CircleAvatar(radius: 22, backgroundColor: Color(0xFFDCFCE7), child: Icon(Icons.co_present, color: kGreen)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(adviser, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: kInk)),
+                    Text('Class Adviser • ${child['section']}', style: const TextStyle(fontSize: 12, color: kMuted)),
+                  ]),
+                ),
+              ]),
+              const SizedBox(height: 18),
+              if (phone.isNotEmpty) ...[
+                _actionButton(context, Icons.call, 'Call Adviser', kGreen, Uri.parse('tel:$phone')),
+                const SizedBox(height: 10),
+                _actionButton(context, Icons.sms, 'Send SMS', const Color(0xFF2563EB), Uri.parse('sms:$phone?body=$body')),
+                const SizedBox(height: 10),
+              ],
+              if (email.isNotEmpty)
+                _actionButton(context, Icons.email, 'Send Email', const Color(0xFFEA580C), Uri.parse('mailto:$email?subject=Attendance%20Inquiry&body=$body')),
+              if (phone.isEmpty && email.isEmpty)
+                const Text('No adviser contact details on file. Please reach the school office.', style: TextStyle(color: kMuted, fontSize: 12.5)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _actionButton(BuildContext context, IconData icon, String label, Color color, Uri uri) => SizedBox(
+        width: double.infinity,
+        height: 46,
+        child: OutlinedButton.icon(
+          onPressed: () => _launch(context, uri),
+          icon: Icon(icon, color: color, size: 19),
+          label: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w700)),
+          style: OutlinedButton.styleFrom(side: BorderSide(color: color.withValues(alpha: 0.4)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+        ),
+      );
+}
+
+// ---------------------------------------------------------------------------
+// Profile tab
+// ---------------------------------------------------------------------------
+class ProfileTab extends StatelessWidget {
+  const ProfileTab({super.key, required this.api, required this.childCount, required this.onLogout});
+  final ParentApi api;
+  final int childCount;
+  final VoidCallback onLogout;
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: _cardDecoration(),
+          child: Column(children: [
+            CircleAvatar(radius: 34, backgroundColor: const Color(0xFFDCFCE7), child: Text(_initials(api.parentName), style: const TextStyle(color: kGreen, fontWeight: FontWeight.w800, fontSize: 22))),
+            const SizedBox(height: 12),
+            Text(api.parentName, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: kInk)),
+            const SizedBox(height: 2),
+            const Text('Parent / Guardian', style: TextStyle(fontSize: 12.5, color: kMuted)),
+          ]),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          decoration: _cardDecoration(),
+          child: Column(children: [
+            _tile(Icons.phone_outlined, 'Contact Number', api.parentContact.isEmpty ? '—' : api.parentContact),
+            const Divider(height: 1),
+            _tile(Icons.alternate_email, 'Username', api.parentUsername.isEmpty ? '—' : api.parentUsername),
+            const Divider(height: 1),
+            _tile(Icons.family_restroom, 'Linked Children', '$childCount'),
+          ]),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: OutlinedButton.icon(
+            onPressed: onLogout,
+            icon: const Icon(Icons.logout, color: Color(0xFFDC2626), size: 19),
+            label: const Text('Log Out', style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.w700)),
+            style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFFECACA)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+          ),
+        ),
+        const SizedBox(height: 20),
+        const Center(child: Text('EduTrack Parent • v1.0.0', style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5))),
+      ],
+    );
+  }
+
+  Widget _tile(IconData icon, String label, String value) => ListTile(
+        leading: Icon(icon, color: kMuted, size: 20),
+        title: Text(label, style: const TextStyle(fontSize: 12.5, color: kMuted)),
+        trailing: Text(value, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: kInk)),
+      );
+}
+
+// ---------------------------------------------------------------------------
+// Painters & status helpers
+// ---------------------------------------------------------------------------
+class RingPainter extends CustomPainter {
+  RingPainter(this.progress, {required this.color});
+  final double progress;
+  final Color color;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.min(size.width, size.height) / 2 - 10;
+    final bg = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 12
+      ..strokeCap = StrokeCap.round
+      ..color = color.withValues(alpha: .18);
+    final fg = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 12
+      ..strokeCap = StrokeCap.round
+      ..color = color;
+    canvas.drawCircle(center, radius, bg);
+    canvas.drawArc(Rect.fromCircle(center: center, radius: radius), -math.pi / 2, math.pi * 2 * progress.clamp(0, 1), false, fg);
+  }
+
+  @override
+  bool shouldRepaint(RingPainter oldDelegate) => oldDelegate.progress != progress || oldDelegate.color != color;
+}
+
+class _DefaultSchoolArt extends StatelessWidget {
+  const _DefaultSchoolArt();
+  @override
+  Widget build(BuildContext context) => CustomPaint(painter: _SchoolArtPainter());
+}
+
+class _SchoolArtPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final ground = Paint()..color = const Color(0xFFE8F7EE);
+    final green = Paint()..color = const Color(0xFF45A56D);
+    final deep = Paint()..color = const Color(0xFF127456);
+    final mid = Paint()..color = const Color(0xFF73BE89);
+    final pale = Paint()..color = const Color(0xFFF8FFFB);
+    final sky = Paint()..color = const Color(0xFFEAF7FF);
+
+    canvas.drawOval(Rect.fromLTWH(6, size.height - 18, size.width - 12, 15), ground);
+    canvas.drawCircle(Offset(size.width * .18, size.height * .64), 18, mid);
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(size.width * .16, size.height * .64, size.width * .08, size.height * .26), const Radius.circular(4)), deep);
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(size.width * .38, size.height * .40, size.width * .52, size.height * .42), const Radius.circular(5)), mid);
+
+    final roof = Path()
+      ..moveTo(size.width * .34, size.height * .42)
+      ..lineTo(size.width * .64, size.height * .23)
+      ..lineTo(size.width * .94, size.height * .42)
+      ..close();
+    canvas.drawPath(roof, deep);
+
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(size.width * .58, size.height * .58, size.width * .14, size.height * .27), const Radius.circular(4)), deep);
+    for (final x in [0.45, 0.78]) {
+      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(size.width * x, size.height * .54, 12, 15), const Radius.circular(2)), pale);
+    }
+    canvas.drawCircle(Offset(size.width * .65, size.height * .37), 14, pale);
+    canvas.drawLine(Offset(size.width * .65, size.height * .28), Offset(size.width * .65, size.height * .08), deep..strokeWidth = 3);
+    final flag = Path()
+      ..moveTo(size.width * .66, size.height * .08)
+      ..lineTo(size.width * .82, size.height * .13)
+      ..lineTo(size.width * .66, size.height * .18)
+      ..close();
+    canvas.drawPath(flag, green);
+    canvas.drawOval(Rect.fromLTWH(size.width * .08, 6, size.width * .22, 9), sky);
+    canvas.drawOval(Rect.fromLTWH(size.width * .78, 15, size.width * .18, 8), sky);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
 Color statusColor(String s) {
   final v = s.toLowerCase();
   if (v.contains('inside')) return kGreen;
@@ -784,433 +1615,9 @@ Color toneColor(String tone) {
     case 'out':
       return const Color(0xFFEA580C);
     case 'lunch':
-      return const Color(0xFFD97706);
     case 'late':
       return const Color(0xFFD97706);
     default:
       return kGreen;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Home tab — child summary card
-// ---------------------------------------------------------------------------
-class HomeTab extends StatelessWidget {
-  const HomeTab({super.key, required this.child, this.picker});
-  final Map<String, dynamic> child;
-  final Widget? picker;
-
-  @override
-  Widget build(BuildContext context) {
-    final status = '${child['current_status'] ?? 'Absent'}';
-    final today = '${child['today_status'] ?? 'Absent'}';
-    final latest = '${child['latest_scan_time'] ?? ''}';
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
-      children: [
-        if (picker != null) Padding(padding: const EdgeInsets.only(top: 12), child: picker!),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 26,
-                        backgroundColor: const Color(0xFFEEF2FF),
-                        child: Text(
-                          _initials('${child['name']}'),
-                          style: const TextStyle(color: Color(0xFF4F46E5), fontWeight: FontWeight.w800),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('${child['name']}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: kInk)),
-                            const SizedBox(height: 2),
-                            Text('LRN: ${child['lrn']?.toString().isNotEmpty == true ? child['lrn'] : 'N/A'}',
-                                style: const TextStyle(fontSize: 12, color: kMuted)),
-                          ],
-                        ),
-                      ),
-                      StatusPill(label: status),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  _infoRow(Icons.layers_outlined, 'Grade & Section', '${child['grade_level']} • ${child['section']}'),
-                  _infoRow(Icons.account_balance_outlined, 'School', '${child['school_name']}'),
-                  _infoRow(Icons.co_present, 'Adviser', '${child['adviser_name']}'),
-                  const Divider(height: 26),
-                  Row(
-                    children: [
-                      Expanded(child: _miniStat('Today', today, statusColor(today))),
-                      Container(width: 1, height: 38, color: const Color(0xFFF1F5F9)),
-                      Expanded(child: _miniStat('Latest Scan', latest.isEmpty ? '—' : latest, kInk)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        if (((child['consecutive_absences'] as num?)?.toInt() ?? 0) >= 2)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFEF2F2),
-                border: Border.all(color: const Color(0xFFFECACA)),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626)),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      '${child['name']} has ${child['consecutive_absences']} consecutive absences. Please contact the adviser.',
-                      style: const TextStyle(color: Color(0xFF991B1B), fontSize: 12.5, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _infoRow(IconData icon, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 17, color: kMuted),
-          const SizedBox(width: 10),
-          Text('$label:  ', style: const TextStyle(fontSize: 12.5, color: kMuted)),
-          Expanded(child: Text(value, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: kInk))),
-        ],
-      ),
-    );
-  }
-
-  Widget _miniStat(String label, String value, Color color) {
-    return Column(
-      children: [
-        Text(value, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: color)),
-        const SizedBox(height: 2),
-        Text(label, style: const TextStyle(fontSize: 10.5, color: kMuted, fontWeight: FontWeight.w600)),
-      ],
-    );
-  }
-}
-
-String _initials(String name) {
-  final parts = name.replaceAll(',', ' ').trim().split(RegExp(r'\s+'));
-  if (parts.isEmpty || parts.first.isEmpty) return 'S';
-  if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-  return (parts.first.substring(0, 1) + parts[1].substring(0, 1)).toUpperCase();
-}
-
-class StatusPill extends StatelessWidget {
-  const StatusPill({super.key, required this.label});
-  final String label;
-  @override
-  Widget build(BuildContext context) {
-    final color = statusColor(label);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-      child: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 11.5)),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Attendance timeline tab
-// ---------------------------------------------------------------------------
-class AttendanceTab extends StatelessWidget {
-  const AttendanceTab({super.key, required this.child, this.picker});
-  final Map<String, dynamic> child;
-  final Widget? picker;
-  @override
-  Widget build(BuildContext context) {
-    final timeline = (child['timeline'] as List?) ?? const [];
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
-      children: [
-        if (picker != null) Padding(padding: const EdgeInsets.only(top: 12), child: picker!),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
-          child: Text("Today’s Scan History", style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: kInk)),
-        ),
-        if (timeline.isEmpty)
-          const Padding(
-            padding: EdgeInsets.all(40),
-            child: Center(child: Text('No scans recorded yet today.', style: TextStyle(color: kMuted))),
-          )
-        else
-          ...timeline.map((e) {
-            final entry = e as Map<String, dynamic>;
-            final tone = '${entry['tone'] ?? 'in'}';
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-              child: Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: toneColor(tone).withValues(alpha: 0.12),
-                    child: Icon(toneIcon(tone), color: toneColor(tone), size: 20),
-                  ),
-                  title: Text('${entry['label_display'] ?? entry['label']}',
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: kInk)),
-                  subtitle: Text('${entry['time_display'] ?? ''}', style: const TextStyle(fontSize: 12, color: kMuted)),
-                ),
-              ),
-            );
-          }),
-      ],
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Notifications tab
-// ---------------------------------------------------------------------------
-class NotificationsTab extends StatelessWidget {
-  const NotificationsTab({super.key, required this.notifications});
-  final List<dynamic> notifications;
-  @override
-  Widget build(BuildContext context) {
-    if (notifications.isEmpty) {
-      return ListView(children: const [
-        Padding(padding: EdgeInsets.all(40), child: Center(child: Text('No notifications yet.', style: TextStyle(color: kMuted)))),
-      ]);
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      itemCount: notifications.length,
-      itemBuilder: (_, i) {
-        final n = notifications[i] as Map<String, dynamic>;
-        final tone = '${n['tone'] ?? 'in'}';
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-          child: Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: ListTile(
-              leading: CircleAvatar(
-                backgroundColor: toneColor(tone).withValues(alpha: 0.12),
-                child: Icon(toneIcon(tone), color: toneColor(tone), size: 20),
-              ),
-              title: Text('${n['title']}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: kInk)),
-              subtitle: Text('${n['message']}', style: const TextStyle(fontSize: 12, color: kMuted)),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Adviser contact tab
-// ---------------------------------------------------------------------------
-class AdviserTab extends StatelessWidget {
-  const AdviserTab({super.key, required this.child, this.picker});
-  final Map<String, dynamic> child;
-  final Widget? picker;
-
-  Future<void> _launch(BuildContext context, Uri uri) async {
-    try {
-      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!ok && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No app available for this action.')));
-      }
-    } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open this action.')));
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final adviser = '${child['adviser_name'] ?? 'No adviser assigned'}';
-    final contact = '${child['adviser_contact'] ?? ''}'.trim();
-    final email = '${child['adviser_email'] ?? ''}'.trim();
-    final phone = contact.replaceAll(RegExp(r'[^0-9+]'), '');
-    final body = Uri.encodeComponent(
-        'Good day Teacher, this is the parent/guardian of ${child['name']} (${child['grade_level']} - ${child['section']}). ');
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
-      children: [
-        if (picker != null) Padding(padding: const EdgeInsets.only(top: 12), child: picker!),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const CircleAvatar(radius: 22, backgroundColor: Color(0xFFDCFCE7), child: Icon(Icons.co_present, color: kGreen)),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(adviser, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: kInk)),
-                            Text('Class Adviser • ${child['section']}', style: const TextStyle(fontSize: 12, color: kMuted)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  if (phone.isNotEmpty) ...[
-                    _actionButton(context, Icons.call, 'Call Adviser', kGreen, Uri.parse('tel:$phone')),
-                    const SizedBox(height: 10),
-                    _actionButton(context, Icons.sms, 'Send SMS', const Color(0xFF2563EB), Uri.parse('sms:$phone?body=$body')),
-                    const SizedBox(height: 10),
-                  ],
-                  if (email.isNotEmpty)
-                    _actionButton(context, Icons.email, 'Send Email', const Color(0xFFEA580C),
-                        Uri.parse('mailto:$email?subject=Attendance%20Inquiry&body=$body')),
-                  if (phone.isEmpty && email.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 6),
-                      child: Text('No adviser contact details on file. Please reach the school office.',
-                          style: TextStyle(color: kMuted, fontSize: 12.5)),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _actionButton(BuildContext context, IconData icon, String label, Color color, Uri uri) {
-    return SizedBox(
-      width: double.infinity,
-      height: 46,
-      child: OutlinedButton.icon(
-        onPressed: () => _launch(context, uri),
-        icon: Icon(icon, color: color, size: 19),
-        label: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w700)),
-        style: OutlinedButton.styleFrom(
-          side: BorderSide(color: color.withValues(alpha: 0.4)),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Profile tab
-// ---------------------------------------------------------------------------
-class ProfileTab extends StatelessWidget {
-  const ProfileTab({super.key, required this.api, required this.childCount, required this.onLogout});
-  final ParentApi api;
-  final int childCount;
-  final VoidCallback onLogout;
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                CircleAvatar(
-                  radius: 34,
-                  backgroundColor: const Color(0xFFDCFCE7),
-                  child: Text(_initials(api.parentName), style: const TextStyle(color: kGreen, fontWeight: FontWeight.w800, fontSize: 22)),
-                ),
-                const SizedBox(height: 12),
-                Text(api.parentName, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: kInk)),
-                const SizedBox(height: 2),
-                Text('Parent / Guardian', style: const TextStyle(fontSize: 12.5, color: kMuted)),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Column(
-            children: [
-              _tile(Icons.phone_outlined, 'Contact Number', api.parentContact.isEmpty ? '—' : api.parentContact),
-              const Divider(height: 1),
-              _tile(Icons.alternate_email, 'Username', api.parentUsername.isEmpty ? '—' : api.parentUsername),
-              const Divider(height: 1),
-              _tile(Icons.family_restroom, 'Linked Children', '$childCount'),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity,
-          height: 48,
-          child: OutlinedButton.icon(
-            onPressed: () async {
-              final ok = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Log out?'),
-                  content: const Text('You will need to sign in again to view your child’s attendance.'),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                    TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Log out', style: TextStyle(color: Color(0xFFDC2626)))),
-                  ],
-                ),
-              );
-              if (ok == true) onLogout();
-            },
-            icon: const Icon(Icons.logout, color: Color(0xFFDC2626), size: 19),
-            label: const Text('Log Out', style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.w700)),
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Color(0xFFFECACA)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-        const Center(child: Text('EduTrack Parent • v1.0.0', style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5))),
-      ],
-    );
-  }
-
-  Widget _tile(IconData icon, String label, String value) {
-    return ListTile(
-      leading: Icon(icon, color: kMuted, size: 20),
-      title: Text(label, style: const TextStyle(fontSize: 12.5, color: kMuted)),
-      trailing: Text(value, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: kInk)),
-    );
   }
 }
