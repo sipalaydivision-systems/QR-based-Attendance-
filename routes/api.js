@@ -757,6 +757,66 @@ async function resolveAttendanceStatusFromEvents(personType, dateStr, attendance
     });
 }
 
+function attendanceEventAction(value) {
+    const raw = String(value || '').trim().toLowerCase();
+    if (raw === 'time_in' || raw === 'time in') return 'time_in';
+    if (raw === 'time_out' || raw === 'time out') return 'time_out';
+    return raw;
+}
+
+function buildAttendanceScanSummary(row, dateStr, schedule, storedEvents) {
+    const events = Array.isArray(storedEvents) ? [...storedEvents] : [];
+    if (row.time_in && !events.some(event => attendanceEventAction(event.event) === 'time_in')) {
+        const decision = firstScanDecision(row.time_in, schedule, row.status || 'present');
+        events.unshift({
+            event: 'time_in',
+            event_label: decision.label || ATTENDANCE_SCAN_LABELS.TIME_IN,
+            event_time: row.time_in
+        });
+    }
+    if (row.time_out && !events.some(event => attendanceEventAction(event.event) === 'time_out' && String(event.event_time) === String(row.time_out))) {
+        events.push({
+            event: 'time_out',
+            event_label: timeOutScanLabel(row.time_out, schedule),
+            event_time: row.time_out
+        });
+    }
+
+    const summary = {
+        am_time_in: [],
+        am_time_out: [],
+        pm_time_in: [],
+        pm_time_out: [],
+        scan_statuses: []
+    };
+
+    events
+        .filter(event => event && event.event_time)
+        .sort((a, b) => compareDateTime(a.event_time, b.event_time))
+        .forEach(event => {
+            const action = attendanceEventAction(event.event);
+            const label = normalizeEventLabel(event.event_label) || (action === 'time_out'
+                ? timeOutScanLabel(event.event_time, schedule)
+                : ATTENDANCE_SCAN_LABELS.TIME_IN);
+            const entry = {
+                time: event.event_time,
+                time_display: formatTime12(event.event_time),
+                label,
+                status: label
+            };
+            let bucket = null;
+            if (action === 'time_in') {
+                bucket = compareDateTime(event.event_time, schedule.lunchStart) >= 0 ? 'pm_time_in' : 'am_time_in';
+            } else if (action === 'time_out') {
+                bucket = compareDateTime(event.event_time, schedule.pmInStart) >= 0 ? 'pm_time_out' : 'am_time_out';
+            }
+            if (bucket && summary[bucket]) summary[bucket].push(entry);
+            summary.scan_statuses.push({ ...entry, action });
+        });
+
+    return summary;
+}
+
 async function hasSchoolDayEnded(dateStr) {
     const today = todayDate();
     if (dateStr < today) return true;
@@ -2545,13 +2605,31 @@ router.get('/attendance', requireAuth, async (req, res) => {
 
         query += ' ORDER BY a.time_in DESC';
         const [rows] = await db.query(query, params);
+        const schedule = await getAttendanceScheduleTimes(date);
+        const eventsByAttendance = new Map();
+        const attendanceIds = rows.map(row => row.id).filter(Boolean);
+        if (attendanceIds.length > 0) {
+            const [eventRows] = await db.query(
+                `SELECT attendance_id, event, event_label, event_time
+                 FROM attendance_events
+                 WHERE attendance_id IN (?)
+                 ORDER BY event_time, id`,
+                [attendanceIds]
+            );
+            eventRows.forEach(event => {
+                const key = event.attendance_id;
+                if (!eventsByAttendance.has(key)) eventsByAttendance.set(key, []);
+                eventsByAttendance.get(key).push(event);
+            });
+        }
         decorateLateHalfDays(rows, await getPmLateTime());
         await Promise.all(rows.map(async (row) => {
+            const rowDate = row.date instanceof Date ? row.date.toISOString().slice(0, 10) : String(row.date).slice(0, 10);
+            row.scan_summary = buildAttendanceScanSummary(row, rowDate, schedule, eventsByAttendance.get(row.id) || []);
             if (!row.time_in) {
                 row.attendance_status = 'Absent';
                 return;
             }
-            const rowDate = row.date instanceof Date ? row.date.toISOString().slice(0, 10) : String(row.date).slice(0, 10);
             const resolved = await resolveAttendanceStatusFromEvents(row.person_type, rowDate, row.id, row.time_in);
             row.status = resolved.status || row.status;
             row.attendance_status = resolved.label || statusLabel(row.status);

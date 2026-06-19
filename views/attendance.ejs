@@ -52,6 +52,49 @@
 </div>
 
 <div class="card">
+    <style>
+        .attendance-scan-cell {
+            min-width: 104px;
+        }
+        .scan-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .scan-entry {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+            line-height: 1.1;
+            white-space: nowrap;
+        }
+        .scan-time {
+            font-weight: 700;
+            color: var(--dark);
+            font-size: 0.82rem;
+        }
+        .scan-label {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 3px 7px;
+            font-size: 0.68rem;
+            font-weight: 800;
+            letter-spacing: 0.01em;
+            background: #eef2ff;
+            color: #1d4ed8;
+        }
+        .scan-label-in { background: #dcfce7; color: #047857; }
+        .scan-label-out { background: #fee2e2; color: #b91c1c; }
+        .scan-label-lunch { background: #ffedd5; color: #c2410c; }
+        .scan-label-return { background: #dbeafe; color: #1d4ed8; }
+        .scan-label-complete { background: #d1fae5; color: #065f46; }
+        .scan-empty {
+            color: var(--gray-400);
+            font-weight: 700;
+        }
+    </style>
     <div class="table-responsive">
         <table class="data-table">
             <thead>
@@ -60,8 +103,10 @@
                     <th>LRN / ID</th>
                     <th>School</th>
                     <th>Grade / Section</th>
-                    <th>Time In</th>
-                    <th>Time Out</th>
+                    <th>AM Time In</th>
+                    <th>AM Time Out</th>
+                    <th>PM Time In</th>
+                    <th>PM Time Out</th>
                     <th>Status</th>
                 </tr>
             </thead>
@@ -72,6 +117,37 @@
 
 <script>
 var isAdviser = <%= user.role === 'adviser' ? 'true' : 'false' %>;
+
+function esc(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function scanLabelClass(label) {
+    var raw = String(label || '').toUpperCase();
+    if (raw.indexOf('COMPLETED') >= 0) return 'scan-label-complete';
+    if (raw.indexOf('LUNCH') >= 0) return 'scan-label-lunch';
+    if (raw.indexOf('RETURN') >= 0 || raw.indexOf('WELCOME') >= 0) return 'scan-label-return';
+    if (raw.indexOf('OUT') >= 0) return 'scan-label-out';
+    if (raw.indexOf('IN') >= 0 || raw.indexOf('LATE') >= 0) return 'scan-label-in';
+    return '';
+}
+
+function renderScanCell(items) {
+    if (!items || !items.length) return '<span class="scan-empty">-</span>';
+    return '<div class="scan-stack">' + items.map(function(item) {
+        var time = item.time_display || (item.time ? new Date(item.time).toLocaleTimeString() : '-');
+        var label = item.status || item.label || '';
+        return '<span class="scan-entry">' +
+            '<span class="scan-time">' + esc(time) + '</span>' +
+            '<span class="scan-label ' + scanLabelClass(label) + '">' + esc(label || 'SCAN') + '</span>' +
+            '</span>';
+    }).join('') + '</div>';
+}
 
 async function loadAttendance() {
     var date = document.getElementById('attDate').value;
@@ -102,17 +178,19 @@ async function loadAttendance() {
             : rawStatus === 'half_day' ? 'badge-half-day'
             : 'badge-inactive';
         var statusText = r.attendance_status || formatStatusLabel(r.status, r.late_half_day);
-        var timeOutText = r.time_out ? new Date(r.time_out).toLocaleTimeString() : (r.monitoring_status === 'PENDING TIME OUT' || r.monitoring_status === 'Pending Time Out' ? 'Pending Time Out' : '-');
+        var scans = r.scan_summary || {};
         return '<tr>' +
-            '<td><strong>' + (r.person_name || 'N/A') + '</strong></td>' +
-            '<td>' + (r.lrn || r.employee_id || '-') + '</td>' +
-            '<td><span class="school-code">' + (r.school_name || '-') + '</span></td>' +
-            '<td>' + (r.grade_name || '-') + (r.section_name ? ' / ' + r.section_name : '') + '</td>' +
-            '<td>' + (r.time_in ? new Date(r.time_in).toLocaleTimeString() : '-') + '</td>' +
-            '<td>' + timeOutText + '</td>' +
-            '<td><span class="badge ' + statusClass + '">' + statusText + '</span></td>' +
+            '<td><strong>' + esc(r.person_name || 'N/A') + '</strong></td>' +
+            '<td>' + esc(r.lrn || r.employee_id || '-') + '</td>' +
+            '<td><span class="school-code">' + esc(r.school_name || '-') + '</span></td>' +
+            '<td>' + esc(r.grade_name || '-') + (r.section_name ? ' / ' + esc(r.section_name) : '') + '</td>' +
+            '<td class="attendance-scan-cell">' + renderScanCell(scans.am_time_in) + '</td>' +
+            '<td class="attendance-scan-cell">' + renderScanCell(scans.am_time_out) + '</td>' +
+            '<td class="attendance-scan-cell">' + renderScanCell(scans.pm_time_in) + '</td>' +
+            '<td class="attendance-scan-cell">' + renderScanCell(scans.pm_time_out) + '</td>' +
+            '<td><span class="badge ' + statusClass + '">' + esc(statusText) + '</span></td>' +
             '</tr>';
-    }).join('') || '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon"><i class="fa-solid fa-clipboard-list" style="font-size:2.5rem;color:var(--gray-300);"></i></div><h4>No attendance records found</h4><p>No records for the selected date and filters.</p></div></td></tr>';
+    }).join('') || '<tr><td colspan="9"><div class="empty-state"><div class="empty-icon"><i class="fa-solid fa-clipboard-list" style="font-size:2.5rem;color:var(--gray-300);"></i></div><h4>No attendance records found</h4><p>No records for the selected date and filters.</p></div></td></tr>';
 
     var exportParams = new URLSearchParams({ date: date, end_date: date, type: type });
     if (!isAdviser && school) exportParams.append('school', school);
