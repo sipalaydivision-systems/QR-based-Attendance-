@@ -54,8 +54,14 @@ public class MainActivity extends Activity {
                 if (isFinishing()) return;
                 if (SessionStore.hasConfiguredBaseUrl(this)) {
                     openingDashboard = true;
-                    Class<?> next = SessionStore.isLoggedIn(this) ? DashboardActivity.class : LoginActivity.class;
-                    startActivity(new Intent(this, next));
+                    if (isParentApp()) {
+                        Intent parentPortal = new Intent(this, WebAppActivity.class);
+                        parentPortal.putExtra("path", "/parent/app");
+                        startActivity(parentPortal);
+                    } else {
+                        Class<?> next = SessionStore.isLoggedIn(this) ? DashboardActivity.class : LoginActivity.class;
+                        startActivity(new Intent(this, next));
+                    }
                     overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
                     finish();
                     return;
@@ -64,6 +70,10 @@ public class MainActivity extends Activity {
                 handler.postDelayed(this::checkServerAndOpen, 3500);
             });
         }).start();
+    }
+
+    private boolean isParentApp() {
+        return getResources().getBoolean(getResources().getIdentifier("parent_app", "bool", getPackageName()));
     }
 
     private void showSplash() {

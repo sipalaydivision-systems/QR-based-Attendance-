@@ -19,6 +19,18 @@ android {
         versionCode 35
         versionName "2.1.5"
     }
+
+    flavorDimensions "portal"
+    productFlavors {
+        division {
+            dimension "portal"
+        }
+        parent {
+            dimension "portal"
+            applicationIdSuffix ".parent"
+            versionNameSuffix "-parent"
+        }
+    }
 }
 
 dependencies {
