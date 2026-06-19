@@ -9,6 +9,7 @@ import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
@@ -192,7 +193,8 @@ public class WebAppActivity extends Activity {
         Intent intent = new Intent(this, WebAppActivity.class);
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 4100, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setSmallIcon(R.drawable.system_logo)
+                .setLargeIcon(BitmapFactory.decodeResource(getResources(), R.drawable.system_logo))
                 .setContentTitle(title == null || title.trim().isEmpty() ? "Edutrack Alert" : title)
                 .setContentText(body == null || body.trim().isEmpty() ? "Attendance mobile notification." : body)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(body == null ? "" : body))

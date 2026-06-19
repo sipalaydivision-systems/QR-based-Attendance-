@@ -1983,7 +1983,8 @@ public class DashboardActivity extends Activity {
         intent.putExtra("tab", "alerts");
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 3001, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setSmallIcon(R.drawable.system_logo)
+                .setLargeIcon(BitmapFactory.decodeResource(getResources(), R.drawable.system_logo))
                 .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
