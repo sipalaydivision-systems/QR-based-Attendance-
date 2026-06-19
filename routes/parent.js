@@ -645,6 +645,118 @@ router.get('/parent/app', requireParentAuth, async (req, res) => {
     });
 });
 
+// ---- JSON auth for the native parent app (cookie session, same as web) ----
+router.post('/api/parent/login', async (req, res) => {
+    const identifier = String(req.body.identifier || '').trim();
+    const password = String(req.body.password || '');
+    if (!identifier || !password) {
+        return res.status(400).json({ success: false, error: 'Please enter your mobile number or username and password.' });
+    }
+    const normalized = normalizeContact(identifier);
+    try {
+        const [rows] = await db.query(
+            "SELECT * FROM parents WHERE status = 'active' AND (username = ? OR normalized_contact = ?) LIMIT 1",
+            [identifier, normalized]
+        );
+        if (rows.length === 0) {
+            if (isContactLike(identifier) && !(await contactExistsForStudent(normalized))) {
+                return res.status(404).json({ success: false, error: 'This contact number is not registered. Please contact the school adviser or administrator.' });
+            }
+            return res.status(404).json({ success: false, error: 'Parent account not found. Please register first using your registered guardian contact number.' });
+        }
+        const parent = rows[0];
+        const match = await bcrypt.compare(password, parent.password);
+        if (!match) {
+            return res.status(401).json({ success: false, error: 'Invalid mobile number/username or password.' });
+        }
+        req.session.user = {
+            id: parent.id,
+            parent_id: parent.id,
+            username: parent.username || parent.contact_number,
+            fullname: parent.guardian_name,
+            role: 'parent',
+            contact_number: parent.contact_number,
+            normalized_contact: parent.normalized_contact
+        };
+        await db.query('UPDATE parents SET last_login = ? WHERE id = ?', [nowDateTime(), parent.id]);
+        return res.json({
+            success: true,
+            parent: { id: parent.id, guardian_name: parent.guardian_name, contact_number: parent.contact_number, username: parent.username || '' }
+        });
+    } catch (err) {
+        console.error('Parent API login error:', err);
+        return res.status(500).json({ success: false, error: 'A server error occurred. Please try again.' });
+    }
+});
+
+router.post('/api/parent/register', async (req, res) => {
+    const guardianName = String(req.body.guardian_name || '').trim();
+    const contactNumber = String(req.body.contact_number || '').trim();
+    const username = String(req.body.username || '').trim();
+    const password = String(req.body.password || '');
+    const confirmPassword = String(req.body.confirm_password || '');
+    const normalized = normalizeContact(contactNumber);
+    if (!guardianName || !contactNumber || !password || !confirmPassword) {
+        return res.status(400).json({ success: false, error: 'Please complete all required fields.' });
+    }
+    if (password.length < 6) {
+        return res.status(400).json({ success: false, error: 'Password must be at least 6 characters.' });
+    }
+    if (password !== confirmPassword) {
+        return res.status(400).json({ success: false, error: 'Passwords do not match.' });
+    }
+    try {
+        if (!(await contactExistsForStudent(normalized))) {
+            return res.status(404).json({ success: false, error: 'This contact number is not registered. Please contact the school adviser or administrator.' });
+        }
+        const [existingContact] = await db.query('SELECT id FROM parents WHERE normalized_contact = ? LIMIT 1', [normalized]);
+        if (existingContact.length) {
+            return res.status(409).json({ success: false, error: 'This contact number already has a parent account. Please log in.' });
+        }
+        if (username) {
+            const [existingUsername] = await db.query('SELECT id FROM parents WHERE username = ? LIMIT 1', [username]);
+            if (existingUsername.length) {
+                return res.status(409).json({ success: false, error: 'This username is already taken.' });
+            }
+        }
+        const hashed = await bcrypt.hash(password, 10);
+        const [result] = await db.query(
+            'INSERT INTO parents (guardian_name, contact_number, normalized_contact, username, password) VALUES (?, ?, ?, ?, ?)',
+            [guardianName, contactNumber, normalized, username || null, hashed]
+        );
+        req.session.user = {
+            id: result.insertId,
+            parent_id: result.insertId,
+            username: username || contactNumber,
+            fullname: guardianName,
+            role: 'parent',
+            contact_number: contactNumber,
+            normalized_contact: normalized
+        };
+        return res.json({
+            success: true,
+            parent: { id: result.insertId, guardian_name: guardianName, contact_number: contactNumber, username: username || '' }
+        });
+    } catch (err) {
+        console.error('Parent API register error:', err);
+        return res.status(500).json({ success: false, error: 'A server error occurred. Please try again.' });
+    }
+});
+
+router.post('/api/parent/logout', (req, res) => {
+    req.session.destroy(() => res.json({ success: true }));
+});
+
+router.get('/api/parent/me', requireParentAuth, (req, res) => {
+    const u = req.session.user;
+    return res.json({
+        id: u.id,
+        guardian_name: u.fullname,
+        contact_number: u.contact_number,
+        username: u.username || ''
+    });
+});
+
 router.get('/api/parent/branding', requireParentAuth, async (req, res) => {
     try {
         const branding = await loadBranding();

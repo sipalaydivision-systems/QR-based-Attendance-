@@ -1,0 +1,72 @@
+name: Build Parent APK
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'mobile-flutter-parent/lib/**'
+      - 'mobile-flutter-parent/pubspec.yaml'
+      - 'mobile-flutter-parent/android/**'
+  workflow_dispatch:
+
+concurrency:
+  group: build-parent-apk
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          # No pinned version: pubspec requires Dart ^3.11.5, so use latest stable
+
+      - name: Install Flutter dependencies
+        working-directory: mobile-flutter-parent
+        run: flutter pub get
+
+      - name: Analyze (non-blocking)
+        working-directory: mobile-flutter-parent
+        run: flutter analyze || true
+
+      - name: Build release APK
+        working-directory: mobile-flutter-parent
+        run: flutter build apk --release
+
+      - name: Copy APK to public/downloads
+        run: |
+          mkdir -p public/downloads
+          cp mobile-flutter-parent/build/app/outputs/flutter-apk/app-release.apk \
+             public/downloads/edutrack-parent.apk
+          echo "APK size: $(du -sh public/downloads/edutrack-parent.apk)"
+
+      - name: Commit and push updated APK
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/downloads/edutrack-parent.apk
+          if git diff --staged --quiet; then
+            echo "No changes to APK — skipping commit."
+          else
+            git commit -m "chore: auto-rebuild Parent APK [skip ci]"
+            git push
+            echo "Parent APK updated and pushed."
+          fi
