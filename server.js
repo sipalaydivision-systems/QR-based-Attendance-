@@ -83,11 +83,13 @@ app.use(async (req, res, next) => {
 
 // Routes
 const authRoutes = require('./routes/auth');
+const parentRoutes = require('./routes/parent');
 const apiRoutes = require('./routes/api');
 const adminRoutes = require('./routes/admin');
 const exportRoutes = require('./routes/export');
 const transferRoutes = require('./routes/transfers');
 
+app.use('/', parentRoutes);
 app.use('/', authRoutes);
 app.use('/api/transfers', transferRoutes);
 app.use('/api', apiRoutes);
@@ -95,6 +97,7 @@ app.use('/admin', adminRoutes);
 app.use('/export', exportRoutes);
 
 function getDashboardUrl(role) {
+    if (role === 'parent') return '/parent/app';
     if (role === 'principal') return '/admin/principal-dashboard';
     if (role === 'superintendent') return '/admin/sds-dashboard';
     if (role === 'asst_superintendent') return '/admin/asds-dashboard';
@@ -253,8 +256,8 @@ async function ensureRuntimeSchema() {
            OR (setting_key = 'teacher_duty_end_time' AND (setting_value IS NULL OR setting_value IN ('', '17:00', '17:00:00')))
     `);
 
-    // Adviser role support: expand users.role ENUM + add teacher_id link column.
-    await db.query("ALTER TABLE users MODIFY COLUMN role ENUM('super_admin','principal','superintendent','asst_superintendent','adviser') NOT NULL DEFAULT 'principal'");
+    // Role support: expand users.role ENUM + add teacher_id link column.
+    await db.query("ALTER TABLE users MODIFY COLUMN role ENUM('super_admin','principal','superintendent','asst_superintendent','adviser','parent') NOT NULL DEFAULT 'principal'");
     const [teacherIdCol] = await db.query(
         `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'teacher_id'`
@@ -282,6 +285,23 @@ async function ensureRuntimeSchema() {
         await db.query("ALTER TABLE teachers ADD COLUMN category ENUM('teacher','shs_teacher') DEFAULT 'teacher' AFTER status");
         console.log('Added teachers.category column for SHS teacher distinction.');
     }
+
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS parents (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            guardian_name VARCHAR(255) NOT NULL,
+            contact_number VARCHAR(100) NOT NULL,
+            normalized_contact VARCHAR(30) NOT NULL UNIQUE,
+            username VARCHAR(100) UNIQUE,
+            password VARCHAR(255) NOT NULL,
+            status ENUM('active','inactive') DEFAULT 'active',
+            last_login TIMESTAMP NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_parents_contact (normalized_contact),
+            INDEX idx_parents_username (username)
+        ) ENGINE=InnoDB
+    `);
 
     // Section transfer / reassignment approval requests. The approver is always a
     // teacher (the receiving section's adviser for a student transfer, or the

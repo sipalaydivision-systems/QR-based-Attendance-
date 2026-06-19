@@ -54,6 +54,9 @@ function applySchoolFilter(req) {
         // sentinel that matches no rows so they see nothing instead of every school.
         return user.school_id ? user.school_id : -1;
     }
+    if (user.role === 'parent') {
+        return -1;
+    }
     // Other roles can filter by query param
     const schoolParam = req.query.school || req.body.school;
     return schoolParam ? parseInt(schoolParam, 10) : null;

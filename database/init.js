@@ -59,6 +59,7 @@ async function init() {
         await ensureColumn('teachers', 'active_from', 'DATE NULL AFTER qr_code');
         await ensureColumn('sections', 'adviser_teacher_id', 'INT NULL AFTER adviser');
         await ensureColumn('students', 'active_from', 'DATE NULL AFTER qr_code');
+        await ensureColumnDefinition('users', 'role', "ENUM('super_admin','principal','superintendent','asst_superintendent','adviser','parent') NOT NULL DEFAULT 'principal'");
         await ensureColumnDefinition('students', 'status', "ENUM('active','inactive','deleted') DEFAULT 'inactive'");
         await ensureColumnDefinition('teachers', 'status', "ENUM('active','inactive','deleted') DEFAULT 'inactive'");
         await ensureColumnDefinition('attendance', 'status', "ENUM('present','late','half_day','absent') DEFAULT 'present'");

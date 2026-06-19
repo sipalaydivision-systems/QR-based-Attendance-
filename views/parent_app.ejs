@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#06996b">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>EduTrack Parent App</title>
+    <link rel="manifest" href="/parent-manifest.webmanifest">
+    <link rel="icon" type="image/png" href="/uploads/logos/system-logo.png">
+    <link rel="apple-touch-icon" href="/uploads/logos/system-logo.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --ink: #14221d;
+            --muted: #66776f;
+            --green: #06996b;
+            --green-dark: #045c42;
+            --green-soft: #e8f8f1;
+            --line: #dbe8e2;
+            --surface: #ffffff;
+            --bg: #eef5f2;
+            --danger: #dc2626;
+            --warning: #d97706;
+            --blue: #2563eb;
+            --shadow: 0 16px 36px rgba(16, 35, 28, .13);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background:
+                linear-gradient(rgba(15,110,82,.045) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(15,110,82,.045) 1px, transparent 1px),
+                var(--bg);
+            background-size: 28px 28px;
+            color: var(--ink);
+        }
+        .app {
+            max-width: 430px;
+            min-height: 100vh;
+            margin: 0 auto;
+            background: #f4faf7;
+            position: relative;
+            overflow-x: hidden;
+            box-shadow: 0 0 0 1px rgba(16,35,28,.08);
+            padding-bottom: calc(92px + env(safe-area-inset-bottom));
+        }
+        .hero {
+            color: #fff;
+            padding: calc(16px + env(safe-area-inset-top)) 18px 20px;
+            border-radius: 0 0 28px 28px;
+            background:
+                radial-gradient(circle at 84% 18%, rgba(255,255,255,.16), transparent 88px),
+                radial-gradient(circle at 50% -14%, rgba(255,255,255,.12), transparent 180px),
+                linear-gradient(135deg, #08ad78 0%, #078a62 54%, #045c42 100%);
+            box-shadow: 0 16px 32px rgba(4,92,66,.26);
+        }
+        .top-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+        .brand img { width: 48px; height: 48px; border-radius: 50%; object-fit: contain; background: #fff; padding: 3px; flex: 0 0 auto; }
+        .brand h1 { margin: 0; font-size: 1.32rem; line-height: 1; }
+        .brand p { margin: 4px 0 0; color: rgba(255,255,255,.78); font-size: .78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .logout-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            display: grid;
+            place-items: center;
+            background: rgba(255,255,255,.14);
+            border: 1px solid rgba(255,255,255,.25);
+            color: #fff;
+            text-decoration: none;
+        }
+        .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            min-height: 38px;
+            padding: 0 13px;
+            border-radius: 14px;
+            background: #fff;
+            color: var(--green-dark);
+            font-weight: 900;
+            font-size: .82rem;
+            box-shadow: 0 8px 18px rgba(4,92,66,.12);
+        }
+        .chip .live-dot { width: 10px; height: 10px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 0 7px rgba(239,68,68,.12); }
+        .content { padding: 18px 14px 0; }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 24px;
+            box-shadow: var(--shadow);
+            padding: 16px;
+            margin-bottom: 14px;
+        }
+        .greeting {
+            position: relative;
+            overflow: hidden;
+            min-height: 220px;
+        }
+        .greeting h2 { margin: 0; font-size: 1rem; color: var(--muted); }
+        .greeting .name { font-size: clamp(1.55rem, 8vw, 2.15rem); line-height: 1.02; font-weight: 900; letter-spacing: -0.03em; max-width: 58%; overflow-wrap: anywhere; }
+        .greeting .date { margin-top: 8px; color: var(--muted); font-weight: 800; font-size: .85rem; max-width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .school-art {
+            position: absolute;
+            right: 12px;
+            top: 34px;
+            width: 142px;
+            height: 100px;
+            object-fit: contain;
+        }
+        .mini-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 9px; margin-top: 24px; position: relative; z-index: 1; }
+        .mini {
+            min-height: 92px;
+            border-radius: 17px;
+            border: 1px solid #cfe5da;
+            background: #f4fbf8;
+            padding: 12px;
+        }
+        .mini.warn { background: #fff7ed; border-color: #fed7aa; }
+        .mini.danger { background: #fef2f2; border-color: #fecaca; }
+        .mini i { color: var(--green); }
+        .mini.warn i, .mini.warn strong { color: var(--warning); }
+        .mini.danger i, .mini.danger strong { color: var(--danger); }
+        .mini strong { display: block; margin-top: 13px; font-size: 1.45rem; line-height: 1; }
+        .mini span { display: block; margin-top: 5px; color: var(--muted); font-size: .72rem; font-weight: 900; line-height: 1.2; }
+        .section-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 4px 2px 12px; }
+        .section-title h3 { margin: 0; display: flex; align-items: center; gap: 9px; font-size: 1.05rem; }
+        .section-title i { color: var(--green); }
+        .student-card {
+            display: grid;
+            grid-template-columns: 48px 1fr;
+            gap: 12px;
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            padding: 12px;
+            margin-top: 10px;
+            background: #fff;
+        }
+        .avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            color: #047857;
+            background: #d1fae5;
+            font-weight: 900;
+            box-shadow: 0 8px 18px rgba(4,120,87,.14);
+        }
+        .student-card h4 { margin: 0; font-size: .98rem; line-height: 1.2; overflow-wrap: anywhere; }
+        .meta { color: var(--muted); font-size: .76rem; font-weight: 700; margin-top: 4px; line-height: 1.35; }
+        .status-row { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            border-radius: 999px;
+            padding: 5px 9px;
+            font-size: .68rem;
+            font-weight: 900;
+            background: #dcfce7;
+            color: #047857;
+        }
+        .badge.late { background: #fef3c7; color: #b45309; }
+        .badge.half { background: #ffedd5; color: #c2410c; }
+        .badge.absent { background: #fee2e2; color: #b91c1c; }
+        .badge.out { background: #e0f2fe; color: #0369a1; }
+        .tabs { display: none; }
+        .tabs.active { display: block; }
+        .timeline { display: grid; gap: 10px; }
+        .event {
+            display: grid;
+            grid-template-columns: 42px 1fr;
+            gap: 10px;
+            padding: 12px;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            background: #fff;
+        }
+        .event-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 14px;
+            display: grid;
+            place-items: center;
+            background: #dcfce7;
+            color: #047857;
+        }
+        .event.late .event-icon { background: #fef3c7; color: #b45309; }
+        .event.out .event-icon { background: #fee2e2; color: #b91c1c; }
+        .event.lunch .event-icon { background: #ffedd5; color: #c2410c; }
+        .event.return .event-icon { background: #dbeafe; color: #1d4ed8; }
+        .event strong { display: block; font-size: .9rem; }
+        .event span { display: block; color: var(--muted); font-size: .76rem; margin-top: 3px; font-weight: 700; }
+        .control-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+        select, input[type="date"] {
+            min-width: 0;
+            height: 42px;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            background: #fff;
+            padding: 0 10px;
+            font-weight: 800;
+            color: var(--ink);
+        }
+        .notif-btn {
+            width: 100%;
+            height: 44px;
+            border: 0;
+            border-radius: 16px;
+            background: #06996b;
+            color: #fff;
+            font-weight: 900;
+            margin-bottom: 12px;
+        }
+        .adviser-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+        .action-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            min-height: 38px;
+            padding: 0 13px;
+            border-radius: 999px;
+            background: var(--green-soft);
+            color: #047857;
+            font-weight: 900;
+            text-decoration: none;
+            font-size: .8rem;
+        }
+        .empty {
+            text-align: center;
+            color: var(--muted);
+            padding: 30px 18px;
+            border: 1px dashed #cbded5;
+            border-radius: 20px;
+            background: #fff;
+            font-weight: 800;
+        }
+        .bottom-nav {
+            position: fixed;
+            left: 50%;
+            bottom: 0;
+            transform: translateX(-50%);
+            width: min(430px, 100%);
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 2px;
+            background: rgba(255,255,255,.94);
+            border: 1px solid rgba(219,232,226,.9);
+            border-bottom: 0;
+            border-radius: 24px 24px 0 0;
+            box-shadow: 0 -12px 32px rgba(16,35,28,.12);
+            padding: 9px 8px calc(9px + env(safe-area-inset-bottom));
+            z-index: 20;
+            backdrop-filter: blur(12px);
+        }
+        .nav-btn {
+            border: 0;
+            background: transparent;
+            color: #66776f;
+            display: grid;
+            place-items: center;
+            gap: 4px;
+            font-weight: 900;
+            font-size: .68rem;
+            padding: 8px 0;
+            border-radius: 16px;
+        }
+        .nav-btn i { font-size: 1.15rem; }
+        .nav-btn.active { background: #e8f8f1; color: #047857; }
+        @media (max-width: 360px) {
+            .content { padding-left: 10px; padding-right: 10px; }
+            .school-art { width: 120px; }
+            .mini { padding: 10px; }
+            .control-row { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <header class="hero">
+            <div class="top-row">
+                <div class="brand">
+                    <img id="appLogo" src="<%= branding.system_logo || '/uploads/logos/system-logo.png' %>" alt="EduTrack logo">
+                    <div>
+                        <h1 id="systemName"><%= branding.system_name || 'EduTrack' %></h1>
+                        <p id="divisionName"><%= branding.division_name || 'Schools Division of Sipalay City' %></p>
+                    </div>
+                </div>
+                <a class="logout-icon" href="/parent/logout" title="Logout"><i class="fa-solid fa-right-from-bracket"></i></a>
+            </div>
+            <div class="chips">
+                <div class="chip"><span class="live-dot"></span> LIVE</div>
+                <div class="chip"><i class="fa-regular fa-calendar"></i> <span id="shortDate">Today</span></div>
+            </div>
+        </header>
+
+        <main class="content">
+            <section id="tab-home" class="tabs active">
+                <div class="card greeting">
+                    <h2 id="greetingText">Good day</h2>
+                    <div class="name" id="parentName"><%= parent.fullname || 'Parent' %></div>
+                    <div class="date" id="longDate"></div>
+                    <img class="school-art" id="schoolArt" src="<%= branding.mobile_dashboard_school_art || '/uploads/logos/system-logo.png' %>" alt="">
+                    <div class="mini-stats">
+                        <div class="mini"><i class="fa-solid fa-child-reaching"></i><strong id="childCount">0</strong><span>Linked Children</span></div>
+                        <div class="mini"><i class="fa-solid fa-school-circle-check"></i><strong id="insideCount">0</strong><span>Inside School</span></div>
+                        <div class="mini danger"><i class="fa-solid fa-bell"></i><strong id="alertCount">0</strong><span>Alerts Today</span></div>
+                    </div>
+                </div>
+                <div class="section-title"><h3><i class="fa-solid fa-users"></i> My Children</h3></div>
+                <div id="childrenList"></div>
+            </section>
+
+            <section id="tab-attendance" class="tabs">
+                <div class="card">
+                    <div class="section-title"><h3><i class="fa-solid fa-clipboard-check"></i> Attendance Timeline</h3></div>
+                    <div class="control-row">
+                        <select id="childSelect"></select>
+                        <input id="dateInput" type="date">
+                    </div>
+                    <div id="timelineWrap" class="timeline"></div>
+                </div>
+            </section>
+
+            <section id="tab-notifications" class="tabs">
+                <div class="card">
+                    <div class="section-title"><h3><i class="fa-solid fa-bell"></i> Notifications</h3></div>
+                    <button class="notif-btn" type="button" onclick="enableNotifications()"><i class="fa-solid fa-bell"></i> Enable Phone Notifications</button>
+                    <div id="notificationList"></div>
+                </div>
+            </section>
+
+            <section id="tab-adviser" class="tabs">
+                <div class="card">
+                    <div class="section-title"><h3><i class="fa-solid fa-chalkboard-user"></i> Contact Adviser</h3></div>
+                    <div id="adviserList"></div>
+                </div>
+            </section>
+
+            <section id="tab-profile" class="tabs">
+                <div class="card">
+                    <div class="section-title"><h3><i class="fa-solid fa-user"></i> Profile</h3></div>
+                    <div class="student-card">
+                        <div class="avatar"><%= (parent.fullname || 'P').charAt(0).toUpperCase() %></div>
+                        <div>
+                            <h4><%= parent.fullname || 'Parent' %></h4>
+                            <div class="meta">Contact: <%= parent.contact_number || '' %></div>
+                            <div class="meta">Username: <%= parent.username || 'Mobile number login' %></div>
+                            <div class="status-row"><span class="badge"><i class="fa-solid fa-lock"></i> Parent-only access</span></div>
+                        </div>
+                    </div>
+                    <div class="empty" style="margin-top:12px;">You can only view students linked to your registered guardian contact number.</div>
+                </div>
+            </section>
+        </main>
+
+        <nav class="bottom-nav">
+            <button class="nav-btn active" data-tab="home" onclick="showTab('home')"><i class="fa-solid fa-house"></i>Home</button>
+            <button class="nav-btn" data-tab="attendance" onclick="showTab('attendance')"><i class="fa-solid fa-clipboard-list"></i>Attendance</button>
+            <button class="nav-btn" data-tab="notifications" onclick="showTab('notifications')"><i class="fa-solid fa-bell"></i>Alerts</button>
+            <button class="nav-btn" data-tab="adviser" onclick="showTab('adviser')"><i class="fa-solid fa-phone"></i>Adviser</button>
+            <button class="nav-btn" data-tab="profile" onclick="showTab('profile')"><i class="fa-solid fa-user"></i>Profile</button>
+        </nav>
+    </div>
+
+    <script>
+    var state = { children: [], notifications: [], parent: null, logo: '<%= branding.system_logo || "/uploads/logos/system-logo.png" %>' };
+    var seenKey = 'edutrack-parent-seen-notifications';
+    var firstLoad = true;
+
+    function esc(v) {
+        return String(v == null ? '' : v)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+    function todayString() {
+        var d = new Date();
+        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    }
+    function formatLong(dateStr) {
+        return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' });
+    }
+    function initials(name) {
+        return String(name || 'S').split(/\s+/).filter(Boolean).slice(0,2).map(function(part){ return part.charAt(0).toUpperCase(); }).join('') || 'S';
+    }
+    function statusClass(status, current) {
+        var text = String(status || current || '').toLowerCase();
+        if (text.indexOf('absent') !== -1) return 'absent';
+        if (text.indexOf('half') !== -1) return 'half';
+        if (text.indexOf('late') !== -1) return 'late';
+        if (text.indexOf('out') !== -1 || text.indexOf('completed') !== -1) return 'out';
+        return '';
+    }
+    function iconForTone(tone) {
+        if (tone === 'out') return 'fa-right-from-bracket';
+        if (tone === 'late') return 'fa-clock';
+        if (tone === 'lunch') return 'fa-utensils';
+        if (tone === 'return') return 'fa-rotate-left';
+        return 'fa-right-to-bracket';
+    }
+    function showTab(name) {
+        document.querySelectorAll('.tabs').forEach(function(tab){ tab.classList.toggle('active', tab.id === 'tab-' + name); });
+        document.querySelectorAll('.nav-btn').forEach(function(btn){ btn.classList.toggle('active', btn.getAttribute('data-tab') === name); });
+        if (name === 'attendance') renderTimeline();
+    }
+    function renderChildCard(child) {
+        var cls = statusClass(child.today_status, child.current_status);
+        return '<div class="student-card">' +
+            '<div class="avatar">' + esc(initials(child.name)) + '</div>' +
+            '<div>' +
+                '<h4>' + esc(child.name) + '</h4>' +
+                '<div class="meta">LRN: ' + esc(child.lrn || 'N/A') + '</div>' +
+                '<div class="meta">' + esc(child.grade_level) + ' - ' + esc(child.section) + '</div>' +
+                '<div class="meta">' + esc(child.school_name) + '</div>' +
+                '<div class="status-row">' +
+                    '<span class="badge ' + cls + '">' + esc(child.today_status || 'Absent') + '</span>' +
+                    '<span class="badge out">' + esc(child.current_status || 'Absent') + '</span>' +
+                    '<span class="badge"><i class="fa-regular fa-clock"></i> ' + esc(child.latest_scan_time || '--:--') + '</span>' +
+                '</div>' +
+            '</div>' +
+        '</div>';
+    }
+    function renderHome() {
+        var children = state.children || [];
+        document.getElementById('childCount').textContent = children.length;
+        document.getElementById('insideCount').textContent = children.filter(function(c){ return c.current_status === 'Inside School'; }).length;
+        document.getElementById('alertCount').textContent = (state.notifications || []).filter(function(n){ return n.type === 'absent' || n.type === 'flagged'; }).length;
+        document.getElementById('childrenList').innerHTML = children.length
+            ? children.map(renderChildCard).join('')
+            : '<div class="empty">No linked students found for this guardian contact number.</div>';
+    }
+    function renderSelectors() {
+        var select = document.getElementById('childSelect');
+        var current = select.value;
+        select.innerHTML = (state.children || []).map(function(child) {
+            return '<option value="' + child.id + '">' + esc(child.name) + '</option>';
+        }).join('');
+        if (current && (state.children || []).some(function(child){ return String(child.id) === String(current); })) {
+            select.value = current;
+        }
+    }
+    function selectedChild() {
+        var id = document.getElementById('childSelect').value;
+        return (state.children || []).find(function(child){ return String(child.id) === String(id); }) || (state.children || [])[0];
+    }
+    function renderTimeline() {
+        var child = selectedChild();
+        var wrap = document.getElementById('timelineWrap');
+        if (!child) {
+            wrap.innerHTML = '<div class="empty">No linked student selected.</div>';
+            return;
+        }
+        if (!child.timeline || !child.timeline.length) {
+            wrap.innerHTML = '<div class="empty">' + esc(child.name) + ' has no scan records for this date.</div>';
+            return;
+        }
+        wrap.innerHTML = child.timeline.map(function(entry) {
+            return '<div class="event ' + esc(entry.tone || '') + '">' +
+                '<div class="event-icon"><i class="fa-solid ' + iconForTone(entry.tone) + '"></i></div>' +
+                '<div><strong>' + esc(entry.label_display) + '</strong><span>' + esc(entry.time_display) + '</span></div>' +
+            '</div>';
+        }).join('');
+    }
+    function renderNotifications() {
+        var list = document.getElementById('notificationList');
+        if (!state.notifications || !state.notifications.length) {
+            list.innerHTML = '<div class="empty">No parent notifications yet.</div>';
+            return;
+        }
+        list.innerHTML = state.notifications.map(function(note) {
+            return '<div class="event ' + esc(note.tone || '') + '">' +
+                '<div class="event-icon"><i class="fa-solid ' + iconForTone(note.tone) + '"></i></div>' +
+                '<div><strong>' + esc(note.title) + '</strong><span>' + esc(note.message || '') + '</span></div>' +
+            '</div>';
+        }).join('');
+    }
+    function renderAdvisers() {
+        var byAdviser = {};
+        (state.children || []).forEach(function(child) {
+            var key = [child.adviser_name, child.adviser_contact, child.adviser_email].join('|');
+            byAdviser[key] = byAdviser[key] || { adviser_name: child.adviser_name, adviser_contact: child.adviser_contact, adviser_email: child.adviser_email, students: [] };
+            byAdviser[key].students.push(child.name);
+        });
+        var advisers = Object.keys(byAdviser).map(function(k){ return byAdviser[k]; });
+        document.getElementById('adviserList').innerHTML = advisers.length ? advisers.map(function(adviser) {
+            var contact = adviser.adviser_contact || '';
+            var email = adviser.adviser_email || '';
+            var smsBody = encodeURIComponent('Good day. I would like to ask about my child attendance in EduTrack.');
+            return '<div class="student-card">' +
+                '<div class="avatar"><i class="fa-solid fa-chalkboard-user"></i></div>' +
+                '<div>' +
+                    '<h4>' + esc(adviser.adviser_name || 'No adviser assigned') + '</h4>' +
+                    '<div class="meta">Students: ' + esc(adviser.students.join(', ')) + '</div>' +
+                    '<div class="adviser-actions">' +
+                        (contact ? '<a class="action-link" href="tel:' + encodeURIComponent(contact) + '"><i class="fa-solid fa-phone"></i> Call</a>' : '') +
+                        (contact ? '<a class="action-link" href="sms:' + encodeURIComponent(contact) + '?body=' + smsBody + '"><i class="fa-solid fa-message"></i> SMS</a>' : '') +
+                        (email ? '<a class="action-link" href="mailto:' + encodeURIComponent(email) + '?subject=Attendance Inquiry&body=' + smsBody + '"><i class="fa-solid fa-envelope"></i> Email</a>' : '') +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        }).join('') : '<div class="empty">No adviser contact is linked yet.</div>';
+    }
+    function maybeShowBrowserNotifications(notifications) {
+        if (firstLoad || !('Notification' in window) || Notification.permission !== 'granted') return;
+        var seen = {};
+        try { seen = JSON.parse(localStorage.getItem(seenKey) || '{}'); } catch (e) { seen = {}; }
+        notifications.slice(0, 12).forEach(function(note) {
+            if (seen[note.key]) return;
+            seen[note.key] = Date.now();
+            try {
+                new Notification(note.title || 'EduTrack Parent', {
+                    body: note.message || '',
+                    icon: state.logo || '/uploads/logos/system-logo.png',
+                    data: { url: '/parent/app' }
+                });
+            } catch (e) {}
+        });
+        localStorage.setItem(seenKey, JSON.stringify(seen));
+    }
+    function markSeen(notifications) {
+        var seen = {};
+        try { seen = JSON.parse(localStorage.getItem(seenKey) || '{}'); } catch (e) { seen = {}; }
+        notifications.slice(0, 80).forEach(function(note){ seen[note.key] = seen[note.key] || Date.now(); });
+        localStorage.setItem(seenKey, JSON.stringify(seen));
+    }
+    function renderAll() {
+        renderHome();
+        renderSelectors();
+        renderTimeline();
+        renderNotifications();
+        renderAdvisers();
+    }
+    async function loadDashboard() {
+        var date = document.getElementById('dateInput').value || todayString();
+        var res = await fetch('/api/parent/dashboard?date=' + encodeURIComponent(date), { headers: { 'Accept': 'application/json' } });
+        if (!res.ok) {
+            if (res.status === 401) location.href = '/parent-login';
+            return;
+        }
+        var data = await res.json();
+        state.children = data.children || [];
+        state.notifications = data.notifications || [];
+        state.parent = data.parent || null;
+        document.getElementById('parentName').textContent = state.parent && state.parent.guardian_name ? state.parent.guardian_name : '<%= parent.fullname || "Parent" %>';
+        renderAll();
+        maybeShowBrowserNotifications(state.notifications);
+        if (firstLoad) {
+            markSeen(state.notifications);
+            firstLoad = false;
+        }
+    }
+    async function loadBranding() {
+        try {
+            var res = await fetch('/api/parent/branding');
+            var data = await res.json();
+            if (data.system_logo) {
+                state.logo = data.system_logo;
+                document.getElementById('appLogo').src = data.system_logo;
+            }
+            if (data.system_name) document.getElementById('systemName').textContent = data.system_name;
+            if (data.division_name) document.getElementById('divisionName').textContent = data.division_name;
+            if (data.mobile_dashboard_school_art) document.getElementById('schoolArt').src = data.mobile_dashboard_school_art;
+        } catch (e) {}
+    }
+    async function enableNotifications() {
+        if (!('Notification' in window)) {
+            alert('Notifications are not supported on this browser.');
+            return;
+        }
+        var result = await Notification.requestPermission();
+        if (result === 'granted') alert('Parent notifications are enabled while the app is open or installed.');
+    }
+    function initDates() {
+        var date = todayString();
+        document.getElementById('dateInput').value = date;
+        document.getElementById('longDate').textContent = formatLong(date);
+        document.getElementById('shortDate').textContent = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric' });
+        document.getElementById('greetingText').textContent = new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening';
+        document.getElementById('dateInput').addEventListener('change', function() {
+            document.getElementById('longDate').textContent = formatLong(this.value);
+            document.getElementById('shortDate').textContent = new Date(this.value + 'T00:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric' });
+            firstLoad = true;
+            loadDashboard();
+        });
+        document.getElementById('childSelect').addEventListener('change', renderTimeline);
+    }
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function(){});
+    initDates();
+    loadBranding();
+    loadDashboard();
+    setInterval(loadDashboard, 15000);
+    </script>
+</body>
+</html>

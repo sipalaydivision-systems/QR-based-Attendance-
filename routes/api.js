@@ -43,6 +43,13 @@ function getPublicBaseUrl(req) {
     return `${req.protocol}://${req.get('host') || ''}`.replace(/\/+$/, '');
 }
 
+router.use((req, res, next) => {
+    if (req.session && req.session.user && req.session.user.role === 'parent') {
+        return res.status(403).json({ error: 'Parent accounts can only use the parent mobile app APIs.' });
+    }
+    return next();
+});
+
 function normalizeOptionalSchoolId(value) {
     const parsed = parseInt(value, 10);
     return Number.isInteger(parsed) && parsed > 0 ? parsed : null;

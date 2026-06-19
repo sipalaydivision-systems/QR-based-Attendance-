@@ -1,0 +1,22 @@
+{
+  "name": "EduTrack Parent App",
+  "short_name": "EduTrack Parent",
+  "start_url": "/parent/app",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#06996b",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/uploads/logos/system-logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/uploads/logos/system-logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

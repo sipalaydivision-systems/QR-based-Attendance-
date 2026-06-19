@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255),
     contact VARCHAR(50),
     profile_photo MEDIUMTEXT,
-    role ENUM('super_admin','principal','superintendent','asst_superintendent','adviser') NOT NULL DEFAULT 'principal',
+    role ENUM('super_admin','principal','superintendent','asst_superintendent','adviser','parent') NOT NULL DEFAULT 'principal',
     teacher_id INT,
     school_id INT,
     status ENUM('active','inactive') DEFAULT 'active',
@@ -64,6 +64,24 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- -----------------------------------------------------------
+-- Parent / Guardian Accounts
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS parents (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    guardian_name VARCHAR(255) NOT NULL,
+    contact_number VARCHAR(100) NOT NULL,
+    normalized_contact VARCHAR(30) NOT NULL UNIQUE,
+    username VARCHAR(100) UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    status ENUM('active','inactive') DEFAULT 'active',
+    last_login TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_parents_contact (normalized_contact),
+    INDEX idx_parents_username (username)
 ) ENGINE=InnoDB;
 
 -- -----------------------------------------------------------

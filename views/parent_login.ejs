@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#06996b">
+    <title>Parent Login - EduTrack</title>
+    <link rel="manifest" href="/parent-manifest.webmanifest">
+    <link rel="icon" type="image/png" href="/uploads/logos/system-logo.png">
+    <link rel="apple-touch-icon" href="/uploads/logos/system-logo.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            color: #10231c;
+            background:
+                radial-gradient(circle at 80% 12%, rgba(255,255,255,.18) 0 120px, transparent 122px),
+                linear-gradient(135deg, #08ad78 0%, #078a62 52%, #045c42 100%);
+            display: grid;
+            place-items: center;
+            padding: 24px;
+        }
+        .card {
+            width: min(420px, 100%);
+            background: rgba(255,255,255,.96);
+            border: 1px solid rgba(255,255,255,.55);
+            border-radius: 28px;
+            box-shadow: 0 28px 80px rgba(4, 72, 52, .28);
+            padding: 30px;
+        }
+        .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+        .brand img { width: 54px; height: 54px; object-fit: contain; border-radius: 50%; background: #fff; padding: 4px; box-shadow: 0 10px 24px rgba(6, 153, 107, .18); }
+        .brand h1 { margin: 0; font-size: 1.45rem; line-height: 1.05; }
+        .brand p { margin: 3px 0 0; color: #62756d; font-size: .86rem; }
+        .eyebrow { color: #06996b; font-size: .72rem; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 7px; }
+        h2 { margin: 0 0 8px; font-size: 1.85rem; letter-spacing: -0.02em; }
+        .sub { margin: 0 0 24px; color: #62756d; line-height: 1.45; }
+        .alert { border-radius: 14px; padding: 12px 14px; margin-bottom: 16px; font-size: .88rem; font-weight: 700; }
+        .alert.error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        label { display: block; font-size: .78rem; font-weight: 800; color: #344a42; margin: 14px 0 7px; }
+        .input {
+            width: 100%;
+            height: 48px;
+            border-radius: 14px;
+            border: 1px solid #cfe0d8;
+            padding: 0 14px;
+            font-size: .95rem;
+            outline: none;
+            background: #fff;
+        }
+        .input:focus { border-color: #06996b; box-shadow: 0 0 0 4px rgba(6,153,107,.12); }
+        .btn {
+            width: 100%;
+            margin-top: 20px;
+            height: 50px;
+            border: 0;
+            border-radius: 16px;
+            background: #06996b;
+            color: #fff;
+            font-weight: 900;
+            font-size: .95rem;
+            cursor: pointer;
+            box-shadow: 0 14px 28px rgba(6, 153, 107, .24);
+        }
+        .links { margin-top: 18px; display: grid; gap: 10px; text-align: center; font-size: .9rem; }
+        .links a { color: #047857; font-weight: 800; text-decoration: none; }
+        .note { margin-top: 16px; color: #7a8b84; font-size: .78rem; line-height: 1.45; text-align: center; }
+    </style>
+</head>
+<body>
+    <main class="card">
+        <div class="brand">
+            <img src="<%= (settings && settings.system_logo) || '/uploads/logos/system-logo.png' %>" alt="EduTrack logo">
+            <div>
+                <h1>EduTrack</h1>
+                <p><%= (settings && settings.division_name) || 'Schools Division of Sipalay City' %></p>
+            </div>
+        </div>
+        <div class="eyebrow">Parent Portal</div>
+        <h2>Welcome back</h2>
+        <p class="sub">Monitor your child&apos;s attendance in real time using your registered guardian contact number or username.</p>
+
+        <% if (error) { %><div class="alert error"><i class="fa-solid fa-circle-exclamation"></i> <%= error %></div><% } %>
+
+        <form method="POST" action="/parent-login">
+            <label for="identifier">Mobile Number or Username</label>
+            <input class="input" id="identifier" name="identifier" value="<%= values.identifier || '' %>" autocomplete="username" required>
+
+            <label for="password">Password</label>
+            <input class="input" id="password" name="password" type="password" autocomplete="current-password" required>
+
+            <button class="btn" type="submit"><i class="fa-solid fa-right-to-bracket"></i> Login</button>
+        </form>
+
+        <div class="links">
+            <a href="/parent-register">Create parent account</a>
+            <a href="/Download-app">Download Parent App</a>
+        </div>
+        <div class="note">Only parents or guardians whose contact number is saved in a student record can register.</div>
+    </main>
+</body>
+</html>

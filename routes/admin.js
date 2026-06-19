@@ -24,10 +24,17 @@ router.get('/scanner', async (req, res) => {
 
 // All admin routes require authentication
 router.use(requireAuth);
+router.use((req, res, next) => {
+    if (req.session.user && req.session.user.role === 'parent') {
+        return res.redirect('/parent/app');
+    }
+    return next();
+});
 
 // Helper: get correct dashboard URL for a role
 function getDashboardUrl(role) {
     switch (role) {
+        case 'parent': return '/parent/app';
         case 'superintendent': return '/admin/sds-dashboard';
         case 'asst_superintendent': return '/admin/asds-dashboard';
         case 'principal': return '/admin/principal-dashboard';

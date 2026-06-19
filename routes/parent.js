@@ -1,0 +1,684 @@
+const express = require('express');
+const bcrypt = require('bcrypt');
+const fs = require('fs');
+const path = require('path');
+const db = require('../config/database');
+const {
+    todayDate,
+    nowDateTime,
+    normalizeTime,
+    sqlDateTime,
+    compareDateTime,
+    formatTime12
+} = require('../utils/appTime');
+const {
+    ATTENDANCE_SCAN_LABELS,
+    computeDailyAttendanceStatusFromEvents,
+    firstScanDecision,
+    normalizeEventLabel,
+    statusLabel,
+    timeOutScanLabel
+} = require('../utils/attendanceStatus');
+
+const router = express.Router();
+
+function normalizeContact(value) {
+    let digits = String(value || '').replace(/\D/g, '');
+    if (digits.startsWith('63') && digits.length === 12) digits = `0${digits.slice(2)}`;
+    if (digits.length === 10 && digits.startsWith('9')) digits = `0${digits}`;
+    return digits;
+}
+
+function isContactLike(value) {
+    return normalizeContact(value).length >= 7;
+}
+
+function displayStudentName(student) {
+    return [student.firstname, student.middlename ? `${student.middlename.charAt(0).toUpperCase()}.` : '', student.lastname]
+        .filter(Boolean)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function dateMinusDays(dateStr, days) {
+    const [year, month, day] = String(dateStr).split('-').map(part => parseInt(part, 10));
+    const date = new Date(year, month - 1, day);
+    date.setDate(date.getDate() - days);
+    return [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, '0'),
+        String(date.getDate()).padStart(2, '0')
+    ].join('-');
+}
+
+function sqlDateOnly(value) {
+    if (!value) return '';
+    if (value instanceof Date) {
+        return [
+            value.getFullYear(),
+            String(value.getMonth() + 1).padStart(2, '0'),
+            String(value.getDate()).padStart(2, '0')
+        ].join('-');
+    }
+    return String(value).slice(0, 10);
+}
+
+function isAbsenceFinal(dateStr) {
+    const today = todayDate();
+    if (dateStr < today) return true;
+    if (dateStr > today) return false;
+    return compareDateTime(nowDateTime(), `${dateStr} 16:00:00`) >= 0;
+}
+
+function requireParentAuth(req, res, next) {
+    if (req.session && req.session.user && req.session.user.role === 'parent') return next();
+    if ((req.originalUrl || '').startsWith('/api/parent/')) {
+        return res.status(401).json({ error: 'Parent login required.' });
+    }
+    return res.redirect('/parent-login');
+}
+
+async function renderParentAuth(res, view, opts = {}) {
+    return res.render(view, Object.assign({
+        title: view === 'parent_register' ? 'Parent Registration' : 'Parent Login',
+        error: null,
+        success: null,
+        values: {}
+    }, opts));
+}
+
+async function contactExistsForStudent(normalizedContact) {
+    if (!normalizedContact) return false;
+    const [rows] = await db.query(
+        `SELECT guardian_contact
+         FROM students
+         WHERE status != 'deleted'
+           AND guardian_contact IS NOT NULL
+           AND guardian_contact != ''`
+    );
+    return rows.some(row => normalizeContact(row.guardian_contact) === normalizedContact);
+}
+
+async function getParentChildren(normalizedContact) {
+    if (!normalizedContact) return [];
+    const [rows] = await db.query(
+        `SELECT
+            s.id, s.lrn, s.firstname, s.lastname, s.middlename, s.guardian_contact, s.status,
+            s.school_id, s.grade_level_id, s.section_id,
+            sc.name AS school_name, sc.logo AS school_logo,
+            gl.name AS grade_name,
+            sec.name AS section_name,
+            COALESCE(NULLIF(sec.adviser, ''), TRIM(CONCAT_WS(' ', at.firstname, at.middlename, at.lastname))) AS adviser_name,
+            at.contact AS adviser_contact,
+            at.email AS adviser_email
+         FROM students s
+         LEFT JOIN schools sc ON s.school_id = sc.id
+         LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id
+         LEFT JOIN sections sec ON s.section_id = sec.id
+         LEFT JOIN teachers at ON sec.adviser_teacher_id = at.id
+         WHERE s.status != 'deleted'
+           AND s.guardian_contact IS NOT NULL
+           AND s.guardian_contact != ''
+         ORDER BY s.lastname, s.firstname`
+    );
+    return rows
+        .filter(row => normalizeContact(row.guardian_contact) === normalizedContact)
+        .map(row => ({
+            ...row,
+            name: displayStudentName(row)
+        }));
+}
+
+async function getAttendanceScheduleTimes(dateStr) {
+    const [settingsRows] = await db.query(
+        `SELECT setting_key, setting_value
+         FROM settings
+         WHERE setting_key IN ('am_late_time', 'lunch_break_start', 'pm_time_in_start', 'pm_late_time', 'pm_time_out_end')`
+    );
+    const settings = Object.fromEntries(settingsRows.map(row => [row.setting_key, row.setting_value]));
+    return {
+        amLateStart: sqlDateTime(dateStr, normalizeTime(settings.am_late_time, '07:15:00')),
+        lunchStart: sqlDateTime(dateStr, normalizeTime(settings.lunch_break_start, '11:00:00')),
+        pmInStart: sqlDateTime(dateStr, normalizeTime(settings.pm_time_in_start, '13:00:00')),
+        pmLateStart: sqlDateTime(dateStr, normalizeTime(settings.pm_late_time, '13:15:00')),
+        pmOutStart: sqlDateTime(dateStr, normalizeTime(settings.pm_time_out_end, '16:00:00'))
+    };
+}
+
+async function getAttendanceEventsByIds(attendanceIds) {
+    const ids = [...new Set((attendanceIds || []).filter(Boolean))];
+    const map = new Map();
+    if (ids.length === 0) return map;
+    const [rows] = await db.query(
+        `SELECT attendance_id, event, event_label, event_time
+         FROM attendance_events
+         WHERE attendance_id IN (?)
+         ORDER BY event_time, id`,
+        [ids]
+    );
+    rows.forEach(row => {
+        if (!map.has(row.attendance_id)) map.set(row.attendance_id, []);
+        map.get(row.attendance_id).push(row);
+    });
+    return map;
+}
+
+function attendanceEventAction(value) {
+    const raw = String(value || '').trim().toLowerCase();
+    if (raw === 'time_in' || raw === 'time in') return 'time_in';
+    if (raw === 'time_out' || raw === 'time out') return 'time_out';
+    return raw;
+}
+
+function eventTone(label) {
+    const value = String(label || '').toLowerCase();
+    if (value.includes('late')) return 'late';
+    if (value.includes('lunch')) return 'lunch';
+    if (value.includes('out') || value.includes('completed')) return 'out';
+    if (value.includes('return') || value.includes('welcome')) return 'return';
+    return 'in';
+}
+
+function buildAttendanceTimeline(row, schedule, storedEvents) {
+    const events = Array.isArray(storedEvents) ? [...storedEvents] : [];
+    if (row && row.time_in && !events.some(event => attendanceEventAction(event.event) === 'time_in')) {
+        const decision = firstScanDecision(row.time_in, schedule, row.status || 'present');
+        events.unshift({
+            event: 'time_in',
+            event_label: decision.label || ATTENDANCE_SCAN_LABELS.TIME_IN,
+            event_time: row.time_in
+        });
+    }
+    if (row && row.time_out && !events.some(event => attendanceEventAction(event.event) === 'time_out' && String(event.event_time) === String(row.time_out))) {
+        events.push({
+            event: 'time_out',
+            event_label: timeOutScanLabel(row.time_out, schedule),
+            event_time: row.time_out
+        });
+    }
+    return events
+        .filter(event => event && event.event_time)
+        .sort((a, b) => compareDateTime(a.event_time, b.event_time))
+        .map(event => {
+            const action = attendanceEventAction(event.event);
+            const label = normalizeEventLabel(event.event_label) || (action === 'time_out'
+                ? timeOutScanLabel(event.event_time, schedule)
+                : ATTENDANCE_SCAN_LABELS.TIME_IN);
+            return {
+                action,
+                label,
+                label_display: label,
+                time: event.event_time,
+                time_display: formatTime12(event.event_time),
+                tone: eventTone(label)
+            };
+        });
+}
+
+function currentStudentState(attendance, timeline, resolved) {
+    if (!attendance || !attendance.time_in) return 'Absent';
+    const latest = timeline[timeline.length - 1];
+    const latestLabel = normalizeEventLabel(latest && latest.label);
+    const monitoring = normalizeEventLabel(attendance.monitoring_status);
+    if (latestLabel === ATTENDANCE_SCAN_LABELS.COMPLETED || monitoring === ATTENDANCE_SCAN_LABELS.COMPLETED) return 'Completed';
+    if (latestLabel === ATTENDANCE_SCAN_LABELS.LUNCH_OUT || monitoring === ATTENDANCE_SCAN_LABELS.LUNCH_OUT) return 'Lunch Out';
+    if (latest && latest.action === 'time_out') return 'Outside School';
+    if (resolved && resolved.status === 'half_day' && !timeline.length) return resolved.label || 'Half-Day';
+    return 'Inside School';
+}
+
+function resolveAttendance(attendance, schedule, storedEvents) {
+    if (!attendance || !attendance.time_in) {
+        return {
+            status: 'absent',
+            label: 'Absent',
+            timeline: [],
+            current_status: 'Absent',
+            latest_scan_time: null
+        };
+    }
+    const timeline = buildAttendanceTimeline(attendance, schedule, storedEvents);
+    const eventsForCompute = timeline.map(entry => ({
+        event: entry.action,
+        event_label: entry.label,
+        event_time: entry.time
+    }));
+    const resolved = computeDailyAttendanceStatusFromEvents({
+        events: eventsForCompute,
+        schedule,
+        baseStatus: attendance.status || 'present'
+    });
+    const latest = timeline[timeline.length - 1];
+    return {
+        status: resolved.status || attendance.status || 'present',
+        label: resolved.label || statusLabel(resolved.status || attendance.status),
+        remarks: resolved.remarks || '',
+        half_day_type: resolved.halfDayType || null,
+        timeline,
+        current_status: currentStudentState(attendance, timeline, resolved),
+        latest_scan_time: latest ? latest.time_display : null
+    };
+}
+
+async function isSchoolDay(dateStr, schoolId) {
+    const [year, month, dayOfMonth] = String(dateStr).split('-').map(part => parseInt(part, 10));
+    const date = new Date(year, month - 1, dayOfMonth);
+    const day = date.getDay();
+    if (day === 0 || day === 6) {
+        return { is_school_day: false, reason: 'Weekend', type: 'Weekend' };
+    }
+    const [[override]] = await db.query('SELECT is_school_day, reason FROM school_days WHERE date = ? LIMIT 1', [dateStr]);
+    if (override) {
+        return {
+            is_school_day: Number(override.is_school_day) === 1,
+            reason: override.reason || (Number(override.is_school_day) === 1 ? '' : 'No classes'),
+            type: Number(override.is_school_day) === 1 ? 'School Day' : 'No Classes'
+        };
+    }
+    const [holidays] = await db.query(
+        `SELECT name
+         FROM holidays
+         WHERE holiday_date = ?
+           AND (is_national = 1 OR school_id IS NULL OR school_id = ?)
+         LIMIT 1`,
+        [dateStr, schoolId || null]
+    );
+    if (holidays.length) {
+        return { is_school_day: false, reason: holidays[0].name || 'Holiday', type: 'Holiday' };
+    }
+    return { is_school_day: true, reason: '', type: 'School Day' };
+}
+
+async function countConsecutiveAbsences(studentId, schoolId, baseDate) {
+    const schoolDates = [];
+    const startOffset = isAbsenceFinal(baseDate) ? 0 : 1;
+    for (let offset = startOffset; offset < 14 && schoolDates.length < 2; offset++) {
+        const date = dateMinusDays(baseDate, offset);
+        const schoolDay = await isSchoolDay(date, schoolId);
+        if (schoolDay.is_school_day) schoolDates.push(date);
+    }
+    if (schoolDates.length < 2) return 0;
+    const [rows] = await db.query(
+        `SELECT date, time_in
+         FROM attendance
+         WHERE person_type = 'student'
+           AND person_id = ?
+           AND date IN (?)`,
+        [studentId, schoolDates]
+    );
+    const presentDates = new Set(rows.filter(row => row.time_in).map(row => sqlDateOnly(row.date)));
+    let count = 0;
+    for (const date of schoolDates) {
+        if (presentDates.has(date)) break;
+        count++;
+    }
+    return count;
+}
+
+async function buildParentPayload(parent, date) {
+    const children = await getParentChildren(parent.normalized_contact);
+    const schedule = await getAttendanceScheduleTimes(date);
+    const childIds = children.map(child => child.id);
+    const attendanceByStudent = new Map();
+    if (childIds.length) {
+        const [attendanceRows] = await db.query(
+            `SELECT *
+             FROM attendance
+             WHERE person_type = 'student'
+               AND date = ?
+               AND person_id IN (?)`,
+            [date, childIds]
+        );
+        attendanceRows.forEach(row => attendanceByStudent.set(row.person_id, row));
+    }
+    const eventsByAttendance = await getAttendanceEventsByIds(
+        Array.from(attendanceByStudent.values()).map(row => row.id)
+    );
+
+    const childPayload = [];
+    for (const child of children) {
+        const attendance = attendanceByStudent.get(child.id) || null;
+        const resolved = resolveAttendance(attendance, schedule, attendance ? (eventsByAttendance.get(attendance.id) || []) : []);
+        const consecutiveAbsences = await countConsecutiveAbsences(child.id, child.school_id, date);
+        childPayload.push({
+            id: child.id,
+            name: child.name,
+            lrn: child.lrn || '',
+            grade_level: child.grade_name || 'N/A',
+            section: child.section_name || 'N/A',
+            school_name: child.school_name || 'N/A',
+            school_logo: child.school_logo || '',
+            adviser_name: child.adviser_name || 'No adviser assigned',
+            adviser_contact: child.adviser_contact || '',
+            adviser_email: child.adviser_email || '',
+            today_status: resolved.label,
+            status_key: resolved.status,
+            current_status: resolved.current_status,
+            latest_scan_time: resolved.latest_scan_time,
+            remarks: resolved.remarks || '',
+            timeline: resolved.timeline,
+            consecutive_absences: consecutiveAbsences
+        });
+    }
+
+    const schoolIds = [...new Set(children.map(child => child.school_id).filter(Boolean))];
+    const notifications = await buildParentNotifications(childPayload, schoolIds, date);
+    return {
+        date,
+        parent: {
+            id: parent.id,
+            guardian_name: parent.guardian_name,
+            contact_number: parent.contact_number,
+            username: parent.username || ''
+        },
+        children: childPayload,
+        notifications
+    };
+}
+
+async function buildParentNotifications(children, schoolIds, date) {
+    const notifications = [];
+    for (const child of children) {
+        child.timeline.forEach(entry => {
+            notifications.push({
+                key: `scan-${child.id}-${entry.time}-${entry.label}`,
+                type: 'attendance',
+                title: `${child.name} - ${entry.label_display}`,
+                message: `${entry.time_display} • ${child.school_name}`,
+                child_id: child.id,
+                child_name: child.name,
+                created_at: entry.time,
+                tone: entry.tone
+            });
+        });
+        if (isAbsenceFinal(date) && !child.timeline.length && child.today_status === 'Absent') {
+            notifications.push({
+                key: `absent-${child.id}-${date}`,
+                type: 'absent',
+                title: `${child.name} is marked Absent`,
+                message: `${child.grade_level} • ${child.section} • ${child.school_name}`,
+                child_id: child.id,
+                child_name: child.name,
+                created_at: `${date} 16:00:00`,
+                tone: 'out'
+            });
+        }
+        if (child.consecutive_absences >= 2) {
+            notifications.push({
+                key: `flagged-${child.id}-${date}`,
+                type: 'flagged',
+                title: `${child.name} has 2 consecutive absences`,
+                message: 'Please contact the adviser or school for assistance.',
+                child_id: child.id,
+                child_name: child.name,
+                created_at: `${date} 16:01:00`,
+                tone: 'out'
+            });
+        }
+    }
+
+    if (schoolIds.length) {
+        const [rows] = await db.query(
+            `SELECT id, title, message, type, school_id, created_at
+             FROM notifications
+             WHERE school_id IS NULL OR school_id IN (?)
+             ORDER BY created_at DESC
+             LIMIT 50`,
+            [schoolIds]
+        );
+        rows.forEach(row => {
+            notifications.push({
+                key: `announcement-${row.id}`,
+                type: row.type || 'announcement',
+                title: row.title || 'Announcement',
+                message: row.message || '',
+                created_at: row.created_at,
+                tone: row.type === 'holiday' || row.type === 'no_class' ? 'lunch' : 'in'
+            });
+        });
+    } else {
+        const [rows] = await db.query(
+            `SELECT id, title, message, type, school_id, created_at
+             FROM notifications
+             WHERE school_id IS NULL
+             ORDER BY created_at DESC
+             LIMIT 25`
+        );
+        rows.forEach(row => {
+            notifications.push({
+                key: `announcement-${row.id}`,
+                type: row.type || 'announcement',
+                title: row.title || 'Announcement',
+                message: row.message || '',
+                created_at: row.created_at,
+                tone: 'in'
+            });
+        });
+    }
+
+    for (const schoolId of schoolIds.length ? schoolIds : [null]) {
+        const day = await isSchoolDay(date, schoolId);
+        if (!day.is_school_day) {
+            notifications.push({
+                key: `no-class-${schoolId || 'all'}-${date}`,
+                type: 'no_class',
+                title: day.type || 'No Classes',
+                message: day.reason || 'No classes are scheduled today.',
+                created_at: `${date} 06:00:00`,
+                tone: 'lunch'
+            });
+        }
+    }
+
+    return notifications
+        .sort((a, b) => compareDateTime(b.created_at, a.created_at))
+        .slice(0, 80);
+}
+
+async function loadBranding() {
+    const [rows] = await db.query(
+        "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('system_logo','system_name','division_name','mobile_dashboard_school_art')"
+    );
+    return Object.fromEntries(rows.map(row => [row.setting_key, row.setting_value]));
+}
+
+router.get('/Download-app', async (req, res) => {
+    const parentApkPath = path.join(__dirname, '..', 'public', 'downloads', 'edutrack-parent.apk');
+    const branding = await loadBranding().catch(() => ({}));
+    return res.render('parent_download', {
+        title: 'EduTrack Parent App',
+        parentApkAvailable: fs.existsSync(parentApkPath),
+        missing: req.query.missing === '1',
+        branding
+    });
+});
+
+router.get('/download-app', (req, res) => res.redirect('/Download-app'));
+
+router.get('/download/parent-app', (req, res) => {
+    const parentApkPath = path.join(__dirname, '..', 'public', 'downloads', 'edutrack-parent.apk');
+    if (!fs.existsSync(parentApkPath)) return res.redirect('/Download-app?missing=1');
+    return res.download(parentApkPath, 'EduTrack-Parent-App.apk');
+});
+
+router.get('/parent', (req, res) => {
+    if (req.session.user && req.session.user.role === 'parent') return res.redirect('/parent/app');
+    return res.redirect('/parent-login');
+});
+
+router.get('/parent-login', (req, res) => {
+    if (req.session.user && req.session.user.role === 'parent') return res.redirect('/parent/app');
+    return renderParentAuth(res, 'parent_login');
+});
+
+router.post('/parent-login', async (req, res) => {
+    const identifier = String(req.body.identifier || '').trim();
+    const password = String(req.body.password || '');
+    if (!identifier || !password) {
+        return renderParentAuth(res, 'parent_login', {
+            error: 'Please enter your mobile number or username and password.',
+            values: { identifier }
+        });
+    }
+    const normalized = normalizeContact(identifier);
+    try {
+        const [rows] = await db.query(
+            `SELECT *
+             FROM parents
+             WHERE status = 'active'
+               AND (username = ? OR normalized_contact = ?)
+             LIMIT 1`,
+            [identifier, normalized]
+        );
+        if (rows.length === 0) {
+            if (isContactLike(identifier) && !(await contactExistsForStudent(normalized))) {
+                return renderParentAuth(res, 'parent_login', {
+                    error: 'This contact number is not registered. Please contact the school adviser or administrator.',
+                    values: { identifier }
+                });
+            }
+            return renderParentAuth(res, 'parent_login', {
+                error: 'Parent account not found. Please register first using your registered guardian contact number.',
+                values: { identifier }
+            });
+        }
+        const parent = rows[0];
+        const match = await bcrypt.compare(password, parent.password);
+        if (!match) {
+            return renderParentAuth(res, 'parent_login', {
+                error: 'Invalid mobile number/username or password.',
+                values: { identifier }
+            });
+        }
+        req.session.user = {
+            id: parent.id,
+            parent_id: parent.id,
+            username: parent.username || parent.contact_number,
+            fullname: parent.guardian_name,
+            role: 'parent',
+            contact_number: parent.contact_number,
+            normalized_contact: parent.normalized_contact
+        };
+        await db.query('UPDATE parents SET last_login = ? WHERE id = ?', [nowDateTime(), parent.id]);
+        return res.redirect('/parent/app');
+    } catch (err) {
+        console.error('Parent login error:', err);
+        return renderParentAuth(res, 'parent_login', {
+            error: 'A server error occurred. Please try again.',
+            values: { identifier }
+        });
+    }
+});
+
+router.get('/parent-register', (req, res) => {
+    if (req.session.user && req.session.user.role === 'parent') return res.redirect('/parent/app');
+    return renderParentAuth(res, 'parent_register');
+});
+
+router.post('/parent-register', async (req, res) => {
+    const guardianName = String(req.body.guardian_name || '').trim();
+    const contactNumber = String(req.body.contact_number || '').trim();
+    const username = String(req.body.username || '').trim();
+    const password = String(req.body.password || '');
+    const confirmPassword = String(req.body.confirm_password || '');
+    const normalized = normalizeContact(contactNumber);
+    const values = { guardian_name: guardianName, contact_number: contactNumber, username };
+    if (!guardianName || !contactNumber || !password || !confirmPassword) {
+        return renderParentAuth(res, 'parent_register', { error: 'Please complete all required fields.', values });
+    }
+    if (password.length < 6) {
+        return renderParentAuth(res, 'parent_register', { error: 'Password must be at least 6 characters.', values });
+    }
+    if (password !== confirmPassword) {
+        return renderParentAuth(res, 'parent_register', { error: 'Passwords do not match.', values });
+    }
+    try {
+        if (!(await contactExistsForStudent(normalized))) {
+            return renderParentAuth(res, 'parent_register', {
+                error: 'This contact number is not registered. Please contact the school adviser or administrator.',
+                values
+            });
+        }
+        const [existingContact] = await db.query('SELECT id FROM parents WHERE normalized_contact = ? LIMIT 1', [normalized]);
+        if (existingContact.length) {
+            return renderParentAuth(res, 'parent_register', { error: 'This contact number already has a parent account. Please log in.', values });
+        }
+        if (username) {
+            const [existingUsername] = await db.query('SELECT id FROM parents WHERE username = ? LIMIT 1', [username]);
+            if (existingUsername.length) {
+                return renderParentAuth(res, 'parent_register', { error: 'This username is already taken.', values });
+            }
+        }
+        const hashed = await bcrypt.hash(password, 10);
+        const [result] = await db.query(
+            `INSERT INTO parents (guardian_name, contact_number, normalized_contact, username, password)
+             VALUES (?, ?, ?, ?, ?)`,
+            [guardianName, contactNumber, normalized, username || null, hashed]
+        );
+        req.session.user = {
+            id: result.insertId,
+            parent_id: result.insertId,
+            username: username || contactNumber,
+            fullname: guardianName,
+            role: 'parent',
+            contact_number: contactNumber,
+            normalized_contact: normalized
+        };
+        return res.redirect('/parent/app');
+    } catch (err) {
+        console.error('Parent registration error:', err);
+        return renderParentAuth(res, 'parent_register', { error: 'A server error occurred. Please try again.', values });
+    }
+});
+
+router.get('/parent/logout', (req, res) => {
+    req.session.destroy(() => res.redirect('/parent-login'));
+});
+
+router.get('/parent/app', requireParentAuth, async (req, res) => {
+    const branding = await loadBranding().catch(() => ({}));
+    return res.render('parent_app', {
+        title: 'EduTrack Parent App',
+        parent: req.session.user,
+        branding
+    });
+});
+
+router.get('/api/parent/branding', requireParentAuth, async (req, res) => {
+    try {
+        const branding = await loadBranding();
+        return res.json({
+            system_logo: branding.system_logo || '',
+            system_name: branding.system_name || 'EduTrack',
+            division_name: branding.division_name || 'Schools Division of Sipalay City',
+            mobile_dashboard_school_art: branding.mobile_dashboard_school_art || ''
+        });
+    } catch (err) {
+        return res.status(500).json({ error: 'Failed to load parent app branding.' });
+    }
+});
+
+router.get('/api/parent/dashboard', requireParentAuth, async (req, res) => {
+    try {
+        const date = req.query.date || todayDate();
+        const payload = await buildParentPayload(req.session.user, date);
+        return res.json(payload);
+    } catch (err) {
+        console.error('Parent dashboard error:', err);
+        return res.status(500).json({ error: 'Failed to load parent dashboard.' });
+    }
+});
+
+router.get('/api/parent/notifications', requireParentAuth, async (req, res) => {
+    try {
+        const date = req.query.date || todayDate();
+        const payload = await buildParentPayload(req.session.user, date);
+        return res.json({ notifications: payload.notifications });
+    } catch (err) {
+        console.error('Parent notifications error:', err);
+        return res.status(500).json({ error: 'Failed to load parent notifications.' });
+    }
+});
+
+module.exports = router;

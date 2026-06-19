@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#06996b">
+    <title>EduTrack Parent App</title>
+    <link rel="manifest" href="/parent-manifest.webmanifest">
+    <link rel="icon" type="image/png" href="/uploads/logos/system-logo.png">
+    <link rel="apple-touch-icon" href="/uploads/logos/system-logo.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --ink: #10231c;
+            --muted: #d9fff0;
+            --green: #06996b;
+            --green-deep: #037252;
+            --surface: #ffffff;
+            --line: #d7e6df;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            color: #fff;
+            background:
+                radial-gradient(circle at 88% 8%, rgba(255,255,255,0.18) 0 126px, transparent 128px),
+                radial-gradient(circle at 24% 42%, rgba(77,255,186,.16), transparent 310px),
+                linear-gradient(135deg, #08ad78 0%, #078a62 52%, #045c42 100%);
+            overflow-x: hidden;
+        }
+        body::after {
+            content: "";
+            position: fixed;
+            left: -12vw;
+            right: -12vw;
+            bottom: -190px;
+            height: 330px;
+            background: #fff;
+            border-radius: 50% 50% 0 0;
+            transform: rotate(3deg);
+            z-index: -1;
+        }
+        .wrap { width: min(1120px, calc(100% - 40px)); margin: 0 auto; }
+        .brand-bar { height: 92px; display: flex; align-items: center; }
+        .brand { display: inline-flex; align-items: center; gap: 12px; text-decoration: none; color: #fff; }
+        .brand img { width: 46px; height: 46px; object-fit: contain; border-radius: 50%; background: #fff; padding: 3px; }
+        .brand strong { display: block; font-size: 19px; line-height: 1.1; }
+        .brand span { display: block; margin-top: 3px; color: rgba(255,255,255,.84); font-size: 12px; }
+        .hero-grid {
+            display: grid;
+            grid-template-columns: .9fr 1fr;
+            gap: clamp(44px, 6vw, 92px);
+            align-items: center;
+            padding: 16px 0 140px;
+        }
+        .phone-shell {
+            width: min(318px, 92vw);
+            margin: 0 auto;
+            padding: 8px;
+            border-radius: 39px;
+            background: linear-gradient(145deg, #ff9d1f 0%, #f47b12 42%, #7a2100 100%);
+            box-shadow: 0 38px 96px rgba(4,55,42,.28), inset 0 0 0 5px rgba(29,15,8,.88);
+            position: relative;
+        }
+        .phone-shell::before {
+            content: "";
+            position: absolute;
+            top: 14px;
+            left: 50%;
+            width: 86px;
+            height: 22px;
+            border-radius: 999px;
+            background: #0c1512;
+            transform: translateX(-50%);
+            z-index: 4;
+        }
+        .phone-screen {
+            height: 586px;
+            border: 2px solid #17110c;
+            border-radius: 31px;
+            overflow: hidden;
+            background: #f4faf7;
+            color: var(--ink);
+        }
+        .phone-header {
+            padding: 39px 12px 11px;
+            background: rgba(255,255,255,.96);
+            border-bottom: 1px solid #e2ece7;
+        }
+        .phone-brand { display: flex; align-items: center; gap: 9px; }
+        .phone-brand img { width: 34px; height: 34px; border-radius: 50%; background: #fff; padding: 2px; }
+        .phone-title { font-size: 14px; font-weight: 900; }
+        .phone-subtitle { font-size: 9px; color: #62756d; }
+        .phone-body { padding: 12px; }
+        .greeting-card {
+            border-radius: 22px;
+            background: #fff;
+            border: 1px solid #dbe8e2;
+            box-shadow: 0 12px 28px rgba(16,35,28,.12);
+            padding: 15px;
+        }
+        .greeting-card small { color: #62756d; font-weight: 800; }
+        .greeting-card h3 { margin: 4px 0 7px; font-size: 22px; line-height: 1; }
+        .student-mini { display: grid; gap: 9px; margin-top: 14px; }
+        .student-row {
+            display: grid;
+            grid-template-columns: 38px 1fr auto;
+            align-items: center;
+            gap: 9px;
+            border: 1px solid #dcebe4;
+            border-radius: 16px;
+            padding: 9px;
+            background: #f8fcfa;
+        }
+        .avatar { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: #dcfce7; color: #047857; font-weight: 900; }
+        .student-row strong { display: block; font-size: 12px; }
+        .student-row span { display: block; font-size: 9px; color: #62756d; margin-top: 2px; }
+        .pill { border-radius: 999px; padding: 5px 8px; font-size: 9px; font-weight: 900; background: #dcfce7; color: #047857; }
+        .phone-nav { display: grid; grid-template-columns: repeat(5,1fr); gap: 4px; padding: 9px 11px; background: #fff; border-top: 1px solid #e2ece7; margin-top: 12px; }
+        .phone-nav div { text-align: center; font-size: 8px; color: #62756d; font-weight: 800; }
+        .phone-nav i { display: block; font-size: 15px; margin-bottom: 3px; color: #06996b; }
+        .hero-copy .live-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 13px;
+            border-radius: 999px;
+            background: rgba(255,255,255,.14);
+            border: 1px solid rgba(255,255,255,.22);
+            font-weight: 900;
+            margin-bottom: 26px;
+        }
+        .live-dot { width: 9px; height: 9px; border-radius: 50%; background: #ff4d4d; box-shadow: 0 0 0 7px rgba(255,77,77,.12); }
+        h1 { font-size: clamp(42px, 6vw, 70px); line-height: .98; letter-spacing: -0.04em; margin: 0 0 22px; }
+        .hero-copy p { font-size: 17px; line-height: 1.65; color: rgba(255,255,255,.9); max-width: 640px; }
+        .actions { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 28px; }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            min-height: 56px;
+            padding: 0 28px;
+            border-radius: 999px;
+            font-weight: 900;
+            text-decoration: none;
+        }
+        .btn.primary { background: #0c1512; color: #fff; }
+        .btn.secondary { background: #fff; color: #047857; }
+        .notice { margin-top: 18px; color: #fef3c7; font-weight: 800; max-width: 560px; }
+        @media (max-width: 860px) {
+            .hero-grid { grid-template-columns: 1fr; padding-bottom: 110px; }
+            .hero-copy { text-align: center; }
+            .hero-copy p { margin-left: auto; margin-right: auto; }
+            .actions { justify-content: center; }
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <header class="brand-bar">
+            <a class="brand" href="/Download-app">
+                <img src="<%= branding.system_logo || '/uploads/logos/system-logo.png' %>" alt="EduTrack logo">
+                <span><strong><%= branding.system_name || 'EduTrack' %></strong><span><%= branding.division_name || 'Schools Division of Sipalay City' %></span></span>
+            </a>
+        </header>
+
+        <section class="hero-grid">
+            <div class="phone-shell" aria-hidden="true">
+                <div class="phone-screen">
+                    <div class="phone-header">
+                        <div class="phone-brand">
+                            <img src="<%= branding.system_logo || '/uploads/logos/system-logo.png' %>" alt="">
+                            <div>
+                                <div class="phone-title">EduTrack Parent</div>
+                                <div class="phone-subtitle">Child attendance monitor</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="phone-body">
+                        <div class="greeting-card">
+                            <small>Good afternoon</small>
+                            <h3>Parent</h3>
+                            <small>Monitor your children live</small>
+                            <div class="student-mini">
+                                <div class="student-row">
+                                    <div class="avatar">JD</div>
+                                    <div><strong>Juan Dela Cruz</strong><span>Grade 3 - Apple</span></div>
+                                    <div class="pill">Inside</div>
+                                </div>
+                                <div class="student-row">
+                                    <div class="avatar">AB</div>
+                                    <div><strong>Ana Buenaventura</strong><span>Grade 6 - Sampaguita</span></div>
+                                    <div class="pill">Time In</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="phone-nav">
+                            <div><i class="fa-solid fa-house"></i>Home</div>
+                            <div><i class="fa-solid fa-clipboard-check"></i>Attendance</div>
+                            <div><i class="fa-solid fa-bell"></i>Alerts</div>
+                            <div><i class="fa-solid fa-phone"></i>Adviser</div>
+                            <div><i class="fa-solid fa-user"></i>Profile</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="hero-copy">
+                <div class="live-pill"><span class="live-dot"></span> EduTrack Parent App</div>
+                <h1>Monitor Your Child&apos;s Attendance in Real Time</h1>
+                <p>See time in, late arrivals, lunch out, PM time in, early out, completed attendance, absences, and school announcements from the same secure EduTrack platform.</p>
+                <p>Parents can only view children linked to their registered guardian contact number.</p>
+                <% if (missing) { %>
+                    <div class="notice">The parent APK has not been uploaded yet. You can open the Parent Portal now and install it as a web app from your mobile browser.</div>
+                <% } %>
+                <div class="actions">
+                    <a class="btn primary" href="/download/parent-app"><i class="fa-solid fa-download"></i> Download Parent App</a>
+                    <a class="btn secondary" href="/parent/app"><i class="fa-solid fa-mobile-screen"></i> Open Parent Portal</a>
+                </div>
+            </div>
+        </section>
+    </div>
+</body>
+</html>
