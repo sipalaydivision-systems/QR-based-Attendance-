@@ -469,7 +469,7 @@
                             '<div style="font-size:0.6875rem;color:var(--gray-500);">' + (r.grade_name || '') + (r.section_name ? ' · ' + r.section_name : '') + '</div>' +
                         '</div>' +
                         '<div style="text-align:right;flex-shrink:0;">' +
-                            '<div style="font-size:0.6875rem;font-weight:700;color:' + sc + ';"><i class="fa-solid ' + si + '"></i> ' + formatStatusLabel(r.status, r.late_half_day) + '</div>' +
+                            '<div style="font-size:0.6875rem;font-weight:700;color:' + sc + ';"><i class="fa-solid ' + si + '"></i> ' + (r.attendance_status || formatStatusLabel(r.status, r.late_half_day)) + '</div>' +
                             '<div style="font-size:0.6875rem;color:var(--gray-400);">' + timeStr + '</div>' +
                         '</div>' +
                     '</div>';

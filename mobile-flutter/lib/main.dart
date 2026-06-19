@@ -5108,15 +5108,19 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
     final lrn = '${row['lrn'] ?? '-'}';
     final adviser = '${row['adviser'] ?? '-'}'.trim();
     // Derive the status key from the raw status so chip colour/grouping stay
-    // correct, then show "Half-Day (Late)" when the server flags a late
-    // half-day (PM-only arrival after the PM Late cutoff).
+    // correct. The visible label uses the server's professional final status
+    // (Half-Day PM, Half-Day AM Early Out, etc.), falling back to the late
+    // half-day wording only when no detailed label is available.
     final lateHalfDay = row['late_half_day'] == true;
     final statusValue = statusKey(
       row['att_status'] ?? row['attendance_status'],
     );
-    final status = lateHalfDay && statusValue == 'half_day'
-        ? 'Half-Day (Late)'
-        : formatStatusLabel(row['attendance_status']);
+    final detailedStatus = '${row['attendance_status'] ?? ''}'.trim();
+    final status = detailedStatus.isNotEmpty
+        ? formatStatusLabel(detailedStatus)
+        : (lateHalfDay && statusValue == 'half_day'
+            ? 'Half-Day (Late)'
+            : formatStatusLabel(row['att_status']));
     final isAbsent = statusValue == 'absent';
     final isHalfDay = statusValue == 'half_day';
     final absentDays = intValue(row['absent_days']);
@@ -8612,6 +8616,24 @@ String formatStatusLabel(dynamic value) {
       return 'Late';
     case 'half day':
       return 'Half-Day';
+    case 'half day pm':
+      return 'Half-Day PM';
+    case 'half day pm late':
+      return 'Half-Day PM Late';
+    case 'half day am':
+      return 'Half-Day AM';
+    case 'half day am early out':
+      return 'Half-Day AM Early Out';
+    case 'half day pm early out':
+      return 'Half-Day PM Early Out';
+    case 'completed':
+      return 'Completed';
+    case 'returned':
+      return 'Returned';
+    case 'lunch out':
+      return 'Lunch Out';
+    case 'attendance closed':
+      return 'Attendance Closed';
     case 'inactive':
       return 'Inactive';
     case 'active':
