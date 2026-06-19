@@ -23,8 +23,10 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.text.SimpleDateFormat;
+import java.util.HashSet;
 import java.util.Date;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 public class AbsenceWorker extends Worker {
@@ -43,10 +45,12 @@ public class AbsenceWorker extends Worker {
                 .setConstraints(constraints)
                 .build();
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, request);
+        DailyReportWorker.schedule(context);
     }
 
     static void cancel(Context context) {
         WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME);
+        DailyReportWorker.cancel(context);
     }
 
     @NonNull
@@ -56,19 +60,32 @@ public class AbsenceWorker extends Worker {
         if (!SessionStore.isLoggedIn(context)) return Result.success();
         try {
             JSONArray flags = new JSONArray(ApiClient.getRaw(context, "/api/absence-flags?days=2"));
-            if (flags.length() == 0) return Result.success();
-
             String today = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
-            String key = today + ":" + flags.length();
-            String last = SessionStore.prefs(context).getString("last_absence_notification", "");
-            if (key.equals(last)) return Result.success();
+            String storeKey = "absence_notified_flags_" + today;
+            Set<String> notified = new HashSet<>(SessionStore.prefs(context).getStringSet(storeKey, new HashSet<>()));
+            Set<String> current = new HashSet<>();
+            NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
 
-            JSONObject first = flags.optJSONObject(0);
-            String body = flags.length() == 1
-                    ? absenceNotificationBody(first)
-                    : flags.length() + " flagged. First: " + absenceNotificationBody(first);
-            notify(context, absenceTitle(flags.length()), body);
-            SessionStore.prefs(context).edit().putString("last_absence_notification", key).apply();
+            for (int i = 0; i < flags.length(); i++) {
+                JSONObject row = flags.optJSONObject(i);
+                String key = absenceNotificationKey(row, today);
+                current.add(key);
+                if (notified.contains(key)) continue;
+                notify(context, stableNotificationId(key), absenceTitle(1), absenceNotificationBody(row));
+                notified.add(key);
+            }
+
+            for (String stale : new HashSet<>(notified)) {
+                if (!current.contains(stale)) {
+                    if (manager != null) manager.cancel(stableNotificationId(stale));
+                    notified.remove(stale);
+                }
+            }
+
+            SessionStore.prefs(context).edit()
+                    .putStringSet(storeKey, notified)
+                    .putString("last_absence_notification_day", today)
+                    .apply();
             return Result.success();
         } catch (SecurityException e) {
             SessionStore.clear(context);
@@ -78,7 +95,7 @@ public class AbsenceWorker extends Worker {
         }
     }
 
-    private void notify(Context context, String title, String body) {
+    private void notify(Context context, int notificationId, String title, String body) {
         NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager == null) return;
 
@@ -110,7 +127,22 @@ public class AbsenceWorker extends Worker {
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_HIGH);
 
-        manager.notify(2001, builder.build());
+        manager.notify(notificationId, builder.build());
+    }
+
+    private String absenceNotificationKey(JSONObject row, String day) {
+        if (row == null) return day + "|unknown";
+        return day
+                + "|" + row.optString("person_type", "student")
+                + "|" + valueOrDash(row.optString("id", row.optString("lrn", row.optString("name", ""))))
+                + "|" + valueOrDash(row.optString("school_name", ""))
+                + "|" + row.optInt("absent_days", 2);
+    }
+
+    private int stableNotificationId(String value) {
+        int hash = 17;
+        for (int i = 0; i < value.length(); i++) hash = 31 * hash + value.charAt(i);
+        return 2100 + Math.abs(hash % 700000);
     }
 
     private String absenceNotificationBody(JSONObject row) {

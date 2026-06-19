@@ -390,9 +390,28 @@
 
     var tbody = document.getElementById('schoolBreakdownBody');
     if (tbody && Array.isArray(data.schools)) {
-      tbody.innerHTML = data.schools.map(function(s) {
+      var schoolRowsHtml = data.schools.map(function(s) {
         return '<tr><td><strong>' + s.name + '</strong></td><td>' + s.enrollment + '</td><td>' + s.present + '</td><td>' + (s.late || 0) + '</td><td>' + (s.half_day || 0) + '</td><td>' + s.absent + '</td><td>' + s.rate + '%</td><td>' + s.teachers_present + '/' + s.teachers_total + '</td><td>' + s.teacher_rate + '%</td></tr>';
       }).join('');
+      var tableSignature = data.schools.map(function(s) {
+        return [
+          s.id,
+          s.name,
+          s.enrollment,
+          s.present,
+          s.late || 0,
+          s.half_day || 0,
+          s.absent,
+          s.rate,
+          s.teachers_present,
+          s.teachers_total,
+          s.teacher_rate
+        ].join('|');
+      }).join('||');
+      if (tbody.getAttribute('data-rate-signature') !== tableSignature) {
+        tbody.setAttribute('data-rate-signature', tableSignature);
+        tbody.innerHTML = schoolRowsHtml;
+      }
     }
   }
 

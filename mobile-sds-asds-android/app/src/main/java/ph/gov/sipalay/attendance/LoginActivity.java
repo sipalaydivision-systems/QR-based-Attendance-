@@ -124,7 +124,7 @@ public class LoginActivity extends Activity {
         progressWrap.addView(progress, Ui.lp(Ui.dp(this, 38), Ui.dp(this, 38)));
         card.addView(progressWrap, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 8), 0, 0));
 
-        TextView footer = Ui.text(this, "Attendance Monitoring System\nv2.1.4", 13, android.graphics.Color.rgb(148, 163, 158), Typeface.NORMAL);
+        TextView footer = Ui.text(this, "Attendance Monitoring System\nv2.1.5", 13, android.graphics.Color.rgb(148, 163, 158), Typeface.NORMAL);
         footer.setGravity(Gravity.CENTER);
         root.addView(footer, Ui.marginLp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 0, Ui.dp(this, 24), 0, Ui.dp(this, 110)));
 

@@ -5,6 +5,7 @@ public/downloads/Edutrack-Scanner-Windows.zip
 .env
 .gradle/
 mobile-sds-asds-android/.gradle/
+mobile-sds-asds-android/build/
 mobile-sds-asds-android/app/build/
 *.log
 logs/

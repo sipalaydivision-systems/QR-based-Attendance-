@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -34,6 +35,25 @@ final ValueNotifier<String?> dashboardSchoolArtData = ValueNotifier<String?>(
 final ValueNotifier<String> brandName = ValueNotifier<String>(AppConfig.appName);
 final ValueNotifier<String> brandSubtitle =
     ValueNotifier<String>(AppConfig.subtitle);
+const MethodChannel nativeBridge = MethodChannel('edutrack/native');
+
+Future<void> syncNativeBackgroundNotifications(ApiService api) async {
+  if (!Platform.isAndroid || api.cookie.isEmpty) return;
+  try {
+    await nativeBridge.invokeMethod('scheduleBackgroundNotifications', {
+      'baseUrl': AppConfig.baseUrl,
+      'cookie': api.cookie,
+      'fullname': api.fullname,
+    });
+  } catch (_) {}
+}
+
+Future<void> cancelNativeBackgroundNotifications() async {
+  if (!Platform.isAndroid) return;
+  try {
+    await nativeBridge.invokeMethod('cancelBackgroundNotifications');
+  } catch (_) {}
+}
 
 void loadCachedBranding(SharedPreferences prefs) {
   final logo = prefs.getString('brand_logo');
@@ -408,9 +428,11 @@ class ApiService {
     await prefs.setString('cookie', sessionCookie);
     await prefs.setString('fullname', '${user['fullname'] ?? username}');
     await prefs.setString('role', '${user['role'] ?? 'division'}');
+    await syncNativeBackgroundNotifications(this);
   }
 
   Future<void> logout() async {
+    await cancelNativeBackgroundNotifications();
     await prefs.remove('cookie');
     await prefs.remove('fullname');
     await prefs.remove('role');
@@ -1269,6 +1291,7 @@ class _HomeShellState extends State<HomeShell>
     )..repeat();
     load();
     scheduleDailyFallbackNotification();
+    syncNativeBackgroundNotifications(widget.api);
     // Poll often so edited student and absence details show quickly.
     timer = Timer.periodic(
       const Duration(seconds: 5),

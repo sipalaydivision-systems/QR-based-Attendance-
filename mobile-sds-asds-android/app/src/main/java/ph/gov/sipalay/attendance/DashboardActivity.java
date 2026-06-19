@@ -41,9 +41,11 @@ import org.json.JSONObject;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 public class DashboardActivity extends Activity {
     private static final String CHANNEL_ID = "mobile_app_alerts";
@@ -63,6 +65,7 @@ public class DashboardActivity extends Activity {
     private JSONArray currentSchools = new JSONArray();
     private String currentTab = "dashboard";
     private String lastHash = "";
+    private String lastDashboardSignature = "";
     private String selectedDate = "";
     private int selectedSchoolId = -1;
     private int selectedGradeId = -1;
@@ -235,10 +238,17 @@ public class DashboardActivity extends Activity {
                     dashboard = freshDashboard;
                     absenceFlags = freshFlags;
                     if (poll != null) lastHash = poll.optString("hash", lastHash);
+                    String freshSignature = lastHash + "|" + freshDashboard.toString() + "|" + freshFlags.toString();
+                    boolean shouldRender = firstLoad || !freshSignature.equals(lastDashboardSignature);
+                    lastDashboardSignature = freshSignature;
                     dashboardReady = true;
                     setLoading(false);
                     if (dateChip != null) dateChip.setText(selectedDate);
-                    renderCurrentTab(firstLoad);
+                    if (shouldRender) {
+                        renderCurrentTab(firstLoad);
+                    } else {
+                        updateLiveText("LIVE");
+                    }
                     notifyAbsenceFlags(absenceFlags);
                 });
             } catch (SecurityException e) {
@@ -1917,13 +1927,35 @@ public class DashboardActivity extends Activity {
     }
 
     private void notifyAbsenceFlags(JSONArray flags) {
-        if (flags == null || flags.length() == 0) return;
-        String key = today() + ":" + flags.length();
-        String last = SessionStore.prefs(this).getString("last_native_absence_notification", "");
-        if (key.equals(last)) return;
-        JSONObject first = flags.optJSONObject(0);
-        sendNotification(absenceTitle(flags.length()), first == null ? "Flagged student details unavailable." : absenceNotificationBody(first), false);
-        SessionStore.prefs(this).edit().putString("last_native_absence_notification", key).apply();
+        if (flags == null) return;
+        String day = today();
+        String storeKey = "native_absence_notified_flags_" + day;
+        Set<String> notified = new HashSet<>(SessionStore.prefs(this).getStringSet(storeKey, new HashSet<>()));
+        Set<String> current = new HashSet<>();
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        boolean changed = false;
+
+        for (int i = 0; i < flags.length(); i++) {
+            JSONObject row = flags.optJSONObject(i);
+            String key = absenceNotificationKey(row, day);
+            current.add(key);
+            if (notified.contains(key)) continue;
+            sendNotification(absenceTitle(1), row == null ? "Flagged student details unavailable." : absenceNotificationBody(row), false, stableNotificationId(key));
+            notified.add(key);
+            changed = true;
+        }
+
+        for (String stale : new HashSet<>(notified)) {
+            if (!current.contains(stale)) {
+                if (manager != null) manager.cancel(stableNotificationId(stale));
+                notified.remove(stale);
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            SessionStore.prefs(this).edit().putStringSet(storeKey, notified).apply();
+        }
     }
 
     private void sendNotification(String title, String body) {
@@ -1931,6 +1963,10 @@ public class DashboardActivity extends Activity {
     }
 
     private void sendNotification(String title, String body, boolean showToast) {
+        sendNotification(title, body, showToast, 3001);
+    }
+
+    private void sendNotification(String title, String body, boolean showToast, int notificationId) {
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 42);
             if (showToast) Toast.makeText(this, "Allow notifications, then try again.", Toast.LENGTH_LONG).show();
@@ -1954,12 +1990,27 @@ public class DashboardActivity extends Activity {
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_HIGH);
-        manager.notify(3001, builder.build());
+        manager.notify(notificationId, builder.build());
         if (showToast) Toast.makeText(this, "Notification sent.", Toast.LENGTH_SHORT).show();
     }
 
     private String absenceTitle(int count) {
         return count == 1 ? "1 student absent 2+ days" : count + " students absent 2+ days";
+    }
+
+    private String absenceNotificationKey(JSONObject row, String day) {
+        if (row == null) return day + "|unknown";
+        return day
+                + "|" + row.optString("person_type", "student")
+                + "|" + valueOrDash(row.optString("id", row.optString("lrn", row.optString("name", ""))))
+                + "|" + valueOrDash(row.optString("school_name", ""))
+                + "|" + row.optInt("absent_days", 2);
+    }
+
+    private int stableNotificationId(String value) {
+        int hash = 17;
+        for (int i = 0; i < value.length(); i++) hash = 31 * hash + value.charAt(i);
+        return 3100 + Math.abs(hash % 700000);
     }
 
     private void sendWelcomeNotification() {

@@ -1938,7 +1938,8 @@ router.get('/realtime-poll', requireAuth, async (req, res) => {
                 'teacher_duty_start_time',
                 'teacher_duty_end_time',
                 'teacher_late_threshold',
-                'auto_activate_on_scan'
+                'auto_activate_on_scan',
+                'ai_report_icon'
              )`
         );
 

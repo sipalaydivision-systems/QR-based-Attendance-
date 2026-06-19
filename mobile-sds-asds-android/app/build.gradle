@@ -16,8 +16,8 @@ android {
         applicationId "ph.gov.sipalay.attendance"
         minSdk 23
         targetSdk 34
-        versionCode 34
-        versionName "2.1.4"
+        versionCode 35
+        versionName "2.1.5"
     }
 }
 
