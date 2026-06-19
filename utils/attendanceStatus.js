@@ -305,7 +305,11 @@ function computeDailyAttendanceStatusFromEvents(input = {}) {
         }
     });
 
-    if (!inside && lastOut) {
+    // Early-out / lunch reclassification only applies to full-day (AM) attendees.
+    // Someone whose FIRST scan was already a PM half-day never attended the
+    // morning, so leaving must not relabel them "Half-Day AM" — keep their
+    // PM half-day status.
+    if (!inside && lastOut && broadStatus !== 'half_day') {
         if (lastOut.kind === 'lunch') {
             return halfDayResult('Half-Day AM', 'am_only', 'Morning Session Only');
         }
@@ -367,7 +371,9 @@ function computeDailyAttendanceStatus(input = {}) {
         return baseResult(firstDecision.status, 'Completed', 'Attendance completed for the day');
     }
 
-    if (timeOut && !returnedAfterOut) {
+    // Only full-day (AM) attendees can be reclassified by an early-out/lunch-out.
+    // A PM-only first scan stays a PM half-day even if they leave.
+    if (timeOut && !returnedAfterOut && firstDecision.status !== 'half_day') {
         if (isAtOrAfter(timeOut, schedule.lunchStart) && isBefore(timeOut, schedule.pmInStart)) {
             return halfDayResult('Half-Day AM', 'am_only', 'Morning Session Only');
         }
