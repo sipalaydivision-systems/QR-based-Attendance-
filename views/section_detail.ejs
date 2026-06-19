@@ -149,6 +149,33 @@ if (user && user.role === 'superintendent') {
     margin-top: 2px;
     line-height: 1.35;
 }
+.scan-cell { min-width: 118px; }
+.scan-stack { display: flex; flex-direction: column; gap: 5px; }
+.scan-entry { display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.scan-time {
+    font-family: 'Inter', monospace;
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: var(--text);
+    white-space: nowrap;
+}
+.scan-label {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 2px 7px;
+    font-size: 0.58rem;
+    font-weight: 800;
+    line-height: 1.2;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.scan-label-in { background: #dcfce7; color: #047857; }
+.scan-label-out { background: #fee2e2; color: #b91c1c; }
+.scan-label-lunch { background: #ffedd5; color: #c2410c; }
+.scan-label-return { background: #dbeafe; color: #1d4ed8; }
+.scan-label-complete { background: #e0f2fe; color: #0369a1; }
+.scan-empty { color: var(--gray-400); font-weight: 800; }
 @media (max-width: 768px) {
     .section-warning-card {
         padding: 10px 12px;
@@ -307,12 +334,14 @@ if (user && user.role === 'superintendent') {
                     <th>Student Name</th>
                     <th>LRN</th>
                     <th>Adviser</th>
-                    <th>Time In</th>
-                    <th>Time Out</th>
+                    <th>AM Time In</th>
+                    <th>AM Time Out</th>
+                    <th>PM Time In</th>
+                    <th>PM Time Out</th>
                     <th>Status</th>
                 </tr>
             </thead>
-            <tbody id="studentBody"><tr><td colspan="7" class="text-center text-muted" style="padding:40px">Loading...</td></tr></tbody>
+            <tbody id="studentBody"><tr><td colspan="9" class="text-center text-muted" style="padding:40px">Loading...</td></tr></tbody>
         </table>
     </div>
 </div>
@@ -366,6 +395,32 @@ function normalizePhone(value) {
     var clean = String(value || '').trim();
     if (!clean || /@/.test(clean)) return '';
     return clean.replace(/[^0-9+]/g, '');
+}
+function esc(v){
+    return String(v == null ? '' : v)
+        .replace(/&/g,'&amp;')
+        .replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;')
+        .replace(/'/g,'&#39;');
+}
+function scanLabelClass(label) {
+    var value = String(label || '').toLowerCase();
+    if (value.indexOf('completed') !== -1) return 'scan-label-complete';
+    if (value.indexOf('return') !== -1 || value.indexOf('welcome') !== -1) return 'scan-label-return';
+    if (value.indexOf('lunch') !== -1) return 'scan-label-lunch';
+    if (value.indexOf('out') !== -1) return 'scan-label-out';
+    return 'scan-label-in';
+}
+function renderScanCell(entries) {
+    if (!entries || entries.length === 0) return '<span class="scan-empty">--</span>';
+    return '<div class="scan-stack">' + entries.map(function(entry) {
+        var label = entry.label || entry.status || '';
+        return '<div class="scan-entry">' +
+            '<span class="scan-time">' + esc(entry.time_display || entry.time || '') + '</span>' +
+            '<span class="scan-label ' + scanLabelClass(label) + '">' + esc(label) + '</span>' +
+        '</div>';
+    }).join('') + '</div>';
 }
 function adviserMessage() {
     return 'Please check attendance updates for section ' + (document.getElementById('secName').textContent || '-') + '.';
@@ -497,13 +552,12 @@ async function loadData() {
 }
 
 function renderStudents() {
-    function esc(v){ return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
     var visible = allStudents.filter(function(s){return s.status === 'active' || s.status === 'inactive';});
     var activeCount = allStudents.filter(function(s){return s.status === 'active';}).length;
     document.getElementById('studentCountBadge').textContent = visible.length;
 
     if (visible.length === 0) {
-        document.getElementById('studentBody').innerHTML = '<tr><td colspan="7" style="text-align:center;padding:60px 20px;color:var(--text-muted)"><div class="empty-state"><i class="fa fa-user-graduate" style="font-size:3rem;opacity:.3;margin-bottom:16px"></i><h3>No Students Found</h3><p>No students are enrolled in this section.</p></div></td></tr>';
+        document.getElementById('studentBody').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:60px 20px;color:var(--text-muted)"><div class="empty-state"><i class="fa fa-user-graduate" style="font-size:3rem;opacity:.3;margin-bottom:16px"></i><h3>No Students Found</h3><p>No students are enrolled in this section.</p></div></td></tr>';
         return;
     }
 
@@ -522,17 +576,7 @@ function renderStudents() {
         var initial = s.firstname ? s.firstname[0].toUpperCase() : '?';
         var fullName = s.lastname + ', ' + s.firstname + (s.middlename ? ' ' + s.middlename.charAt(0).toUpperCase() + '.' : '');
         var avatarClass = isAbsent ? 'student-avatar absent' : 'student-avatar';
-
-        var timeInHtml = '---';
-        var timeOutHtml = '---';
-        if (att && att.time_in) {
-            timeInHtml = '<span style="color:var(--success);font-weight:500"><i class="fa fa-sign-in-alt" style="margin-right:4px"></i>' + formatTime12(att.time_in) + '</span>';
-        }
-        if (att && att.time_out) {
-            timeOutHtml = '<span style="color:var(--primary);font-weight:500"><i class="fa fa-sign-out-alt" style="margin-right:4px"></i>' + formatTime12(att.time_out) + '</span>';
-        } else if (att && att.time_in) {
-            timeOutHtml = '<span style="color:var(--warning);font-weight:600"><i class="fa fa-hourglass-half" style="margin-right:4px"></i>Pending Time Out</span>';
-        }
+        var scans = att && att.scan_summary ? att.scan_summary : {};
 
         var statusLabel = (att && att.attendance_status) || formatStatusLabel(status, att && att.late_half_day);
         var badgeClass = isStudentInactive
@@ -546,8 +590,10 @@ function renderStudents() {
             '<td><div class="student-name-cell"><div class="'+avatarClass+'">'+initial+'</div><span class="student-name-text">'+fullName+'</span></div></td>'+
             '<td><span class="lrn-badge">'+(s.lrn||'\u2014')+'</span></td>'+
             '<td>' + esc(currentAdviser ? currentAdviser : '\u2014') + '</td>'+
-            '<td>'+(isStudentInactive ? '<span style="color:var(--gray-400)">---</span>' : timeInHtml)+'</td>'+
-            '<td>'+(isStudentInactive ? '<span style="color:var(--gray-400)">---</span>' : timeOutHtml)+'</td>'+
+            '<td class="scan-cell">'+(isStudentInactive ? '<span class="scan-empty">--</span>' : renderScanCell(scans.am_time_in))+'</td>'+
+            '<td class="scan-cell">'+(isStudentInactive ? '<span class="scan-empty">--</span>' : renderScanCell(scans.am_time_out))+'</td>'+
+            '<td class="scan-cell">'+(isStudentInactive ? '<span class="scan-empty">--</span>' : renderScanCell(scans.pm_time_in))+'</td>'+
+            '<td class="scan-cell">'+(isStudentInactive ? '<span class="scan-empty">--</span>' : renderScanCell(scans.pm_time_out))+'</td>'+
             '<td><span class="'+badgeClass+'">'+statusLabel+'</span></td>'+
         '</tr>';
     }).join('');

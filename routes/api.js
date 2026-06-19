@@ -736,6 +736,25 @@ async function getAttendanceEvents(attendanceId) {
     return events;
 }
 
+async function getAttendanceEventsByIds(attendanceIds) {
+    const ids = [...new Set((attendanceIds || []).filter(Boolean))];
+    const eventsByAttendance = new Map();
+    if (ids.length === 0) return eventsByAttendance;
+    const [eventRows] = await db.query(
+        `SELECT attendance_id, event, event_label, event_time
+         FROM attendance_events
+         WHERE attendance_id IN (?)
+         ORDER BY event_time, id`,
+        [ids]
+    );
+    eventRows.forEach(event => {
+        const key = event.attendance_id;
+        if (!eventsByAttendance.has(key)) eventsByAttendance.set(key, []);
+        eventsByAttendance.get(key).push(event);
+    });
+    return eventsByAttendance;
+}
+
 async function resolveAttendanceStatusFromEvents(personType, dateStr, attendanceId, firstTimeIn) {
     const [baseStatus, schedule, storedEvents] = await Promise.all([
         getBaseAttendanceStatus(personType, dateStr, firstTimeIn),
@@ -2606,22 +2625,7 @@ router.get('/attendance', requireAuth, async (req, res) => {
         query += ' ORDER BY a.time_in DESC';
         const [rows] = await db.query(query, params);
         const schedule = await getAttendanceScheduleTimes(date);
-        const eventsByAttendance = new Map();
-        const attendanceIds = rows.map(row => row.id).filter(Boolean);
-        if (attendanceIds.length > 0) {
-            const [eventRows] = await db.query(
-                `SELECT attendance_id, event, event_label, event_time
-                 FROM attendance_events
-                 WHERE attendance_id IN (?)
-                 ORDER BY event_time, id`,
-                [attendanceIds]
-            );
-            eventRows.forEach(event => {
-                const key = event.attendance_id;
-                if (!eventsByAttendance.has(key)) eventsByAttendance.set(key, []);
-                eventsByAttendance.get(key).push(event);
-            });
-        }
+        const eventsByAttendance = await getAttendanceEventsByIds(rows.map(row => row.id));
         decorateLateHalfDays(rows, await getPmLateTime());
         await Promise.all(rows.map(async (row) => {
             const rowDate = row.date instanceof Date ? row.date.toISOString().slice(0, 10) : String(row.date).slice(0, 10);
@@ -3820,6 +3824,8 @@ router.get('/adviser-dashboard', requireAuth, async (req, res) => {
         );
 
         const pmLateTime = await getPmLateTime();
+        const schedule = await getAttendanceScheduleTimes(date);
+        const eventsByAttendance = await getAttendanceEventsByIds(students.map(s => s.attendance_id));
         const activeStudents = students.filter(s => s.status === 'active');
         const present = activeStudents.filter(s => s.att_status === 'present');
         const late = activeStudents.filter(s => s.att_status === 'late');
@@ -3844,6 +3850,14 @@ router.get('/adviser-dashboard', requireAuth, async (req, res) => {
                 const resolved = s.attendance_id && s.time_in
                     ? await resolveAttendanceStatusFromEvents('student', date, s.attendance_id, s.time_in)
                     : null;
+                const scanSummary = s.attendance_id
+                    ? buildAttendanceScanSummary(
+                        { id: s.attendance_id, person_type: 'student', time_in: s.time_in, time_out: s.time_out, status: s.att_status },
+                        date,
+                        schedule,
+                        eventsByAttendance.get(s.attendance_id) || []
+                    )
+                    : { am_time_in: [], am_time_out: [], pm_time_in: [], pm_time_out: [], scan_statuses: [] };
                 return {
                     id: s.id,
                     lrn: s.lrn,
@@ -3864,6 +3878,7 @@ router.get('/adviser-dashboard', requireAuth, async (req, res) => {
                     attendance_status: resolved ? (resolved.label || statusLabel(resolved.status)) : statusLabel(s.att_status),
                     half_day_type: resolved && resolved.halfDayType || null,
                     remarks: resolved && resolved.remarks || '',
+                    scan_summary: scanSummary,
                     flagged: flaggedIds.includes(s.id)
                 };
             })),
