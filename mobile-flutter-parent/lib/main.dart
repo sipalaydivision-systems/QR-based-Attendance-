@@ -1554,7 +1554,7 @@ class HomeTab extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
         if (picker != null) ...[picker!, const SizedBox(height: 14)],
-        // Greeting + counters in one parent card
+        // Greeting and counters in one parent card.
         Container(
           padding: const EdgeInsets.all(18),
           decoration: _cardDecoration(),

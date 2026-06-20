@@ -49,7 +49,7 @@ jobs:
 
       - name: Build release APK
         working-directory: mobile-flutter-parent
-        run: flutter build apk --release
+        run: flutter build apk --release --no-tree-shake-icons
 
       - name: Copy APK to public/downloads
         run: |
