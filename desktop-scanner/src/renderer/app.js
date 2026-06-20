@@ -473,7 +473,7 @@ function resolveLogBadge(scan) {
     case 'RETURNED':   return { label: 'Returned',   cls: 'returned' };
     case 'LUNCH OUT':  return { label: 'Lunch Out',  cls: 'lunch-out' };
     case 'COMPLETED':  return { label: 'Completed',  cls: 'completed' };
-    case 'EARLY OUT':  return { label: 'Early Out',  cls: 'early-out' };
+    case 'EARLY OUT':  return { label: 'Early Dismissal',  cls: 'early-out' };
     case 'OUT':
       // A time-out that already makes the whole day a half-day means the person
       // left the afternoon session early — surface it as an early dismissal.
@@ -659,7 +659,7 @@ function bannerHeadingFor(data, tone, fallbackTitle) {
   }
   if (action === 'TIME_OUT') {
     if (ds === 'LUNCH OUT') return 'Lunch time out!'.toUpperCase();
-    if (ds === 'EARLY OUT') return 'Early out recorded!'.toUpperCase();
+    if (ds === 'EARLY OUT') return 'Early dismissal recorded!'.toUpperCase();
     if (ds === 'COMPLETED') return 'Completed!'.toUpperCase();
     return 'Time out recorded!'.toUpperCase();
   }
@@ -697,7 +697,7 @@ function bannerSubFor(data, tone, fallbackMessage) {
         ? 'Attendance for today is complete. Enjoy your weekend!'
         : 'Attendance for today is complete. See you tomorrow!';
     }
-    if (ds === 'EARLY OUT') return 'Early out recorded. Scan again if you return before the session ends.';
+    if (ds === 'EARLY OUT') return 'Early dismissal recorded. Scan again if you return before the session ends.';
     return 'You have successfully timed out for the day.';
   }
   if (action === 'ALREADY_RECORDED') return 'You are already marked present for today.';
@@ -725,7 +725,7 @@ function heroConfigFor(data) {
     const pills = {
       'COMPLETED': { pill: '&#10003; Completed', pillClass: 'out' },
       'LUNCH OUT': { pill: 'Lunch Out', pillClass: 'pending' },
-      'EARLY OUT': { pill: 'Early Out', pillClass: 'out' }
+      'EARLY OUT': { pill: 'Early Dismissal', pillClass: 'out' }
     };
     const pillConfig = pills[ds] || { pill: '&#10003; Complete', pillClass: 'out' };
     if (data.offline) return { label: 'Time Out', value: data.time_out || data.time || '—', variant: 'offline', pill: 'Saved Offline', pillClass: 'offline' };
