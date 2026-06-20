@@ -50,7 +50,8 @@ Future<void> showParentNotification(String title, String body) async {
 const String kBaseUrl = 'https://sdo-sipalay-edutrack.up.railway.app';
 const String kAppName = 'EduTrack';
 const String kSubtitle = 'Schools Division of Sipalay City';
-const String kMonitoringLabel = 'Parent Attendance Monitor';
+// User-facing Guardian wording is separate from the existing parent API routes.
+const String kMonitoringLabel = 'Guardian Attendance Monitor';
 const String kNoNet = 'No internet connection. Please check your network.';
 
 const Color kGreen = Color(0xFF16A34A);
