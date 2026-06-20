@@ -6,8 +6,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
-import 'package:ota_update/ota_update.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -1569,18 +1570,11 @@ class _ProfileTabState extends State<ProfileTab> {
   String _notes = '';
   bool _otaBusy = false;
   String _otaMsg = '';
-  StreamSubscription<OtaEvent>? _otaSub;
 
   @override
   void initState() {
     super.initState();
     _loadVersions();
-  }
-
-  @override
-  void dispose() {
-    _otaSub?.cancel();
-    super.dispose();
   }
 
   Future<void> _loadVersions() async {
@@ -1608,43 +1602,41 @@ class _ProfileTabState extends State<ProfileTab> {
     return false;
   }
 
-  void _installUpdate() {
+  // Download the latest APK and open the system installer directly — no browser.
+  Future<void> _installUpdate() async {
     setState(() {
       _otaBusy = true;
-      _otaMsg = 'Starting download…';
+      _otaMsg = 'Downloading update…';
     });
     try {
-      _otaSub = OtaUpdate().execute(_apkUrl, destinationFilename: 'edutrack-parent.apk').listen((OtaEvent event) {
-        if (!mounted) return;
-        setState(() {
-          switch (event.status) {
-            case OtaStatus.DOWNLOADING:
-              _otaMsg = 'Downloading ${event.value ?? '0'}%';
-              break;
-            case OtaStatus.INSTALLING:
-              _otaMsg = 'Opening installer — tap Install to finish.';
-              _otaBusy = false;
-              break;
-            case OtaStatus.PERMISSION_NOT_GRANTED_ERROR:
-              _otaMsg = 'Please allow “Install unknown apps” for EduTrack Parent, then try again.';
-              _otaBusy = false;
-              break;
-            default:
-              _otaMsg = 'Update could not complete. Please try again.';
-              _otaBusy = false;
-          }
-        });
-      }, onError: (Object e) {
-        if (!mounted) return;
-        setState(() {
-          _otaBusy = false;
-          _otaMsg = 'Update failed. Check your connection and try again.';
-        });
-      });
-    } catch (_) {
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/edutrack-parent.apk');
+      final resp = await http.Client().send(http.Request('GET', Uri.parse(_apkUrl))).timeout(const Duration(minutes: 4));
+      final total = resp.contentLength ?? 0;
+      final sink = file.openWrite();
+      var received = 0;
+      await for (final chunk in resp.stream) {
+        sink.add(chunk);
+        received += chunk.length;
+        if (total > 0 && mounted) {
+          setState(() => _otaMsg = 'Downloading ${(received / total * 100).round()}%');
+        }
+      }
+      await sink.close();
+      if (!mounted) return;
       setState(() {
         _otaBusy = false;
-        _otaMsg = 'Could not start the update.';
+        _otaMsg = 'Opening installer — tap Install to finish.';
+      });
+      final result = await OpenFilex.open(file.path, type: 'application/vnd.android.package-archive');
+      if (result.type != ResultType.done && mounted) {
+        setState(() => _otaMsg = 'Allow “Install unknown apps” for EduTrack Parent, then tap Install Update again.');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _otaBusy = false;
+        _otaMsg = 'Update failed. Check your connection and try again.';
       });
     }
   }
