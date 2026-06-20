@@ -1,7 +1,7 @@
 name: edutrack_parent
 description: "EduTrack Parent App — monitor your child's attendance in real time."
 publish_to: 'none'
-version: 1.0.3+4
+version: 1.0.4+5
 
 environment:
   sdk: ^3.11.5

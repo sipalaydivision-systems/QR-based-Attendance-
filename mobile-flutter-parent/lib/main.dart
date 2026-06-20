@@ -319,7 +319,7 @@ class ParentApp extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Splash / loading screen (same look as the SDS/ASDS app)
+// Splash / loading screen
 // ---------------------------------------------------------------------------
 class SplashGate extends StatefulWidget {
   const SplashGate({super.key, required this.api});
@@ -363,73 +363,108 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
     return Scaffold(
       body: AnimatedBuilder(
         animation: controller,
-        builder: (context, child) => CustomPaint(
-          painter: LiveMeshPainter(controller.value, intensity: .42, focusY: .36),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(30),
-              child: Column(
-                children: [
-                  const Spacer(),
-                  Stack(
-                    alignment: Alignment.center,
-                    children: [PulseRing(value: controller.value, size: 148), const AppLogo(size: 96)],
-                  ),
-                  const SizedBox(height: 28),
-                  const Text(kAppName, style: TextStyle(fontSize: 38, color: Color(0xFF12201B), fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 8),
-                  const Text(kSubtitle, textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF4D5D56), fontSize: 16)),
-                  const SizedBox(height: 38),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: .88),
-                      borderRadius: BorderRadius.circular(99),
-                      border: Border.all(color: const Color(0xFFDCE7E1)),
-                    ),
-                    child: const Text(kMonitoringLabel, style: TextStyle(color: kSeal, fontWeight: FontWeight.w800)),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: .94),
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: const Color(0xFFDCE7E1)),
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            const LiveDot(color: Color(0xFFE53935)),
-                            const SizedBox(width: 8),
-                            const Text('CONNECTING TO SERVER',
-                                style: TextStyle(color: Color(0xFF33423C), fontWeight: FontWeight.w900, letterSpacing: 1.1)),
-                            const Spacer(),
-                            Text('${(progress * 100).round()}%', style: const TextStyle(color: kSeal, fontWeight: FontWeight.w900)),
+        builder: (context, child) => Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF073B2B), Color(0xFF0B7A55), Color(0xFF12A16F)],
+            ),
+          ),
+          child: Stack(
+            children: [
+              Positioned.fill(child: CustomPaint(painter: _HeaderPatternPainter())),
+              Positioned(top: -80, right: -70, child: _splashOrb(210, Colors.white.withValues(alpha: .11))),
+              Positioned(bottom: -90, left: -60, child: _splashOrb(190, Colors.white.withValues(alpha: .08))),
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(26),
+                  child: Column(
+                    children: [
+                      const Spacer(),
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          PulseRing(value: controller.value, size: 170),
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: .15),
+                              borderRadius: BorderRadius.circular(34),
+                              border: Border.all(color: Colors.white.withValues(alpha: .24)),
+                            ),
+                            child: const AppLogo(size: 96),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 26),
+                      const Text(kAppName, style: TextStyle(fontSize: 40, color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: -.7)),
+                      const SizedBox(height: 6),
+                      const Text(kSubtitle, textAlign: TextAlign.center, style: TextStyle(color: Colors.white70, fontSize: 15.5, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 24),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: .14),
+                          borderRadius: BorderRadius.circular(99),
+                          border: Border.all(color: Colors.white.withValues(alpha: .22)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            LiveDot(color: Colors.white, size: 8),
+                            SizedBox(width: 7),
+                            Text('Preparing parent dashboard', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12.5)),
                           ],
                         ),
-                        const SizedBox(height: 12),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(99),
-                          child: LinearProgressIndicator(
-                            value: progress,
-                            minHeight: 10,
-                            backgroundColor: const Color(0xFFE5EFEA),
-                            color: const Color(0xFF138A64),
-                          ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .18), blurRadius: 28, offset: const Offset(0, 12))],
                         ),
-                      ],
-                    ),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.verified_user_rounded, color: kGreen, size: 20),
+                                const SizedBox(width: 8),
+                                const Expanded(child: Text('Securely loading records', style: TextStyle(color: kInk, fontWeight: FontWeight.w900))),
+                                Text('${(progress * 100).round()}%', style: const TextStyle(color: kGreenDark, fontWeight: FontWeight.w900)),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(99),
+                              child: LinearProgressIndicator(
+                                value: progress,
+                                minHeight: 9,
+                                backgroundColor: const Color(0xFFE5EFEA),
+                                color: kGreen,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),
     );
   }
+
+  Widget _splashOrb(double size, Color color) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+      );
 }
 
 class AppLogo extends StatelessWidget {
@@ -623,7 +658,7 @@ class _LoginScreenState extends State<LoginScreen> {
         await _initNotifications();
         await widget.api.registerDeviceToken();
       } catch (_) {}
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => HomeShell(api: widget.api)));
+      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => HomeShell(api: widget.api, showWelcome: true)));
     } else {
       setState(() {
         _busy = false;
@@ -732,7 +767,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         await _initNotifications();
         await widget.api.registerDeviceToken();
       } catch (_) {}
-      Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => HomeShell(api: widget.api)), (r) => false);
+      Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => HomeShell(api: widget.api, showWelcome: true)), (r) => false);
     } else {
       setState(() {
         _busy = false;
@@ -905,8 +940,9 @@ class AuthButton extends StatelessWidget {
 // Home shell — SDS/ASDS styled header + 5 tabs
 // ---------------------------------------------------------------------------
 class HomeShell extends StatefulWidget {
-  const HomeShell({super.key, required this.api});
+  const HomeShell({super.key, required this.api, this.showWelcome = false});
   final ParentApi api;
+  final bool showWelcome;
   @override
   State<HomeShell> createState() => _HomeShellState();
 }
@@ -916,6 +952,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int _child = 0;
   bool _loading = true;
   bool _firstDashboardLoad = true;
+  bool _headerCompact = false;
   String? _error;
   String? _schoolArt;
   int _unreadCount = 0;
@@ -929,6 +966,9 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.api.registerDeviceToken();
+    if (widget.showWelcome) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showWelcomeBanner());
+    }
     _load();
     _loadBranding();
     _timer = Timer.periodic(const Duration(seconds: 20), (_) => _load(silent: true));
@@ -989,6 +1029,12 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         if (!silent) _error = 'Unable to load right now. Pull down to retry.';
       });
     }
+  }
+
+  void _onScroll(ScrollNotification notification) {
+    if (notification.depth != 0) return;
+    final compact = notification.metrics.pixels > 24;
+    if (compact != _headerCompact) setState(() => _headerCompact = compact);
   }
 
   int _countUnread(List? notes) => (notes ?? const []).where((n) {
@@ -1060,6 +1106,23 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _showWelcomeBanner() async {
+    final note = {
+      'type': 'welcome',
+      'title': 'Welcome to EduTrack Parent',
+      'message': '${greeting()}, ${widget.api.parentName}. Your child attendance dashboard is ready.',
+    };
+    try {
+      await showParentNotification('Welcome to EduTrack Parent', 'Your child attendance dashboard is ready.');
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() => _bannerNote = note);
+    _bannerTimer?.cancel();
+    _bannerTimer = Timer(const Duration(seconds: 6), () {
+      if (mounted) setState(() => _bannerNote = null);
+    });
+  }
+
   Future<void> _markAllNotificationsRead() async {
     final unread = await widget.api.markNotificationsRead();
     if (!mounted) return;
@@ -1090,11 +1153,17 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         children: [
           Column(
             children: [
-              ParentHeader(onLogout: _confirmLogout),
+              ParentHeader(onLogout: _confirmLogout, compact: _headerCompact),
               Expanded(
                 child: _loading
                     ? const Center(child: CircularProgressIndicator(color: kGreen))
-                    : RefreshIndicator(color: kGreen, onRefresh: _load, child: _buildTab()),
+                    : NotificationListener<ScrollNotification>(
+                        onNotification: (notification) {
+                          _onScroll(notification);
+                          return false;
+                        },
+                        child: RefreshIndicator(color: kGreen, onRefresh: _load, child: _buildTab()),
+                      ),
               ),
             ],
           ),
@@ -1268,6 +1337,7 @@ class ParentNotificationBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = important ? const Color(0xFFDC2626) : kGreen;
+    final isWelcome = '${note['type'] ?? ''}'.toLowerCase() == 'welcome';
     return Material(
       elevation: 12,
       borderRadius: BorderRadius.circular(18),
@@ -1288,7 +1358,9 @@ class ParentNotificationBanner extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(color: color.withValues(alpha: .12), borderRadius: BorderRadius.circular(14)),
-                child: Icon(important ? Icons.warning_amber_rounded : Icons.notifications_active_rounded, color: color),
+                child: isWelcome
+                    ? const Center(child: AppLogo(size: 34))
+                    : Icon(important ? Icons.warning_amber_rounded : Icons.notifications_active_rounded, color: color),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -1319,65 +1391,81 @@ class ParentNotificationBanner extends StatelessWidget {
 // Green gradient header (same as SDS/ASDS dashboard)
 // ---------------------------------------------------------------------------
 class ParentHeader extends StatelessWidget {
-  const ParentHeader({super.key, required this.onLogout});
+  const ParentHeader({super.key, required this.onLogout, required this.compact});
   final VoidCallback onLogout;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final sealSize = compact ? 42.0 : 52.0;
+    final actionSize = compact ? 40.0 : 44.0;
+    final radius = compact ? 20.0 : 26.0;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
       width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
           colors: [Color(0xFF0C5A3C), Color(0xFF14855A), Color(0xFF0D6347)],
           stops: [0.0, 0.52, 1.0],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(26)),
-        boxShadow: [BoxShadow(color: Color(0x330C5A3C), blurRadius: 16, offset: Offset(0, 6))],
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(radius)),
+        boxShadow: const [BoxShadow(color: Color(0x330C5A3C), blurRadius: 16, offset: Offset(0, 6))],
       ),
       child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(26)),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(radius)),
         child: Stack(
           children: [
             Positioned.fill(child: CustomPaint(painter: _HeaderPatternPainter())),
-            Positioned(right: 14, bottom: -18, child: Icon(Icons.school_rounded, size: 104, color: Colors.white.withValues(alpha: .06))),
+            Positioned(
+              right: 14,
+              bottom: compact ? -34 : -18,
+              child: Icon(Icons.school_rounded, size: compact ? 88 : 104, color: Colors.white.withValues(alpha: .06)),
+            ),
             Padding(
-              padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + 10, 16, 16),
+              padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + (compact ? 7 : 10), 16, compact ? 10 : 16),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Row(
                     children: [
-                      _seal(52),
-                      const SizedBox(width: 12),
-                      const Expanded(
+                      _seal(sealSize),
+                      SizedBox(width: compact ? 10 : 12),
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(kAppName, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: -.2)),
-                            SizedBox(height: 2),
-                            Text(kSubtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white70, fontSize: 11.5, fontWeight: FontWeight.w600)),
+                            Text(kAppName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(color: Colors.white, fontSize: compact ? 18 : 20, fontWeight: FontWeight.w900, letterSpacing: -.2)),
+                            SizedBox(height: compact ? 1 : 2),
+                            Text(kSubtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(color: Colors.white70, fontSize: compact ? 10.5 : 11.5, fontWeight: FontWeight.w600)),
                           ],
                         ),
                       ),
                       const SizedBox(width: 10),
-                      _headerAction(Icons.logout_rounded, onLogout),
+                      _headerAction(Icons.logout_rounded, onLogout, actionSize),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: compact ? 9 : 14),
                   Row(
                     children: [
-                      _chip(Row(mainAxisSize: MainAxisSize.min, children: const [
-                        LiveDot(color: Color(0xFFFF3B30), size: 9),
-                        SizedBox(width: 6),
-                        Text('LIVE', style: TextStyle(color: Color(0xFFE5403A), fontWeight: FontWeight.w900, fontSize: 11.5)),
-                      ])),
+                      _chip(Row(mainAxisSize: MainAxisSize.min, children: [
+                        LiveDot(color: const Color(0xFFFF3B30), size: compact ? 8 : 9),
+                        const SizedBox(width: 6),
+                        Text('LIVE', style: TextStyle(color: const Color(0xFFE5403A), fontWeight: FontWeight.w900, fontSize: compact ? 10.5 : 11.5)),
+                      ]), dense: compact),
                       const SizedBox(width: 8),
-                      _chip(Text(shortDateString()), dense: true),
+                      _chip(Text(shortDateString()), dense: true, fontSize: compact ? 10.5 : 11.5),
                       const SizedBox(width: 8),
-                      Flexible(child: _chip(Text(isoDateString()), dense: true)),
+                      Flexible(child: _chip(Text(isoDateString()), dense: true, fontSize: compact ? 10.5 : 11.5)),
                     ],
                   ),
                 ],
@@ -1402,24 +1490,24 @@ class ParentHeader extends StatelessWidget {
         child: ClipOval(child: Image.asset('assets/images/app_logo.png', fit: BoxFit.contain)),
       );
 
-  Widget _headerAction(IconData icon, VoidCallback onTap) => Material(
+  Widget _headerAction(IconData icon, VoidCallback onTap, double size) => Material(
         color: Colors.white.withValues(alpha: .14),
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
           onTap: onTap,
-          child: SizedBox(width: 44, height: 44, child: Icon(icon, size: 20, color: Colors.white)),
+          child: SizedBox(width: size, height: size, child: Icon(icon, size: 20, color: Colors.white)),
         ),
       );
 
-  Widget _chip(Widget child, {bool dense = false}) => Container(
+  Widget _chip(Widget child, {bool dense = false, double fontSize = 11.5}) => Container(
         padding: EdgeInsets.symmetric(horizontal: dense ? 11 : 13, vertical: dense ? 8 : 9),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(13),
           boxShadow: [BoxShadow(color: const Color(0xFF06301F).withValues(alpha: .14), blurRadius: 10, offset: const Offset(0, 4))],
         ),
-        child: DefaultTextStyle(style: const TextStyle(color: kSeal, fontWeight: FontWeight.w900, fontSize: 11.5), child: child),
+        child: DefaultTextStyle(style: TextStyle(color: kSeal, fontWeight: FontWeight.w900, fontSize: fontSize), child: child),
       );
 }
 
@@ -1466,41 +1554,45 @@ class HomeTab extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
         if (picker != null) ...[picker!, const SizedBox(height: 14)],
-        // Greeting card
+        // Greeting + counters in one parent card
         Container(
           padding: const EdgeInsets.all(18),
           decoration: _cardDecoration(),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+          child: Column(
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(greeting(), style: const TextStyle(color: kMuted, fontSize: 13)),
-                    const SizedBox(height: 2),
-                    Text(parentName, maxLines: 2, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: kInk, fontSize: 24, fontWeight: FontWeight.w900, height: 1.05)),
-                    const SizedBox(height: 8),
-                    Text(fullDateString(), style: const TextStyle(color: kMuted, fontSize: 12.5, fontWeight: FontWeight.w600)),
-                  ],
-                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(greeting(), style: const TextStyle(color: kMuted, fontSize: 13.5, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 2),
+                        Text(parentName, maxLines: 2, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: kInk, fontSize: 26, fontWeight: FontWeight.w900, height: 1.02)),
+                        const SizedBox(height: 8),
+                        Text(fullDateString(), maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: kMuted, fontSize: 12.5, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(width: 124, height: 92, child: SchoolArt(data: schoolArt)),
+                ],
               ),
-              const SizedBox(width: 8),
-              SizedBox(width: 120, height: 92, child: SchoolArt(data: schoolArt)),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(child: _dashboardStatTile(const Color(0xFFE8FAF0), kGreen, Icons.groups_rounded, '$total', total == 1 ? 'Child' : 'Children')),
+                  const SizedBox(width: 12),
+                  Expanded(child: _dashboardStatTile(const Color(0xFFEEF2FF), const Color(0xFF4F46E5), Icons.school_rounded, '$present', 'Present')),
+                  const SizedBox(width: 12),
+                  Expanded(child: _dashboardStatTile(const Color(0xFFFDF2F2), const Color(0xFFDC2626), Icons.person_off_rounded, '$absent', 'Absent')),
+                ],
+              ),
             ],
           ),
-        ),
-        const SizedBox(height: 14),
-        // Stat tiles
-        Row(
-          children: [
-            Expanded(child: _statTile(const Color(0xFFE8FAF0), kGreen, Icons.groups_rounded, '$total', total == 1 ? 'Child' : 'Children')),
-            const SizedBox(width: 12),
-            Expanded(child: _statTile(const Color(0xFFEEF2FF), const Color(0xFF4F46E5), Icons.check_circle_rounded, '$present', 'Present')),
-            const SizedBox(width: 12),
-            Expanded(child: _statTile(const Color(0xFFFDECEC), const Color(0xFFDC2626), Icons.cancel_rounded, '$absent', 'Absent')),
-          ],
         ),
         const SizedBox(height: 14),
         // Today Analytics donut
@@ -1623,16 +1715,27 @@ class HomeTab extends StatelessWidget {
         ),
       );
 
-  Widget _statTile(Color bg, Color fg, IconData icon, String value, String label) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-        decoration: _cardDecoration(),
+  Widget _dashboardStatTile(Color bg, Color fg, IconData icon, String value, String label) => Container(
+        minHeight: 102,
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+        decoration: BoxDecoration(
+          color: bg.withValues(alpha: .72),
+          borderRadius: BorderRadius.circular(17),
+          border: Border.all(color: fg.withValues(alpha: .13)),
+        ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(width: 36, height: 36, decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: fg, size: 19)),
-            const SizedBox(height: 8),
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: .72), borderRadius: BorderRadius.circular(12)),
+              child: Icon(icon, color: fg, size: 18),
+            ),
+            const Spacer(),
             Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: kInk)),
-            const SizedBox(height: 1),
-            Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10.5, color: kMuted, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 3),
+            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.5, color: kMuted, fontWeight: FontWeight.w800)),
           ],
         ),
       );
