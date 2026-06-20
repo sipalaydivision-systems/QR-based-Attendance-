@@ -1716,7 +1716,7 @@ class HomeTab extends StatelessWidget {
       );
 
   Widget _dashboardStatTile(Color bg, Color fg, IconData icon, String value, String label) => Container(
-        minHeight: 102,
+        constraints: const BoxConstraints(minHeight: 102),
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
         decoration: BoxDecoration(
           color: bg.withValues(alpha: .72),
