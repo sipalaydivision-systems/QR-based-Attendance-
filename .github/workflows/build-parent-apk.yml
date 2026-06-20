@@ -49,7 +49,18 @@ jobs:
 
       - name: Build release APK
         working-directory: mobile-flutter-parent
-        run: flutter build apk --release --no-tree-shake-icons
+        run: |
+          set +e
+          flutter build apk --release --no-tree-shake-icons 2>&1 | tee parent-build.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            message="$(tail -n 80 parent-build.log)"
+            message="${message//'%'/'%25'}"
+            message="${message//$'\n'/'%0A'}"
+            message="${message//$'\r'/'%0D'}"
+            echo "::error title=Parent APK build failed::$message"
+          fi
+          exit "$status"
 
       - name: Copy APK to public/downloads
         run: |
