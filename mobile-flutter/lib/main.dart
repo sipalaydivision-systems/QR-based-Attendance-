@@ -5082,7 +5082,7 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
     final adviser = '${row['adviser'] ?? '-'}'.trim();
     // Derive the status key from the raw status so chip colour/grouping stay
     // correct. The visible label uses the server's professional final status
-    // (Half-Day PM, Half-Day AM Early Out, etc.), falling back to the late
+    // (Half-Day PM, Half-Day AM Early Dismissal, etc.), falling back to the late
     // half-day wording only when no detailed label is available.
     final lateHalfDay = row['late_half_day'] == true;
     final statusValue = statusKey(
@@ -8595,10 +8595,10 @@ String formatStatusLabel(dynamic value) {
       return 'Half-Day PM Late';
     case 'half day am':
       return 'Half-Day AM';
-    case 'half day am early out':
-      return 'Half-Day AM Early Out';
-    case 'half day pm early out':
-      return 'Half-Day PM Early Out';
+    case 'half day am early dismissal':
+      return 'Half-Day AM Early Dismissal';
+    case 'half day pm early dismissal':
+      return 'Half-Day PM Early Dismissal';
     case 'completed':
       return 'Completed';
     case 'returned':

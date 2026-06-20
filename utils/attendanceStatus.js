@@ -59,8 +59,8 @@ function statusLabel(value) {
         half_day_pm: 'Half-Day PM',
         half_day_pm_late: 'Half-Day PM Late',
         half_day_am: 'Half-Day AM',
-        half_day_am_early_out: 'Half-Day AM Early Out',
-        half_day_pm_early_out: 'Half-Day PM Early Out',
+        half_day_am_early_dismissal: 'Half-Day AM Early Dismissal',
+        half_day_pm_early_dismissal: 'Half-Day PM Early Dismissal',
         attendance_closed: 'Attendance Closed',
         already_recorded: 'Already Recorded',
         already_completed: 'Already Completed',
@@ -314,9 +314,9 @@ function computeDailyAttendanceStatusFromEvents(input = {}) {
             return halfDayResult('Half-Day AM', 'am_only', 'Morning Session Only');
         }
         if (lastOut.kind === 'early_am') {
-            return halfDayResult('Half-Day AM Early Out', 'am_early_out', 'Early Out During AM Session');
+            return halfDayResult('Half-Day AM Early Dismissal', 'am_early_out', 'Early Dismissal During AM Session');
         }
-        return halfDayResult('Half-Day PM Early Out', 'pm_early_out', 'Early Out During PM Session');
+        return halfDayResult('Half-Day PM Early Dismissal', 'pm_early_out', 'Early Dismissal During PM Session');
     }
 
     if (completed && broadStatus !== 'half_day') {
@@ -324,7 +324,7 @@ function computeDailyAttendanceStatusFromEvents(input = {}) {
     }
 
     if (returnedFromEarlyOut && broadStatus !== 'half_day') {
-        return baseResult(broadStatus, 'Returned', 'Returned after Early Out');
+        return baseResult(broadStatus, 'Returned', 'Returned after Early Dismissal');
     }
 
     if (returnedFromLunch && broadStatus !== 'half_day') {
@@ -378,9 +378,9 @@ function computeDailyAttendanceStatus(input = {}) {
             return halfDayResult('Half-Day AM', 'am_only', 'Morning Session Only');
         }
         if (isBefore(timeOut, schedule.lunchStart)) {
-            return halfDayResult('Half-Day AM Early Out', 'am_early_out', 'Early Out During AM Session');
+            return halfDayResult('Half-Day AM Early Dismissal', 'am_early_out', 'Early Dismissal During AM Session');
         }
-        return halfDayResult('Half-Day PM Early Out', 'pm_early_out', 'Early Out During PM Session');
+        return halfDayResult('Half-Day PM Early Dismissal', 'pm_early_out', 'Early Dismissal During PM Session');
     }
 
     if (returnedAfterOut && firstDecision.status !== 'half_day') {
@@ -401,9 +401,9 @@ function halfDayLabel(halfDayType) {
         pm_late: 'Half-Day PM Late',
         pm_only: 'Half-Day PM',
         am_only: 'Half-Day AM',
-        am_early_out: 'Half-Day AM Early Out',
-        pm_early_out: 'Half-Day PM Early Out',
-        early_dismissal: 'Half-Day Early Out'
+        am_early_out: 'Half-Day AM Early Dismissal',
+        pm_early_out: 'Half-Day PM Early Dismissal',
+        early_dismissal: 'Half-Day Early Dismissal'
     };
     return labels[halfDayType] || 'Half-Day';
 }
