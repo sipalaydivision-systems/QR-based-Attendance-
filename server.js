@@ -303,6 +303,87 @@ async function ensureRuntimeSchema() {
         ) ENGINE=InnoDB
     `);
 
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS notifications (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(255),
+            message TEXT,
+            type VARCHAR(50),
+            school_id INT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB
+    `);
+
+    async function ensureRuntimeColumn(tableName, columnName, definition) {
+        const [cols] = await db.query(
+            `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+            [tableName, columnName]
+        );
+        if (cols.length === 0) {
+            await db.query(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+            console.log(`Added missing ${tableName}.${columnName} column.`);
+        }
+    }
+
+    await ensureRuntimeColumn('notifications', 'grade_level_id', 'INT NULL AFTER school_id');
+    await ensureRuntimeColumn('notifications', 'section_id', 'INT NULL AFTER grade_level_id');
+    await ensureRuntimeColumn('notifications', 'student_id', 'INT NULL AFTER section_id');
+    await ensureRuntimeColumn('notifications', 'target_audience', "VARCHAR(50) DEFAULT 'school' AFTER student_id");
+    await ensureRuntimeColumn('notifications', 'attachment_url', 'MEDIUMTEXT AFTER target_audience');
+    await ensureRuntimeColumn('notifications', 'created_by', 'INT NULL AFTER attachment_url');
+    await ensureRuntimeColumn('notifications', 'created_by_name', 'VARCHAR(255) NULL AFTER created_by');
+    await ensureRuntimeColumn('notifications', 'created_by_role', 'VARCHAR(50) NULL AFTER created_by_name');
+
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS parent_devices (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            parent_id INT NOT NULL,
+            contact_number VARCHAR(100),
+            normalized_contact VARCHAR(30),
+            device_token VARCHAR(255) NOT NULL,
+            push_token TEXT,
+            platform VARCHAR(50) DEFAULT 'android',
+            app_version VARCHAR(50),
+            user_agent TEXT,
+            last_seen_at TIMESTAMP NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_parent_device_token (device_token),
+            INDEX idx_parent_devices_parent (parent_id),
+            INDEX idx_parent_devices_contact (normalized_contact),
+            FOREIGN KEY (parent_id) REFERENCES parents(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB
+    `);
+
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS parent_notifications (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            parent_id INT NOT NULL,
+            student_id INT,
+            school_id INT,
+            grade_level_id INT,
+            section_id INT,
+            type VARCHAR(60) NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            message TEXT NOT NULL,
+            source_key VARCHAR(191) NOT NULL,
+            source_notification_id INT,
+            created_by VARCHAR(255),
+            created_by_role VARCHAR(50),
+            is_read TINYINT(1) DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            read_at TIMESTAMP NULL,
+            UNIQUE KEY uk_parent_notification_source (parent_id, source_key),
+            INDEX idx_parent_notifications_parent_read (parent_id, is_read, created_at),
+            INDEX idx_parent_notifications_student (student_id),
+            INDEX idx_parent_notifications_scope (school_id, grade_level_id, section_id),
+            FOREIGN KEY (parent_id) REFERENCES parents(id) ON DELETE CASCADE,
+            FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB
+    `);
+
     // Section transfer / reassignment approval requests. The approver is always a
     // teacher (the receiving section's adviser for a student transfer, or the
     // reassigned teacher for a principal reassignment).

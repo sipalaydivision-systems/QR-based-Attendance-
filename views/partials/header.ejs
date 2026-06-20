@@ -135,6 +135,11 @@
                     <i class="nav-icon fa-solid fa-qrcode"></i> Print QR Codes
                 </a>
             </li>
+            <li>
+                <a href="/admin/notifications" class="<%= page === 'notifications' ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-bell"></i> Announcements
+                </a>
+            </li>
             <% } %>
 
             <% if (user.role !== 'adviser') { %>

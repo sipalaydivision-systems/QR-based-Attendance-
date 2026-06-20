@@ -29,6 +29,11 @@ const {
     statusLabel,
     timeOutScanLabel
 } = require('../utils/attendanceStatus');
+const {
+    fanOutAnnouncement,
+    normalizeAnnouncementType,
+    notifyParentsForStudentScan
+} = require('../utils/parentNotifications');
 
 function requireAuthOrScannerKiosk(req, res, next) {
     if (req.session && req.session.user) return next();
@@ -1365,6 +1370,8 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
                 [personType, person.id, person.school_id, today, now, now, attendanceStatus, displayStatus]
             );
             await logAttendanceEvent(insertResult.insertId, personType, person.id, person.school_id, today, 'time_in', displayStatus, now);
+            notifyParentsForStudentScan({ personType, personId: person.id, label: displayStatus, eventTime: now })
+                .catch(err => console.error('Parent scan notification error:', err));
 
             return res.json({
                 success: true,
@@ -1448,6 +1455,8 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
             }
 
             await logAttendanceEvent(attendanceRow.id, personType, person.id, person.school_id, today, 'time_out', label, now);
+            notifyParentsForStudentScan({ personType, personId: person.id, label, eventTime: now })
+                .catch(err => console.error('Parent scan notification error:', err));
             const resolvedStatus = await resolveAttendanceStatusFromEvents(
                 personType,
                 today,
@@ -1503,6 +1512,8 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
             });
         }
         await logAttendanceEvent(attendanceRow.id, personType, person.id, person.school_id, today, 'time_in', label, now);
+        notifyParentsForStudentScan({ personType, personId: person.id, label, eventTime: now })
+            .catch(err => console.error('Parent scan notification error:', err));
         const resolvedStatus = await resolveAttendanceStatusFromEvents(
             personType,
             today,
@@ -3599,11 +3610,22 @@ router.get('/is-school-day', requireAuthOrScannerKiosk, async (req, res) => {
 // ---- Notifications CRUD ----
 router.get('/notifications', requireAuth, async (req, res) => {
     try {
+        const user = req.session.user;
         const schoolId = applySchoolFilter(req);
-        let query = `SELECT n.*, s.name as school_name FROM notifications n
-            LEFT JOIN schools s ON n.school_id = s.id WHERE 1=1`;
+        let query = `SELECT n.*, s.name as school_name, gl.name as grade_name, sec.name as section_name
+            FROM notifications n
+            LEFT JOIN schools s ON n.school_id = s.id
+            LEFT JOIN grade_levels gl ON n.grade_level_id = gl.id
+            LEFT JOIN sections sec ON n.section_id = sec.id
+            WHERE 1=1`;
         const params = [];
         if (schoolId) { query += ' AND n.school_id = ?'; params.push(schoolId); }
+        if (user.role === 'adviser') {
+            const [[teacher]] = await db.query('SELECT school_id, grade_level_id, section_id FROM teachers WHERE id = ? LIMIT 1', [user.teacher_id || 0]);
+            if (!teacher) return res.json([]);
+            query += ' AND (n.section_id = ? OR (n.school_id = ? AND n.section_id IS NULL AND n.grade_level_id IS NULL AND n.student_id IS NULL))';
+            params.push(teacher.section_id || -1, teacher.school_id || -1);
+        }
         query += ' ORDER BY n.created_at DESC LIMIT 200';
         const [rows] = await db.query(query, params);
         return res.json(rows);
@@ -3613,17 +3635,114 @@ router.get('/notifications', requireAuth, async (req, res) => {
     }
 });
 
-router.post('/notifications', requireRole('super_admin'), async (req, res) => {
-    const { title, message, type, school_id } = req.body;
+router.post('/notifications', requireRole('super_admin', 'principal', 'adviser'), async (req, res) => {
+    const {
+        title,
+        message,
+        type,
+        school_id,
+        grade_level_id,
+        section_id,
+        student_id,
+        target_audience,
+        attachment_url
+    } = req.body;
     if (!title || !message) {
         return res.status(400).json({ error: 'Title and message are required.' });
     }
     try {
-        await db.query(
-            'INSERT INTO notifications (title, message, type, school_id) VALUES (?, ?, ?, ?)',
-            [title, message, type || 'general', school_id || null]
+        const user = req.session.user;
+        let finalSchoolId = normalizeOptionalSchoolId(school_id);
+        let finalGradeId = normalizeOptionalSchoolId(grade_level_id);
+        let finalSectionId = normalizeOptionalSchoolId(section_id);
+        let finalStudentId = normalizeOptionalSchoolId(student_id);
+        const normalizedType = normalizeAnnouncementType(type);
+        const audience = String(target_audience || '').trim() || (finalStudentId ? 'student' : finalSectionId ? 'section' : finalGradeId ? 'grade' : 'school');
+
+        if (user.role === 'principal') {
+            if (!user.school_id) return res.status(403).json({ error: 'No school is assigned to your account.' });
+            finalSchoolId = user.school_id;
+        }
+
+        if (user.role === 'adviser') {
+            const [[teacher]] = await db.query(
+                `SELECT t.school_id, t.grade_level_id, t.section_id,
+                        TRIM(CONCAT_WS(' ', t.firstname, t.middlename, t.lastname)) AS adviser_name
+                 FROM teachers t
+                 WHERE t.id = ?
+                 LIMIT 1`,
+                [user.teacher_id || 0]
+            );
+            if (!teacher || !teacher.school_id || !teacher.section_id) {
+                return res.status(403).json({ error: 'Your adviser account is not linked to a school section.' });
+            }
+            finalSchoolId = teacher.school_id;
+            finalGradeId = teacher.grade_level_id || finalGradeId || null;
+            finalSectionId = teacher.section_id;
+            if (finalStudentId) {
+                const [[student]] = await db.query(
+                    'SELECT id FROM students WHERE id = ? AND section_id = ? AND school_id = ? AND status != ? LIMIT 1',
+                    [finalStudentId, teacher.section_id, teacher.school_id, 'deleted']
+                );
+                if (!student) return res.status(403).json({ error: 'You can only send student-specific notices to students in your advisory section.' });
+            }
+        }
+
+        if (finalSectionId) {
+            const [[section]] = await db.query('SELECT school_id, grade_level_id FROM sections WHERE id = ? LIMIT 1', [finalSectionId]);
+            if (!section) return res.status(400).json({ error: 'Selected section was not found.' });
+            if (finalSchoolId && Number(section.school_id) !== Number(finalSchoolId)) {
+                return res.status(403).json({ error: 'Selected section is outside your school scope.' });
+            }
+            finalSchoolId = finalSchoolId || section.school_id;
+            finalGradeId = finalGradeId || section.grade_level_id || null;
+        }
+
+        if (finalGradeId) {
+            const [[grade]] = await db.query('SELECT school_id FROM grade_levels WHERE id = ? LIMIT 1', [finalGradeId]);
+            if (!grade) return res.status(400).json({ error: 'Selected grade level was not found.' });
+            if (finalSchoolId && grade.school_id && Number(grade.school_id) !== Number(finalSchoolId)) {
+                return res.status(403).json({ error: 'Selected grade level is outside your school scope.' });
+            }
+            finalSchoolId = finalSchoolId || grade.school_id || null;
+        }
+
+        if (finalStudentId) {
+            const [[student]] = await db.query('SELECT school_id, grade_level_id, section_id FROM students WHERE id = ? AND status != ? LIMIT 1', [finalStudentId, 'deleted']);
+            if (!student) return res.status(400).json({ error: 'Selected student was not found.' });
+            if (finalSchoolId && Number(student.school_id) !== Number(finalSchoolId)) {
+                return res.status(403).json({ error: 'Selected student is outside your school scope.' });
+            }
+            if (finalSectionId && Number(student.section_id) !== Number(finalSectionId)) {
+                return res.status(403).json({ error: 'Selected student is outside the selected section.' });
+            }
+            finalSchoolId = finalSchoolId || student.school_id;
+            finalGradeId = finalGradeId || student.grade_level_id || null;
+            finalSectionId = finalSectionId || student.section_id || null;
+        }
+
+        const [result] = await db.query(
+            `INSERT INTO notifications
+                (title, message, type, school_id, grade_level_id, section_id, student_id,
+                 target_audience, attachment_url, created_by, created_by_name, created_by_role)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                title,
+                message,
+                normalizedType,
+                finalSchoolId || null,
+                finalGradeId || null,
+                finalSectionId || null,
+                finalStudentId || null,
+                audience,
+                attachment_url || null,
+                user.id || null,
+                user.fullname || user.username || null,
+                user.role || null
+            ]
         );
-        return res.json({ success: true });
+        const sentToParents = await fanOutAnnouncement(result.insertId);
+        return res.json({ success: true, id: result.insertId, sent_to_parents: sentToParents });
     } catch (err) {
         console.error('Create notification error:', err);
         return res.status(500).json({ error: 'Failed to create notification.' });

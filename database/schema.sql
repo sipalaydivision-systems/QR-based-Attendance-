@@ -218,8 +218,66 @@ CREATE TABLE IF NOT EXISTS notifications (
     message TEXT,
     type VARCHAR(50),
     school_id INT,
+    grade_level_id INT,
+    section_id INT,
+    student_id INT,
+    target_audience VARCHAR(50) DEFAULT 'school',
+    attachment_url MEDIUMTEXT,
+    created_by INT,
+    created_by_name VARCHAR(255),
+    created_by_role VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- -----------------------------------------------------------
+-- Parent Device Tokens
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS parent_devices (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    parent_id INT NOT NULL,
+    contact_number VARCHAR(100),
+    normalized_contact VARCHAR(30),
+    device_token VARCHAR(255) NOT NULL,
+    push_token TEXT,
+    platform VARCHAR(50) DEFAULT 'android',
+    app_version VARCHAR(50),
+    user_agent TEXT,
+    last_seen_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_parent_device_token (device_token),
+    INDEX idx_parent_devices_parent (parent_id),
+    INDEX idx_parent_devices_contact (normalized_contact),
+    FOREIGN KEY (parent_id) REFERENCES parents(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- -----------------------------------------------------------
+-- Parent Notification Inbox
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS parent_notifications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    parent_id INT NOT NULL,
+    student_id INT,
+    school_id INT,
+    grade_level_id INT,
+    section_id INT,
+    type VARCHAR(60) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    source_key VARCHAR(191) NOT NULL,
+    source_notification_id INT,
+    created_by VARCHAR(255),
+    created_by_role VARCHAR(50),
+    is_read TINYINT(1) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    read_at TIMESTAMP NULL,
+    UNIQUE KEY uk_parent_notification_source (parent_id, source_key),
+    INDEX idx_parent_notifications_parent_read (parent_id, is_read, created_at),
+    INDEX idx_parent_notifications_student (student_id),
+    INDEX idx_parent_notifications_scope (school_id, grade_level_id, section_id),
+    FOREIGN KEY (parent_id) REFERENCES parents(id) ON DELETE CASCADE,
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- -----------------------------------------------------------

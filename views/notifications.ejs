@@ -6,6 +6,100 @@
     </div>
 </div>
 
+<!-- Parent Announcement Composer -->
+<div class="card" style="margin-bottom:1rem;">
+    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <div>
+            <h3 style="margin:0;"><i class="fa-solid fa-bullhorn"></i> Parent Announcements</h3>
+            <p class="text-muted" style="margin:.25rem 0 0;">Send meeting notices, reminders, holidays, events, or emergency alerts to parent mobile apps.</p>
+        </div>
+        <span class="badge badge-active" id="announcementSentCount">Ready</span>
+    </div>
+    <form id="announcementForm" style="display:grid;gap:12px;margin-top:1rem;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
+            <div class="form-group">
+                <label>Announcement Type</label>
+                <select id="annType" name="type" class="form-control">
+                    <option value="announcement_general">General Announcement</option>
+                    <option value="announcement_parent_meeting">Parent Meeting</option>
+                    <option value="announcement_class_meeting">Class Meeting</option>
+                    <option value="announcement_holiday">Holiday / No Classes</option>
+                    <option value="announcement_school_event">School Event</option>
+                    <option value="announcement_emergency">Emergency Announcement</option>
+                    <option value="announcement_reminder">Reminder</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Target Audience</label>
+                <select id="annAudience" name="target_audience" class="form-control">
+                    <option value="school">All parents in the school</option>
+                    <option value="grade">Parents by grade level</option>
+                    <option value="section">Parents by section</option>
+                    <option value="student">Parents of one student</option>
+                </select>
+            </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
+            <div class="form-group">
+                <label>School</label>
+                <select id="annSchool" name="school_id" class="form-control">
+                    <option value="">All / My School</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Grade Level</label>
+                <select id="annGrade" name="grade_level_id" class="form-control">
+                    <option value="">Any grade</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Section</label>
+                <select id="annSection" name="section_id" class="form-control">
+                    <option value="">Any section</option>
+                </select>
+            </div>
+            <div class="form-group" id="annStudentWrap" style="display:none;">
+                <label>Student ID</label>
+                <input id="annStudent" name="student_id" class="form-control" placeholder="Student ID">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Title</label>
+            <input id="annTitle" name="title" class="form-control" maxlength="255" placeholder="Example: Parent Meeting" required>
+        </div>
+        <div class="form-group">
+            <label>Message / Content</label>
+            <textarea id="annMessage" name="message" class="form-control" rows="4" placeholder="Write the full parent announcement here..." required></textarea>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <button class="btn btn-primary" type="submit"><i class="fa-solid fa-paper-plane"></i> Send Announcement</button>
+            <span id="announcementStatus" class="text-muted"></span>
+        </div>
+    </form>
+</div>
+
+<div class="card" style="margin-bottom:1rem;">
+    <div class="card-header">
+        <h3 style="margin:0;"><i class="fa-solid fa-list-check"></i> Recent Parent Notices</h3>
+    </div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th>Title</th>
+                    <th>Target</th>
+                    <th>Created By</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody id="announcementRows">
+                <tr><td colspan="5" class="text-center text-muted">Loading announcements...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
 <!-- 2-Day Consecutive Absence Alerts -->
 <div class="alert-card">
     <div class="alert-card-header">
@@ -98,6 +192,122 @@ function schoolLogo(flag, size) {
     }
     return '<img src="' + escapeHtml(src) + '" alt="" style="width:' + safeSize + 'px;height:' + safeSize + 'px;border-radius:8px;object-fit:cover;border:1px solid var(--border);background:#fff;flex-shrink:0;">';
 }
+function announcementTypeLabel(type) {
+    var labels = {
+        announcement_general: 'General',
+        announcement_parent_meeting: 'Parent Meeting',
+        announcement_class_meeting: 'Class Meeting',
+        announcement_holiday: 'Holiday / No Classes',
+        announcement_school_event: 'School Event',
+        announcement_emergency: 'Emergency',
+        announcement_reminder: 'Reminder'
+    };
+    return labels[type] || String(type || 'Announcement').replace(/_/g, ' ');
+}
+function targetLabel(row) {
+    if (row.student_id) return 'Student #' + row.student_id;
+    if (row.section_name) return (row.grade_name ? row.grade_name + ' / ' : '') + row.section_name;
+    if (row.grade_name) return row.grade_name;
+    if (row.school_name) return row.school_name;
+    return 'All parents';
+}
+async function populateAnnouncementFilters() {
+    try {
+        var schools = await (await fetch('/api/schools')).json();
+        var schoolEl = document.getElementById('annSchool');
+        if (Array.isArray(schools)) {
+            schoolEl.innerHTML = '<option value="">All / My School</option>' + schools.map(function(s){
+                return '<option value="' + escapeHtml(s.id) + '">' + escapeHtml(s.name) + '</option>';
+            }).join('');
+        }
+    } catch(e) {}
+    await loadGradesAndSections();
+}
+async function loadGradesAndSections() {
+    var schoolId = document.getElementById('annSchool').value;
+    try {
+        var grades = await (await fetch('/api/grade-levels')).json();
+        var filteredGrades = Array.isArray(grades) ? grades.filter(function(g){ return !schoolId || String(g.school_id) === String(schoolId); }) : [];
+        document.getElementById('annGrade').innerHTML = '<option value="">Any grade</option>' + filteredGrades.map(function(g){
+            return '<option value="' + escapeHtml(g.id) + '">' + escapeHtml(g.name) + '</option>';
+        }).join('');
+    } catch(e) {}
+    await loadSections();
+}
+async function loadSections() {
+    var schoolId = document.getElementById('annSchool').value;
+    var gradeId = document.getElementById('annGrade').value;
+    var url = '/api/sections?' + new URLSearchParams({
+        school_id: schoolId || '',
+        grade_level_id: gradeId || ''
+    }).toString();
+    try {
+        var sections = await (await fetch(url)).json();
+        document.getElementById('annSection').innerHTML = '<option value="">Any section</option>' + (Array.isArray(sections) ? sections : []).map(function(sec){
+            return '<option value="' + escapeHtml(sec.id) + '">' + escapeHtml((sec.grade_name ? sec.grade_name + ' - ' : '') + sec.name) + '</option>';
+        }).join('');
+    } catch(e) {}
+}
+function updateAnnouncementAudience() {
+    var audience = document.getElementById('annAudience').value;
+    document.getElementById('annStudentWrap').style.display = audience === 'student' ? '' : 'none';
+    document.getElementById('annGrade').closest('.form-group').style.display = (audience === 'grade' || audience === 'section' || audience === 'student') ? '' : 'none';
+    document.getElementById('annSection').closest('.form-group').style.display = (audience === 'section' || audience === 'student') ? '' : 'none';
+}
+async function loadAnnouncementRows() {
+    try {
+        var rows = await (await fetch('/api/notifications')).json();
+        var body = document.getElementById('announcementRows');
+        if (!Array.isArray(rows) || rows.length === 0) {
+            body.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No announcements yet.</td></tr>';
+            return;
+        }
+        body.innerHTML = rows.slice(0, 25).map(function(row) {
+            return '<tr>'
+                + '<td><span class="badge badge-active">' + escapeHtml(announcementTypeLabel(row.type)) + '</span></td>'
+                + '<td><strong>' + escapeHtml(row.title || '-') + '</strong><div class="text-muted" style="font-size:.75rem;">' + escapeHtml(row.message || '') + '</div></td>'
+                + '<td>' + escapeHtml(targetLabel(row)) + '</td>'
+                + '<td>' + escapeHtml(row.created_by_name || row.created_by_role || 'System') + '</td>'
+                + '<td>' + escapeHtml(row.created_at ? new Date(row.created_at).toLocaleString() : '-') + '</td>'
+                + '</tr>';
+        }).join('');
+    } catch(e) {
+        document.getElementById('announcementRows').innerHTML = '<tr><td colspan="5" class="text-center text-danger">Failed to load announcements.</td></tr>';
+    }
+}
+async function sendAnnouncement(event) {
+    event.preventDefault();
+    var status = document.getElementById('announcementStatus');
+    status.textContent = 'Sending...';
+    var form = document.getElementById('announcementForm');
+    var data = Object.fromEntries(new FormData(form).entries());
+    if (data.target_audience === 'school') {
+        data.grade_level_id = '';
+        data.section_id = '';
+        data.student_id = '';
+    } else if (data.target_audience === 'grade') {
+        data.section_id = '';
+        data.student_id = '';
+    } else if (data.target_audience === 'section') {
+        data.student_id = '';
+    }
+    try {
+        var res = await fetch('/api/notifications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        var json = await res.json();
+        if (!res.ok || json.error) throw new Error(json.error || 'Failed to send announcement.');
+        status.textContent = 'Sent to ' + (json.sent_to_parents || 0) + ' parent account(s).';
+        document.getElementById('announcementSentCount').textContent = 'Sent';
+        form.reset();
+        updateAnnouncementAudience();
+        await loadAnnouncementRows();
+    } catch(e) {
+        status.textContent = e.message || 'Failed to send announcement.';
+    }
+}
 function buildAdviserAction(flag) {
     var adviser = flag.adviser || 'Assigned adviser';
     var adviserEmail = (flag.adviser_email || '').trim();
@@ -182,7 +392,15 @@ async function loadNotifications() {
     }
 }
 loadNotifications();
+populateAnnouncementFilters();
+loadAnnouncementRows();
+updateAnnouncementAudience();
+document.getElementById('announcementForm').addEventListener('submit', sendAnnouncement);
+document.getElementById('annAudience').addEventListener('change', updateAnnouncementAudience);
+document.getElementById('annSchool').addEventListener('change', loadGradesAndSections);
+document.getElementById('annGrade').addEventListener('change', loadSections);
 setInterval(loadNotifications, 5000);
+setInterval(loadAnnouncementRows, 30000);
 </script>
 
 <div class="live-indicator"><div class="live-dot"></div> Live</div>

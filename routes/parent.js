@@ -19,6 +19,15 @@ const {
     statusLabel,
     timeOutScanLabel
 } = require('../utils/attendanceStatus');
+const {
+    createNoClassNotificationForParent,
+    getParentInbox,
+    getParentUnreadCount,
+    markParentNotificationsRead,
+    registerParentDevice,
+    syncAnnouncementNotificationsForParent,
+    syncAttendanceNotificationsForParent
+} = require('../utils/parentNotifications');
 
 const router = express.Router();
 
@@ -345,6 +354,9 @@ async function buildParentPayload(parent, date) {
             id: child.id,
             name: child.name,
             lrn: child.lrn || '',
+            school_id: child.school_id || null,
+            grade_level_id: child.grade_level_id || null,
+            section_id: child.section_id || null,
             grade_level: child.grade_name || 'N/A',
             section: child.section_name || 'N/A',
             school_name: child.school_name || 'N/A',
@@ -358,12 +370,21 @@ async function buildParentPayload(parent, date) {
             latest_scan_time: resolved.latest_scan_time,
             remarks: resolved.remarks || '',
             timeline: resolved.timeline,
-            consecutive_absences: consecutiveAbsences
+            consecutive_absences: consecutiveAbsences,
+            absence_final: isAbsenceFinal(date)
         });
     }
 
     const schoolIds = [...new Set(children.map(child => child.school_id).filter(Boolean))];
-    const notifications = await buildParentNotifications(childPayload, schoolIds, date);
+    await syncAttendanceNotificationsForParent(parent, childPayload, date);
+    await syncAnnouncementNotificationsForParent(parent, childPayload);
+    for (const schoolId of schoolIds.length ? schoolIds : [null]) {
+        const day = await isSchoolDay(date, schoolId);
+        await createNoClassNotificationForParent(parent, schoolId, date, day);
+    }
+    const parentId = parent.parent_id || parent.id;
+    const notifications = await getParentInbox(parentId, { limit: 100 });
+    const unread_count = await getParentUnreadCount(parentId);
     return {
         date,
         parent: {
@@ -373,7 +394,8 @@ async function buildParentPayload(parent, date) {
             username: parent.username || ''
         },
         children: childPayload,
-        notifications
+        notifications,
+        unread_count
     };
 }
 
@@ -786,10 +808,45 @@ router.get('/api/parent/notifications', requireParentAuth, async (req, res) => {
     try {
         const date = req.query.date || todayDate();
         const payload = await buildParentPayload(req.session.user, date);
-        return res.json({ notifications: payload.notifications });
+        return res.json({ notifications: payload.notifications, unread_count: payload.unread_count || 0 });
     } catch (err) {
         console.error('Parent notifications error:', err);
         return res.status(500).json({ error: 'Failed to load parent notifications.' });
+    }
+});
+
+router.post('/api/parent/device-token', requireParentAuth, async (req, res) => {
+    const deviceToken = String(req.body.device_token || '').trim();
+    if (!deviceToken) return res.status(400).json({ success: false, error: 'Device token is required.' });
+    try {
+        await registerParentDevice({
+            parentId: req.session.user.parent_id || req.session.user.id,
+            contactNumber: req.session.user.contact_number,
+            normalizedContact: req.session.user.normalized_contact,
+            deviceToken,
+            pushToken: String(req.body.push_token || '').trim() || null,
+            platform: String(req.body.platform || '').trim() || 'android',
+            appVersion: String(req.body.app_version || '').trim(),
+            userAgent: req.get('user-agent') || ''
+        });
+        return res.json({ success: true });
+    } catch (err) {
+        console.error('Parent device token error:', err);
+        return res.status(500).json({ success: false, error: 'Failed to save notification device.' });
+    }
+});
+
+router.post('/api/parent/notifications/read', requireParentAuth, async (req, res) => {
+    try {
+        const ids = Array.isArray(req.body.notification_ids)
+            ? req.body.notification_ids
+            : (req.body.notification_id ? [req.body.notification_id] : null);
+        const changed = await markParentNotificationsRead(req.session.user.parent_id || req.session.user.id, ids);
+        const unread_count = await getParentUnreadCount(req.session.user.parent_id || req.session.user.id);
+        return res.json({ success: true, changed, unread_count });
+    } catch (err) {
+        console.error('Parent notification read error:', err);
+        return res.status(500).json({ success: false, error: 'Failed to mark notifications as read.' });
     }
 });
 

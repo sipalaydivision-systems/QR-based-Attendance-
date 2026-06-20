@@ -40,6 +40,8 @@ Future<void> showParentNotification(String title, String body) async {
         channelDescription: 'Attendance alerts for your child',
         importance: Importance.high,
         priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
+        largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
       ),
     ),
   );
@@ -118,6 +120,7 @@ class ParentApi {
   String get parentName => prefs.getString('parent_name') ?? 'Parent';
   String get parentContact => prefs.getString('parent_contact') ?? '';
   String get parentUsername => prefs.getString('parent_username') ?? '';
+  String get deviceToken => prefs.getString('parent_device_token') ?? '';
 
   Map<String, String> get _headers => {
         'Accept': 'application/json',
@@ -189,6 +192,50 @@ class ParentApi {
     return _decode(res.body);
   }
 
+  Future<String> ensureDeviceToken() async {
+    final existing = prefs.getString('parent_device_token');
+    if (existing != null && existing.isNotEmpty) return existing;
+    final random = math.Random.secure();
+    final salt = List<int>.generate(12, (_) => random.nextInt(256)).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    final token = 'parent-${DateTime.now().microsecondsSinceEpoch}-$salt';
+    await prefs.setString('parent_device_token', token);
+    return token;
+  }
+
+  Future<void> registerDeviceToken() async {
+    if (!isLoggedIn) return;
+    try {
+      final info = await PackageInfo.fromPlatform();
+      final token = await ensureDeviceToken();
+      await http
+          .post(Uri.parse('$kBaseUrl/api/parent/device-token'), headers: _headers, body: {
+            'device_token': token,
+            'platform': Platform.isAndroid ? 'android' : Platform.operatingSystem,
+            'app_version': info.version,
+          })
+          .timeout(const Duration(seconds: 15));
+    } catch (_) {
+      // Device registration is retried on the next dashboard refresh.
+    }
+  }
+
+  Future<int> markNotificationsRead([List<int>? ids]) async {
+    try {
+      final payload = ids == null ? <String, dynamic>{} : {'notification_ids': ids};
+      final res = await http
+          .post(
+            Uri.parse('$kBaseUrl/api/parent/notifications/read'),
+            headers: {..._headers, 'Content-Type': 'application/json'},
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 15));
+      final data = _decode(res.body);
+      return ((data['unread_count'] as num?) ?? 0).toInt();
+    } catch (_) {
+      return 0;
+    }
+  }
+
   Future<Map<String, dynamic>> branding() async {
     try {
       final res = await http
@@ -235,6 +282,7 @@ class ParentApi {
     await prefs.remove('parent_name');
     await prefs.remove('parent_contact');
     await prefs.remove('parent_username');
+    await prefs.remove('parent_notified_notifications');
   }
 
   Map<String, dynamic> _decode(String body) {
@@ -571,6 +619,10 @@ class _LoginScreenState extends State<LoginScreen> {
     final res = await widget.api.login(id, pw);
     if (!mounted) return;
     if (res['success'] == true) {
+      try {
+        await _initNotifications();
+        await widget.api.registerDeviceToken();
+      } catch (_) {}
       Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => HomeShell(api: widget.api)));
     } else {
       setState(() {
@@ -676,6 +728,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
     if (!mounted) return;
     if (res['success'] == true) {
+      try {
+        await _initNotifications();
+        await widget.api.registerDeviceToken();
+      } catch (_) {}
       Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => HomeShell(api: widget.api)), (r) => false);
     } else {
       setState(() {
@@ -855,21 +911,27 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int _tab = 0;
   int _child = 0;
   bool _loading = true;
+  bool _firstDashboardLoad = true;
   String? _error;
   String? _schoolArt;
+  int _unreadCount = 0;
+  Map<String, dynamic>? _bannerNote;
   Map<String, dynamic> _data = {};
   Timer? _timer;
+  Timer? _bannerTimer;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    widget.api.registerDeviceToken();
     _load();
     _loadBranding();
-    _timer = Timer.periodic(const Duration(seconds: 45), (_) => _load(silent: true));
+    _timer = Timer.periodic(const Duration(seconds: 20), (_) => _load(silent: true));
   }
 
   Future<void> _loadBranding() async {
@@ -881,8 +943,18 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
+    _bannerTimer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      widget.api.registerDeviceToken();
+      _load(silent: true);
+    }
   }
 
   List<dynamic> get _children => (_data['children'] as List?) ?? const [];
@@ -897,11 +969,15 @@ class _HomeShellState extends State<HomeShell> {
     try {
       final data = await widget.api.dashboard();
       if (!mounted) return;
+      final unread = ((data['unread_count'] as num?) ?? _countUnread(data['notifications'] as List?)).toInt();
       setState(() {
         _data = data;
+        _unreadCount = unread;
         _loading = false;
         _error = null;
       });
+      await _processNotificationUpdates(data, showPopups: !_firstDashboardLoad);
+      _firstDashboardLoad = false;
     } catch (e) {
       if (!mounted) return;
       if ('$e'.contains('SESSION_EXPIRED')) {
@@ -915,6 +991,92 @@ class _HomeShellState extends State<HomeShell> {
     }
   }
 
+  int _countUnread(List? notes) => (notes ?? const []).where((n) {
+        final item = n as Map<String, dynamic>;
+        return item['is_read'] != true && item['is_read'] != 1;
+      }).length;
+
+  String _noteId(Map<String, dynamic> note) => '${note['notification_id'] ?? note['key'] ?? note['created_at'] ?? note['title']}';
+
+  bool _isImportant(Map<String, dynamic> note) {
+    final type = '${note['type'] ?? ''}'.toLowerCase();
+    return type.contains('emergency') || type.contains('early') || type.contains('absent') || type.contains('flagged');
+  }
+
+  Future<void> _processNotificationUpdates(Map<String, dynamic> data, {required bool showPopups}) async {
+    final notes = ((data['notifications'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((n) => Map<String, dynamic>.from(n))
+        .toList();
+    final notified = (widget.api.prefs.getStringList('parent_notified_notifications') ?? const <String>[]).toSet();
+    final fresh = notes.where((note) {
+      final unread = note['is_read'] != true && note['is_read'] != 1;
+      return unread && !notified.contains(_noteId(note));
+    }).toList();
+    if (showPopups) {
+      for (final note in fresh.take(4)) {
+        await _showNotificationPopup(note);
+      }
+    }
+    for (final note in notes.take(120)) {
+      notified.add(_noteId(note));
+    }
+    await widget.api.prefs.setStringList('parent_notified_notifications', notified.take(150).toList());
+  }
+
+  Future<void> _showNotificationPopup(Map<String, dynamic> note) async {
+    final title = '${note['title'] ?? 'EduTrack Parent'}';
+    final body = '${note['message'] ?? ''}';
+    try {
+      await showParentNotification(title, body);
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() => _bannerNote = note);
+    _bannerTimer?.cancel();
+    _bannerTimer = Timer(const Duration(seconds: 7), () {
+      if (mounted) setState(() => _bannerNote = null);
+    });
+    if (_isImportant(note)) {
+      Future.delayed(const Duration(milliseconds: 250), () {
+        if (!mounted) return;
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+            content: Text(body),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  setState(() => _tab = 3);
+                },
+                child: const Text('Contact Adviser'),
+              ),
+            ],
+          ),
+        );
+      });
+    }
+  }
+
+  Future<void> _markAllNotificationsRead() async {
+    final unread = await widget.api.markNotificationsRead();
+    if (!mounted) return;
+    final updated = Map<String, dynamic>.from(_data);
+    final notes = ((_data['notifications'] as List?) ?? const []).map((n) {
+      final item = Map<String, dynamic>.from(n as Map);
+      item['is_read'] = true;
+      return item;
+    }).toList();
+    updated['notifications'] = notes;
+    updated['unread_count'] = unread;
+    setState(() {
+      _data = updated;
+      _unreadCount = unread;
+    });
+  }
+
   Future<void> _logout() async {
     await widget.api.logout();
     if (!mounted) return;
@@ -924,14 +1086,35 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Column(
+      body: Stack(
         children: [
-          ParentHeader(onLogout: _confirmLogout),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator(color: kGreen))
-                : RefreshIndicator(color: kGreen, onRefresh: _load, child: _buildTab()),
+          Column(
+            children: [
+              ParentHeader(onLogout: _confirmLogout),
+              Expanded(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator(color: kGreen))
+                    : RefreshIndicator(color: kGreen, onRefresh: _load, child: _buildTab()),
+              ),
+            ],
           ),
+          if (_bannerNote != null)
+            Positioned(
+              left: 14,
+              right: 14,
+              top: MediaQuery.paddingOf(context).top + 10,
+              child: ParentNotificationBanner(
+                note: _bannerNote!,
+                onTap: () {
+                  setState(() {
+                    _tab = 2;
+                    _bannerNote = null;
+                  });
+                  _markAllNotificationsRead();
+                },
+                onClose: () => setState(() => _bannerNote = null),
+              ),
+            ),
         ],
       ),
       bottomNavigationBar: NavigationBarTheme(
@@ -940,16 +1123,23 @@ class _HomeShellState extends State<HomeShell> {
         ),
         child: NavigationBar(
           selectedIndex: _tab,
-          onDestinationSelected: (i) => setState(() => _tab = i),
+          onDestinationSelected: (i) {
+            setState(() => _tab = i);
+            if (i == 2) _markAllNotificationsRead();
+          },
           height: 66,
           backgroundColor: Colors.white,
           indicatorColor: const Color(0xFFDCFCE7),
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home, color: kGreen), label: 'Home'),
-            NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment, color: kGreen), label: 'Attendance'),
-            NavigationDestination(icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications, color: kGreen), label: 'Alerts'),
-            NavigationDestination(icon: Icon(Icons.phone_outlined), selectedIcon: Icon(Icons.phone, color: kGreen), label: 'Adviser'),
-            NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person, color: kGreen), label: 'Profile'),
+          destinations: [
+            const NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home, color: kGreen), label: 'Home'),
+            const NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment, color: kGreen), label: 'Attendance'),
+            NavigationDestination(
+              icon: BadgeIcon(icon: Icons.notifications_outlined, count: _unreadCount),
+              selectedIcon: BadgeIcon(icon: Icons.notifications, count: _unreadCount, selected: true),
+              label: 'Alerts',
+            ),
+            const NavigationDestination(icon: Icon(Icons.phone_outlined), selectedIcon: Icon(Icons.phone, color: kGreen), label: 'Adviser'),
+            const NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person, color: kGreen), label: 'Profile'),
           ],
         ),
       ),
@@ -1029,6 +1219,100 @@ class _HomeShellState extends State<HomeShell> {
           Text(text, textAlign: TextAlign.center, style: const TextStyle(color: kMuted, fontSize: 13.5)),
         ],
       );
+}
+
+class BadgeIcon extends StatelessWidget {
+  const BadgeIcon({super.key, required this.icon, required this.count, this.selected = false});
+  final IconData icon;
+  final int count;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = count > 99 ? '99+' : '$count';
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(icon, color: selected ? kGreen : null),
+        if (count > 0)
+          Positioned(
+            right: -10,
+            top: -8,
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444),
+                borderRadius: BorderRadius.circular(99),
+                border: Border.all(color: Colors.white, width: 1.4),
+              ),
+              child: Text(label, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class ParentNotificationBanner extends StatelessWidget {
+  const ParentNotificationBanner({super.key, required this.note, required this.onTap, required this.onClose});
+  final Map<String, dynamic> note;
+  final VoidCallback onTap;
+  final VoidCallback onClose;
+
+  bool get important {
+    final type = '${note['type'] ?? ''}'.toLowerCase();
+    return type.contains('emergency') || type.contains('early') || type.contains('absent') || type.contains('flagged');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = important ? const Color(0xFFDC2626) : kGreen;
+    return Material(
+      elevation: 12,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: color.withValues(alpha: .28)),
+            boxShadow: [BoxShadow(color: color.withValues(alpha: .18), blurRadius: 20, offset: const Offset(0, 8))],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(color: color.withValues(alpha: .12), borderRadius: BorderRadius.circular(14)),
+                child: Icon(important ? Icons.warning_amber_rounded : Icons.notifications_active_rounded, color: color),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('${note['title'] ?? 'EduTrack Parent'}', maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w900, color: kInk)),
+                    const SizedBox(height: 2),
+                    Text('${note['message'] ?? ''}', maxLines: 2, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: kMuted)),
+                    const SizedBox(height: 4),
+                    Text('Tap to open full details', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: color)),
+                  ],
+                ),
+              ),
+              IconButton(onPressed: onClose, icon: const Icon(Icons.close_rounded, size: 18), color: kMuted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1447,32 +1731,211 @@ class AttendanceTab extends StatelessWidget {
 // ---------------------------------------------------------------------------
 // Notifications tab
 // ---------------------------------------------------------------------------
-class NotificationsTab extends StatelessWidget {
+String parentNotificationTypeLabel(Map<String, dynamic> note) {
+  final provided = '${note['type_label'] ?? ''}'.trim();
+  if (provided.isNotEmpty && provided != 'null') return provided;
+  final type = '${note['type'] ?? ''}';
+  const labels = {
+    'attendance_time_in': 'Attendance',
+    'attendance_late_time_in': 'Late',
+    'attendance_pm_time_in': 'PM Time In',
+    'attendance_pm_late_time_in': 'PM Late',
+    'attendance_lunch_out': 'Lunch Out',
+    'attendance_returned': 'Returned',
+    'attendance_early_out': 'Early Dismissal',
+    'attendance_completed': 'Completed',
+    'attendance_absent': 'Absent',
+    'attendance_flagged': '2-Day Flag',
+    'announcement_general': 'Announcement',
+    'announcement_parent_meeting': 'Parent Meeting',
+    'announcement_class_meeting': 'Class Meeting',
+    'announcement_holiday': 'Holiday / No Classes',
+    'announcement_school_event': 'School Event',
+    'announcement_emergency': 'Emergency',
+    'announcement_reminder': 'Reminder',
+  };
+  return labels[type] ?? type.replaceAll('_', ' ');
+}
+
+String parentNotificationCategory(Map<String, dynamic> note) {
+  final provided = '${note['category'] ?? ''}'.trim();
+  if (provided.isNotEmpty && provided != 'null') return provided;
+  final type = '${note['type'] ?? ''}';
+  if (type.startsWith('attendance_')) return 'attendance';
+  if (type.contains('meeting')) return 'meetings';
+  if (type.contains('holiday') || type.contains('no_class')) return 'holidays';
+  if (type.contains('emergency') || type.contains('absent') || type.contains('flagged') || type.contains('early')) return 'alerts';
+  return 'announcements';
+}
+
+Color parentNotificationColor(Map<String, dynamic> note) {
+  final type = '${note['type'] ?? ''}'.toLowerCase();
+  if (type.contains('emergency') || type.contains('early') || type.contains('absent') || type.contains('flagged')) return const Color(0xFFDC2626);
+  if (type.contains('late') || type.contains('holiday') || type.contains('meeting') || type.contains('lunch')) return const Color(0xFFEA580C);
+  if (type.contains('completed') || type.contains('returned') || type.contains('time_in')) return kGreen;
+  return const Color(0xFF2563EB);
+}
+
+IconData parentNotificationIcon(Map<String, dynamic> note) {
+  final type = '${note['type'] ?? ''}'.toLowerCase();
+  if (type.contains('meeting')) return Icons.groups_rounded;
+  if (type.contains('holiday')) return Icons.event_busy_rounded;
+  if (type.contains('emergency')) return Icons.warning_amber_rounded;
+  if (type.contains('absent') || type.contains('flagged') || type.contains('early')) return Icons.report_problem_rounded;
+  if (type.contains('lunch')) return Icons.restaurant_rounded;
+  if (type.contains('completed')) return Icons.task_alt_rounded;
+  if (type.contains('announcement') || type.contains('reminder') || type.contains('event')) return Icons.campaign_rounded;
+  return Icons.login_rounded;
+}
+
+String parentNotificationTime(Map<String, dynamic> note) {
+  final display = '${note['time_display'] ?? ''}'.trim();
+  if (display.isNotEmpty && display != 'null') return display;
+  final raw = '${note['created_at'] ?? ''}'.trim();
+  if (raw.isEmpty || raw == 'null') return '';
+  final parsed = DateTime.tryParse(raw.replaceFirst(' ', 'T'));
+  if (parsed == null) return raw;
+  final hour = parsed.hour == 0 ? 12 : (parsed.hour > 12 ? parsed.hour - 12 : parsed.hour);
+  final minute = parsed.minute.toString().padLeft(2, '0');
+  final suffix = parsed.hour >= 12 ? 'PM' : 'AM';
+  return '${_moShort[parsed.month - 1]} ${parsed.day}, $hour:$minute $suffix';
+}
+
+class NotificationsTab extends StatefulWidget {
   const NotificationsTab({super.key, required this.notifications});
   final List<dynamic> notifications;
+
+  @override
+  State<NotificationsTab> createState() => _NotificationsTabState();
+}
+
+class _NotificationsTabState extends State<NotificationsTab> {
+  String _filter = 'all';
+
   @override
   Widget build(BuildContext context) {
+    final all = widget.notifications.whereType<Map>().map((n) => Map<String, dynamic>.from(n)).toList();
+    final notifications = _filter == 'all' ? all : all.where((n) => parentNotificationCategory(n) == _filter).toList();
     if (notifications.isEmpty) {
-      return ListView(children: const [Padding(padding: EdgeInsets.all(40), child: Center(child: Text('No notifications yet.', style: TextStyle(color: kMuted))))]);
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        children: [
+          _filterBar(),
+          const SizedBox(height: 16),
+          const Padding(padding: EdgeInsets.all(24), child: Center(child: Text('No notifications yet.', style: TextStyle(color: kMuted)))),
+        ],
+      );
     }
-    return ListView.builder(
+    return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-      itemCount: notifications.length,
-      itemBuilder: (_, i) {
-        final n = notifications[i] as Map<String, dynamic>;
-        final tone = '${n['tone'] ?? 'in'}';
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          decoration: _cardDecoration(),
-          child: ListTile(
-            leading: CircleAvatar(backgroundColor: toneColor(tone).withValues(alpha: 0.12), child: Icon(toneIcon(tone), color: toneColor(tone), size: 20)),
-            title: Text('${n['title']}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: kInk)),
-            subtitle: Text('${n['message']}', style: const TextStyle(fontSize: 12, color: kMuted)),
-          ),
-        );
-      },
+      children: [
+        _filterBar(),
+        const SizedBox(height: 12),
+        ...notifications.map(_notificationCard),
+      ],
     );
   }
+
+  Widget _filterBar() {
+    const filters = [
+      ['all', 'All'],
+      ['attendance', 'Attendance'],
+      ['announcements', 'Announcements'],
+      ['meetings', 'Meetings'],
+      ['holidays', 'Holidays'],
+      ['alerts', 'Alerts'],
+    ];
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: filters.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final key = filters[i][0];
+          final label = filters[i][1];
+          final selected = key == _filter;
+          return ChoiceChip(
+            selected: selected,
+            onSelected: (_) => setState(() => _filter = key),
+            label: Text(label),
+            labelStyle: TextStyle(color: selected ? Colors.white : kInk, fontSize: 12, fontWeight: FontWeight.w800),
+            selectedColor: kGreen,
+            backgroundColor: Colors.white,
+            shape: StadiumBorder(side: BorderSide(color: selected ? kGreen : const Color(0xFFE5E7EB))),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _notificationCard(Map<String, dynamic> n) {
+    final color = parentNotificationColor(n);
+    final unread = n['is_read'] != true && n['is_read'] != 1;
+    final student = '${n['student_name'] ?? n['child_name'] ?? ''}'.trim();
+    final school = '${n['school_name'] ?? ''}'.trim();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: _cardDecoration(),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 22,
+            backgroundColor: color.withValues(alpha: .12),
+            child: Icon(parentNotificationIcon(n), color: color, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: color.withValues(alpha: .1), borderRadius: BorderRadius.circular(99)),
+                      child: Text(parentNotificationTypeLabel(n), style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w900)),
+                    ),
+                    const Spacer(),
+                    if (unread)
+                      Container(width: 9, height: 9, decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text('${n['title'] ?? 'EduTrack Parent'}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: kInk)),
+                const SizedBox(height: 4),
+                Text('${n['message'] ?? ''}', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: kMuted, height: 1.28)),
+                const SizedBox(height: 9),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    if (student.isNotEmpty) _miniMeta(Icons.child_care_rounded, student),
+                    if (school.isNotEmpty) _miniMeta(Icons.school_rounded, school),
+                    _miniMeta(Icons.schedule_rounded, parentNotificationTime(n)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _miniMeta(IconData icon, String text) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: const Color(0xFF94A3B8)),
+          const SizedBox(width: 4),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 210),
+            child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: kMuted, fontSize: 11, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      );
 }
 
 // ---------------------------------------------------------------------------

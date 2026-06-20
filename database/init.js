@@ -59,6 +59,14 @@ async function init() {
         await ensureColumn('teachers', 'active_from', 'DATE NULL AFTER qr_code');
         await ensureColumn('sections', 'adviser_teacher_id', 'INT NULL AFTER adviser');
         await ensureColumn('students', 'active_from', 'DATE NULL AFTER qr_code');
+        await ensureColumn('notifications', 'grade_level_id', 'INT NULL AFTER school_id');
+        await ensureColumn('notifications', 'section_id', 'INT NULL AFTER grade_level_id');
+        await ensureColumn('notifications', 'student_id', 'INT NULL AFTER section_id');
+        await ensureColumn('notifications', 'target_audience', "VARCHAR(50) DEFAULT 'school' AFTER student_id");
+        await ensureColumn('notifications', 'attachment_url', 'MEDIUMTEXT AFTER target_audience');
+        await ensureColumn('notifications', 'created_by', 'INT NULL AFTER attachment_url');
+        await ensureColumn('notifications', 'created_by_name', 'VARCHAR(255) NULL AFTER created_by');
+        await ensureColumn('notifications', 'created_by_role', 'VARCHAR(50) NULL AFTER created_by_name');
         await ensureColumnDefinition('users', 'role', "ENUM('super_admin','principal','superintendent','asst_superintendent','adviser','parent') NOT NULL DEFAULT 'principal'");
         await ensureColumnDefinition('students', 'status', "ENUM('active','inactive','deleted') DEFAULT 'inactive'");
         await ensureColumnDefinition('teachers', 'status', "ENUM('active','inactive','deleted') DEFAULT 'inactive'");
