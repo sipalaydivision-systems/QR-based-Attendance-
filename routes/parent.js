@@ -879,13 +879,13 @@ router.post('/api/parent/change-password', requireParentAuth, async (req, res) =
 
 // Latest published parent-app version. Bump this (and the Flutter pubspec version)
 // whenever a new APK is released so the in-app updater offers the update.
-const PARENT_APP_LATEST = { version: '1.0.2', version_code: 3 };
+const PARENT_APP_LATEST = { version: '1.0.3', version_code: 4 };
 router.get('/api/parent/app-version', (req, res) => {
     return res.json({
         latest_version: PARENT_APP_LATEST.version,
         latest_version_code: PARENT_APP_LATEST.version_code,
         apk_url: `${req.protocol}://${req.get('host')}/download/parent-app`,
-        notes: 'Refreshed dashboard design, attendance fixes, change password, and in-app updates.'
+        notes: 'Parent notifications, unread badges, announcement alerts, and device registration.'
     });
 });
 
