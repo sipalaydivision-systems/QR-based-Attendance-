@@ -14,7 +14,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:url_launcher/url_launcher.dart';
 
 class AppConfig {
-  static const appName = 'Edutrack';
+  static const appName = 'EduTrack';
   static const subtitle = 'Schools Division of Sipalay City';
   static const monitoringLabel = 'Attendance Monitoring App';
   static const noInternetMessage =
@@ -964,6 +964,7 @@ class _LoginScreenState extends State<LoginScreen>
   final password = TextEditingController();
   late final AnimationController backgroundController;
   bool loading = false;
+  bool obscurePassword = true;
   String? error;
 
   @override
@@ -1026,188 +1027,126 @@ class _LoginScreenState extends State<LoginScreen>
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     return Scaffold(
       resizeToAvoidBottomInset: true,
+      backgroundColor: const Color(0xFFEEF8F3),
       body: AnimatedBuilder(
         animation: backgroundController,
         builder: (context, child) => CustomPaint(
           painter: LiveMeshPainter(
             backgroundController.value,
-            intensity: .16,
+            intensity: .10,
             lightMode: true,
           ),
           child: child,
         ),
-        child: CustomScrollView(
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          slivers: [
-            SliverToBoxAdapter(
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: EdgeInsets.fromLTRB(20, 28, 20, math.max(28, bottomInset + 24)),
               child: Container(
-                height: 252,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFF5F7F6),
-                  borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(36),
-                    bottomRight: Radius.circular(36),
-                  ),
+                width: 420,
+                constraints: const BoxConstraints(maxWidth: 420),
+                padding: const EdgeInsets.fromLTRB(28, 34, 28, 26),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: .08),
+                      blurRadius: 40,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
-                child: const SafeArea(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      AppLogo(size: 82),
-                      SizedBox(height: 16),
-                      Text(
-                        AppConfig.appName,
-                        style: TextStyle(
-                          color: Color(0xFF12201B),
-                          fontSize: 36,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -.8,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Center(child: AppLogo(size: 76)),
+                    const SizedBox(height: 14),
+                    const Text(
+                      AppConfig.appName,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900, color: Color(0xFF111827)),
+                    ),
+                    const SizedBox(height: 3),
+                    const Text(
+                      'Attendance Portal',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 13, color: Color(0xFF6B7280), fontWeight: FontWeight.w700),
+                    ),
+                    if (error != null) ...[
+                      const SizedBox(height: 18),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          border: Border.all(color: const Color(0xFFFECACA)),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                      ),
-                      SizedBox(height: 6),
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 28),
-                        child: Text(
-                          AppConfig.subtitle,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Color(0xFF4D5D56),
-                            fontWeight: FontWeight.w700,
-                          ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline, color: Color(0xFFDC2626), size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text(error!, style: const TextStyle(color: Color(0xFFDC2626), fontSize: 12.5, fontWeight: FontWeight.w700))),
+                          ],
                         ),
                       ),
                     ],
-                  ),
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  18,
-                  20,
-                  math.max(30, bottomInset + 26),
-                ),
-                child: PremiumCard(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Welcome Back',
-                        style: TextStyle(
-                          fontSize: 30,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -.7,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      const Text(
-                        'Sign in to monitor live attendance.',
-                        style: TextStyle(
-                          color: Color(0xFF667872),
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      if (error != null) ...[
-                        const SizedBox(height: 14),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(
-                              0xFFFFEFEF,
-                            ).withValues(alpha: .84),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFFFECACA)),
-                          ),
-                          child: Text(
-                            error!,
-                            style: const TextStyle(
-                              color: Color(0xFFB91C1C),
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 22),
-                      _label('Username'),
-                      _field(
-                        username,
-                        'Enter your username',
-                        icon: Icons.person_rounded,
-                      ),
-                      const SizedBox(height: 14),
-                      _label('Password'),
-                      _field(
-                        password,
-                        'Enter your password',
-                        secret: true,
-                        icon: Icons.lock_rounded,
-                      ),
-                      const SizedBox(height: 24),
-                      Container(
-                        width: double.infinity,
-                        height: 56,
+                    const SizedBox(height: 22),
+                    _label('Username'),
+                    _field(username, 'Enter your username', icon: Icons.person_outline_rounded),
+                    const SizedBox(height: 14),
+                    _label('Password'),
+                    _field(
+                      password,
+                      'Enter your password',
+                      secret: obscurePassword,
+                      isPassword: true,
+                      icon: Icons.lock_outline_rounded,
+                      onToggleSecret: () => setState(() => obscurePassword = !obscurePassword),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: DecoratedBox(
                         decoration: BoxDecoration(
-                          color: const Color(0xFF138A64),
-                          borderRadius: BorderRadius.circular(20),
+                          gradient: const LinearGradient(colors: [Color(0xFF16A34A), Color(0xFF059669)]),
+                          borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(
-                                0xFF0F6E52,
-                              ).withValues(alpha: .25),
-                              blurRadius: 18,
-                              offset: const Offset(0, 10),
+                              color: const Color(0xFF16A34A).withValues(alpha: .30),
+                              blurRadius: 14,
+                              offset: const Offset(0, 6),
                             ),
                           ],
                         ),
-                        child: FilledButton(
+                        child: ElevatedButton(
                           onPressed: loading ? null : submit,
-                          style: FilledButton.styleFrom(
+                          style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.transparent,
                             shadowColor: Colors.transparent,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                            ),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                           child: loading
-                              ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Text(
-                                  'Sign In',
-                                  style: TextStyle(
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Text('Sign In', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
                         ),
                       ),
-                      const SizedBox(height: 18),
-                      const Center(
-                        child: Text(
-                          '${AppConfig.monitoringLabel}\nv2.1.19',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Color(0xFF77847E),
-                            fontWeight: FontWeight.w600,
-                            height: 1.35,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 18),
+                    const Text(
+                      'For authorized EduTrack users only',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5, fontWeight: FontWeight.w600),
+                    ),
+                  ],
                 ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -1216,10 +1155,12 @@ class _LoginScreenState extends State<LoginScreen>
   Widget _label(String value) => Padding(
     padding: const EdgeInsets.only(bottom: 8, left: 2),
     child: Text(
-      value,
+      value.toUpperCase(),
       style: const TextStyle(
-        fontWeight: FontWeight.w900,
-        color: Color(0xFF1D2A25),
+        fontSize: 11,
+        fontWeight: FontWeight.w800,
+        color: Color(0xFF6B7280),
+        letterSpacing: .4,
       ),
     ),
   );
@@ -1228,26 +1169,35 @@ class _LoginScreenState extends State<LoginScreen>
     TextEditingController controller,
     String hint, {
     bool secret = false,
+    bool isPassword = false,
     required IconData icon,
+    VoidCallback? onToggleSecret,
   }) => TextField(
     controller: controller,
     obscureText: secret,
-    textInputAction: secret ? TextInputAction.done : TextInputAction.next,
-    onSubmitted: (_) => secret ? submit() : null,
+    textInputAction: isPassword ? TextInputAction.done : TextInputAction.next,
+    onSubmitted: (_) => isPassword ? submit() : null,
     decoration: InputDecoration(
       hintText: hint,
-      prefixIcon: Icon(icon, color: const Color(0xFF138A64)),
+      hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13.5),
+      prefixIcon: Icon(icon, color: const Color(0xFF6B7280), size: 20),
+      suffixIcon: onToggleSecret == null
+          ? null
+          : IconButton(
+              onPressed: onToggleSecret,
+              icon: Icon(secret ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: const Color(0xFF6B7280), size: 20),
+            ),
       filled: true,
       fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: Color(0xFFDBE6E0)),
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFFD1D5DB), width: 1.5),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: Color(0xFF138A64), width: 2),
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFF16A34A), width: 1.6),
       ),
     ),
   );

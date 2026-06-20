@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#06996b">
-    <title>EduTrack Parent App</title>
+    <title>EduTrack Guardian App</title>
     <link rel="manifest" href="/parent-manifest.webmanifest">
     <link rel="icon" type="image/png" href="/uploads/logos/system-logo.png">
     <link rel="apple-touch-icon" href="/uploads/logos/system-logo.png">
@@ -174,7 +174,7 @@
                         <div class="phone-brand">
                             <img src="<%= branding.system_logo || '/uploads/logos/system-logo.png' %>" alt="">
                             <div>
-                                <div class="phone-title">EduTrack Parent</div>
+                                <div class="phone-title">EduTrack Guardian</div>
                                 <div class="phone-subtitle">Child attendance monitor</div>
                             </div>
                         </div>
@@ -182,7 +182,7 @@
                     <div class="phone-body">
                         <div class="greeting-card">
                             <small>Good afternoon</small>
-                            <h3>Parent</h3>
+                            <h3>Guardian</h3>
                             <small>Monitor your children live</small>
                             <div class="student-mini">
                                 <div class="student-row">
@@ -209,16 +209,16 @@
             </div>
 
             <div class="hero-copy">
-                <div class="live-pill"><span class="live-dot"></span> EduTrack Parent App</div>
+                <div class="live-pill"><span class="live-dot"></span> EduTrack Guardian App</div>
                 <h1>Monitor Your Child&apos;s Attendance in Real Time</h1>
                 <p>See time in, late arrivals, lunch out, PM time in, early out, completed attendance, absences, and school announcements from the same secure EduTrack platform.</p>
-                <p>Parents can only view children linked to their registered guardian contact number.</p>
+                <p>Guardians can only view children linked to their registered guardian contact number.</p>
                 <% if (missing) { %>
-                    <div class="notice">The parent APK has not been uploaded yet. You can open the Parent Portal now and install it as a web app from your mobile browser.</div>
+                    <div class="notice">The guardian APK has not been uploaded yet. You can open the Guardian Portal now and install it as a web app from your mobile browser.</div>
                 <% } %>
                 <div class="actions">
-                    <a class="btn primary" href="/download/parent-app"><i class="fa-solid fa-download"></i> Download Parent App</a>
-                    <a class="btn secondary" href="/parent/app"><i class="fa-solid fa-mobile-screen"></i> Open Parent Portal</a>
+                    <a class="btn primary" href="/download/parent-app"><i class="fa-solid fa-download"></i> Download Guardian App</a>
+                    <a class="btn secondary" href="/parent/app"><i class="fa-solid fa-mobile-screen"></i> Open Guardian Portal</a>
                 </div>
             </div>
         </section>

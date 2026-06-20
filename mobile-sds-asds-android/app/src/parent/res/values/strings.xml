@@ -1,4 +1,4 @@
 <resources>
-    <string name="app_name">EduTrack Parent</string>
+    <string name="app_name">EduTrack Guardian</string>
     <bool name="parent_app">true</bool>
 </resources>

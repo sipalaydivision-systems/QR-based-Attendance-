@@ -1,6 +1,6 @@
 {
-  "name": "EduTrack Parent App",
-  "short_name": "EduTrack Parent",
+  "name": "EduTrack Guardian App",
+  "short_name": "EduTrack Guardian",
   "start_url": "/parent/app",
   "scope": "/",
   "display": "standalone",

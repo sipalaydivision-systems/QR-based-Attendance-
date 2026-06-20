@@ -5,6 +5,11 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val mobileReleaseKeystore = file("edutrack-mobile-release.jks")
+if (!mobileReleaseKeystore.exists()) {
+    throw org.gradle.api.GradleException("Missing EduTrack mobile release keystore. Refusing to build an APK that would break future updates.")
+}
+
 android {
     namespace = "ph.gov.sipalay.attendance"
     compileSdk = flutter.compileSdkVersion
@@ -29,11 +34,18 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = mobileReleaseKeystore
+            storePassword = System.getenv("MOBILE_RELEASE_STORE_PASSWORD") ?: "EduTrackMobile2026!"
+            keyAlias = System.getenv("MOBILE_RELEASE_KEY_ALIAS") ?: "edutrack-mobile"
+            keyPassword = System.getenv("MOBILE_RELEASE_KEY_PASSWORD") ?: "EduTrackMobile2026!"
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

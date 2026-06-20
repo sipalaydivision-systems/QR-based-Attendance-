@@ -509,7 +509,7 @@ router.get('/Download-app', async (req, res) => {
     const parentApkPath = path.join(__dirname, '..', 'public', 'downloads', 'edutrack-parent.apk');
     const branding = await loadBranding().catch(() => ({}));
     return res.render('parent_download', {
-        title: 'EduTrack Parent App',
+        title: 'EduTrack Guardian App',
         parentApkAvailable: fs.existsSync(parentApkPath),
         missing: req.query.missing === '1',
         branding
@@ -521,7 +521,7 @@ router.get('/download-app', (req, res) => res.redirect('/Download-app'));
 router.get('/download/parent-app', (req, res) => {
     const parentApkPath = path.join(__dirname, '..', 'public', 'downloads', 'edutrack-parent.apk');
     if (!fs.existsSync(parentApkPath)) return res.redirect('/Download-app?missing=1');
-    return res.download(parentApkPath, 'EduTrack-Parent-App.apk');
+    return res.download(parentApkPath, 'EduTrack-Guardian-App.apk');
 });
 
 router.get('/parent', (req, res) => {
@@ -661,7 +661,7 @@ router.get('/parent/logout', (req, res) => {
 router.get('/parent/app', requireParentAuth, async (req, res) => {
     const branding = await loadBranding().catch(() => ({}));
     return res.render('parent_app', {
-        title: 'EduTrack Parent App',
+        title: 'EduTrack Guardian App',
         parent: req.session.user,
         branding
     });
@@ -879,13 +879,13 @@ router.post('/api/parent/change-password', requireParentAuth, async (req, res) =
 
 // Latest published parent-app version. Bump this (and the Flutter pubspec version)
 // whenever a new APK is released so the in-app updater offers the update.
-const PARENT_APP_LATEST = { version: '1.0.5', version_code: 6 };
+const PARENT_APP_LATEST = { version: '1.0.6', version_code: 7 };
 router.get('/api/parent/app-version', (req, res) => {
     return res.json({
         latest_version: PARENT_APP_LATEST.version,
         latest_version_code: PARENT_APP_LATEST.version_code,
         apk_url: `${req.protocol}://${req.get('host')}/download/parent-app`,
-        notes: 'Fixes Android update signing so future Parent App updates install normally. If Android says package conflict, uninstall the old Parent App once, then install this version.'
+        notes: 'Renames the app to EduTrack Guardian and updates the loading screen wording. Future signed updates continue to install normally.'
     });
 });
 

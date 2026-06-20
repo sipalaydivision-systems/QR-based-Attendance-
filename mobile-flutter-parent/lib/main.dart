@@ -15,7 +15,7 @@ import 'package:url_launcher/url_launcher.dart';
 final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
 const AndroidNotificationChannel _channel = AndroidNotificationChannel(
   'edutrack_parent',
-  'EduTrack Parent',
+  'EduTrack Guardian',
   description: 'Attendance alerts for your child',
   importance: Importance.high,
 );
@@ -36,7 +36,7 @@ Future<void> showParentNotification(String title, String body) async {
     const NotificationDetails(
       android: AndroidNotificationDetails(
         'edutrack_parent',
-        'EduTrack Parent',
+        'EduTrack Guardian',
         channelDescription: 'Attendance alerts for your child',
         importance: Importance.high,
         priority: Priority.high,
@@ -305,7 +305,7 @@ class ParentApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'EduTrack Parent',
+      title: 'EduTrack Guardian',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -414,7 +414,7 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
                           children: const [
                             LiveDot(color: Colors.white, size: 8),
                             SizedBox(width: 7),
-                            Text('Preparing parent dashboard', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12.5)),
+                            Text('Initializing Guardian\nAccess', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12.5, height: 1.05)),
                           ],
                         ),
                       ),
@@ -432,7 +432,7 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
                               children: [
                                 const Icon(Icons.verified_user_rounded, color: kGreen, size: 20),
                                 const SizedBox(width: 8),
-                                const Expanded(child: Text('Securely loading records', style: TextStyle(color: kInk, fontWeight: FontWeight.w900))),
+                                const Expanded(child: Text('Loading Real-Time Records', style: TextStyle(color: kInk, fontWeight: FontWeight.w900))),
                                 Text('${(progress * 100).round()}%', style: const TextStyle(color: kGreenDark, fontWeight: FontWeight.w900)),
                               ],
                             ),
@@ -683,7 +683,7 @@ class _LoginScreenState extends State<LoginScreen> {
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: AuthCard(
-                subtitle: 'Parent Portal',
+                subtitle: 'Guardian Portal',
                 children: [
                   if (_error != null) AuthAlert(message: _error!),
                   AuthField(controller: _id, label: 'Mobile Number or Username', hint: 'e.g. 09171234567', icon: Icons.person_outline),
@@ -711,7 +711,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
-                  const Text('For registered parents/guardians only', style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5)),
+                  const Text('For registered guardians only', style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5)),
                 ],
               ),
             ),
@@ -1071,7 +1071,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   }
 
   Future<void> _showNotificationPopup(Map<String, dynamic> note) async {
-    final title = '${note['title'] ?? 'EduTrack Parent'}';
+    final title = '${note['title'] ?? 'EduTrack Guardian'}';
     final body = '${note['message'] ?? ''}';
     try {
       await showParentNotification(title, body);
@@ -1109,11 +1109,11 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   Future<void> _showWelcomeBanner() async {
     final note = {
       'type': 'welcome',
-      'title': 'Welcome to EduTrack Parent',
+      'title': 'Welcome to EduTrack Guardian',
       'message': '${greeting()}, ${widget.api.parentName}. Your child attendance dashboard is ready.',
     };
     try {
-      await showParentNotification('Welcome to EduTrack Parent', 'Your child attendance dashboard is ready.');
+      await showParentNotification('Welcome to EduTrack Guardian', 'Your child attendance dashboard is ready.');
     } catch (_) {}
     if (!mounted) return;
     setState(() => _bannerNote = note);
@@ -1368,7 +1368,7 @@ class ParentNotificationBanner extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('${note['title'] ?? 'EduTrack Parent'}', maxLines: 1, overflow: TextOverflow.ellipsis,
+                    Text('${note['title'] ?? 'EduTrack Guardian'}', maxLines: 1, overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w900, color: kInk)),
                     const SizedBox(height: 2),
                     Text('${note['message'] ?? ''}', maxLines: 2, overflow: TextOverflow.ellipsis,
@@ -2007,7 +2007,7 @@ class _NotificationsTabState extends State<NotificationsTab> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                Text('${n['title'] ?? 'EduTrack Parent'}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: kInk)),
+                Text('${n['title'] ?? 'EduTrack Guardian'}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: kInk)),
                 const SizedBox(height: 4),
                 Text('${n['message'] ?? ''}', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: kMuted, height: 1.28)),
                 const SizedBox(height: 9),
@@ -2196,10 +2196,10 @@ class _ProfileTabState extends State<ProfileTab> {
       });
       final result = await OpenFilex.open(file.path, type: 'application/vnd.android.package-archive');
       if (mounted) {
-        setState(() => _otaMsg = 'If Android shows package conflict, uninstall the old EduTrack Parent app once, then install this signed update. Future updates will install normally.');
+        setState(() => _otaMsg = 'If Android shows package conflict, uninstall the old EduTrack Guardian app once, then install this signed update. Future updates will install normally.');
       }
       if (result.type != ResultType.done && mounted) {
-        setState(() => _otaMsg = 'Allow “Install unknown apps” for EduTrack Parent, then tap Install Update again.');
+        setState(() => _otaMsg = 'Allow “Install unknown apps” for EduTrack Guardian, then tap Install Update again.');
       }
     } catch (_) {
       if (!mounted) return;
@@ -2212,7 +2212,7 @@ class _ProfileTabState extends State<ProfileTab> {
 
   Future<void> _testNotification() async {
     try {
-      await showParentNotification('EduTrack Parent — Test', 'Notifications are working. You will be alerted about your child’s attendance.');
+      await showParentNotification('EduTrack Guardian — Test', 'Notifications are working. You will be alerted about your child’s attendance.');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Test notification sent. Check your notification tray.')));
       }
@@ -2382,12 +2382,12 @@ class _ProfileTabState extends State<ProfileTab> {
               ],
               const SizedBox(height: 8),
               const Text(
-                'Installs directly inside the app — no browser needed. When asked, allow “Install unknown apps” for EduTrack Parent, then tap Install.',
+                'Installs directly inside the app — no browser needed. When asked, allow “Install unknown apps” for EduTrack Guardian, then tap Install.',
                 style: TextStyle(fontSize: 11, color: kMuted),
               ),
               const SizedBox(height: 6),
               const Text(
-                'Package conflict fix: uninstall the old EduTrack Parent app once, then install this signed update. After that, future updates will install normally.',
+                'Package conflict fix: uninstall the old EduTrack Guardian app once, then install this signed update. After that, future updates will install normally.',
                 style: TextStyle(fontSize: 11, color: Color(0xFF9A3412), fontWeight: FontWeight.w700),
               ),
             ],
@@ -2434,7 +2434,7 @@ class _ProfileTabState extends State<ProfileTab> {
           ),
         ),
         const SizedBox(height: 20),
-        Center(child: Text('EduTrack Parent • v${_current.isEmpty ? '1.0.1' : _current}', style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5))),
+        Center(child: Text('EduTrack Guardian • v${_current.isEmpty ? '1.0.1' : _current}', style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5))),
       ],
     );
   }

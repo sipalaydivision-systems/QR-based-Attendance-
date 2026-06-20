@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#06996b">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>EduTrack Parent App</title>
+    <title>EduTrack Guardian App</title>
     <link rel="manifest" href="/parent-manifest.webmanifest">
     <link rel="icon" type="image/png" href="/uploads/logos/system-logo.png">
     <link rel="apple-touch-icon" href="/uploads/logos/system-logo.png">
@@ -353,7 +353,7 @@
                             <h4><%= parent.fullname || 'Parent' %></h4>
                             <div class="meta">Contact: <%= parent.contact_number || '' %></div>
                             <div class="meta">Username: <%= parent.username || 'Mobile number login' %></div>
-                            <div class="status-row"><span class="badge"><i class="fa-solid fa-lock"></i> Parent-only access</span></div>
+                            <div class="status-row"><span class="badge"><i class="fa-solid fa-lock"></i> Guardian-only access</span></div>
                         </div>
                     </div>
                     <div class="empty" style="margin-top:12px;">You can only view students linked to your registered guardian contact number.</div>
@@ -518,7 +518,7 @@
             if (seen[note.key]) return;
             seen[note.key] = Date.now();
             try {
-                new Notification(note.title || 'EduTrack Parent', {
+                new Notification(note.title || 'EduTrack Guardian', {
                     body: note.message || '',
                     icon: state.logo || '/uploads/logos/system-logo.png',
                     data: { url: '/parent/app' }
@@ -578,7 +578,7 @@
             return;
         }
         var result = await Notification.requestPermission();
-        if (result === 'granted') alert('Parent notifications are enabled while the app is open or installed.');
+        if (result === 'granted') alert('Guardian notifications are enabled while the app is open or installed.');
     }
     function initDates() {
         var date = todayString();
