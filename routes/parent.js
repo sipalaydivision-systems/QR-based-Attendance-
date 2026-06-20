@@ -408,8 +408,8 @@ async function buildParentNotifications(children, schoolIds, date) {
             notifications.push({
                 key: `flagged-${child.id}-${date}`,
                 type: 'flagged',
-                title: `${child.name} has 2 consecutive absences`,
-                message: 'Please contact the adviser or school for assistance.',
+                title: `${child.name} has ${child.consecutive_absences} consecutive absences`,
+                message: `${child.grade_level} • ${child.section} • ${child.school_name}`,
                 child_id: child.id,
                 child_name: child.name,
                 created_at: `${date} 16:01:00`,
@@ -434,7 +434,7 @@ async function buildParentNotifications(children, schoolIds, date) {
                 title: row.title || 'Announcement',
                 message: row.message || '',
                 created_at: row.created_at,
-                tone: row.type === 'holiday' || row.type === 'no_class' ? 'lunch' : 'in'
+                tone: row.type === 'holiday' || row.type === 'no_class' ? 'holiday' : 'in'
             });
         });
     } else {
@@ -466,7 +466,7 @@ async function buildParentNotifications(children, schoolIds, date) {
                 title: day.type || 'No Classes',
                 message: day.reason || 'No classes are scheduled today.',
                 created_at: `${date} 06:00:00`,
-                tone: 'lunch'
+                tone: 'holiday'
             });
         }
     }
@@ -791,6 +791,45 @@ router.get('/api/parent/notifications', requireParentAuth, async (req, res) => {
         console.error('Parent notifications error:', err);
         return res.status(500).json({ error: 'Failed to load parent notifications.' });
     }
+});
+
+router.post('/api/parent/change-password', requireParentAuth, async (req, res) => {
+    const current = String(req.body.current_password || '');
+    const next = String(req.body.new_password || '');
+    const confirm = String(req.body.confirm_password || '');
+    if (!current || !next || !confirm) {
+        return res.status(400).json({ success: false, error: 'Please complete all password fields.' });
+    }
+    if (next.length < 6) {
+        return res.status(400).json({ success: false, error: 'New password must be at least 6 characters.' });
+    }
+    if (next !== confirm) {
+        return res.status(400).json({ success: false, error: 'New passwords do not match.' });
+    }
+    try {
+        const [[parent]] = await db.query('SELECT id, password FROM parents WHERE id = ? LIMIT 1', [req.session.user.parent_id]);
+        if (!parent) return res.status(404).json({ success: false, error: 'Account not found.' });
+        const ok = await bcrypt.compare(current, parent.password);
+        if (!ok) return res.status(401).json({ success: false, error: 'Your current password is incorrect.' });
+        const hashed = await bcrypt.hash(next, 10);
+        await db.query('UPDATE parents SET password = ? WHERE id = ?', [hashed, parent.id]);
+        return res.json({ success: true });
+    } catch (err) {
+        console.error('Parent change-password error:', err);
+        return res.status(500).json({ success: false, error: 'A server error occurred. Please try again.' });
+    }
+});
+
+// Latest published parent-app version. Bump this (and the Flutter pubspec version)
+// whenever a new APK is released so the in-app updater offers the update.
+const PARENT_APP_LATEST = { version: '1.0.1', version_code: 2 };
+router.get('/api/parent/app-version', (req, res) => {
+    return res.json({
+        latest_version: PARENT_APP_LATEST.version,
+        latest_version_code: PARENT_APP_LATEST.version_code,
+        apk_url: `${req.protocol}://${req.get('host')}/download/parent-app`,
+        notes: 'Refreshed dashboard design, attendance fixes, change password, and in-app updates.'
+    });
 });
 
 module.exports = router;

@@ -4,9 +4,45 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
+import 'package:ota_update/ota_update.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
+const AndroidNotificationChannel _channel = AndroidNotificationChannel(
+  'edutrack_parent',
+  'EduTrack Parent',
+  description: 'Attendance alerts for your child',
+  importance: Importance.high,
+);
+
+Future<void> _initNotifications() async {
+  const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+  await _notifications.initialize(const InitializationSettings(android: android));
+  final impl = _notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+  await impl?.createNotificationChannel(_channel);
+  await impl?.requestNotificationsPermission();
+}
+
+Future<void> showParentNotification(String title, String body) async {
+  await _notifications.show(
+    DateTime.now().millisecondsSinceEpoch.remainder(100000),
+    title,
+    body,
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'edutrack_parent',
+        'EduTrack Parent',
+        channelDescription: 'Attendance alerts for your child',
+        importance: Importance.high,
+        priority: Priority.high,
+      ),
+    ),
+  );
+}
 
 const String kBaseUrl = 'https://sdo-sipalay-edutrack.up.railway.app';
 const String kAppName = 'EduTrack';
@@ -62,6 +98,9 @@ String attendanceScoreLabel(int pct) {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await _initNotifications();
+  } catch (_) {/* notifications are best-effort */}
   final prefs = await SharedPreferences.getInstance();
   runApp(ParentApp(api: ParentApi(prefs)));
 }
@@ -147,6 +186,42 @@ class ParentApi {
         .timeout(const Duration(seconds: 20));
     if (res.statusCode == 401) throw Exception('SESSION_EXPIRED');
     return _decode(res.body);
+  }
+
+  Future<Map<String, dynamic>> branding() async {
+    try {
+      final res = await http
+          .get(Uri.parse('$kBaseUrl/api/parent/branding'), headers: _headers)
+          .timeout(const Duration(seconds: 15));
+      return _decode(res.body);
+    } catch (_) {
+      return <String, dynamic>{};
+    }
+  }
+
+  Future<Map<String, dynamic>> appVersion() async {
+    try {
+      final res = await http
+          .get(Uri.parse('$kBaseUrl/api/parent/app-version'), headers: _headers)
+          .timeout(const Duration(seconds: 15));
+      return _decode(res.body);
+    } catch (_) {
+      return <String, dynamic>{};
+    }
+  }
+
+  Future<Map<String, dynamic>> changePassword(String current, String next, String confirm) async {
+    try {
+      final res = await http
+          .post(Uri.parse('$kBaseUrl/api/parent/change-password'),
+              headers: _headers, body: {'current_password': current, 'new_password': next, 'confirm_password': confirm})
+          .timeout(const Duration(seconds: 20));
+      final data = _decode(res.body);
+      if (res.statusCode == 200 && data['success'] == true) return {'success': true};
+      return {'success': false, 'error': data['error'] ?? 'Could not change password.'};
+    } catch (e) {
+      return {'success': false, 'error': _netError(e)};
+    }
   }
 
   Future<void> logout() async {
@@ -784,6 +859,7 @@ class _HomeShellState extends State<HomeShell> {
   int _child = 0;
   bool _loading = true;
   String? _error;
+  String? _schoolArt;
   Map<String, dynamic> _data = {};
   Timer? _timer;
 
@@ -791,7 +867,15 @@ class _HomeShellState extends State<HomeShell> {
   void initState() {
     super.initState();
     _load();
+    _loadBranding();
     _timer = Timer.periodic(const Duration(seconds: 45), (_) => _load(silent: true));
+  }
+
+  Future<void> _loadBranding() async {
+    final b = await widget.api.branding();
+    if (!mounted) return;
+    final art = '${b['mobile_dashboard_school_art'] ?? ''}';
+    if (art.isNotEmpty) setState(() => _schoolArt = art);
   }
 
   @override
@@ -906,7 +990,7 @@ class _HomeShellState extends State<HomeShell> {
       case 4:
         return ProfileTab(api: widget.api, childCount: _children.length, onLogout: _confirmLogout);
       default:
-        return HomeTab(parentName: widget.api.parentName, children: _children, selected: _child, picker: _childPicker());
+        return HomeTab(parentName: widget.api.parentName, children: _children, selected: _child, picker: _childPicker(), schoolArt: _schoolArt);
     }
   }
 
@@ -1076,11 +1160,12 @@ class _HeaderPatternPainter extends CustomPainter {
 // Home tab — greeting card + stat tiles + Today Analytics donut
 // ---------------------------------------------------------------------------
 class HomeTab extends StatelessWidget {
-  const HomeTab({super.key, required this.parentName, required this.children, required this.selected, this.picker});
+  const HomeTab({super.key, required this.parentName, required this.children, required this.selected, this.picker, this.schoolArt});
   final String parentName;
   final List<dynamic> children;
   final int selected;
   final Widget? picker;
+  final String? schoolArt;
 
   int _count(bool Function(Map<String, dynamic>) test) =>
       children.where((c) => test(c as Map<String, dynamic>)).length;
@@ -1117,7 +1202,7 @@ class HomeTab extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              const SizedBox(width: 120, height: 92, child: _DefaultSchoolArt()),
+              SizedBox(width: 120, height: 92, child: SchoolArt(data: schoolArt)),
             ],
           ),
         ),
@@ -1310,15 +1395,33 @@ class AttendanceTab extends StatelessWidget {
       children: [
         if (picker != null) ...[picker!, const SizedBox(height: 8)],
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Row(children: [
-            const Icon(Icons.assignment_rounded, color: kGreen, size: 20),
-            const SizedBox(width: 8),
-            Text("Today’s Scan History — ${'${child['name']}'.split(',').first}",
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: kInk)),
-          ]),
+          padding: const EdgeInsets.fromLTRB(2, 8, 2, 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const Icon(Icons.assignment_rounded, color: kGreen, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  "Today’s Scan History",
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w900, color: kInk),
+                ),
+              ),
+              Flexible(
+                child: Text(
+                  '${child['name']}'.split(',').first,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: kMuted),
+                ),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         if (timeline.isEmpty)
           Container(padding: const EdgeInsets.all(28), decoration: _cardDecoration(), child: const Center(child: Text('No scans recorded yet today.', style: TextStyle(color: kMuted))))
         else
@@ -1425,7 +1528,7 @@ class AdviserTab extends StatelessWidget {
                 const SizedBox(height: 10),
               ],
               if (email.isNotEmpty)
-                _actionButton(context, Icons.email, 'Send Email', const Color(0xFFEA580C), Uri.parse('mailto:$email?subject=Attendance%20Inquiry&body=$body')),
+                _actionButton(context, Icons.email, 'Send Email', const Color(0xFFEA580C), Uri.parse('mailto:$email?body=$body')),
               if (phone.isEmpty && email.isEmpty)
                 const Text('No adviser contact details on file. Please reach the school office.', style: TextStyle(color: kMuted, fontSize: 12.5)),
             ],
@@ -1450,13 +1553,183 @@ class AdviserTab extends StatelessWidget {
 // ---------------------------------------------------------------------------
 // Profile tab
 // ---------------------------------------------------------------------------
-class ProfileTab extends StatelessWidget {
+class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key, required this.api, required this.childCount, required this.onLogout});
   final ParentApi api;
   final int childCount;
   final VoidCallback onLogout;
   @override
+  State<ProfileTab> createState() => _ProfileTabState();
+}
+
+class _ProfileTabState extends State<ProfileTab> {
+  String _current = '';
+  String _latest = '';
+  String _apkUrl = '$kBaseUrl/download/parent-app';
+  String _notes = '';
+  bool _otaBusy = false;
+  String _otaMsg = '';
+  StreamSubscription<OtaEvent>? _otaSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVersions();
+  }
+
+  @override
+  void dispose() {
+    _otaSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadVersions() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) setState(() => _current = info.version);
+    } catch (_) {/* ignore */}
+    final v = await widget.api.appVersion();
+    if (!mounted) return;
+    setState(() {
+      _latest = '${v['latest_version'] ?? ''}';
+      if ('${v['apk_url'] ?? ''}'.isNotEmpty) _apkUrl = '${v['apk_url']}';
+      _notes = '${v['notes'] ?? ''}';
+    });
+  }
+
+  bool get _updateAvailable {
+    if (_latest.isEmpty || _current.isEmpty) return false;
+    List<int> p(String s) => s.split('.').map((x) => int.tryParse(x.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0).toList();
+    final a = p(_latest), b = p(_current);
+    for (var i = 0; i < a.length; i++) {
+      final bi = i < b.length ? b[i] : 0;
+      if (a[i] != bi) return a[i] > bi;
+    }
+    return false;
+  }
+
+  void _installUpdate() {
+    setState(() {
+      _otaBusy = true;
+      _otaMsg = 'Starting download…';
+    });
+    try {
+      _otaSub = OtaUpdate().execute(_apkUrl, destinationFilename: 'edutrack-parent.apk').listen((OtaEvent event) {
+        if (!mounted) return;
+        setState(() {
+          switch (event.status) {
+            case OtaStatus.DOWNLOADING:
+              _otaMsg = 'Downloading ${event.value ?? '0'}%';
+              break;
+            case OtaStatus.INSTALLING:
+              _otaMsg = 'Opening installer — tap Install to finish.';
+              _otaBusy = false;
+              break;
+            case OtaStatus.PERMISSION_NOT_GRANTED_ERROR:
+              _otaMsg = 'Please allow “Install unknown apps” for EduTrack Parent, then try again.';
+              _otaBusy = false;
+              break;
+            default:
+              _otaMsg = 'Update could not complete. Please try again.';
+              _otaBusy = false;
+          }
+        });
+      }, onError: (Object e) {
+        if (!mounted) return;
+        setState(() {
+          _otaBusy = false;
+          _otaMsg = 'Update failed. Check your connection and try again.';
+        });
+      });
+    } catch (_) {
+      setState(() {
+        _otaBusy = false;
+        _otaMsg = 'Could not start the update.';
+      });
+    }
+  }
+
+  Future<void> _testNotification() async {
+    try {
+      await showParentNotification('EduTrack Parent — Test', 'Notifications are working. You will be alerted about your child’s attendance.');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Test notification sent. Check your notification tray.')));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not send a notification. Please allow notifications in settings.')));
+      }
+    }
+  }
+
+  Future<void> _changePassword() async {
+    final cur = TextEditingController();
+    final nw = TextEditingController();
+    final cf = TextEditingController();
+    bool busy = false;
+    bool obscure = true;
+    String? err;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          Future<void> submit() async {
+            setLocal(() {
+              busy = true;
+              err = null;
+            });
+            final res = await widget.api.changePassword(cur.text, nw.text, cf.text);
+            if (res['success'] == true) {
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password updated successfully.')));
+            } else {
+              setLocal(() {
+                busy = false;
+                err = '${res['error']}';
+              });
+            }
+          }
+
+          InputDecoration dec(String l) => InputDecoration(labelText: l, isDense: true, border: const OutlineInputBorder());
+          return AlertDialog(
+            title: const Text('Change Password'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (err != null)
+                    Padding(padding: const EdgeInsets.only(bottom: 10), child: Text(err!, style: const TextStyle(color: Color(0xFFDC2626), fontSize: 12.5))),
+                  TextField(controller: cur, obscureText: obscure, decoration: dec('Current password')),
+                  const SizedBox(height: 10),
+                  TextField(controller: nw, obscureText: obscure, decoration: dec('New password')),
+                  const SizedBox(height: 10),
+                  TextField(controller: cf, obscureText: obscure, decoration: dec('Confirm new password')),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(onPressed: () => setLocal(() => obscure = !obscure), child: Text(obscure ? 'Show' : 'Hide', style: const TextStyle(fontSize: 12))),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: busy ? null : () => Navigator.pop(ctx), child: const Text('Cancel')),
+              TextButton(
+                onPressed: busy ? null : submit,
+                child: busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Update'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    cur.dispose();
+    nw.dispose();
+    cf.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final api = widget.api;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -1472,6 +1745,7 @@ class ProfileTab extends StatelessWidget {
           ]),
         ),
         const SizedBox(height: 12),
+        // Account info + change password
         Container(
           decoration: _cardDecoration(),
           child: Column(children: [
@@ -1479,22 +1753,122 @@ class ProfileTab extends StatelessWidget {
             const Divider(height: 1),
             _tile(Icons.alternate_email, 'Username', api.parentUsername.isEmpty ? '—' : api.parentUsername),
             const Divider(height: 1),
-            _tile(Icons.family_restroom, 'Linked Children', '$childCount'),
+            ListTile(
+              leading: const Icon(Icons.lock_outline, color: kGreen, size: 20),
+              title: const Text('Change Password', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: kInk)),
+              subtitle: const Text('Update your account password', style: TextStyle(fontSize: 11.5, color: kMuted)),
+              trailing: const Icon(Icons.chevron_right, color: kMuted),
+              onTap: _changePassword,
+            ),
+            const Divider(height: 1),
+            _tile(Icons.family_restroom, 'Linked Children', '${widget.childCount}'),
           ]),
+        ),
+        const SizedBox(height: 12),
+        // App updates
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: _cardDecoration(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: const [
+                Icon(Icons.system_update, color: kGreen, size: 20),
+                SizedBox(width: 8),
+                Text('App Updates', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: kInk)),
+              ]),
+              const SizedBox(height: 8),
+              Text('Installed: v${_current.isEmpty ? '…' : _current}${_latest.isEmpty ? '' : '   •   Latest: v$_latest'}',
+                  style: const TextStyle(fontSize: 12.5, color: kMuted, fontWeight: FontWeight.w600)),
+              if (_updateAvailable) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: const Color(0xFFFFF7ED), border: Border.all(color: const Color(0xFFFED7AA)), borderRadius: BorderRadius.circular(10)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(children: [
+                        Icon(Icons.new_releases, color: Color(0xFFEA580C), size: 18),
+                        SizedBox(width: 6),
+                        Text('Update available', style: TextStyle(color: Color(0xFF9A3412), fontWeight: FontWeight.w800, fontSize: 13)),
+                      ]),
+                      if (_notes.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(_notes, style: const TextStyle(color: Color(0xFF9A3412), fontSize: 12)),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: ElevatedButton.icon(
+                  onPressed: _otaBusy ? null : _installUpdate,
+                  icon: _otaBusy
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.download_rounded, size: 19),
+                  label: Text(_updateAvailable ? 'Install Update Now' : 'Install Latest Version'),
+                  style: ElevatedButton.styleFrom(backgroundColor: kGreen, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                ),
+              ),
+              if (_otaMsg.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(_otaMsg, style: const TextStyle(fontSize: 12, color: kGreenDark, fontWeight: FontWeight.w600)),
+              ],
+              const SizedBox(height: 8),
+              const Text(
+                'Installs directly inside the app — no browser needed. When asked, allow “Install unknown apps” for EduTrack Parent, then tap Install.',
+                style: TextStyle(fontSize: 11, color: kMuted),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Notification test
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: _cardDecoration(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: const [
+                Icon(Icons.notifications_active_outlined, color: kGreen, size: 20),
+                SizedBox(width: 8),
+                Text('Notifications', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: kInk)),
+              ]),
+              const SizedBox(height: 6),
+              const Text('Send yourself a test alert to confirm notifications are working.', style: TextStyle(fontSize: 12, color: kMuted)),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: OutlinedButton.icon(
+                  onPressed: _testNotification,
+                  icon: const Icon(Icons.notifications, color: kGreen, size: 19),
+                  label: const Text('Test Notification', style: TextStyle(color: kGreen, fontWeight: FontWeight.w700)),
+                  style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFBBF7D0)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 16),
         SizedBox(
           width: double.infinity,
           height: 48,
           child: OutlinedButton.icon(
-            onPressed: onLogout,
+            onPressed: widget.onLogout,
             icon: const Icon(Icons.logout, color: Color(0xFFDC2626), size: 19),
             label: const Text('Log Out', style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.w700)),
             style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFFECACA)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
           ),
         ),
         const SizedBox(height: 20),
-        const Center(child: Text('EduTrack Parent • v1.0.0', style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5))),
+        Center(child: Text('EduTrack Parent • v${_current.isEmpty ? '1.0.1' : _current}', style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5))),
       ],
     );
   }
@@ -1533,6 +1907,34 @@ class RingPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(RingPainter oldDelegate) => oldDelegate.progress != progress || oldDelegate.color != color;
+}
+
+// Renders the admin-uploaded school art (same image as the SDS/ASDS dashboard)
+// when available, otherwise the bundled painted school.
+class SchoolArt extends StatelessWidget {
+  const SchoolArt({super.key, this.data});
+  final String? data;
+  @override
+  Widget build(BuildContext context) {
+    final d = (data ?? '').trim();
+    if (d.isNotEmpty) {
+      try {
+        final comma = d.indexOf(',');
+        final encoded = comma != -1 ? d.substring(comma + 1) : d;
+        final bytes = base64Decode(encoded);
+        return Image.memory(
+          bytes,
+          fit: BoxFit.contain,
+          alignment: Alignment.bottomRight,
+          gaplessPlayback: true,
+          errorBuilder: (_, __, ___) => const _DefaultSchoolArt(),
+        );
+      } on FormatException {
+        return const _DefaultSchoolArt();
+      }
+    }
+    return const _DefaultSchoolArt();
+  }
 }
 
 class _DefaultSchoolArt extends StatelessWidget {
@@ -1603,6 +2005,8 @@ IconData toneIcon(String tone) {
       return Icons.restaurant;
     case 'late':
       return Icons.schedule;
+    case 'holiday':
+      return Icons.event_busy; // weekends / holidays / no-class days
     case 'return':
       return Icons.login;
     default:
@@ -1617,6 +2021,8 @@ Color toneColor(String tone) {
     case 'lunch':
     case 'late':
       return const Color(0xFFD97706);
+    case 'holiday':
+      return const Color(0xFF7C3AED); // calm violet for non-school days
     default:
       return kGreen;
   }
