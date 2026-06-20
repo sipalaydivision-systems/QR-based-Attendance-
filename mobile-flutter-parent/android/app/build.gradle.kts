@@ -5,6 +5,11 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val parentReleaseKeystore = file("edutrack-parent-release.jks")
+if (!parentReleaseKeystore.exists()) {
+    throw org.gradle.api.GradleException("Missing parent release keystore. Refusing to build an APK that would break in-app updates.")
+}
+
 android {
     namespace = "ph.gov.sipalay.attendance"
     compileSdk = flutter.compileSdkVersion
@@ -30,11 +35,18 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = parentReleaseKeystore
+            storePassword = System.getenv("PARENT_RELEASE_STORE_PASSWORD") ?: "EduTrackParent2026!"
+            keyAlias = System.getenv("PARENT_RELEASE_KEY_ALIAS") ?: "edutrack-parent"
+            keyPassword = System.getenv("PARENT_RELEASE_KEY_PASSWORD") ?: "EduTrackParent2026!"
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

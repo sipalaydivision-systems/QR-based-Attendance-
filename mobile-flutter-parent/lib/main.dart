@@ -2195,6 +2195,9 @@ class _ProfileTabState extends State<ProfileTab> {
         _otaMsg = 'Opening installer — tap Install to finish.';
       });
       final result = await OpenFilex.open(file.path, type: 'application/vnd.android.package-archive');
+      if (mounted) {
+        setState(() => _otaMsg = 'If Android shows package conflict, uninstall the old EduTrack Parent app once, then install this signed update. Future updates will install normally.');
+      }
       if (result.type != ResultType.done && mounted) {
         setState(() => _otaMsg = 'Allow “Install unknown apps” for EduTrack Parent, then tap Install Update again.');
       }
@@ -2381,6 +2384,11 @@ class _ProfileTabState extends State<ProfileTab> {
               const Text(
                 'Installs directly inside the app — no browser needed. When asked, allow “Install unknown apps” for EduTrack Parent, then tap Install.',
                 style: TextStyle(fontSize: 11, color: kMuted),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Package conflict fix: uninstall the old EduTrack Parent app once, then install this signed update. After that, future updates will install normally.',
+                style: TextStyle(fontSize: 11, color: Color(0xFF9A3412), fontWeight: FontWeight.w700),
               ),
             ],
           ),

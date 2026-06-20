@@ -879,13 +879,13 @@ router.post('/api/parent/change-password', requireParentAuth, async (req, res) =
 
 // Latest published parent-app version. Bump this (and the Flutter pubspec version)
 // whenever a new APK is released so the in-app updater offers the update.
-const PARENT_APP_LATEST = { version: '1.0.4', version_code: 5 };
+const PARENT_APP_LATEST = { version: '1.0.5', version_code: 6 };
 router.get('/api/parent/app-version', (req, res) => {
     return res.json({
         latest_version: PARENT_APP_LATEST.version,
         latest_version_code: PARENT_APP_LATEST.version_code,
         apk_url: `${req.protocol}://${req.get('host')}/download/parent-app`,
-        notes: 'Modern parent welcome banner, compact scroll header, refreshed loading screen, and dashboard card redesign.'
+        notes: 'Fixes Android update signing so future Parent App updates install normally. If Android says package conflict, uninstall the old Parent App once, then install this version.'
     });
 });
 
