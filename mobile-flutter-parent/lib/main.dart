@@ -21,32 +21,51 @@ const AndroidNotificationChannel _channel = AndroidNotificationChannel(
   importance: Importance.high,
 );
 
+// Use the launcher icon for notifications — exactly like the SDS/ASDS app, which
+// guarantees the small icon resource always exists at runtime.
 Future<void> _initNotifications({bool requestPermission = true}) async {
-  const android = AndroidInitializationSettings('@drawable/ic_stat_edutrack');
+  const android = AndroidInitializationSettings('@mipmap/ic_launcher');
   await _notifications.initialize(const InitializationSettings(android: android));
   final impl = _notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
   await impl?.createNotificationChannel(_channel);
   if (requestPermission) await impl?.requestNotificationsPermission();
 }
 
+// Ensure POST_NOTIFICATIONS is granted (Android 13+). Safe to call repeatedly.
+Future<bool> ensureParentNotificationPermission() async {
+  try {
+    final impl = _notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    if (impl == null) return true;
+    final enabled = await impl.areNotificationsEnabled() ?? false;
+    if (enabled) return true;
+    return await impl.requestNotificationsPermission() ?? false;
+  } catch (_) {
+    return false;
+  }
+}
+
 Future<void> showParentNotification(String title, String body, {int? id}) async {
-  await _notifications.show(
-    id ?? DateTime.now().millisecondsSinceEpoch.remainder(100000),
-    title,
-    body,
-    NotificationDetails(
-      android: AndroidNotificationDetails(
-        'edutrack_parent',
-        'EduTrack Guardian',
-        channelDescription: 'Attendance alerts for your child',
-        importance: Importance.high,
-        priority: Priority.high,
-        icon: '@drawable/ic_stat_edutrack',
-        largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
-        styleInformation: BigTextStyleInformation(body, contentTitle: title),
+  try {
+    await _notifications.show(
+      id ?? DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      title,
+      body,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'edutrack_parent',
+          'EduTrack Guardian',
+          channelDescription: 'Attendance alerts for your child',
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+          largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+          styleInformation: BigTextStyleInformation(body, contentTitle: title),
+        ),
       ),
-    ),
-  );
+    );
+  } catch (_) {
+    // Never let a notification failure surface as an app error.
+  }
 }
 
 const String _guardianBackgroundTask = 'guardianNotificationSync';
@@ -265,6 +284,9 @@ String attendanceScoreLabel(int pct) {
 // Admin-uploaded school/system logo (cached across launches). Shown on the
 // splash, login card, header seal, and home greeting instead of the bundled art.
 String gSchoolLogo = '';
+// Admin-uploaded home-screen school illustration, cached so the real artwork
+// shows instantly instead of the painted placeholder.
+String gSchoolArt = '';
 
 // Render a logo value that may be a data URL, an absolute URL, or a server path.
 Widget brandLogoImage(String value, {BoxFit fit = BoxFit.contain, Widget Function()? fallback}) {
@@ -314,6 +336,7 @@ Future<void> main() async {
   } catch (_) {/* notifications are best-effort */}
   final prefs = await SharedPreferences.getInstance();
   gSchoolLogo = prefs.getString('parent_school_logo') ?? '';
+  gSchoolArt = prefs.getString('parent_school_art') ?? '';
   if ((prefs.getString('cookie') ?? '').isNotEmpty) {
     unawaited(scheduleGuardianBackgroundSync());
   }
@@ -1208,8 +1231,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   bool _firstDashboardLoad = true;
   bool _headerCompact = false;
   String? _error;
-  String? _schoolArt;
-  String? _schoolLogo;
+  String? _schoolArt = gSchoolArt.isNotEmpty ? gSchoolArt : null;
+  String? _schoolLogo = gSchoolLogo.isNotEmpty ? gSchoolLogo : null;
   int _unreadCount = 0;
   Map<String, dynamic> _data = {};
   Timer? _timer;
@@ -1222,10 +1245,11 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    ensureParentNotificationPermission();
     widget.api.registerDeviceToken();
     _load();
     _loadBranding();
-    _timer = Timer.periodic(const Duration(seconds: 20), (_) => _load(silent: true));
+    _timer = Timer.periodic(const Duration(seconds: 15), (_) => _load(silent: true));
   }
 
   Future<void> _loadBranding() async {
@@ -1240,6 +1264,10 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     if (logo.isNotEmpty) {
       gSchoolLogo = logo;
       await widget.api.prefs.setString('parent_school_logo', logo);
+    }
+    if (art.isNotEmpty) {
+      gSchoolArt = art;
+      await widget.api.prefs.setString('parent_school_art', art);
     }
   }
 
@@ -2857,9 +2885,18 @@ class _ProfileTabState extends State<ProfileTab> {
     }
   }
 
-  void _testNotification() {
-    // Open the gallery of every notification type. Tapping a card sends that
-    // alert to the system tray (see _NotificationPreviewSheet).
+  Future<void> _testNotification() async {
+    // Make sure notifications are allowed first, then open the gallery. Tapping a
+    // card sends that alert to the system tray (see _NotificationPreviewSheet).
+    final granted = await ensureParentNotificationPermission();
+    if (!mounted) return;
+    if (!granted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Notifications are turned off. Enable them in Settings → Apps → EduTrack Guardian → Notifications.'),
+        duration: Duration(seconds: 5),
+      ));
+      return;
+    }
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: const Color(0xFFF6F8FB),
