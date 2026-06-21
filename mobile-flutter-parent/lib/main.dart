@@ -2258,12 +2258,52 @@ Color parentNotificationColor(Map<String, dynamic> note) {
 
 IconData parentNotificationIcon(Map<String, dynamic> note) {
   final type = '${note['type'] ?? ''}'.toLowerCase();
+  // Distinct icon per exact type so every notification reads at a glance.
+  switch (type) {
+    case 'attendance_time_in':
+      return Icons.login_rounded;
+    case 'attendance_late_time_in':
+      return Icons.running_with_errors_rounded;
+    case 'attendance_pm_time_in':
+      return Icons.wb_sunny_rounded;
+    case 'attendance_pm_late_time_in':
+      return Icons.history_toggle_off_rounded;
+    case 'attendance_lunch_out':
+      return Icons.restaurant_rounded;
+    case 'attendance_returned':
+      return Icons.assignment_return_rounded;
+    case 'attendance_early_out':
+      return Icons.logout_rounded;
+    case 'attendance_completed':
+      return Icons.task_alt_rounded;
+    case 'attendance_absent':
+      return Icons.person_off_rounded;
+    case 'attendance_flagged':
+      return Icons.flag_rounded;
+    case 'announcement_general':
+      return Icons.campaign_rounded;
+    case 'announcement_parent_meeting':
+      return Icons.groups_rounded;
+    case 'announcement_class_meeting':
+      return Icons.meeting_room_rounded;
+    case 'announcement_holiday':
+      return Icons.event_busy_rounded;
+    case 'announcement_school_event':
+      return Icons.celebration_rounded;
+    case 'announcement_emergency':
+      return Icons.warning_amber_rounded;
+    case 'announcement_reminder':
+      return Icons.notifications_active_rounded;
+  }
+  // Fallback for any legacy/unknown types.
   if (type.contains('meeting')) return Icons.groups_rounded;
   if (type.contains('holiday')) return Icons.event_busy_rounded;
   if (type.contains('emergency')) return Icons.warning_amber_rounded;
-  if (type.contains('absent') || type.contains('flagged') || type.contains('early')) return Icons.report_problem_rounded;
+  if (type.contains('absent') || type.contains('flagged')) return Icons.report_problem_rounded;
+  if (type.contains('early')) return Icons.logout_rounded;
   if (type.contains('lunch')) return Icons.restaurant_rounded;
   if (type.contains('completed')) return Icons.task_alt_rounded;
+  if (type.contains('late')) return Icons.running_with_errors_rounded;
   if (type.contains('announcement') || type.contains('reminder') || type.contains('event')) return Icons.campaign_rounded;
   return Icons.login_rounded;
 }
