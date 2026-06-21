@@ -922,8 +922,9 @@ function renderLocalScans(scans = []) {
   const empty = $('localScanEmpty');
   const footerText = $('localLogFooterText');
 
-  // Show only the 6 most recent scans from this device — newest first
-  const localScans = Array.isArray(scans) ? scans.slice(0, 6) : [];
+  // The packaged scanner stays compact; the browser preview can show its full gallery.
+  const previewLimit = window.__EDUTRACK_PREVIEW_FULL_LOG__ ? scans.length : 6;
+  const localScans = Array.isArray(scans) ? scans.slice(0, previewLimit) : [];
   if (footerText) {
     footerText.textContent = `Showing ${localScans.length} record(s) for today - Last updated ${formatShortTime(new Date())}`;
   }

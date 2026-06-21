@@ -6,6 +6,7 @@
  */
 (function () {
   if (window.edutrack) return; // Real Electron preload already present
+  window.__EDUTRACK_PREVIEW_FULL_LOG__ = true;
 
   /* ── Sample data ── */
   var STUDENT = {
@@ -51,11 +52,12 @@
   var SAMPLE_SCANS = [
     { name: 'Juan Dela Cruz',        personType: 'student', category: '',            gradeLevel: 'Grade 3',  sectionName: 'Apple',       schoolName: 'Agripino Elementary School',      scanTime: new Date().toISOString(), eventAction: 'TIME_IN',  attendanceStatus: 'present', displayStatus: 'TIME IN' },
     { name: 'Wesley Hans Platil',    personType: 'student', category: 'shs_student', gradeLevel: 'Grade 11', sectionName: 'STEM - Rizal',schoolName: 'Sipalay City National High School',scanTime: new Date().toISOString(), eventAction: 'TIME_IN',  attendanceStatus: 'late',    displayStatus: 'LATE TIME IN' },
-    { name: 'Mark Anthony Villamor', personType: 'student', category: '',            gradeLevel: 'Grade 4',  sectionName: 'Narra',       schoolName: 'Agripino Elementary School',      scanTime: new Date().toISOString(), eventAction: 'TIME_IN',  attendanceStatus: 'half_day', displayStatus: 'PM LATE TIME IN' },
     { name: 'Ana Liza Buenaventura', personType: 'teacher', category: '',            gradeLevel: 'Grade 6',  sectionName: 'Sampaguita',  schoolName: 'Agripino Elementary School',      scanTime: new Date().toISOString(), eventAction: 'TIME_IN',  attendanceStatus: 'present', displayStatus: 'PM TIME IN' },
-    { name: 'Grace Padayhag',        personType: 'student', category: '',            gradeLevel: 'Grade 5',  sectionName: 'Mango',       schoolName: 'Agripino Elementary School',      scanTime: new Date().toISOString(), eventAction: 'TIME_OUT', attendanceStatus: 'half_day', displayStatus: 'EARLY OUT' },
+    { name: 'Mark Anthony Villamor', personType: 'student', category: '',            gradeLevel: 'Grade 4',  sectionName: 'Narra',       schoolName: 'Agripino Elementary School',      scanTime: new Date().toISOString(), eventAction: 'TIME_IN',  attendanceStatus: 'half_day', displayStatus: 'PM LATE TIME IN' },
+    { name: 'Jose Miguel Ramos',     personType: 'student', category: '',            gradeLevel: 'Grade 5',  sectionName: 'Mango',       schoolName: 'Agripino Elementary School',      scanTime: new Date().toISOString(), eventAction: 'TIME_IN',  attendanceStatus: 'present', displayStatus: 'WELCOME BACK' },
     { name: 'Ricardo Dalisay',       personType: 'teacher', category: 'shs_teacher', gradeLevel: 'Grade 11', sectionName: 'STEM - Rizal',schoolName: 'Sipalay City National High School',scanTime: new Date().toISOString(), eventAction: 'TIME_IN',  attendanceStatus: 'present', displayStatus: 'RETURNED' },
     { name: 'Maria Santos',          personType: 'teacher', category: '',            gradeLevel: 'Grade 6',  sectionName: 'Sampaguita',  schoolName: 'Agripino Elementary School',      scanTime: new Date().toISOString(), eventAction: 'TIME_OUT', attendanceStatus: 'present', displayStatus: 'LUNCH OUT' },
+    { name: 'Grace Padayhag',        personType: 'student', category: '',            gradeLevel: 'Grade 5',  sectionName: 'Mango',       schoolName: 'Agripino Elementary School',      scanTime: new Date().toISOString(), eventAction: 'TIME_OUT', attendanceStatus: 'half_day', displayStatus: 'EARLY OUT' },
     { name: 'Pedro Reyes',           personType: 'student', category: '',            gradeLevel: 'Grade 5',  sectionName: 'Mango',       schoolName: 'Agripino Elementary School',      scanTime: new Date().toISOString(), eventAction: 'TIME_OUT', attendanceStatus: 'present', displayStatus: 'COMPLETED' }
   ];
 
@@ -130,6 +132,12 @@
       return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_IN', status: 'present', display_status: 'PM TIME IN', message: 'PM time in recorded.', person: TEACHER, time: _time(), time_in: _time(), time_out: '11:35 AM' });
     },
     function () {
+      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_IN', status: 'half_day', late_half_day: true, attendance_status: 'Half-Day PM Late', half_day_type: 'pm_only', remarks: 'Afternoon Session Only - Late', display_status: 'PM LATE TIME IN', message: 'PM late time in recorded.', person: SHS_STUDENT, time: _time(), time_in: _time() });
+    },
+    function () {
+      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_IN', status: 'present', display_status: 'WELCOME BACK', message: 'Welcome back. Lunch return recorded.', person: STUDENT, time: _time(), time_in: _time(), time_out: '11:35 AM' });
+    },
+    function () {
       return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_OUT', status: 'half_day', attendance_status: 'Half-Day', half_day_type: 'pm_only', remarks: 'Afternoon Session Only', display_status: 'COMPLETED', message: 'PM time out recorded - marked as HALF-DAY (Afternoon Session Only).', person: SHS_STUDENT, time: _time(), time_in: '01:00 PM', time_out: '04:00 PM' });
     },
     function () {
@@ -137,6 +145,18 @@
     },
     function () {
       return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_OUT', status: 'present', display_status: 'COMPLETED', completed: true, message: 'Time out recorded - attendance for today is complete.', person: TEACHER, time: _time(), time_in: '01:00 PM', time_out: _time() });
+    },
+    function () {
+      return Object.assign({}, BASE_STATUS, { success: true, action: 'ALREADY_RECORDED', status: 'present', display_status: 'TIME IN', message: 'Already recorded. Please wait before scanning again.', person: STUDENT, time: _time(), time_in: '07:05 AM' });
+    },
+    function () {
+      return Object.assign({}, BASE_STATUS, { success: true, action: 'PENDING_TIME_OUT', status: 'present', display_status: 'TIME IN', message: 'Time out is not available yet.', person: SHS_STUDENT, time: _time(), time_in: '07:10 AM' });
+    },
+    function () {
+      return Object.assign({}, BASE_STATUS, { success: true, action: 'ALREADY_COMPLETED', status: 'present', display_status: 'COMPLETED', completed: true, message: 'Attendance for today is already completed.', person: TEACHER, time: _time(), time_in: '07:00 AM', time_out: '04:00 PM' });
+    },
+    function () {
+      return Object.assign({}, BASE_STATUS, { success: false, action: 'ATTENDANCE_CLOSED', status: 'absent', display_status: 'ATTENDANCE CLOSED', error: 'Attendance is already closed for today.', message: 'Attendance is already closed for today.', person: SHS_TEACHER, time: _time() });
     },
     function () {
       return Object.assign({}, BASE_STATUS, { success: false, error: 'QR code not found in the system. Make sure the student or teacher record is active.', person: null });
@@ -150,6 +170,23 @@
 
   function _time() {
     return new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+  }
+
+  function _logRowFromResult(result) {
+    if (window.__EDUTRACK_PREVIEW_MODAL_GALLERY__) return null;
+    if (!result || !result.success || !result.person || !['TIME_IN', 'TIME_OUT'].includes(result.action)) return null;
+    return {
+      name: result.person.name,
+      personType: result.person.type || 'student',
+      category: result.person.category || '',
+      gradeLevel: result.person.grade || '',
+      sectionName: result.person.section || '',
+      schoolName: result.person.school || '',
+      scanTime: new Date().toISOString(),
+      eventAction: result.action,
+      attendanceStatus: result.status || 'present',
+      displayStatus: result.display_status || result.status || 'PRESENT'
+    };
   }
 
   function _halfDayDemo(kind) {
@@ -232,6 +269,16 @@
     submitScan: async function () {
       var result = DEMO_ACTIONS[_demoIdx % DEMO_ACTIONS.length]();
       _demoIdx++;
+      var row = _logRowFromResult(result);
+      if (row) {
+        SAMPLE_SCANS.unshift(row);
+        if (SAMPLE_SCANS.length > 48) SAMPLE_SCANS.length = 48;
+      }
+      result.recentLocalScans = SAMPLE_SCANS.slice();
+      result.localTodayScanCount = SAMPLE_SCANS.length;
+      result.config = Object.assign({}, result.config || BASE_STATUS.config, {
+        summary: { todayScanCount: SAMPLE_SCANS.length }
+      });
       return result;
     },
     checkConnection: async function () { return BASE_STATUS; },
@@ -259,10 +306,43 @@
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
   });
 
+  function _autoPlayAllStatuses() {
+    var params = new URLSearchParams(window.location.search || '');
+    if (params.get('autoplay') !== 'all') return;
+    window.__EDUTRACK_PREVIEW_MODAL_GALLERY__ = true;
+    var interval = Math.max(3300, Number(params.get('interval')) || 3300);
+    var remaining = DEMO_ACTIONS.length;
+    function playNext() {
+      document.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space', key: ' ', bubbles: true }));
+      remaining--;
+      if (remaining > 0) setTimeout(playNext, interval);
+    }
+    setTimeout(playNext, 1200);
+  }
+
+  function _enableFullAttendanceLogPreview() {
+    var style = document.createElement('style');
+    style.textContent = [
+      'html, body { height: auto !important; min-height: 100%; overflow: auto !important; }',
+      '.app-shell { height: auto !important; min-height: 100vh; }',
+      '.scanner-layout { align-items: start; }',
+      '.side-panel { overflow: visible !important; }',
+      '.record-card { height: auto !important; overflow: visible !important; grid-template-rows: auto auto auto !important; }',
+      '.local-table-wrap { overflow: visible !important; max-height: none !important; }',
+      '.local-scan-table td { padding-top: 10px; padding-bottom: 10px; }',
+      '.time-badge .log-status-badge { max-width: 100%; white-space: normal; text-align: center; line-height: 1.15; }'
+    ].join('\n');
+    document.head.appendChild(style);
+  }
+
   /* Visual notice */
   var hint = document.createElement('div');
   hint.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(10,60,42,.88);color:#fff;font:700 12px/1.4 Segoe UI,sans-serif;padding:8px 18px;border-radius:20px;z-index:9999;pointer-events:none;letter-spacing:.4px;';
-  hint.textContent = '⌨ PREVIEW MODE — press Space to demo a scan result';
-  document.addEventListener('DOMContentLoaded', function () { document.body.appendChild(hint); });
+  hint.textContent = 'PREVIEW MODE - real desktop log statuses; modals cycle automatically';
+  document.addEventListener('DOMContentLoaded', function () {
+    _enableFullAttendanceLogPreview();
+    document.body.appendChild(hint);
+  });
   window.addEventListener('load', _autoShowDemoFromUrl);
+  window.addEventListener('load', _autoPlayAllStatuses);
 })();
