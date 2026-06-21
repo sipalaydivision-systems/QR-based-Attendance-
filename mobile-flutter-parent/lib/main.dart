@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -101,50 +100,12 @@ Color _androidNotificationColor(String type) {
   return const Color(0xFF2563EB);
 }
 
-// Render the same Material icon used by the in-app card into the large Android
-// notification icon. This is the colored icon shown at the right of the popup.
-Future<ByteArrayAndroidBitmap?> _androidNotificationLargeIcon(String type) async {
-  if (type.trim().isEmpty) return null;
-  try {
-    final note = <String, dynamic>{'type': type};
-    final icon = parentNotificationIcon(note);
-    final color = parentNotificationColor(note);
-    const size = 96.0;
-    final recorder = ui.PictureRecorder();
-    final canvas = ui.Canvas(recorder);
-    final background = ui.Paint()..color = color.withValues(alpha: .14);
-    canvas.drawCircle(const ui.Offset(size / 2, size / 2), size / 2, background);
-
-    final painter = TextPainter(
-      text: TextSpan(
-        text: String.fromCharCode(icon.codePoint),
-        style: TextStyle(
-          color: color,
-          fontSize: 48,
-          fontFamily: icon.fontFamily,
-          package: icon.fontPackage,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    painter.paint(
-      canvas,
-      ui.Offset((size - painter.width) / 2, (size - painter.height) / 2),
-    );
-
-    final image = await recorder.endRecording().toImage(size.toInt(), size.toInt());
-    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-    image.dispose();
-    if (bytes == null) return null;
-    return ByteArrayAndroidBitmap(bytes.buffer.asUint8List());
-  } catch (_) {
-    return null;
-  }
-}
-
 Future<bool> showParentNotification(String title, String body, {int? id, String type = ''}) async {
   try {
-    final largeIcon = await _androidNotificationLargeIcon(type);
+    // Per-type monochrome small icon + tint color. The large icon is the static
+    // school seal — never rendered at runtime, so it can never block delivery
+    // (a previous version awaited Picture.toImage() which hangs in the background
+    // isolate and silently stopped notifications from firing).
     await _notifications.show(
       id ?? DateTime.now().millisecondsSinceEpoch.remainder(100000),
       title,
@@ -158,7 +119,7 @@ Future<bool> showParentNotification(String title, String body, {int? id, String 
           priority: Priority.high,
           icon: _androidNotificationIcon(type),
           color: _androidNotificationColor(type),
-          largeIcon: largeIcon,
+          largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
           styleInformation: BigTextStyleInformation(body, contentTitle: title),
         ),
       ),
