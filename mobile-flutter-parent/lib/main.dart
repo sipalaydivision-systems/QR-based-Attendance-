@@ -291,6 +291,21 @@ Widget brandLogoImage(String value, {BoxFit fit = BoxFit.contain, Widget Functio
   );
 }
 
+// Splash/login logo — NEVER waits on the network, so it can never show a blank
+// box. Uses a cached data-URL logo if available, otherwise the bundled seal.
+Widget instantBrandLogo({BoxFit fit = BoxFit.contain}) {
+  final v = gSchoolLogo.trim();
+  if (v.startsWith('data:')) {
+    try {
+      final i = v.indexOf(',');
+      final bytes = base64Decode(i != -1 ? v.substring(i + 1) : v);
+      return Image.memory(bytes, fit: fit, gaplessPlayback: true,
+          errorBuilder: (_, __, ___) => Image.asset('assets/images/app_logo.png', fit: fit));
+    } catch (_) {/* fall through to the bundled asset */}
+  }
+  return Image.asset('assets/images/app_logo.png', fit: fit);
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
@@ -650,7 +665,7 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: const [
-                            LiveDot(color: Colors.white, size: 9),
+                            LiveDot(color: Color(0xFFFF3B30), size: 9),
                             SizedBox(width: 8),
                             Text('Initializing Guardian Access', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12.5)),
                           ],
@@ -719,7 +734,7 @@ class AppLogo extends StatelessWidget {
           border: Border.all(color: const Color(0xFFDCEBE4)),
           boxShadow: [BoxShadow(color: kSeal.withValues(alpha: .10), blurRadius: size * .18, offset: Offset(0, size * .06))],
         ),
-        child: brandLogoImage(gSchoolLogo),
+        child: instantBrandLogo(),
       );
 }
 
@@ -2284,7 +2299,7 @@ class _NotificationPreviewSheet extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text('All notification types', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: kInk)),
-                      Text('${samples.length} sample alerts • also sent to your tray', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: kMuted)),
+                      Text('Tap any alert to send it to your tray • ${samples.length} types', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: kMuted)),
                     ],
                   ),
                 ),
@@ -2297,7 +2312,7 @@ class _NotificationPreviewSheet extends StatelessWidget {
               controller: controller,
               padding: const EdgeInsets.fromLTRB(14, 4, 14, 24),
               itemCount: samples.length,
-              itemBuilder: (_, i) => _previewCard(samples[i]),
+              itemBuilder: (ctx, i) => _previewCard(context, samples[i], i),
             ),
           ),
         ],
@@ -2305,54 +2320,74 @@ class _NotificationPreviewSheet extends StatelessWidget {
     );
   }
 
-  Widget _previewCard(Map<String, dynamic> n) {
+  Widget _previewCard(BuildContext context, Map<String, dynamic> n, int index) {
     final color = parentNotificationColor(n);
     final isAlert = parentNotificationCategory(n) == 'alerts';
     final student = '${n['student_name'] ?? ''}'.trim();
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: isAlert ? color.withValues(alpha: .05) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: isAlert ? color.withValues(alpha: .35) : const Color(0xFFE9EEF4)),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CircleAvatar(radius: 21, backgroundColor: color.withValues(alpha: .12), child: Icon(parentNotificationIcon(n), color: color, size: 19)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
+      clipBehavior: Clip.antiAlias,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            showParentNotification('${n['title']}', '${n['message']}', id: 42000 + index);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Sent "${n['title']}" to your notification tray.'), duration: const Duration(seconds: 2)),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(color: color.withValues(alpha: .1), borderRadius: BorderRadius.circular(99)),
-                      child: Text(parentNotificationTypeLabel(n), style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w900)),
-                    ),
-                    const Spacer(),
-                    Text(parentNotificationTime(n), style: const TextStyle(color: kMuted, fontSize: 10.5, fontWeight: FontWeight.w700)),
-                  ],
+                CircleAvatar(radius: 21, backgroundColor: color.withValues(alpha: .12), child: Icon(parentNotificationIcon(n), color: color, size: 19)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(color: color.withValues(alpha: .1), borderRadius: BorderRadius.circular(99)),
+                            child: Text(parentNotificationTypeLabel(n), style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w900)),
+                          ),
+                          const Spacer(),
+                          Text(parentNotificationTime(n), style: const TextStyle(color: kMuted, fontSize: 10.5, fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                      const SizedBox(height: 7),
+                      Text('${n['title']}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: kInk)),
+                      const SizedBox(height: 3),
+                      Text('${n['message']}', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: kMuted, height: 1.28)),
+                      const SizedBox(height: 7),
+                      Row(
+                        children: [
+                          if (student.isNotEmpty) ...[
+                            const Icon(Icons.child_care_rounded, size: 13, color: Color(0xFF94A3B8)),
+                            const SizedBox(width: 4),
+                            Text(student, style: const TextStyle(color: kMuted, fontSize: 11, fontWeight: FontWeight.w700)),
+                          ],
+                          const Spacer(),
+                          Icon(Icons.send_rounded, size: 13, color: color),
+                          const SizedBox(width: 4),
+                          Text('Tap to send', style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w800)),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 7),
-                Text('${n['title']}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: kInk)),
-                const SizedBox(height: 3),
-                Text('${n['message']}', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: kMuted, height: 1.28)),
-                if (student.isNotEmpty) ...[
-                  const SizedBox(height: 7),
-                  Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.child_care_rounded, size: 13, color: Color(0xFF94A3B8)),
-                    const SizedBox(width: 4),
-                    Text(student, style: const TextStyle(color: kMuted, fontSize: 11, fontWeight: FontWeight.w700)),
-                  ]),
-                ],
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -2822,30 +2857,16 @@ class _ProfileTabState extends State<ProfileTab> {
     }
   }
 
-  Future<void> _testNotification() async {
-    final samples = sampleParentNotifications();
-    // Open the in-app gallery of every notification design immediately.
-    if (mounted) {
-      showModalBottomSheet<void>(
-        context: context,
-        backgroundColor: const Color(0xFFF6F8FB),
-        isScrollControlled: true,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
-        builder: (_) => _NotificationPreviewSheet(samples: samples),
-      );
-    }
-    // Fire a few representative system notifications to the tray (staggered so
-    // they appear as distinct alerts), including a strong emergency alert.
-    const previewIds = [0, 1, 6, 9, 15]; // time in, late, early dismissal, flag, emergency
-    var fired = 0;
-    for (final i in previewIds) {
-      if (i >= samples.length) continue;
-      final note = samples[i];
-      Future.delayed(Duration(milliseconds: 400 * fired), () {
-        showParentNotification('${note['title']}', '${note['message']}', id: 41000 + i);
-      });
-      fired++;
-    }
+  void _testNotification() {
+    // Open the gallery of every notification type. Tapping a card sends that
+    // alert to the system tray (see _NotificationPreviewSheet).
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFFF6F8FB),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (_) => _NotificationPreviewSheet(samples: sampleParentNotifications()),
+    );
   }
 
   Future<void> _editProfile() async {
@@ -3121,7 +3142,7 @@ class _ProfileTabState extends State<ProfileTab> {
                 Text('Notifications', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: kInk)),
               ]),
               const SizedBox(height: 6),
-              const Text('Send yourself a test alert to confirm notifications are working.', style: TextStyle(fontSize: 12, color: kMuted)),
+              const Text('Preview every alert type — tap any one to send it to your notification tray.', style: TextStyle(fontSize: 12, color: kMuted)),
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
