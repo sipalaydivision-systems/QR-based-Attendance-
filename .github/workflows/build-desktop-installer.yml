@@ -60,8 +60,17 @@ jobs:
           $status = git status --porcelain
           if ($status) {
             git commit -m "chore: auto-rebuild desktop installer [skip ci]"
-            git push
-            Write-Host "Installer updated and pushed."
+            for ($i = 1; $i -le 5; $i++) {
+              git push
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "Installer updated and pushed."
+                break
+              }
+              Write-Host "Push rejected (attempt $i) — rebasing on latest main and retrying..."
+              git pull --rebase origin main
+              if ($LASTEXITCODE -ne 0) { git rebase --abort }
+              Start-Sleep -Seconds 3
+            }
           } else {
             Write-Host "No changes to installer — skipping commit."
           }
