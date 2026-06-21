@@ -87,6 +87,15 @@
 .sf2-paper.edit-mode .att-cell:hover { background: #fef9c3 !important; }
 .att-cell.ov-absent  { background: #fff1f2; }
 .att-cell.ov-present { background: #f0fdf4; }
+/* SF2 codes: Tardy = upper-half shaded (Late Comer); Cutting = lower-half shaded */
+.att-cell.tardy {
+    background: linear-gradient(to bottom, #9ca3af 0, #9ca3af 50%, transparent 50%, transparent 100%);
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.att-cell.cutting {
+    background: linear-gradient(to bottom, transparent 0, transparent 50%, #9ca3af 50%, #9ca3af 100%);
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
 .sf2-paper.edit-mode .att-cell.pending-change { outline: 2px solid #f59e0b; outline-offset: -1px; }
 .edit-hint { font-size: 0.75rem; color: var(--gray-500); }
 #sf2SaveBtn, #sf2CancelBtn { display: none; }
@@ -122,7 +131,11 @@
 <%
 var DAY_ABBR = ['M','T','W','TH','F'];
 var pSet = new Set(presentSet);
+var lSet = new Set(lateSet);
+var cSet = new Set(cuttingSet);
 function isPresent(studentId, dateStr) { return pSet.has(studentId + '-' + dateStr); }
+function isTardy(studentId, dateStr) { return lSet.has(studentId + '-' + dateStr); }
+function isCutting(studentId, dateStr) { return cSet.has(studentId + '-' + dateStr); }
 
 // Absences only count for school days that have already ended (lastCountable from server)
 var countableDays = schoolDays.filter(function(d) { return d <= lastCountable; });
@@ -213,9 +226,15 @@ function cellHtml(s, d) {
     var ovKey = s.id + '-' + d;
     var isOv = overridesData.hasOwnProperty(ovKey);
     var ovClass = isOv ? (' ' + (overridesData[ovKey] ? 'ov-present' : 'ov-absent')) : '';
+    // Present + late => Tardy (upper shade); present + half_day => Cutting (lower shade).
+    var codeClass = '';
+    if (!isAbs && !isOv) {
+        if (isTardy(s.id, d)) codeClass = ' tardy';
+        else if (isCutting(s.id, d)) codeClass = ' cutting';
+    }
     var attrs = canEdit
-        ? ' att-cell' + ovClass + '" data-sid="' + s.id + '" data-date="' + d + '" data-state="' + state + '" data-original="' + state + '"'
-        : '"';
+        ? ' att-cell' + ovClass + codeClass + '" data-sid="' + s.id + '" data-date="' + d + '" data-state="' + state + '" data-original="' + state + '"'
+        : codeClass + '"';
     return '<td class="day-cell' + attrs + '><span class="att-text">' + (isAbs ? 'x' : '') + '</span></td>';
 }
 %>
@@ -605,6 +624,8 @@ document.addEventListener('click', function(e) {
     cell.setAttribute('data-state', next);
     var txt = cell.querySelector('.att-text');
     if (txt) txt.textContent = next === 'absent' ? 'x' : '';
+    // A manual toggle is plain present/absent — drop any tardy/cutting shading.
+    cell.classList.remove('tardy', 'cutting');
     var orig = cell.getAttribute('data-original');
     cell.classList.toggle('pending-change', next !== orig);
 });

@@ -523,9 +523,10 @@ router.get('/sf2-report', async (req, res) => {
         const startDate = `${year}-${pad2(month)}-01`;
         const endDate = `${year}-${pad2(month)}-${pad2(daysInMonth)}`;
 
-        // Attendance for the month (time_in = present)
+        // Attendance for the month (time_in = present). status drives the SF2
+        // codes: late => Tardy (upper-half shade), half_day => Cutting (lower-half shade).
         const [attendance] = await db.query(
-            `SELECT person_id, DATE_FORMAT(date,'%Y-%m-%d') as date_str, time_in
+            `SELECT person_id, DATE_FORMAT(date,'%Y-%m-%d') as date_str, time_in, status
              FROM attendance
              WHERE person_type = 'student'
                AND school_id = ?
@@ -533,6 +534,15 @@ router.get('/sf2-report', async (req, res) => {
             [teacher.school_id, startDate, endDate]
         );
         const presentSet = new Set(attendance.filter(r => r.time_in).map(r => `${r.person_id}-${r.date_str}`));
+        const lateSet = new Set();
+        const cuttingSet = new Set();
+        attendance.forEach(r => {
+            if (!r.time_in) return;
+            const key = `${r.person_id}-${r.date_str}`;
+            const st = String(r.status || '').toLowerCase();
+            if (st === 'late') lateSet.add(key);
+            else if (st === 'half_day') cuttingSet.add(key);
+        });
 
         // Holidays (national + this school) and manual school-day overrides — same rules
         // the scanner and dashboards use via checkSchoolDay()
@@ -663,11 +673,14 @@ router.get('/sf2-report', async (req, res) => {
              WHERE teacher_id = ? AND date_str BETWEEN ? AND ?`,
             [teacherId, startDate, endDate]
         ).catch(() => [[]]);
-        // Apply overrides on top of scanner data — teacher override takes precedence
+        // Apply overrides on top of scanner data — teacher override takes precedence.
+        // A manual present/absent toggle has no tardy/cutting sub-state, so clear it.
         attOvRows.forEach(r => {
             const key = `${r.student_id}-${r.date_str}`;
             if (r.is_present) presentSet.add(key);
             else presentSet.delete(key);
+            lateSet.delete(key);
+            cuttingSet.delete(key);
         });
         const overridesData = {};
         attOvRows.forEach(r => { overridesData[`${r.student_id}-${r.date_str}`] = r.is_present ? 1 : 0; });
@@ -679,6 +692,8 @@ router.get('/sf2-report', async (req, res) => {
             principal: principal ? principal.fullname : '',
             students,
             presentSet: [...presentSet],
+            lateSet: [...lateSet],
+            cuttingSet: [...cuttingSet],
             schoolDays,
             slots,
             lastCountable,

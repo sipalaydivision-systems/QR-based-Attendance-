@@ -102,6 +102,7 @@
     </div>
 </div>
 
+<% if (!(user && user.role === 'adviser')) { %>
 <div class="card" style="margin-bottom:1rem;">
     <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
         <h3 style="margin:0;"><i class="fa-solid fa-list-check"></i> Recent Parent Notices</h3>
@@ -124,6 +125,7 @@
         </table>
     </div>
 </div>
+<% } %>
 
 <!-- 2-Day Consecutive Absence Alerts -->
 <div class="alert-card">
@@ -338,6 +340,7 @@ function announcementRowHtml(row) {
         + '</tr>';
 }
 function renderTable(body, toggle, data, expanded, rowHtml) {
+    if (!body) return;
     if (!data.length) {
         body.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No records found.</td></tr>';
         if (toggle) toggle.style.display = 'none';
@@ -360,12 +363,14 @@ function renderAnnouncements() {
 }
 function toggleAnnouncements() { announcementsExpanded = !announcementsExpanded; renderAnnouncements(); }
 async function loadAnnouncementRows() {
+    if (!document.getElementById('announcementRows')) return; // hidden for advisers
     try {
         var rows = await (await fetch('/api/notifications')).json();
         announcementsData = Array.isArray(rows) ? rows : [];
         renderAnnouncements();
     } catch(e) {
-        document.getElementById('announcementRows').innerHTML = '<tr><td colspan="5" class="text-center text-danger">Failed to load announcements.</td></tr>';
+        var el = document.getElementById('announcementRows');
+        if (el) el.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Failed to load announcements.</td></tr>';
     }
 }
 
