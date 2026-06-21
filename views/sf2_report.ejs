@@ -218,24 +218,26 @@ function pctAtt(present, registered) {
 var adviserName = [teacher.firstname, teacher.middlename ? teacher.middlename.charAt(0) + '.' : '', teacher.lastname].filter(Boolean).join(' ');
 
 // Render one attendance cell. Returns full <td> HTML string.
+// Cell code per the SF2 legend: present (blank), late (Tardy, upper shade),
+// half_day (Cutting, lower shade), absent (x).
+function cellCode(s, d) {
+    if (isAbsentOn(s, d)) return 'absent';
+    if (isTardy(s.id, d)) return 'late';
+    if (isCutting(s.id, d)) return 'half_day';
+    return 'present';
+}
+function codeClassOf(code) {
+    return code === 'late' ? ' tardy' : (code === 'half_day' ? ' cutting' : '');
+}
 function cellHtml(s, d) {
     if (!d) return '<td class="day-cell"></td>';
     var canEdit = d >= s.enrolled_from && d <= lastCountable;
-    var isAbs = isAbsentOn(s, d);
-    var state = canEdit ? (isAbs ? 'absent' : 'present') : 'locked';
-    var ovKey = s.id + '-' + d;
-    var isOv = overridesData.hasOwnProperty(ovKey);
-    var ovClass = isOv ? (' ' + (overridesData[ovKey] ? 'ov-present' : 'ov-absent')) : '';
-    // Present + late => Tardy (upper shade); present + half_day => Cutting (lower shade).
-    var codeClass = '';
-    if (!isAbs && !isOv) {
-        if (isTardy(s.id, d)) codeClass = ' tardy';
-        else if (isCutting(s.id, d)) codeClass = ' cutting';
-    }
+    var code = cellCode(s, d);
+    var codeClass = codeClassOf(code);
     var attrs = canEdit
-        ? ' att-cell' + ovClass + codeClass + '" data-sid="' + s.id + '" data-date="' + d + '" data-state="' + state + '" data-original="' + state + '"'
+        ? ' att-cell' + codeClass + '" data-sid="' + s.id + '" data-date="' + d + '" data-state="' + code + '" data-original="' + code + '"'
         : codeClass + '"';
-    return '<td class="day-cell' + attrs + '><span class="att-text">' + (isAbs ? 'x' : '') + '</span></td>';
+    return '<td class="day-cell' + attrs + '><span class="att-text">' + (code === 'absent' ? 'x' : '') + '</span></td>';
 }
 %>
 
@@ -594,7 +596,7 @@ function sf2EnterEdit() {
     document.getElementById('sf2EditBtn').style.display = 'none';
     document.getElementById('sf2SaveBtn').style.display = 'inline-flex';
     document.getElementById('sf2CancelBtn').style.display = 'inline-flex';
-    document.getElementById('sf2EditHint').textContent = 'Click any cell to toggle absent/present. Edit remarks below each name.';
+    document.getElementById('sf2EditHint').textContent = 'Click a cell to cycle: Present → Tardy (upper shade) → Cutting (lower shade) → Absent (x). Edit remarks below each name.';
 }
 
 function sf2CancelEdit() {
@@ -613,19 +615,21 @@ function sf2CancelEdit() {
     document.getElementById('sf2EditHint').textContent = '';
 }
 
-// Cell click — toggle absent ↔ present
+// Cell click — cycle Present → Tardy → Cutting → Absent → Present
+var SF2_CYCLE = { present: 'late', late: 'half_day', half_day: 'absent', absent: 'present' };
 document.addEventListener('click', function(e) {
     if (!document.getElementById('sf2Paper').classList.contains('edit-mode')) return;
     var cell = e.target.closest('.att-cell');
     if (!cell) return;
     var curr = cell.getAttribute('data-state');
     if (curr === 'locked') return;
-    var next = curr === 'absent' ? 'present' : 'absent';
+    var next = SF2_CYCLE[curr] || 'present';
     cell.setAttribute('data-state', next);
     var txt = cell.querySelector('.att-text');
     if (txt) txt.textContent = next === 'absent' ? 'x' : '';
-    // A manual toggle is plain present/absent — drop any tardy/cutting shading.
     cell.classList.remove('tardy', 'cutting');
+    if (next === 'late') cell.classList.add('tardy');
+    else if (next === 'half_day') cell.classList.add('cutting');
     var orig = cell.getAttribute('data-original');
     cell.classList.toggle('pending-change', next !== orig);
 });
@@ -641,7 +645,7 @@ function sf2Save() {
         summary[inp.getAttribute('data-key')] = inp.value;
     });
 
-    // Collect attendance overrides (only changed cells)
+    // Collect attendance overrides (only changed cells), with the chosen code
     var overrides = [];
     document.querySelectorAll('.att-cell[data-original]').forEach(function(cell) {
         var orig = cell.getAttribute('data-original');
@@ -650,7 +654,8 @@ function sf2Save() {
             overrides.push({
                 student_id: parseInt(cell.getAttribute('data-sid')),
                 date: cell.getAttribute('data-date'),
-                is_present: curr === 'present' ? 1 : 0
+                code: curr,
+                is_present: curr === 'absent' ? 0 : 1
             });
         }
     });

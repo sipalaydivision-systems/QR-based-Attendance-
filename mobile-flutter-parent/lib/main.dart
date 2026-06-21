@@ -281,7 +281,14 @@ Widget brandLogoImage(String value, {BoxFit fit = BoxFit.contain, Widget Functio
     }
   }
   final url = v.startsWith('http') ? v : (v.startsWith('/') ? '$kBaseUrl$v' : '$kBaseUrl/$v');
-  return Image.network(url, fit: fit, gaplessPlayback: true, errorBuilder: (_, __, ___) => fb());
+  // Show the bundled logo instantly while the network logo loads (no blank box).
+  return Image.network(
+    url,
+    fit: fit,
+    gaplessPlayback: true,
+    loadingBuilder: (ctx, child, progress) => progress == null ? child : fb(),
+    errorBuilder: (_, __, ___) => fb(),
+  );
 }
 
 Future<void> main() async {
@@ -643,9 +650,9 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: const [
-                            LiveDot(color: Colors.white, size: 8),
-                            SizedBox(width: 7),
-                            Text('Initializing Guardian\nAccess', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12.5, height: 1.05)),
+                            LiveDot(color: Colors.white, size: 9),
+                            SizedBox(width: 8),
+                            Text('Initializing Guardian Access', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12.5)),
                           ],
                         ),
                       ),

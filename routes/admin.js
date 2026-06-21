@@ -656,7 +656,7 @@ router.get('/sf2-report', async (req, res) => {
             if (prev && prev.remark_value) summaryMap.school_head = prev.remark_value;
         }
 
-        // SF2 attendance overrides (teacher can toggle absent/present per cell)
+        // SF2 attendance overrides (teacher can set each cell's code per the legend)
         await db.query(`
             CREATE TABLE IF NOT EXISTS sf2_attendance_overrides (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -668,22 +668,25 @@ router.get('/sf2-report', async (req, res) => {
                 UNIQUE KEY uk_sf2_ov (teacher_id, student_id, date_str)
             )
         `).catch(() => {});
+        // Add the 4-state code column on existing installs (present/late/half_day/absent)
+        await db.query("ALTER TABLE sf2_attendance_overrides ADD COLUMN code VARCHAR(10) NULL AFTER is_present").catch(() => {});
         const [attOvRows] = await db.query(
-            `SELECT student_id, date_str, is_present FROM sf2_attendance_overrides
+            `SELECT student_id, date_str, is_present, code FROM sf2_attendance_overrides
              WHERE teacher_id = ? AND date_str BETWEEN ? AND ?`,
             [teacherId, startDate, endDate]
         ).catch(() => [[]]);
         // Apply overrides on top of scanner data — teacher override takes precedence.
-        // A manual present/absent toggle has no tardy/cutting sub-state, so clear it.
         attOvRows.forEach(r => {
             const key = `${r.student_id}-${r.date_str}`;
-            if (r.is_present) presentSet.add(key);
-            else presentSet.delete(key);
+            const code = r.code || (r.is_present ? 'present' : 'absent');
+            presentSet.delete(key);
             lateSet.delete(key);
             cuttingSet.delete(key);
+            if (code === 'present') presentSet.add(key);
+            else if (code === 'late') { presentSet.add(key); lateSet.add(key); }
+            else if (code === 'half_day') { presentSet.add(key); cuttingSet.add(key); }
+            // 'absent' => present stays removed
         });
-        const overridesData = {};
-        attOvRows.forEach(r => { overridesData[`${r.student_id}-${r.date_str}`] = r.is_present ? 1 : 0; });
 
         res.render('sf2_report', {
             title: 'SF2 Report',
@@ -706,7 +709,6 @@ router.get('/sf2-report', async (req, res) => {
             endDate,
             remarksMap,
             summaryMap,
-            overridesData,
             monthParam
         });
     } catch (err) {
@@ -749,18 +751,22 @@ router.post('/sf2-save-remarks', express.json(), async (req, res) => {
                 [remarkRows]
             );
         }
-        // Save attendance overrides (teacher-toggled cells)
+        // Save attendance overrides (teacher-set cell codes per the SF2 legend)
         if (Array.isArray(overrides) && overrides.length) {
+            await db.query("ALTER TABLE sf2_attendance_overrides ADD COLUMN code VARCHAR(10) NULL AFTER is_present").catch(() => {});
             const validDate = /^\d{4}-\d{2}-\d{2}$/;
+            const VALID_CODES = ['present', 'late', 'half_day', 'absent'];
             for (const ov of overrides) {
                 const sid = parseInt(ov.student_id, 10);
                 if (isNaN(sid) || sid <= 0) continue;
                 if (!validDate.test(ov.date)) continue;
-                const isPresent = ov.is_present ? 1 : 0;
+                const code = VALID_CODES.includes(ov.code) ? ov.code : (ov.is_present ? 'present' : 'absent');
+                const isPresent = code === 'absent' ? 0 : 1;
                 await db.query(
-                    `INSERT INTO sf2_attendance_overrides (teacher_id, student_id, date_str, is_present)
-                     VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE is_present = VALUES(is_present), updated_at = CURRENT_TIMESTAMP`,
-                    [teacherId, sid, ov.date, isPresent]
+                    `INSERT INTO sf2_attendance_overrides (teacher_id, student_id, date_str, is_present, code)
+                     VALUES (?, ?, ?, ?, ?)
+                     ON DUPLICATE KEY UPDATE is_present = VALUES(is_present), code = VALUES(code), updated_at = CURRENT_TIMESTAMP`,
+                    [teacherId, sid, ov.date, isPresent, code]
                 );
             }
         }
