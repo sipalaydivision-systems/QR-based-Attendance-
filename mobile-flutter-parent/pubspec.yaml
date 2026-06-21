@@ -1,7 +1,7 @@
 name: edutrack_parent
 description: "EduTrack Guardian App — monitor your child's attendance in real time."
 publish_to: 'none'
-version: 1.0.11+13
+version: 1.0.12+14
 
 environment:
   sdk: ^3.11.5
@@ -16,6 +16,7 @@ dependencies:
   package_info_plus: ^8.3.1
   path_provider: ^2.1.5
   open_filex: ^4.5.0
+  workmanager: ^0.9.0+3
   cupertino_icons: ^1.0.8
 
 dev_dependencies:

@@ -11,6 +11,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:workmanager/workmanager.dart';
 
 final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
 const AndroidNotificationChannel _channel = AndroidNotificationChannel(
@@ -20,12 +21,12 @@ const AndroidNotificationChannel _channel = AndroidNotificationChannel(
   importance: Importance.high,
 );
 
-Future<void> _initNotifications() async {
-  const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+Future<void> _initNotifications({bool requestPermission = true}) async {
+  const android = AndroidInitializationSettings('@drawable/ic_stat_edutrack');
   await _notifications.initialize(const InitializationSettings(android: android));
   final impl = _notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
   await impl?.createNotificationChannel(_channel);
-  await impl?.requestNotificationsPermission();
+  if (requestPermission) await impl?.requestNotificationsPermission();
 }
 
 Future<void> showParentNotification(String title, String body, {int? id}) async {
@@ -40,12 +41,134 @@ Future<void> showParentNotification(String title, String body, {int? id}) async 
         channelDescription: 'Attendance alerts for your child',
         importance: Importance.high,
         priority: Priority.high,
-        icon: '@mipmap/ic_launcher',
+        icon: '@drawable/ic_stat_edutrack',
         largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
         styleInformation: BigTextStyleInformation(body, contentTitle: title),
       ),
     ),
   );
+}
+
+const String _guardianBackgroundTask = 'guardianNotificationSync';
+const String _guardianPeriodicWork = 'edutrack-guardian-notifications-periodic';
+const String _guardianImmediateWork = 'edutrack-guardian-notifications-immediate';
+const String _notifiedPreference = 'parent_notified_notifications';
+const String _workerReadyPreference = 'parent_notification_worker_ready';
+
+String _notificationKey(Map<String, dynamic> note) =>
+    '${note['notification_id'] ?? note['key'] ?? note['created_at'] ?? note['title']}';
+
+bool _isUnreadNotification(Map<String, dynamic> note) =>
+    note['is_read'] != true && note['is_read'] != 1 && '${note['is_read']}' != '1';
+
+int _systemNotificationId(Map<String, dynamic> note) {
+  final value = int.tryParse('${note['notification_id'] ?? ''}');
+  return value != null && value > 0
+      ? value.remainder(2147483647)
+      : _notificationKey(note).hashCode.abs().remainder(2147483647);
+}
+
+Future<bool> _syncGuardianNotificationsInBackground() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final deviceToken = (prefs.getString('parent_device_token') ?? '').trim();
+    if (deviceToken.isEmpty) return true;
+
+    final response = await http
+        .post(
+          Uri.parse('$kBaseUrl/api/parent/device-notifications'),
+          headers: const {'Accept': 'application/json', 'Content-Type': 'application/json'},
+          body: jsonEncode({'device_token': deviceToken}),
+        )
+        .timeout(const Duration(seconds: 25));
+    if (response.statusCode == 401 || response.statusCode == 403) return true;
+    if (response.statusCode != 200) return false;
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) return false;
+    final notes = ((decoded['notifications'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    final notified = (prefs.getStringList(_notifiedPreference) ?? const <String>[]).toSet();
+
+    // The first background run establishes a baseline so an existing inbox does
+    // not produce a burst of old alerts immediately after an update or login.
+    if (prefs.getBool(_workerReadyPreference) != true) {
+      notified.addAll(notes.map(_notificationKey));
+      await prefs.setStringList(_notifiedPreference, notified.take(200).toList());
+      await prefs.setBool(_workerReadyPreference, true);
+      return true;
+    }
+
+    final fresh = notes
+        .where((note) => _isUnreadNotification(note) && !notified.contains(_notificationKey(note)))
+        .toList()
+      ..sort((a, b) {
+        final left = int.tryParse('${a['notification_id'] ?? 0}') ?? 0;
+        final right = int.tryParse('${b['notification_id'] ?? 0}') ?? 0;
+        return left.compareTo(right);
+      });
+    if (fresh.isNotEmpty) await _initNotifications(requestPermission: false);
+    for (final note in fresh.take(8)) {
+      await showParentNotification(
+        '${note['title'] ?? 'EduTrack Guardian'}',
+        '${note['message'] ?? ''}',
+        id: _systemNotificationId(note),
+      );
+      notified.add(_notificationKey(note));
+    }
+    await prefs.setStringList(_notifiedPreference, notified.toList().reversed.take(200).toList());
+    await prefs.setString('parent_notification_worker_last_run', DateTime.now().toIso8601String());
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+@pragma('vm:entry-point')
+void guardianNotificationCallbackDispatcher() {
+  Workmanager().executeTask((taskName, inputData) async {
+    if (taskName != _guardianBackgroundTask) return true;
+    return _syncGuardianNotificationsInBackground();
+  });
+}
+
+Future<void> _initializeGuardianBackgroundSync() async {
+  if (!Platform.isAndroid) return;
+  await Workmanager().initialize(guardianNotificationCallbackDispatcher);
+}
+
+Future<void> scheduleGuardianBackgroundSync() async {
+  if (!Platform.isAndroid) return;
+  try {
+    final constraints = Constraints(networkType: NetworkType.connected);
+    await Workmanager().registerPeriodicTask(
+      _guardianPeriodicWork,
+      _guardianBackgroundTask,
+      frequency: const Duration(minutes: 15),
+      constraints: constraints,
+      existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
+    );
+    await Workmanager().registerOneOffTask(
+      _guardianImmediateWork,
+      _guardianBackgroundTask,
+      initialDelay: const Duration(seconds: 10),
+      constraints: constraints,
+      existingWorkPolicy: ExistingWorkPolicy.replace,
+    );
+  } catch (_) {
+    // Android may defer background registration while system services start.
+  }
+}
+
+Future<void> cancelGuardianBackgroundSync() async {
+  if (!Platform.isAndroid) return;
+  try {
+    await Workmanager().cancelByUniqueName(_guardianPeriodicWork);
+    await Workmanager().cancelByUniqueName(_guardianImmediateWork);
+  } catch (_) {/* best effort */}
 }
 
 // Representative sample of every Guardian notification type — used by the
@@ -165,9 +288,13 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await _initNotifications();
+    await _initializeGuardianBackgroundSync();
   } catch (_) {/* notifications are best-effort */}
   final prefs = await SharedPreferences.getInstance();
   gSchoolLogo = prefs.getString('parent_school_logo') ?? '';
+  if ((prefs.getString('cookie') ?? '').isNotEmpty) {
+    unawaited(scheduleGuardianBackgroundSync());
+  }
   runApp(ParentApp(api: ParentApi(prefs)));
 }
 
@@ -371,14 +498,18 @@ class ParentApi {
   Future<void> logout() async {
     try {
       await http
-          .post(Uri.parse('$kBaseUrl/api/parent/logout'), headers: _headers)
+          .post(Uri.parse('$kBaseUrl/api/parent/logout'), headers: _headers, body: {
+            'device_token': deviceToken,
+          })
           .timeout(const Duration(seconds: 10));
     } catch (_) {/* ignore */}
+    await cancelGuardianBackgroundSync();
     await prefs.remove('cookie');
     await prefs.remove('parent_name');
     await prefs.remove('parent_contact');
     await prefs.remove('parent_username');
     await prefs.remove('parent_notified_notifications');
+    await prefs.remove(_workerReadyPreference);
   }
 
   Map<String, dynamic> _decode(String body) {
@@ -757,6 +888,7 @@ class _LoginScreenState extends State<LoginScreen> {
       try {
         await _initNotifications();
         await widget.api.registerDeviceToken();
+        await scheduleGuardianBackgroundSync();
       } catch (_) {}
       Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => HomeShell(api: widget.api)));
     } else {
@@ -866,6 +998,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       try {
         await _initNotifications();
         await widget.api.registerDeviceToken();
+        await scheduleGuardianBackgroundSync();
       } catch (_) {}
       Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => HomeShell(api: widget.api)), (r) => false);
     } else {
@@ -1156,7 +1289,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         .whereType<Map>()
         .map((n) => Map<String, dynamic>.from(n))
         .toList();
-    final notified = (widget.api.prefs.getStringList('parent_notified_notifications') ?? const <String>[]).toSet();
+    final notified = (widget.api.prefs.getStringList(_notifiedPreference) ?? const <String>[]).toSet();
     final fresh = notes.where((note) {
       final unread = note['is_read'] != true && note['is_read'] != 1;
       return unread && !notified.contains(_noteId(note));
@@ -1169,7 +1302,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     for (final note in notes.take(120)) {
       notified.add(_noteId(note));
     }
-    await widget.api.prefs.setStringList('parent_notified_notifications', notified.take(150).toList());
+    await widget.api.prefs.setStringList(_notifiedPreference, notified.take(200).toList());
+    await widget.api.prefs.setBool(_workerReadyPreference, true);
   }
 
   bool _isAnnouncement(Map<String, dynamic> note) {
@@ -1181,7 +1315,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   Future<void> _showNotificationPopup(Map<String, dynamic> note) async {
     final title = '${note['title'] ?? 'EduTrack Guardian'}';
     final body = '${note['message'] ?? ''}';
-    // Every notification still fires the system push.
+    // Every notification still fires an Android system notification.
     try {
       await showParentNotification(title, body);
     } catch (_) {}

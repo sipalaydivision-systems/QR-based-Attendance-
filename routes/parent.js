@@ -765,7 +765,16 @@ router.post('/api/parent/register', async (req, res) => {
     }
 });
 
-router.post('/api/parent/logout', (req, res) => {
+router.post('/api/parent/logout', async (req, res) => {
+    const deviceToken = String(req.body.device_token || '').trim();
+    const parentId = req.session && req.session.user && (req.session.user.parent_id || req.session.user.id);
+    try {
+        if (deviceToken && parentId) {
+            await db.query('DELETE FROM parent_devices WHERE parent_id = ? AND device_token = ?', [parentId, deviceToken]);
+        }
+    } catch (err) {
+        console.error('Parent device logout cleanup error:', err);
+    }
     req.session.destroy(() => res.json({ success: true }));
 });
 
@@ -848,6 +857,45 @@ router.post('/api/parent/device-token', requireParentAuth, async (req, res) => {
     } catch (err) {
         console.error('Parent device token error:', err);
         return res.status(500).json({ success: false, error: 'Failed to save notification device.' });
+    }
+});
+
+// Token-authenticated inbox for Android WorkManager. This keeps Guardian alerts
+// available after the UI process is closed or its cookie session expires.
+router.post('/api/parent/device-notifications', async (req, res) => {
+    const deviceToken = String(req.body.device_token || '').trim();
+    if (deviceToken.length < 32) {
+        return res.status(401).json({ success: false, error: 'Invalid notification device.' });
+    }
+    try {
+        const [[device]] = await db.query(
+            `SELECT
+                pd.parent_id,
+                p.id,
+                p.guardian_name,
+                p.contact_number,
+                p.normalized_contact,
+                p.username,
+                p.status
+             FROM parent_devices pd
+             INNER JOIN parents p ON p.id = pd.parent_id
+             WHERE pd.device_token = ?
+             LIMIT 1`,
+            [deviceToken]
+        );
+        if (!device || device.status !== 'active') {
+            return res.status(401).json({ success: false, error: 'Notification device is not registered.' });
+        }
+        await db.query('UPDATE parent_devices SET last_seen_at = ?, updated_at = CURRENT_TIMESTAMP WHERE device_token = ?', [nowDateTime(), deviceToken]);
+        const payload = await buildParentPayload(device, todayDate());
+        return res.json({
+            success: true,
+            notifications: payload.notifications || [],
+            unread_count: payload.unread_count || 0
+        });
+    } catch (err) {
+        console.error('Parent background notifications error:', err);
+        return res.status(500).json({ success: false, error: 'Failed to load background notifications.' });
     }
 });
 
@@ -976,13 +1024,13 @@ router.post('/api/parent/profile', requireParentAuth, async (req, res) => {
 
 // Latest published parent-app version. Bump this (and the Flutter pubspec version)
 // whenever a new APK is released so the in-app updater offers the update.
-const PARENT_APP_LATEST = { version: '1.0.11', version_code: 13 };
+const PARENT_APP_LATEST = { version: '1.0.12', version_code: 14 };
 router.get('/api/parent/app-version', (req, res) => {
     return res.json({
         latest_version: PARENT_APP_LATEST.version,
         latest_version_code: PARENT_APP_LATEST.version_code,
         apk_url: `${req.protocol}://${req.get('host')}/download/parent-app`,
-        notes: 'Renames the app to EduTrack Guardian and updates the loading screen wording. Future signed updates continue to install normally.'
+        notes: 'Adds secure Android background notification checks so Guardian alerts can appear after the app is closed.'
     });
 });
 
