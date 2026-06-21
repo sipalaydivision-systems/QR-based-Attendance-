@@ -3635,6 +3635,45 @@ router.get('/notifications', requireAuth, async (req, res) => {
     }
 });
 
+// Targeting scope for the announcement composer — locks the form to what the
+// current role may actually send to (principal: own school; adviser: own section).
+router.get('/notifications/scope', requireRole('super_admin', 'principal', 'adviser'), async (req, res) => {
+    try {
+        const user = req.session.user;
+        const scope = { role: user.role, lock_school: false, lock_section: false, school: null, grade: null, section: null };
+        if (user.role === 'principal') {
+            if (user.school_id) {
+                const [[sc]] = await db.query('SELECT id, name FROM schools WHERE id = ? LIMIT 1', [user.school_id]);
+                scope.school = sc || { id: user.school_id, name: 'My School' };
+                scope.lock_school = true;
+            }
+        } else if (user.role === 'adviser') {
+            const [[teacher]] = await db.query(
+                `SELECT t.school_id, t.grade_level_id, t.section_id,
+                        sc.name AS school_name, gl.name AS grade_name, sec.name AS section_name
+                 FROM teachers t
+                 LEFT JOIN schools sc ON t.school_id = sc.id
+                 LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
+                 LEFT JOIN sections sec ON t.section_id = sec.id
+                 WHERE t.id = ?
+                 LIMIT 1`,
+                [user.teacher_id || 0]
+            );
+            if (teacher && teacher.school_id && teacher.section_id) {
+                scope.school = { id: teacher.school_id, name: teacher.school_name || 'My School' };
+                scope.grade = teacher.grade_level_id ? { id: teacher.grade_level_id, name: teacher.grade_name || '' } : null;
+                scope.section = { id: teacher.section_id, name: teacher.section_name || 'My Section' };
+                scope.lock_school = true;
+                scope.lock_section = true;
+            }
+        }
+        return res.json(scope);
+    } catch (err) {
+        console.error('Notification scope error:', err);
+        return res.status(500).json({ error: 'Failed to load notification scope.' });
+    }
+});
+
 router.post('/notifications', requireRole('super_admin', 'principal', 'adviser'), async (req, res) => {
     const {
         title,

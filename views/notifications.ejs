@@ -211,17 +211,53 @@ function targetLabel(row) {
     if (row.school_name) return row.school_name;
     return 'All parents';
 }
+var annScope = null;
+function applyAnnouncementScope() {
+    if (!annScope) return;
+    var role = annScope.role;
+    var schoolEl = document.getElementById('annSchool');
+    var sectionEl = document.getElementById('annSection');
+    var audienceEl = document.getElementById('annAudience');
+    var schoolGroup = schoolEl.closest('.form-group');
+    var gradeGroup = document.getElementById('annGrade').closest('.form-group');
+    // Lock the school to the principal's / adviser's own school.
+    if (annScope.lock_school && annScope.school) {
+        schoolEl.innerHTML = '<option value="' + escapeHtml(annScope.school.id) + '">' + escapeHtml(annScope.school.name) + '</option>';
+        schoolEl.value = String(annScope.school.id);
+        schoolEl.disabled = true;
+    }
+    if (role === 'adviser') {
+        // Advisers may only message their own advisory section (or one student in it).
+        audienceEl.innerHTML = '<option value="section">All parents in my section</option>'
+            + '<option value="student">One student in my section</option>';
+        audienceEl.value = 'section';
+        if (annScope.lock_section && annScope.section) {
+            sectionEl.innerHTML = '<option value="' + escapeHtml(annScope.section.id) + '">' + escapeHtml(annScope.section.name) + '</option>';
+            sectionEl.value = String(annScope.section.id);
+            sectionEl.disabled = true;
+        }
+        if (schoolGroup) schoolGroup.style.display = 'none';
+        if (gradeGroup) gradeGroup.style.display = 'none';
+    }
+}
 async function populateAnnouncementFilters() {
     try {
-        var schools = await (await fetch('/api/schools')).json();
-        var schoolEl = document.getElementById('annSchool');
-        if (Array.isArray(schools)) {
-            schoolEl.innerHTML = '<option value="">All / My School</option>' + schools.map(function(s){
-                return '<option value="' + escapeHtml(s.id) + '">' + escapeHtml(s.name) + '</option>';
-            }).join('');
-        }
-    } catch(e) {}
+        annScope = await (await fetch('/api/notifications/scope')).json();
+    } catch(e) { annScope = { role: '<%= user ? user.role : "" %>' }; }
+    if (!(annScope && annScope.lock_school && annScope.school)) {
+        try {
+            var schools = await (await fetch('/api/schools')).json();
+            var schoolEl = document.getElementById('annSchool');
+            if (Array.isArray(schools)) {
+                schoolEl.innerHTML = '<option value="">All / My School</option>' + schools.map(function(s){
+                    return '<option value="' + escapeHtml(s.id) + '">' + escapeHtml(s.name) + '</option>';
+                }).join('');
+            }
+        } catch(e) {}
+    }
+    applyAnnouncementScope();
     await loadGradesAndSections();
+    updateAnnouncementAudience();
 }
 async function loadGradesAndSections() {
     var schoolId = document.getElementById('annSchool').value;
@@ -235,6 +271,7 @@ async function loadGradesAndSections() {
     await loadSections();
 }
 async function loadSections() {
+    if (annScope && annScope.lock_section) return; // adviser section is fixed
     var schoolId = document.getElementById('annSchool').value;
     var gradeId = document.getElementById('annGrade').value;
     var url = '/api/sections?' + new URLSearchParams({
@@ -250,9 +287,18 @@ async function loadSections() {
 }
 function updateAnnouncementAudience() {
     var audience = document.getElementById('annAudience').value;
+    var isAdviser = annScope && annScope.role === 'adviser';
+    var gradeGroup = document.getElementById('annGrade').closest('.form-group');
+    var sectionGroup = document.getElementById('annSection').closest('.form-group');
     document.getElementById('annStudentWrap').style.display = audience === 'student' ? '' : 'none';
-    document.getElementById('annGrade').closest('.form-group').style.display = (audience === 'grade' || audience === 'section' || audience === 'student') ? '' : 'none';
-    document.getElementById('annSection').closest('.form-group').style.display = (audience === 'section' || audience === 'student') ? '' : 'none';
+    if (isAdviser) {
+        // Grade/school are implied; the locked section is always shown.
+        if (gradeGroup) gradeGroup.style.display = 'none';
+        if (sectionGroup) sectionGroup.style.display = '';
+        return;
+    }
+    if (gradeGroup) gradeGroup.style.display = (audience === 'grade' || audience === 'section' || audience === 'student') ? '' : 'none';
+    if (sectionGroup) sectionGroup.style.display = (audience === 'section' || audience === 'student') ? '' : 'none';
 }
 async function loadAnnouncementRows() {
     try {
@@ -394,7 +440,6 @@ async function loadNotifications() {
 loadNotifications();
 populateAnnouncementFilters();
 loadAnnouncementRows();
-updateAnnouncementAudience();
 document.getElementById('announcementForm').addEventListener('submit', sendAnnouncement);
 document.getElementById('annAudience').addEventListener('change', updateAnnouncementAudience);
 document.getElementById('annSchool').addEventListener('change', loadGradesAndSections);
