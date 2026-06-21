@@ -3674,6 +3674,56 @@ router.get('/notifications/scope', requireRole('super_admin', 'principal', 'advi
     }
 });
 
+// Parent contact directory — guardian name + number linked to each child, scoped
+// to the caller (adviser: own section, principal: own school). Lets advisers and
+// principals reach a child's parent. Stays in sync with the app's profile editor.
+router.get('/parent-contacts', requireRole('super_admin', 'principal', 'adviser'), async (req, res) => {
+    try {
+        const user = req.session.user;
+        let where = `s.status != 'deleted' AND s.guardian_contact IS NOT NULL AND s.guardian_contact != ''`;
+        const params = [];
+        if (user.role === 'adviser') {
+            const [[teacher]] = await db.query('SELECT section_id FROM teachers WHERE id = ? LIMIT 1', [user.teacher_id || 0]);
+            if (!teacher || !teacher.section_id) return res.json([]);
+            where += ' AND s.section_id = ?';
+            params.push(teacher.section_id);
+        } else if (user.role === 'principal') {
+            if (!user.school_id) return res.json([]);
+            where += ' AND s.school_id = ?';
+            params.push(user.school_id);
+        } else {
+            const schoolId = applySchoolFilter(req);
+            if (schoolId) { where += ' AND s.school_id = ?'; params.push(schoolId); }
+        }
+        const [rows] = await db.query(
+            `SELECT s.id AS student_id, s.firstname, s.lastname, s.middlename,
+                    s.guardian_name, s.guardian_contact,
+                    gl.name AS grade_name, sec.name AS section_name, sc.name AS school_name
+             FROM students s
+             LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id
+             LEFT JOIN sections sec ON s.section_id = sec.id
+             LEFT JOIN schools sc ON s.school_id = sc.id
+             WHERE ${where}
+             ORDER BY s.lastname, s.firstname
+             LIMIT 1000`,
+            params
+        );
+        const contacts = rows.map(r => ({
+            student_id: r.student_id,
+            student_name: [r.lastname, r.firstname].filter(Boolean).join(', ') + (r.middlename ? ` ${r.middlename.charAt(0)}.` : ''),
+            grade_name: r.grade_name || '',
+            section_name: r.section_name || '',
+            school_name: r.school_name || '',
+            guardian_name: r.guardian_name || '',
+            guardian_contact: r.guardian_contact || ''
+        }));
+        return res.json(contacts);
+    } catch (err) {
+        console.error('Parent contacts error:', err);
+        return res.status(500).json({ error: 'Failed to load parent contacts.' });
+    }
+});
+
 router.post('/notifications', requireRole('super_admin', 'principal', 'adviser'), async (req, res) => {
     const {
         title,

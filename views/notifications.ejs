@@ -78,9 +78,34 @@
     </form>
 </div>
 
+<!-- Parent Contact Directory -->
 <div class="card" style="margin-bottom:1rem;">
-    <div class="card-header">
+    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <h3 style="margin:0;"><i class="fa-solid fa-address-book"></i> Parent Contacts</h3>
+        <button type="button" id="contactsToggle" class="btn btn-sm btn-outline" style="display:none;" onclick="toggleParentContacts()">See all</button>
+    </div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Child</th>
+                    <th>Grade / Section</th>
+                    <th>Parent / Guardian</th>
+                    <th>Contact Number</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="parentContactRows">
+                <tr><td colspan="5" class="text-center text-muted">Loading parent contacts...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom:1rem;">
+    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
         <h3 style="margin:0;"><i class="fa-solid fa-list-check"></i> Recent Parent Notices</h3>
+        <button type="button" id="announcementsToggle" class="btn btn-sm btn-outline" style="display:none;" onclick="toggleAnnouncements()">See all</button>
     </div>
     <div class="table-responsive">
         <table class="data-table">
@@ -300,25 +325,79 @@ function updateAnnouncementAudience() {
     if (gradeGroup) gradeGroup.style.display = (audience === 'grade' || audience === 'section' || audience === 'student') ? '' : 'none';
     if (sectionGroup) sectionGroup.style.display = (audience === 'section' || audience === 'student') ? '' : 'none';
 }
+var MAX_TABLE_ROWS = 6;
+var announcementsData = [];
+var announcementsExpanded = false;
+function announcementRowHtml(row) {
+    return '<tr>'
+        + '<td><span class="badge badge-active">' + escapeHtml(announcementTypeLabel(row.type)) + '</span></td>'
+        + '<td><strong>' + escapeHtml(row.title || '-') + '</strong><div class="text-muted" style="font-size:.75rem;">' + escapeHtml(row.message || '') + '</div></td>'
+        + '<td>' + escapeHtml(targetLabel(row)) + '</td>'
+        + '<td>' + escapeHtml(row.created_by_name || row.created_by_role || 'System') + '</td>'
+        + '<td>' + escapeHtml(row.created_at ? new Date(row.created_at).toLocaleString() : '-') + '</td>'
+        + '</tr>';
+}
+function renderTable(body, toggle, data, expanded, rowHtml) {
+    if (!data.length) {
+        body.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No records found.</td></tr>';
+        if (toggle) toggle.style.display = 'none';
+        return;
+    }
+    var list = expanded ? data : data.slice(0, MAX_TABLE_ROWS);
+    body.innerHTML = list.map(rowHtml).join('');
+    if (toggle) {
+        if (data.length > MAX_TABLE_ROWS) {
+            toggle.style.display = '';
+            toggle.textContent = expanded ? 'Show less' : ('See all (' + data.length + ')');
+        } else {
+            toggle.style.display = 'none';
+        }
+    }
+}
+function renderAnnouncements() {
+    renderTable(document.getElementById('announcementRows'), document.getElementById('announcementsToggle'),
+        announcementsData, announcementsExpanded, announcementRowHtml);
+}
+function toggleAnnouncements() { announcementsExpanded = !announcementsExpanded; renderAnnouncements(); }
 async function loadAnnouncementRows() {
     try {
         var rows = await (await fetch('/api/notifications')).json();
-        var body = document.getElementById('announcementRows');
-        if (!Array.isArray(rows) || rows.length === 0) {
-            body.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No announcements yet.</td></tr>';
-            return;
-        }
-        body.innerHTML = rows.slice(0, 25).map(function(row) {
-            return '<tr>'
-                + '<td><span class="badge badge-active">' + escapeHtml(announcementTypeLabel(row.type)) + '</span></td>'
-                + '<td><strong>' + escapeHtml(row.title || '-') + '</strong><div class="text-muted" style="font-size:.75rem;">' + escapeHtml(row.message || '') + '</div></td>'
-                + '<td>' + escapeHtml(targetLabel(row)) + '</td>'
-                + '<td>' + escapeHtml(row.created_by_name || row.created_by_role || 'System') + '</td>'
-                + '<td>' + escapeHtml(row.created_at ? new Date(row.created_at).toLocaleString() : '-') + '</td>'
-                + '</tr>';
-        }).join('');
+        announcementsData = Array.isArray(rows) ? rows : [];
+        renderAnnouncements();
     } catch(e) {
         document.getElementById('announcementRows').innerHTML = '<tr><td colspan="5" class="text-center text-danger">Failed to load announcements.</td></tr>';
+    }
+}
+
+var parentContactsData = [];
+var parentContactsExpanded = false;
+function parentContactRowHtml(c) {
+    var phone = String(c.guardian_contact || '').replace(/[^0-9+]/g, '');
+    var action = phone
+        ? '<div style="display:flex;gap:6px;flex-wrap:wrap;">'
+            + '<a class="btn btn-sm btn-outline" href="tel:' + encodeURIComponent(phone) + '">Call</a>'
+            + '<a class="btn btn-sm btn-outline" href="sms:' + encodeURIComponent(phone) + '">SMS</a></div>'
+        : '<span class="text-muted">No number</span>';
+    return '<tr>'
+        + '<td><strong>' + escapeHtml(c.student_name || '-') + '</strong></td>'
+        + '<td>' + escapeHtml((c.grade_name || '-') + ' / ' + (c.section_name || '-')) + '</td>'
+        + '<td>' + escapeHtml(c.guardian_name || '—') + '</td>'
+        + '<td>' + escapeHtml(c.guardian_contact || '—') + '</td>'
+        + '<td>' + action + '</td>'
+        + '</tr>';
+}
+function renderParentContacts() {
+    renderTable(document.getElementById('parentContactRows'), document.getElementById('contactsToggle'),
+        parentContactsData, parentContactsExpanded, parentContactRowHtml);
+}
+function toggleParentContacts() { parentContactsExpanded = !parentContactsExpanded; renderParentContacts(); }
+async function loadParentContacts() {
+    try {
+        var rows = await (await fetch('/api/parent-contacts')).json();
+        parentContactsData = Array.isArray(rows) ? rows : [];
+        renderParentContacts();
+    } catch(e) {
+        document.getElementById('parentContactRows').innerHTML = '<tr><td colspan="5" class="text-center text-danger">Failed to load parent contacts.</td></tr>';
     }
 }
 async function sendAnnouncement(event) {
@@ -440,6 +519,7 @@ async function loadNotifications() {
 loadNotifications();
 populateAnnouncementFilters();
 loadAnnouncementRows();
+loadParentContacts();
 document.getElementById('announcementForm').addEventListener('submit', sendAnnouncement);
 document.getElementById('annAudience').addEventListener('change', updateAnnouncementAudience);
 document.getElementById('annSchool').addEventListener('change', loadGradesAndSections);
