@@ -793,6 +793,21 @@ router.get('/api/parent/branding', requireParentAuth, async (req, res) => {
     }
 });
 
+// Public branding (no login) so the splash/login screen can show the
+// admin-uploaded school logo before the guardian signs in.
+router.get('/api/parent/public-branding', async (req, res) => {
+    try {
+        const branding = await loadBranding();
+        return res.json({
+            system_logo: branding.system_logo || '',
+            system_name: branding.system_name || 'EduTrack',
+            division_name: branding.division_name || 'Schools Division of Sipalay City'
+        });
+    } catch (err) {
+        return res.json({});
+    }
+});
+
 router.get('/api/parent/dashboard', requireParentAuth, async (req, res) => {
     try {
         const date = req.query.date || todayDate();
@@ -879,7 +894,7 @@ router.post('/api/parent/change-password', requireParentAuth, async (req, res) =
 
 // Latest published parent-app version. Bump this (and the Flutter pubspec version)
 // whenever a new APK is released so the in-app updater offers the update.
-const PARENT_APP_LATEST = { version: '1.0.7', version_code: 8 };
+const PARENT_APP_LATEST = { version: '1.0.8', version_code: 9 };
 router.get('/api/parent/app-version', (req, res) => {
     return res.json({
         latest_version: PARENT_APP_LATEST.version,

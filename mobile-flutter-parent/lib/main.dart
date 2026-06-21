@@ -100,12 +100,35 @@ String attendanceScoreLabel(int pct) {
   return 'Needs Attention';
 }
 
+// Admin-uploaded school/system logo (cached across launches). Shown on the
+// splash, login card, header seal, and home greeting instead of the bundled art.
+String gSchoolLogo = '';
+
+// Render a logo value that may be a data URL, an absolute URL, or a server path.
+Widget brandLogoImage(String value, {BoxFit fit = BoxFit.contain, Widget Function()? fallback}) {
+  final v = value.trim();
+  Widget fb() => fallback != null ? fallback() : Image.asset('assets/images/app_logo.png', fit: fit);
+  if (v.isEmpty) return fb();
+  if (v.startsWith('data:')) {
+    try {
+      final i = v.indexOf(',');
+      final bytes = base64Decode(i != -1 ? v.substring(i + 1) : v);
+      return Image.memory(bytes, fit: fit, gaplessPlayback: true, errorBuilder: (_, __, ___) => fb());
+    } catch (_) {
+      return fb();
+    }
+  }
+  final url = v.startsWith('http') ? v : (v.startsWith('/') ? '$kBaseUrl$v' : '$kBaseUrl/$v');
+  return Image.network(url, fit: fit, gaplessPlayback: true, errorBuilder: (_, __, ___) => fb());
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await _initNotifications();
   } catch (_) {/* notifications are best-effort */}
   final prefs = await SharedPreferences.getInstance();
+  gSchoolLogo = prefs.getString('parent_school_logo') ?? '';
   runApp(ParentApp(api: ParentApi(prefs)));
 }
 
@@ -248,6 +271,21 @@ class ParentApi {
     }
   }
 
+  // Pre-login branding so the splash/login can show the admin-uploaded logo.
+  Future<void> refreshPublicBranding() async {
+    try {
+      final res = await http
+          .get(Uri.parse('$kBaseUrl/api/parent/public-branding'))
+          .timeout(const Duration(seconds: 10));
+      final data = _decode(res.body);
+      final logo = '${data['system_logo'] ?? ''}'.trim();
+      if (logo.isNotEmpty) {
+        gSchoolLogo = logo;
+        await prefs.setString('parent_school_logo', logo);
+      }
+    } catch (_) {/* best-effort branding refresh */}
+  }
+
   Future<Map<String, dynamic>> appVersion() async {
     try {
       final res = await http
@@ -337,6 +375,10 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
   void initState() {
     super.initState();
     controller = AnimationController(vsync: this, duration: const Duration(seconds: 4))..repeat(reverse: true);
+    // Refresh the admin-uploaded logo before navigating (best-effort, non-blocking).
+    widget.api.refreshPublicBranding().then((_) {
+      if (mounted) setState(() {});
+    });
     Timer.periodic(const Duration(milliseconds: 30), (timer) {
       if (!mounted) return timer.cancel();
       setState(() => progress = math.min(1, progress + .02));
@@ -482,7 +524,7 @@ class AppLogo extends StatelessWidget {
           border: Border.all(color: const Color(0xFFDCEBE4)),
           boxShadow: [BoxShadow(color: kSeal.withValues(alpha: .10), blurRadius: size * .18, offset: Offset(0, size * .06))],
         ),
-        child: Image.asset('assets/images/app_logo.png', fit: BoxFit.contain),
+        child: brandLogoImage(gSchoolLogo),
       );
 }
 
@@ -956,6 +998,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   bool _headerCompact = false;
   String? _error;
   String? _schoolArt;
+  String? _schoolLogo;
   int _unreadCount = 0;
   Map<String, dynamic>? _bannerNote;
   Map<String, dynamic> _data = {};
@@ -979,7 +1022,15 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     final b = await widget.api.branding();
     if (!mounted) return;
     final art = '${b['mobile_dashboard_school_art'] ?? ''}';
-    if (art.isNotEmpty) setState(() => _schoolArt = art);
+    final logo = '${b['system_logo'] ?? ''}';
+    setState(() {
+      if (art.isNotEmpty) _schoolArt = art;
+      if (logo.isNotEmpty) _schoolLogo = logo;
+    });
+    if (logo.isNotEmpty) {
+      gSchoolLogo = logo;
+      await widget.api.prefs.setString('parent_school_logo', logo);
+    }
   }
 
   @override
@@ -1141,6 +1192,22 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     });
   }
 
+  Future<void> _markNotificationRead(int id) async {
+    if (id <= 0) return;
+    // Optimistic local update, then reconcile with the server's unread count.
+    final updated = Map<String, dynamic>.from(_data);
+    final notes = ((_data['notifications'] as List?) ?? const []).map((n) {
+      final item = Map<String, dynamic>.from(n as Map);
+      if ('${item['notification_id']}' == '$id') item['is_read'] = true;
+      return item;
+    }).toList();
+    updated['notifications'] = notes;
+    setState(() => _data = updated);
+    final unread = await widget.api.markNotificationsRead([id]);
+    if (!mounted) return;
+    setState(() => _unreadCount = unread);
+  }
+
   Future<void> _logout() async {
     await widget.api.logout();
     if (!mounted) return;
@@ -1154,7 +1221,12 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         children: [
           Column(
             children: [
-              ParentHeader(onLogout: _confirmLogout, compact: _headerCompact),
+              ParentHeader(
+                onLogout: _confirmLogout,
+                compact: _headerCompact,
+                unreadCount: _unreadCount,
+                onBell: () => setState(() => _tab = 2),
+              ),
               Expanded(
                 child: _loading
                     ? const Center(child: CircularProgressIndicator(color: kGreen))
@@ -1245,13 +1317,18 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       case 1:
         return AttendanceTab(child: _selectedChild!, picker: _childPicker());
       case 2:
-        return NotificationsTab(notifications: _notifications);
+        return NotificationsTab(
+          notifications: _notifications,
+          child: _selectedChild,
+          onMarkRead: _markNotificationRead,
+          onMarkAllRead: _markAllNotificationsRead,
+        );
       case 3:
         return AdviserTab(child: _selectedChild!, picker: _childPicker());
       case 4:
         return ProfileTab(api: widget.api, childCount: _children.length, onLogout: _confirmLogout);
       default:
-        return HomeTab(parentName: widget.api.parentName, children: _children, selected: _child, picker: _childPicker(), schoolArt: _schoolArt);
+        return HomeTab(parentName: widget.api.parentName, children: _children, selected: _child, picker: _childPicker(), schoolArt: _schoolArt, schoolLogo: _schoolLogo);
     }
   }
 
@@ -1392,9 +1469,17 @@ class ParentNotificationBanner extends StatelessWidget {
 // Green gradient header (same as SDS/ASDS dashboard)
 // ---------------------------------------------------------------------------
 class ParentHeader extends StatelessWidget {
-  const ParentHeader({super.key, required this.onLogout, required this.compact});
+  const ParentHeader({
+    super.key,
+    required this.onLogout,
+    required this.compact,
+    this.unreadCount = 0,
+    this.onBell,
+  });
   final VoidCallback onLogout;
   final bool compact;
+  final int unreadCount;
+  final VoidCallback? onBell;
 
   @override
   Widget build(BuildContext context) {
@@ -1452,6 +1537,8 @@ class ParentHeader extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 10),
+                      _bellAction(actionSize),
+                      const SizedBox(width: 8),
                       _headerAction(Icons.logout_rounded, onLogout, actionSize),
                     ],
                   ),
@@ -1488,7 +1575,7 @@ class ParentHeader extends StatelessWidget {
           border: Border.all(color: Colors.white.withValues(alpha: .45), width: 3),
           boxShadow: [BoxShadow(color: const Color(0xFF06301F).withValues(alpha: .28), blurRadius: 12, offset: const Offset(0, 4))],
         ),
-        child: ClipOval(child: Image.asset('assets/images/app_logo.png', fit: BoxFit.contain)),
+        child: ClipOval(child: brandLogoImage(gSchoolLogo, fit: BoxFit.cover)),
       );
 
   Widget _headerAction(IconData icon, VoidCallback onTap, double size) => Material(
@@ -1498,6 +1585,46 @@ class ParentHeader extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           onTap: onTap,
           child: SizedBox(width: size, height: size, child: Icon(icon, size: 20, color: Colors.white)),
+        ),
+      );
+
+  // Notification bell with a live unread badge — stays visible when minimized.
+  Widget _bellAction(double size) => Material(
+        color: Colors.white.withValues(alpha: .14),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onBell,
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.notifications_rounded, size: 20, color: Colors.white),
+                if (unreadCount > 0)
+                  Positioned(
+                    top: 7,
+                    right: 7,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      constraints: const BoxConstraints(minWidth: 15, minHeight: 15),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444),
+                        borderRadius: BorderRadius.circular(99),
+                        border: Border.all(color: const Color(0xFF0D6347), width: 1.5),
+                      ),
+                      child: Text(
+                        unreadCount > 99 ? '99+' : '$unreadCount',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.w900, height: 1.1),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       );
 
@@ -1534,12 +1661,13 @@ class _HeaderPatternPainter extends CustomPainter {
 // Home tab — greeting card + stat tiles + Today Analytics donut
 // ---------------------------------------------------------------------------
 class HomeTab extends StatelessWidget {
-  const HomeTab({super.key, required this.parentName, required this.children, required this.selected, this.picker, this.schoolArt});
+  const HomeTab({super.key, required this.parentName, required this.children, required this.selected, this.picker, this.schoolArt, this.schoolLogo});
   final String parentName;
   final List<dynamic> children;
   final int selected;
   final Widget? picker;
   final String? schoolArt;
+  final String? schoolLogo;
 
   int _count(bool Function(Map<String, dynamic>) test) =>
       children.where((c) => test(c as Map<String, dynamic>)).length;
@@ -1579,7 +1707,7 @@ class HomeTab extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  SizedBox(width: 124, height: 92, child: SchoolArt(data: schoolArt)),
+                  SizedBox(width: 124, height: 92, child: SchoolArt(data: schoolArt, logo: schoolLogo)),
                 ],
               ),
               const SizedBox(height: 18),
@@ -1906,8 +2034,17 @@ String parentNotificationTime(Map<String, dynamic> note) {
 }
 
 class NotificationsTab extends StatefulWidget {
-  const NotificationsTab({super.key, required this.notifications});
+  const NotificationsTab({
+    super.key,
+    required this.notifications,
+    this.child,
+    this.onMarkRead,
+    this.onMarkAllRead,
+  });
   final List<dynamic> notifications;
+  final Map<String, dynamic>? child;
+  final Future<void> Function(int id)? onMarkRead;
+  final Future<void> Function()? onMarkAllRead;
 
   @override
   State<NotificationsTab> createState() => _NotificationsTabState();
@@ -1916,29 +2053,52 @@ class NotificationsTab extends StatefulWidget {
 class _NotificationsTabState extends State<NotificationsTab> {
   String _filter = 'all';
 
+  bool _isUnread(Map<String, dynamic> n) => n['is_read'] != true && n['is_read'] != 1;
+
+  int _idOf(Map<String, dynamic> n) => int.tryParse('${n['notification_id'] ?? ''}') ?? 0;
+
   @override
   Widget build(BuildContext context) {
     final all = widget.notifications.whereType<Map>().map((n) => Map<String, dynamic>.from(n)).toList();
+    final unreadCount = all.where(_isUnread).length;
     final notifications = _filter == 'all' ? all : all.where((n) => parentNotificationCategory(n) == _filter).toList();
-    if (notifications.isEmpty) {
-      return ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        children: [
-          _filterBar(),
-          const SizedBox(height: 16),
-          const Padding(padding: EdgeInsets.all(24), child: Center(child: Text('No notifications yet.', style: TextStyle(color: kMuted)))),
-        ],
-      );
-    }
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
+        _header(unreadCount),
+        const SizedBox(height: 12),
         _filterBar(),
         const SizedBox(height: 12),
-        ...notifications.map(_notificationCard),
+        if (notifications.isEmpty)
+          const Padding(padding: EdgeInsets.all(24), child: Center(child: Text('No notifications yet.', style: TextStyle(color: kMuted))))
+        else
+          ...notifications.map(_notificationCard),
       ],
     );
   }
+
+  Widget _header(int unreadCount) => Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Notifications', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: kInk)),
+                Text(
+                  unreadCount == 0 ? 'You are all caught up' : '$unreadCount unread',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: kMuted),
+                ),
+              ],
+            ),
+          ),
+          if (unreadCount > 0 && widget.onMarkAllRead != null)
+            TextButton.icon(
+              onPressed: () => widget.onMarkAllRead!.call(),
+              icon: const Icon(Icons.done_all_rounded, size: 18, color: kGreen),
+              label: const Text('Mark all read', style: TextStyle(color: kGreen, fontWeight: FontWeight.w800, fontSize: 12.5)),
+            ),
+        ],
+      );
 
   Widget _filterBar() {
     const filters = [
@@ -1975,56 +2135,71 @@ class _NotificationsTabState extends State<NotificationsTab> {
 
   Widget _notificationCard(Map<String, dynamic> n) {
     final color = parentNotificationColor(n);
-    final unread = n['is_read'] != true && n['is_read'] != 1;
+    final unread = _isUnread(n);
+    final isAlert = parentNotificationCategory(n) == 'alerts';
     final student = '${n['student_name'] ?? n['child_name'] ?? ''}'.trim();
     final school = '${n['school_name'] ?? ''}'.trim();
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: _cardDecoration(),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: color.withValues(alpha: .12),
-            child: Icon(parentNotificationIcon(n), color: color, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
+      decoration: BoxDecoration(
+        color: isAlert ? color.withValues(alpha: .05) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isAlert ? color.withValues(alpha: .35) : const Color(0xFFE9EEF4)),
+        boxShadow: const [BoxShadow(color: Color(0x0F101828), blurRadius: 12, offset: Offset(0, 6))],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _openDetail(n),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(color: color.withValues(alpha: .1), borderRadius: BorderRadius.circular(99)),
-                      child: Text(parentNotificationTypeLabel(n), style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w900)),
-                    ),
-                    const Spacer(),
-                    if (unread)
-                      Container(width: 9, height: 9, decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle)),
-                  ],
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: color.withValues(alpha: .12),
+                  child: Icon(parentNotificationIcon(n), color: color, size: 20),
                 ),
-                const SizedBox(height: 8),
-                Text('${n['title'] ?? 'EduTrack Guardian'}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: kInk)),
-                const SizedBox(height: 4),
-                Text('${n['message'] ?? ''}', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: kMuted, height: 1.28)),
-                const SizedBox(height: 9),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    if (student.isNotEmpty) _miniMeta(Icons.child_care_rounded, student),
-                    if (school.isNotEmpty) _miniMeta(Icons.school_rounded, school),
-                    _miniMeta(Icons.schedule_rounded, parentNotificationTime(n)),
-                  ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(color: color.withValues(alpha: .1), borderRadius: BorderRadius.circular(99)),
+                            child: Text(parentNotificationTypeLabel(n), style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w900)),
+                          ),
+                          const Spacer(),
+                          if (unread)
+                            Container(width: 9, height: 9, decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text('${n['title'] ?? 'EduTrack Guardian'}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: kInk)),
+                      const SizedBox(height: 4),
+                      Text('${n['message'] ?? ''}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: kMuted, height: 1.28)),
+                      const SizedBox(height: 9),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          if (student.isNotEmpty) _miniMeta(Icons.child_care_rounded, student),
+                          if (school.isNotEmpty) _miniMeta(Icons.school_rounded, school),
+                          _miniMeta(Icons.schedule_rounded, parentNotificationTime(n)),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -2039,6 +2214,117 @@ class _NotificationsTabState extends State<NotificationsTab> {
             child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: kMuted, fontSize: 11, fontWeight: FontWeight.w700)),
           ),
         ],
+      );
+
+  void _openDetail(Map<String, dynamic> n) {
+    final id = _idOf(n);
+    if (_isUnread(n) && id > 0 && widget.onMarkRead != null) {
+      widget.onMarkRead!.call(id);
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (_) => _NotificationDetailSheet(note: n, child: widget.child),
+    );
+  }
+}
+
+// Detail sheet — full message plus Contact Adviser for alert-type notifications.
+class _NotificationDetailSheet extends StatelessWidget {
+  const _NotificationDetailSheet({required this.note, this.child});
+  final Map<String, dynamic> note;
+  final Map<String, dynamic>? child;
+
+  Future<void> _launch(BuildContext context, Uri uri) async {
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No app available for this action.')));
+      }
+    } catch (_) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open this action.')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = parentNotificationColor(note);
+    final isAlert = parentNotificationCategory(note) == 'alerts';
+    final student = '${note['student_name'] ?? note['child_name'] ?? ''}'.trim();
+    final school = '${note['school_name'] ?? ''}'.trim();
+    final phone = '${child?['adviser_contact'] ?? ''}'.replaceAll(RegExp(r'[^0-9+]'), '');
+    final email = '${child?['adviser_email'] ?? ''}'.trim();
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 22),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(child: Container(width: 44, height: 5, decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(99)))),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                CircleAvatar(radius: 24, backgroundColor: color.withValues(alpha: .12), child: Icon(parentNotificationIcon(note), color: color, size: 22)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(color: color.withValues(alpha: .1), borderRadius: BorderRadius.circular(99)),
+                        child: Text(parentNotificationTypeLabel(note), style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w900)),
+                      ),
+                      const SizedBox(height: 6),
+                      Text('${note['title'] ?? 'EduTrack Guardian'}', style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w900, color: kInk)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text('${note['message'] ?? ''}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF334155), height: 1.4)),
+            const SizedBox(height: 16),
+            if (student.isNotEmpty) _metaRow(Icons.child_care_rounded, 'Student', student),
+            if (school.isNotEmpty) _metaRow(Icons.school_rounded, 'School', school),
+            _metaRow(Icons.schedule_rounded, 'Received', parentNotificationTime(note)),
+            if (isAlert && (phone.isNotEmpty || email.isNotEmpty)) ...[
+              const SizedBox(height: 16),
+              if (phone.isNotEmpty)
+                _contactButton(context, Icons.call_rounded, 'Contact Adviser', kGreen, Uri.parse('tel:$phone')),
+              if (phone.isEmpty && email.isNotEmpty)
+                _contactButton(context, Icons.email_rounded, 'Email Adviser', const Color(0xFF2563EB), Uri.parse('mailto:$email')),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _metaRow(IconData icon, String label, String value) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: const Color(0xFF94A3B8)),
+            const SizedBox(width: 8),
+            Text('$label: ', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: kMuted)),
+            Expanded(child: Text(value, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: kInk))),
+          ],
+        ),
+      );
+
+  Widget _contactButton(BuildContext context, IconData icon, String label, Color color, Uri uri) => SizedBox(
+        width: double.infinity,
+        height: 48,
+        child: ElevatedButton.icon(
+          onPressed: () => _launch(context, uri),
+          icon: Icon(icon, size: 19),
+          label: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
+          style: ElevatedButton.styleFrom(backgroundColor: color, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+        ),
       );
 }
 
@@ -2479,8 +2765,21 @@ class RingPainter extends CustomPainter {
 // Renders the admin-uploaded school art (same image as the SDS/ASDS dashboard)
 // when available, otherwise the bundled painted school.
 class SchoolArt extends StatelessWidget {
-  const SchoolArt({super.key, this.data});
+  const SchoolArt({super.key, this.data, this.logo});
   final String? data;
+  final String? logo;
+
+  Widget _logoOrHouse() {
+    final l = (logo ?? '').trim();
+    if (l.isNotEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(4),
+        child: brandLogoImage(l, fallback: () => const _DefaultSchoolArt()),
+      );
+    }
+    return const _DefaultSchoolArt();
+  }
+
   @override
   Widget build(BuildContext context) {
     final d = (data ?? '').trim();
@@ -2494,13 +2793,13 @@ class SchoolArt extends StatelessWidget {
           fit: BoxFit.contain,
           alignment: Alignment.bottomRight,
           gaplessPlayback: true,
-          errorBuilder: (_, __, ___) => const _DefaultSchoolArt(),
+          errorBuilder: (_, __, ___) => _logoOrHouse(),
         );
       } on FormatException {
-        return const _DefaultSchoolArt();
+        return _logoOrHouse();
       }
     }
-    return const _DefaultSchoolArt();
+    return _logoOrHouse();
   }
 }
 
