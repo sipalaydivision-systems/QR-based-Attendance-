@@ -28,12 +28,12 @@ Future<void> _initNotifications() async {
   await impl?.requestNotificationsPermission();
 }
 
-Future<void> showParentNotification(String title, String body) async {
+Future<void> showParentNotification(String title, String body, {int? id}) async {
   await _notifications.show(
-    DateTime.now().millisecondsSinceEpoch.remainder(100000),
+    id ?? DateTime.now().millisecondsSinceEpoch.remainder(100000),
     title,
     body,
-    const NotificationDetails(
+    NotificationDetails(
       android: AndroidNotificationDetails(
         'edutrack_parent',
         'EduTrack Guardian',
@@ -41,10 +41,49 @@ Future<void> showParentNotification(String title, String body) async {
         importance: Importance.high,
         priority: Priority.high,
         icon: '@mipmap/ic_launcher',
-        largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+        largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+        styleInformation: BigTextStyleInformation(body, contentTitle: title),
       ),
     ),
   );
+}
+
+// Representative sample of every Guardian notification type — used by the
+// "Preview notifications" action so guardians can see each design and alert.
+List<Map<String, dynamic>> sampleParentNotifications() {
+  final now = DateTime.now();
+  String at(int minutesAgo) => now.subtract(Duration(minutes: minutesAgo)).toIso8601String();
+  const student = 'Juan Dela Cruz';
+  const school = 'Sipalay City NHS';
+  Map<String, dynamic> n(String type, String title, String message, int minutesAgo) => {
+        'notification_id': -(1000 + minutesAgo),
+        'type': type,
+        'title': title,
+        'message': message,
+        'student_name': type.startsWith('attendance_') ? student : '',
+        'school_name': school,
+        'created_at': at(minutesAgo).replaceFirst('T', ' '),
+        'is_read': false,
+      };
+  return [
+    n('attendance_time_in', 'Student Time In', 'Your child $student has timed in at 7:28 AM.', 1),
+    n('attendance_late_time_in', 'Student Late', 'Your child $student arrived late at 8:05 AM.', 3),
+    n('attendance_pm_time_in', 'PM Time In', 'Your child $student has entered for the PM session at 1:02 PM.', 8),
+    n('attendance_pm_late_time_in', 'PM Late Time In', 'Your child $student arrived late for the PM session at 1:20 PM.', 12),
+    n('attendance_lunch_out', 'Lunch Out', 'Your child $student went out for lunch at 11:31 AM.', 20),
+    n('attendance_returned', 'Student Returned', 'Your child $student returned to school at 12:55 PM.', 25),
+    n('attendance_early_out', 'Early Dismissal Alert', 'Your child $student left school early at 10:14 AM. Please contact the adviser if needed.', 40),
+    n('attendance_completed', 'Attendance Completed', 'Your child $student completed attendance at 4:02 PM.', 60),
+    n('attendance_absent', 'Student Absent', 'Your child $student has no attendance record today.', 90),
+    n('attendance_flagged', '2-Day Absence Flag', 'Your child $student has been absent for 2 consecutive school days.', 120),
+    n('announcement_general', 'School Announcement', 'Classes will follow the regular schedule this week.', 180),
+    n('announcement_parent_meeting', 'Parent Meeting', 'A parent meeting is scheduled this Friday at 9:00 AM.', 240),
+    n('announcement_class_meeting', 'Class Meeting', 'Section meeting for Grade 7 parents on Wednesday afternoon.', 300),
+    n('announcement_holiday', 'Holiday / No Classes', 'No classes on Monday in observance of a local holiday.', 360),
+    n('announcement_school_event', 'School Event', 'Foundation Day celebration this Saturday. All are welcome.', 420),
+    n('announcement_emergency', 'Emergency Notice', 'Classes are suspended this afternoon due to severe weather.', 480),
+    n('announcement_reminder', 'Reminder', 'Please remind your child to bring their ID and QR code daily.', 540),
+  ];
 }
 
 const String kBaseUrl = 'https://sdo-sipalay-edutrack.up.railway.app';
@@ -1487,7 +1526,7 @@ class ParentHeader extends StatelessWidget {
     final actionSize = compact ? 40.0 : 44.0;
     final radius = compact ? 20.0 : 26.0;
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 240),
+      duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
       width: double.infinity,
       decoration: BoxDecoration(
@@ -1542,19 +1581,30 @@ class ParentHeader extends StatelessWidget {
                       _headerAction(Icons.logout_rounded, onLogout, actionSize),
                     ],
                   ),
-                  SizedBox(height: compact ? 9 : 14),
-                  Row(
-                    children: [
-                      _chip(Row(mainAxisSize: MainAxisSize.min, children: [
-                        LiveDot(color: const Color(0xFFFF3B30), size: compact ? 8 : 9),
-                        const SizedBox(width: 6),
-                        Text('LIVE', style: TextStyle(color: const Color(0xFFE5403A), fontWeight: FontWeight.w900, fontSize: compact ? 10.5 : 11.5)),
-                      ]), dense: compact),
-                      const SizedBox(width: 8),
-                      _chip(Text(shortDateString()), dense: true, fontSize: compact ? 10.5 : 11.5),
-                      const SizedBox(width: 8),
-                      Flexible(child: _chip(Text(isoDateString()), dense: true, fontSize: compact ? 10.5 : 11.5)),
-                    ],
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.topCenter,
+                    child: compact
+                        ? const SizedBox.shrink()
+                        : Column(
+                            children: [
+                              const SizedBox(height: 14),
+                              Row(
+                                children: [
+                                  _chip(Row(mainAxisSize: MainAxisSize.min, children: const [
+                                    LiveDot(color: Color(0xFFFF3B30), size: 9),
+                                    SizedBox(width: 6),
+                                    Text('LIVE', style: TextStyle(color: Color(0xFFE5403A), fontWeight: FontWeight.w900, fontSize: 11.5)),
+                                  ])),
+                                  const SizedBox(width: 8),
+                                  _chip(Text(shortDateString()), dense: true),
+                                  const SizedBox(width: 8),
+                                  Flexible(child: _chip(Text(isoDateString()), dense: true)),
+                                ],
+                              ),
+                            ],
+                          ),
                   ),
                 ],
               ),
@@ -1565,7 +1615,9 @@ class ParentHeader extends StatelessWidget {
     );
   }
 
-  Widget _seal(double size) => Container(
+  Widget _seal(double size) => AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
         width: size,
         height: size,
         padding: EdgeInsets.all(size * .115),
@@ -2020,17 +2072,137 @@ IconData parentNotificationIcon(Map<String, dynamic> note) {
   return Icons.login_rounded;
 }
 
+bool _isSameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+
+String _clockLabel(DateTime t) {
+  final hour = t.hour == 0 ? 12 : (t.hour > 12 ? t.hour - 12 : t.hour);
+  final minute = t.minute.toString().padLeft(2, '0');
+  final suffix = t.hour >= 12 ? 'PM' : 'AM';
+  return '$hour:$minute $suffix';
+}
+
+// Accurate "received" time from the stored timestamp (Manila wall-clock).
+// Recent → relative ("Just now", "5m ago"); else dated/absolute.
 String parentNotificationTime(Map<String, dynamic> note) {
-  final display = '${note['time_display'] ?? ''}'.trim();
-  if (display.isNotEmpty && display != 'null') return display;
   final raw = '${note['created_at'] ?? ''}'.trim();
-  if (raw.isEmpty || raw == 'null') return '';
-  final parsed = DateTime.tryParse(raw.replaceFirst(' ', 'T'));
-  if (parsed == null) return raw;
-  final hour = parsed.hour == 0 ? 12 : (parsed.hour > 12 ? parsed.hour - 12 : parsed.hour);
-  final minute = parsed.minute.toString().padLeft(2, '0');
-  final suffix = parsed.hour >= 12 ? 'PM' : 'AM';
-  return '${_moShort[parsed.month - 1]} ${parsed.day}, $hour:$minute $suffix';
+  final parsed = (raw.isEmpty || raw == 'null') ? null : DateTime.tryParse(raw.replaceFirst(' ', 'T'));
+  if (parsed != null) {
+    final now = DateTime.now();
+    final diff = now.difference(parsed);
+    if (!diff.isNegative) {
+      if (diff.inMinutes < 1) return 'Just now';
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      if (diff.inHours < 6 && _isSameDay(parsed, now)) return '${diff.inHours}h ago';
+    }
+    final time = _clockLabel(parsed);
+    if (_isSameDay(parsed, now)) return 'Today $time';
+    if (_isSameDay(parsed, now.subtract(const Duration(days: 1)))) return 'Yesterday $time';
+    return '${_moShort[parsed.month - 1]} ${parsed.day}, $time';
+  }
+  final display = '${note['time_display'] ?? ''}'.trim();
+  return (display.isNotEmpty && display != 'null') ? display : '';
+}
+
+// Gallery of every notification design — opened from the "Preview notifications"
+// action so guardians can see each type and its alert styling.
+class _NotificationPreviewSheet extends StatelessWidget {
+  const _NotificationPreviewSheet({required this.samples});
+  final List<Map<String, dynamic>> samples;
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: .88,
+      minChildSize: .5,
+      maxChildSize: .96,
+      builder: (context, controller) => Column(
+        children: [
+          const SizedBox(height: 10),
+          Container(width: 44, height: 5, decoration: BoxDecoration(color: const Color(0xFFD7DEE7), borderRadius: BorderRadius.circular(99))),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
+            child: Row(
+              children: [
+                const CircleAvatar(radius: 18, backgroundColor: Color(0xFFDCFCE7), child: Icon(Icons.notifications_active_rounded, color: kGreen, size: 18)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('All notification types', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: kInk)),
+                      Text('${samples.length} sample alerts • also sent to your tray', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: kMuted)),
+                    ],
+                  ),
+                ),
+                IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded, color: kMuted)),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              controller: controller,
+              padding: const EdgeInsets.fromLTRB(14, 4, 14, 24),
+              itemCount: samples.length,
+              itemBuilder: (_, i) => _previewCard(samples[i]),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _previewCard(Map<String, dynamic> n) {
+    final color = parentNotificationColor(n);
+    final isAlert = parentNotificationCategory(n) == 'alerts';
+    final student = '${n['student_name'] ?? ''}'.trim();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isAlert ? color.withValues(alpha: .05) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isAlert ? color.withValues(alpha: .35) : const Color(0xFFE9EEF4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(radius: 21, backgroundColor: color.withValues(alpha: .12), child: Icon(parentNotificationIcon(n), color: color, size: 19)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: color.withValues(alpha: .1), borderRadius: BorderRadius.circular(99)),
+                      child: Text(parentNotificationTypeLabel(n), style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w900)),
+                    ),
+                    const Spacer(),
+                    Text(parentNotificationTime(n), style: const TextStyle(color: kMuted, fontSize: 10.5, fontWeight: FontWeight.w700)),
+                  ],
+                ),
+                const SizedBox(height: 7),
+                Text('${n['title']}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: kInk)),
+                const SizedBox(height: 3),
+                Text('${n['message']}', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: kMuted, height: 1.28)),
+                if (student.isNotEmpty) ...[
+                  const SizedBox(height: 7),
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.child_care_rounded, size: 13, color: Color(0xFF94A3B8)),
+                    const SizedBox(width: 4),
+                    Text(student, style: const TextStyle(color: kMuted, fontSize: 11, fontWeight: FontWeight.w700)),
+                  ]),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class NotificationsTab extends StatefulWidget {
@@ -2498,15 +2670,28 @@ class _ProfileTabState extends State<ProfileTab> {
   }
 
   Future<void> _testNotification() async {
-    try {
-      await showParentNotification('EduTrack Guardian — Test', 'Notifications are working. You will be alerted about your child’s attendance.');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Test notification sent. Check your notification tray.')));
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not send a notification. Please allow notifications in settings.')));
-      }
+    final samples = sampleParentNotifications();
+    // Open the in-app gallery of every notification design immediately.
+    if (mounted) {
+      showModalBottomSheet<void>(
+        context: context,
+        backgroundColor: const Color(0xFFF6F8FB),
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+        builder: (_) => _NotificationPreviewSheet(samples: samples),
+      );
+    }
+    // Fire a few representative system notifications to the tray (staggered so
+    // they appear as distinct alerts), including a strong emergency alert.
+    const previewIds = [0, 1, 6, 9, 15]; // time in, late, early dismissal, flag, emergency
+    var fired = 0;
+    for (final i in previewIds) {
+      if (i >= samples.length) continue;
+      final note = samples[i];
+      Future.delayed(Duration(milliseconds: 400 * fired), () {
+        showParentNotification('${note['title']}', '${note['message']}', id: 41000 + i);
+      });
+      fired++;
     }
   }
 
@@ -2701,8 +2886,8 @@ class _ProfileTabState extends State<ProfileTab> {
                 height: 46,
                 child: OutlinedButton.icon(
                   onPressed: _testNotification,
-                  icon: const Icon(Icons.notifications, color: kGreen, size: 19),
-                  label: const Text('Test Notification', style: TextStyle(color: kGreen, fontWeight: FontWeight.w700)),
+                  icon: const Icon(Icons.notifications_active_rounded, color: kGreen, size: 19),
+                  label: const Text('Preview all notifications', style: TextStyle(color: kGreen, fontWeight: FontWeight.w700)),
                   style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFBBF7D0)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                 ),
               ),
