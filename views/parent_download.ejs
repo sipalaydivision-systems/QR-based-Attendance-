@@ -217,9 +217,16 @@
                     <div class="notice">The guardian APK has not been uploaded yet. You can open the Guardian Portal now and install it as a web app from your mobile browser.</div>
                 <% } %>
                 <div class="actions">
-                    <a class="btn primary" href="/download/parent-app"><i class="fa-solid fa-download"></i> Download Guardian App</a>
+                    <a class="btn primary" href="/download/parent-app"><i class="fa-solid fa-download"></i> Download Guardian App<% if (typeof latestVersion !== 'undefined' && latestVersion) { %> · v<%= latestVersion %><% } %></a>
                     <a class="btn secondary" href="/parent/app"><i class="fa-solid fa-mobile-screen"></i> Open Guardian Portal</a>
                 </div>
+                <% if (typeof latestVersion !== 'undefined' && latestVersion) { %>
+                <p class="notice" style="color:#dffaf0;font-weight:700;margin-top:14px;">
+                    Latest version: <strong>v<%= latestVersion %></strong> (build <%= latestVersionCode %>).
+                    For a clean update, uninstall the old EduTrack Guardian app first, then install this download.
+                    After installing, open <strong>Profile</strong> — it should show v<%= latestVersion %>.
+                </p>
+                <% } %>
             </div>
         </section>
     </div>

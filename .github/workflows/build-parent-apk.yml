@@ -78,8 +78,10 @@ jobs:
             echo "No changes to APK — skipping commit."
           else
             git commit -m "chore: auto-rebuild Parent APK [skip ci]"
+            pushed=0
             for i in 1 2 3 4 5; do
               if git push; then
+                pushed=1
                 echo "Parent APK updated and pushed."
                 break
               fi
@@ -87,4 +89,8 @@ jobs:
               git pull --rebase origin main || git rebase --abort
               sleep 3
             done
+            if [ "$pushed" -ne 1 ]; then
+              echo "::error title=Parent APK publish failed::Could not push the rebuilt APK after 5 attempts."
+              exit 1
+            fi
           fi

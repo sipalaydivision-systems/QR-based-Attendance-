@@ -512,6 +512,8 @@ router.get('/Download-app', async (req, res) => {
         title: 'EduTrack Guardian App',
         parentApkAvailable: fs.existsSync(parentApkPath),
         missing: req.query.missing === '1',
+        latestVersion: PARENT_APP_LATEST.version,
+        latestVersionCode: PARENT_APP_LATEST.version_code,
         branding
     });
 });
@@ -521,7 +523,11 @@ router.get('/download-app', (req, res) => res.redirect('/Download-app'));
 router.get('/download/parent-app', (req, res) => {
     const parentApkPath = path.join(__dirname, '..', 'public', 'downloads', 'edutrack-parent.apk');
     if (!fs.existsSync(parentApkPath)) return res.redirect('/Download-app?missing=1');
-    return res.download(parentApkPath, 'EduTrack-Guardian-App.apk');
+    // Never let a browser/CDN serve a stale APK — always hand back the freshly
+    // built file so "Download" reflects the latest published version.
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    return res.download(parentApkPath, `EduTrack-Guardian-${PARENT_APP_LATEST.version}.apk`);
 });
 
 router.get('/parent', (req, res) => {

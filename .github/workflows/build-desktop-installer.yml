@@ -60,9 +60,11 @@ jobs:
           $status = git status --porcelain
           if ($status) {
             git commit -m "chore: auto-rebuild desktop installer [skip ci]"
+            $pushed = $false
             for ($i = 1; $i -le 5; $i++) {
               git push
               if ($LASTEXITCODE -eq 0) {
+                $pushed = $true
                 Write-Host "Installer updated and pushed."
                 break
               }
@@ -70,6 +72,10 @@ jobs:
               git pull --rebase origin main
               if ($LASTEXITCODE -ne 0) { git rebase --abort }
               Start-Sleep -Seconds 3
+            }
+            if (-not $pushed) {
+              Write-Host "::error title=Installer publish failed::Could not push the rebuilt installer after 5 attempts."
+              exit 1
             }
           } else {
             Write-Host "No changes to installer — skipping commit."
