@@ -350,6 +350,24 @@ class ParentApi {
     }
   }
 
+  Future<Map<String, dynamic>> updateProfile(String name, String contact, String username) async {
+    try {
+      final res = await http
+          .post(Uri.parse('$kBaseUrl/api/parent/profile'),
+              headers: _headers,
+              body: {'guardian_name': name, 'contact_number': contact, 'username': username})
+          .timeout(const Duration(seconds: 20));
+      final data = _decode(res.body);
+      if (res.statusCode == 200 && data['success'] == true) {
+        await _saveParent(data['parent'] as Map<String, dynamic>?);
+        return {'success': true, 'linked_students': data['linked_students'] ?? 0};
+      }
+      return {'success': false, 'error': data['error'] ?? 'Could not update your profile.'};
+    } catch (e) {
+      return {'success': false, 'error': _netError(e)};
+    }
+  }
+
   Future<void> logout() async {
     try {
       await http
@@ -2689,6 +2707,85 @@ class _ProfileTabState extends State<ProfileTab> {
     }
   }
 
+  Future<void> _editProfile() async {
+    final name = TextEditingController(text: widget.api.parentName == 'Parent' ? '' : widget.api.parentName);
+    final contact = TextEditingController(text: widget.api.parentContact);
+    final username = TextEditingController(text: widget.api.parentUsername);
+    bool busy = false;
+    String? err;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          Future<void> submit() async {
+            if (name.text.trim().isEmpty) {
+              setLocal(() => err = 'Please enter your name.');
+              return;
+            }
+            if (contact.text.trim().replaceAll(RegExp(r'[^0-9]'), '').length < 7) {
+              setLocal(() => err = 'Please enter a valid contact number.');
+              return;
+            }
+            setLocal(() {
+              busy = true;
+              err = null;
+            });
+            final res = await widget.api.updateProfile(name.text.trim(), contact.text.trim(), username.text.trim());
+            if (res['success'] == true) {
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (mounted) {
+                setState(() {});
+                final linked = res['linked_students'] ?? 0;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Profile updated. Synced to $linked student record(s).')),
+                );
+              }
+            } else {
+              setLocal(() {
+                busy = false;
+                err = '${res['error']}';
+              });
+            }
+          }
+
+          InputDecoration dec(String l, [String? h]) => InputDecoration(labelText: l, hintText: h, isDense: true, border: const OutlineInputBorder());
+          return AlertDialog(
+            title: const Text('Edit Profile'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (err != null)
+                    Padding(padding: const EdgeInsets.only(bottom: 10), child: Text(err!, style: const TextStyle(color: Color(0xFFDC2626), fontSize: 12.5))),
+                  TextField(controller: name, textCapitalization: TextCapitalization.words, decoration: dec('Full name')),
+                  const SizedBox(height: 10),
+                  TextField(controller: contact, keyboardType: TextInputType.phone, decoration: dec('Contact number', '09xxxxxxxxx')),
+                  const SizedBox(height: 10),
+                  TextField(controller: username, decoration: dec('Username (optional)')),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Changing your number keeps you linked to your children and updates the number your teacher and principal use to reach you.',
+                    style: TextStyle(fontSize: 11, color: kMuted, height: 1.3),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: busy ? null : () => Navigator.pop(ctx), child: const Text('Cancel')),
+              TextButton(
+                onPressed: busy ? null : submit,
+                child: busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Save'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    name.dispose();
+    contact.dispose();
+    username.dispose();
+  }
+
   Future<void> _changePassword() async {
     final cur = TextEditingController();
     final nw = TextEditingController();
@@ -2776,6 +2873,16 @@ class _ProfileTabState extends State<ProfileTab> {
         Container(
           decoration: _cardDecoration(),
           child: Column(children: [
+            ListTile(
+              leading: const Icon(Icons.badge_outlined, color: kGreen, size: 20),
+              title: const Text('Edit Profile', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: kInk)),
+              subtitle: const Text('Update your name, contact number & username', style: TextStyle(fontSize: 11.5, color: kMuted)),
+              trailing: const Icon(Icons.chevron_right, color: kMuted),
+              onTap: _editProfile,
+            ),
+            const Divider(height: 1),
+            _tile(Icons.person_outline, 'Name', api.parentName == 'Parent' ? '—' : api.parentName),
+            const Divider(height: 1),
             _tile(Icons.phone_outlined, 'Contact Number', api.parentContact.isEmpty ? '—' : api.parentContact),
             const Divider(height: 1),
             _tile(Icons.alternate_email, 'Username', api.parentUsername.isEmpty ? '—' : api.parentUsername),

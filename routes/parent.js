@@ -892,9 +892,91 @@ router.post('/api/parent/change-password', requireParentAuth, async (req, res) =
     }
 });
 
+// Update guardian profile (name, contact number, username). A changed contact
+// number cascades to every linked student's guardian_contact so the parent stays
+// linked to their children AND advisers/principals see the new number when they
+// contact the parent. Wrapped in a transaction to avoid orphaning the account.
+router.post('/api/parent/profile', requireParentAuth, async (req, res) => {
+    const guardianName = String(req.body.guardian_name || '').trim();
+    const contactNumber = String(req.body.contact_number || '').trim();
+    const username = String(req.body.username || '').trim();
+    if (!guardianName) {
+        return res.status(400).json({ success: false, error: 'Your name is required.' });
+    }
+    if (!isContactLike(contactNumber)) {
+        return res.status(400).json({ success: false, error: 'Please enter a valid contact number.' });
+    }
+    const newNormalized = normalizeContact(contactNumber);
+    const parentId = req.session.user.parent_id || req.session.user.id;
+    const conn = await db.getConnection();
+    try {
+        await conn.beginTransaction();
+        const [[parent]] = await conn.query('SELECT * FROM parents WHERE id = ? LIMIT 1', [parentId]);
+        if (!parent) {
+            await conn.rollback();
+            return res.status(404).json({ success: false, error: 'Account not found.' });
+        }
+        const oldNormalized = parent.normalized_contact;
+
+        if (newNormalized !== oldNormalized) {
+            const [dups] = await conn.query('SELECT id FROM parents WHERE normalized_contact = ? AND id != ? LIMIT 1', [newNormalized, parentId]);
+            if (dups.length) {
+                await conn.rollback();
+                return res.status(409).json({ success: false, error: 'This contact number is already used by another parent account.' });
+            }
+        }
+        if (username) {
+            const [dupU] = await conn.query('SELECT id FROM parents WHERE username = ? AND id != ? LIMIT 1', [username, parentId]);
+            if (dupU.length) {
+                await conn.rollback();
+                return res.status(409).json({ success: false, error: 'This username is already taken.' });
+            }
+        }
+
+        await conn.query(
+            'UPDATE parents SET guardian_name = ?, contact_number = ?, normalized_contact = ?, username = ? WHERE id = ?',
+            [guardianName, contactNumber, newNormalized, username || null, parentId]
+        );
+
+        // Cascade the new contact + name to the students currently linked by the
+        // old number (normalizeContact is JS logic, so compare in app code).
+        const [students] = await conn.query(
+            `SELECT id, guardian_contact FROM students
+             WHERE status != 'deleted' AND guardian_contact IS NOT NULL AND guardian_contact != ''`
+        );
+        const linkedIds = students
+            .filter(s => normalizeContact(s.guardian_contact) === oldNormalized)
+            .map(s => s.id);
+        if (linkedIds.length) {
+            await conn.query(
+                'UPDATE students SET guardian_contact = ?, guardian_name = ? WHERE id IN (?)',
+                [contactNumber, guardianName, linkedIds]
+            );
+        }
+
+        await conn.commit();
+        // Keep the session in sync so the dynamic child-linking uses the new number.
+        req.session.user.fullname = guardianName;
+        req.session.user.contact_number = contactNumber;
+        req.session.user.normalized_contact = newNormalized;
+        req.session.user.username = username || contactNumber;
+        return res.json({
+            success: true,
+            parent: { id: parentId, guardian_name: guardianName, contact_number: contactNumber, username: username || '' },
+            linked_students: linkedIds.length
+        });
+    } catch (err) {
+        try { await conn.rollback(); } catch (_) { /* connection already closed */ }
+        console.error('Parent profile update error:', err);
+        return res.status(500).json({ success: false, error: 'Failed to update your profile. Please try again.' });
+    } finally {
+        conn.release();
+    }
+});
+
 // Latest published parent-app version. Bump this (and the Flutter pubspec version)
 // whenever a new APK is released so the in-app updater offers the update.
-const PARENT_APP_LATEST = { version: '1.0.10', version_code: 11 };
+const PARENT_APP_LATEST = { version: '1.0.11', version_code: 12 };
 router.get('/api/parent/app-version', (req, res) => {
     return res.json({
         latest_version: PARENT_APP_LATEST.version,
