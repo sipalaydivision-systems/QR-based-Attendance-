@@ -25,7 +25,7 @@ const AndroidNotificationChannel _channel = AndroidNotificationChannel(
 // Android requires a monochrome small icon before any notification can appear.
 // Individual alerts override this default with their notification-type icon.
 Future<void> _initNotifications({bool requestPermission = true}) async {
-  const android = AndroidInitializationSettings('@drawable/ic_stat_edutrack');
+  const android = AndroidInitializationSettings('ic_stat_edutrack');
   await _notifications.initialize(const InitializationSettings(android: android));
   final impl = _notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
   await impl?.createNotificationChannel(_channel);
@@ -50,40 +50,40 @@ Future<bool> ensureParentNotificationPermission() async {
 String _androidNotificationIcon(String type) {
   switch (type.toLowerCase()) {
     case 'attendance_time_in':
-      return '@drawable/ic_n_in';
+      return 'ic_n_in';
     case 'attendance_late_time_in':
-      return '@drawable/ic_n_late';
+      return 'ic_n_late';
     case 'attendance_pm_time_in':
-      return '@drawable/ic_n_pm';
+      return 'ic_n_pm';
     case 'attendance_pm_late_time_in':
-      return '@drawable/ic_n_pm_late';
+      return 'ic_n_pm_late';
     case 'attendance_lunch_out':
-      return '@drawable/ic_n_lunch';
+      return 'ic_n_lunch';
     case 'attendance_returned':
-      return '@drawable/ic_n_returned';
+      return 'ic_n_returned';
     case 'attendance_early_out':
-      return '@drawable/ic_n_out';
+      return 'ic_n_out';
     case 'attendance_completed':
-      return '@drawable/ic_n_done';
+      return 'ic_n_done';
     case 'attendance_absent':
-      return '@drawable/ic_n_absent';
+      return 'ic_n_absent';
     case 'attendance_flagged':
-      return '@drawable/ic_n_flag';
+      return 'ic_n_flag';
     case 'announcement_emergency':
-      return '@drawable/ic_n_alert';
+      return 'ic_n_alert';
     case 'announcement_parent_meeting':
     case 'announcement_class_meeting':
-      return '@drawable/ic_n_meeting';
+      return 'ic_n_meeting';
     case 'announcement_holiday':
-      return '@drawable/ic_n_holiday';
+      return 'ic_n_holiday';
     case 'announcement_general':
-      return '@drawable/ic_n_announce';
+      return 'ic_n_announce';
     case 'announcement_school_event':
-      return '@drawable/ic_n_event';
+      return 'ic_n_event';
     case 'announcement_reminder':
-      return '@drawable/ic_n_reminder';
+      return 'ic_n_reminder';
   }
-  return '@drawable/ic_stat_edutrack';
+  return 'ic_stat_edutrack';
 }
 
 // Accent color that tints the small icon + app name per type.
@@ -142,7 +142,7 @@ Future<ByteArrayAndroidBitmap?> _androidNotificationLargeIcon(String type) async
   }
 }
 
-Future<void> showParentNotification(String title, String body, {int? id, String type = ''}) async {
+Future<bool> showParentNotification(String title, String body, {int? id, String type = ''}) async {
   try {
     final largeIcon = await _androidNotificationLargeIcon(type);
     await _notifications.show(
@@ -158,13 +158,15 @@ Future<void> showParentNotification(String title, String body, {int? id, String 
           priority: Priority.high,
           icon: _androidNotificationIcon(type),
           color: _androidNotificationColor(type),
-          largeIcon: largeIcon ?? const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+          largeIcon: largeIcon,
           styleInformation: BigTextStyleInformation(body, contentTitle: title),
         ),
       ),
     );
-  } catch (_) {
-    // Never let a notification failure surface as an app error.
+    return true;
+  } catch (error) {
+    debugPrint('Guardian notification failed: $error');
+    return false;
   }
 }
 
@@ -2504,15 +2506,23 @@ class _NotificationPreviewSheet extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () {
-            showParentNotification(
+          onTap: () async {
+            final sent = await showParentNotification(
               '${n['title']}',
               '${n['message']}',
               id: 42000 + index,
               type: '${n['type'] ?? ''}',
             );
+            if (!context.mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Sent "${n['title']}" to your notification tray.'), duration: const Duration(seconds: 2)),
+              SnackBar(
+                content: Text(
+                  sent
+                      ? 'Sent "${n['title']}" to your notification tray.'
+                      : 'Could not send the test alert. Check Guardian notification permission in Android Settings.',
+                ),
+                duration: const Duration(seconds: 3),
+              ),
             );
           },
           child: Padding(
