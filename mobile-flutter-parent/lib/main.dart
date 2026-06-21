@@ -740,7 +740,7 @@ class _LoginScreenState extends State<LoginScreen> {
         await _initNotifications();
         await widget.api.registerDeviceToken();
       } catch (_) {}
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => HomeShell(api: widget.api, showWelcome: true)));
+      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => HomeShell(api: widget.api)));
     } else {
       setState(() {
         _busy = false;
@@ -849,7 +849,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         await _initNotifications();
         await widget.api.registerDeviceToken();
       } catch (_) {}
-      Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => HomeShell(api: widget.api, showWelcome: true)), (r) => false);
+      Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => HomeShell(api: widget.api)), (r) => false);
     } else {
       setState(() {
         _busy = false;
@@ -1022,9 +1022,8 @@ class AuthButton extends StatelessWidget {
 // Home shell — SDS/ASDS styled header + 5 tabs
 // ---------------------------------------------------------------------------
 class HomeShell extends StatefulWidget {
-  const HomeShell({super.key, required this.api, this.showWelcome = false});
+  const HomeShell({super.key, required this.api});
   final ParentApi api;
-  final bool showWelcome;
   @override
   State<HomeShell> createState() => _HomeShellState();
 }
@@ -1039,9 +1038,11 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   String? _schoolArt;
   String? _schoolLogo;
   int _unreadCount = 0;
-  Map<String, dynamic>? _bannerNote;
   Map<String, dynamic> _data = {};
   Timer? _timer;
+  // In-app banner is reserved for announcements only (attendance alerts rely on
+  // the system push notification instead).
+  Map<String, dynamic>? _bannerNote;
   Timer? _bannerTimer;
 
   @override
@@ -1049,9 +1050,6 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.api.registerDeviceToken();
-    if (widget.showWelcome) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _showWelcomeBanner());
-    }
     _load();
     _loadBranding();
     _timer = Timer.periodic(const Duration(seconds: 20), (_) => _load(silent: true));
@@ -1135,11 +1133,6 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   String _noteId(Map<String, dynamic> note) => '${note['notification_id'] ?? note['key'] ?? note['created_at'] ?? note['title']}';
 
-  bool _isImportant(Map<String, dynamic> note) {
-    final type = '${note['type'] ?? ''}'.toLowerCase();
-    return type.contains('emergency') || type.contains('early') || type.contains('absent') || type.contains('flagged');
-  }
-
   Future<void> _processNotificationUpdates(Map<String, dynamic> data, {required bool showPopups}) async {
     final notes = ((data['notifications'] as List?) ?? const [])
         .whereType<Map>()
@@ -1161,55 +1154,25 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     await widget.api.prefs.setStringList('parent_notified_notifications', notified.take(150).toList());
   }
 
+  bool _isAnnouncement(Map<String, dynamic> note) {
+    final type = '${note['type'] ?? ''}'.toLowerCase();
+    final category = '${note['category'] ?? ''}'.toLowerCase();
+    return type.startsWith('announcement_') || category == 'announcements' || category == 'meetings' || category == 'holidays';
+  }
+
   Future<void> _showNotificationPopup(Map<String, dynamic> note) async {
     final title = '${note['title'] ?? 'EduTrack Guardian'}';
     final body = '${note['message'] ?? ''}';
+    // Every notification still fires the system push.
     try {
       await showParentNotification(title, body);
     } catch (_) {}
     if (!mounted) return;
+    // Only announcements surface the in-app banner; attendance alerts do not.
+    if (!_isAnnouncement(note)) return;
     setState(() => _bannerNote = note);
     _bannerTimer?.cancel();
-    _bannerTimer = Timer(const Duration(seconds: 7), () {
-      if (mounted) setState(() => _bannerNote = null);
-    });
-    if (_isImportant(note)) {
-      Future.delayed(const Duration(milliseconds: 250), () {
-        if (!mounted) return;
-        showDialog<void>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
-            content: Text(body),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  setState(() => _tab = 3);
-                },
-                child: const Text('Contact Adviser'),
-              ),
-            ],
-          ),
-        );
-      });
-    }
-  }
-
-  Future<void> _showWelcomeBanner() async {
-    final note = {
-      'type': 'welcome',
-      'title': 'Welcome to EduTrack Guardian',
-      'message': '${greeting()}, ${widget.api.parentName}. Your child attendance dashboard is ready.',
-    };
-    try {
-      await showParentNotification('Welcome to EduTrack Guardian', 'Your child attendance dashboard is ready.');
-    } catch (_) {}
-    if (!mounted) return;
-    setState(() => _bannerNote = note);
-    _bannerTimer?.cancel();
-    _bannerTimer = Timer(const Duration(seconds: 6), () {
+    _bannerTimer = Timer(const Duration(seconds: 8), () {
       if (mounted) setState(() => _bannerNote = null);
     });
   }
@@ -1440,62 +1403,93 @@ class BadgeIcon extends StatelessWidget {
   }
 }
 
+// Prominent "Important"-style announcement banner. Shown only for announcements;
+// a colored header strip + type badge make it read as a priority alert.
 class ParentNotificationBanner extends StatelessWidget {
   const ParentNotificationBanner({super.key, required this.note, required this.onTap, required this.onClose});
   final Map<String, dynamic> note;
   final VoidCallback onTap;
   final VoidCallback onClose;
 
-  bool get important {
-    final type = '${note['type'] ?? ''}'.toLowerCase();
-    return type.contains('emergency') || type.contains('early') || type.contains('absent') || type.contains('flagged');
-  }
-
   @override
   Widget build(BuildContext context) {
-    final color = important ? const Color(0xFFDC2626) : kGreen;
-    final isWelcome = '${note['type'] ?? ''}'.toLowerCase() == 'welcome';
+    final color = parentNotificationColor(note);
     return Material(
-      elevation: 12,
+      elevation: 14,
       borderRadius: BorderRadius.circular(18),
+      shadowColor: color.withValues(alpha: .45),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(18),
         child: Container(
-          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: color.withValues(alpha: .28)),
-            boxShadow: [BoxShadow(color: color.withValues(alpha: .18), blurRadius: 20, offset: const Offset(0, 8))],
+            border: Border.all(color: color.withValues(alpha: .35), width: 1.5),
           ),
-          child: Row(
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
+              // Colored header strip with the IMPORTANT label + close.
               Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(color: color.withValues(alpha: .12), borderRadius: BorderRadius.circular(14)),
-                child: isWelcome
-                    ? const Center(child: AppLogo(size: 34))
-                    : Icon(important ? Icons.warning_amber_rounded : Icons.notifications_active_rounded, color: color),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
+                color: color,
+                padding: const EdgeInsets.fromLTRB(14, 7, 8, 7),
+                child: Row(
                   children: [
-                    Text('${note['title'] ?? 'EduTrack Guardian'}', maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w900, color: kInk)),
-                    const SizedBox(height: 2),
-                    Text('${note['message'] ?? ''}', maxLines: 2, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: kMuted)),
-                    const SizedBox(height: 4),
-                    Text('Tap to open full details', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: color)),
+                    const Icon(Icons.priority_high_rounded, color: Colors.white, size: 16),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        parentNotificationTypeLabel(note).toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: .4),
+                      ),
+                    ),
+                    Text(parentNotificationTime(note), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
+                    GestureDetector(
+                      onTap: onClose,
+                      child: const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.close_rounded, size: 17, color: Colors.white)),
+                    ),
                   ],
                 ),
               ),
-              IconButton(onPressed: onClose, icon: const Icon(Icons.close_rounded, size: 18), color: kMuted),
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(color: color.withValues(alpha: .12), borderRadius: BorderRadius.circular(14)),
+                      child: Icon(parentNotificationIcon(note), color: color, size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('${note['title'] ?? 'EduTrack Guardian'}', maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: kInk)),
+                          const SizedBox(height: 3),
+                          Text('${note['message'] ?? ''}', maxLines: 2, overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: kMuted, height: 1.25)),
+                          const SizedBox(height: 5),
+                          Row(
+                            children: [
+                              Text('Tap to open full details', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: color)),
+                              const SizedBox(width: 4),
+                              Icon(Icons.arrow_forward_rounded, size: 12, color: color),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
