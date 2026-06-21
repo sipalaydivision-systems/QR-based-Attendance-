@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -21,10 +22,10 @@ const AndroidNotificationChannel _channel = AndroidNotificationChannel(
   importance: Importance.high,
 );
 
-// Use the launcher icon for notifications — exactly like the SDS/ASDS app, which
-// guarantees the small icon resource always exists at runtime.
+// Android requires a monochrome small icon before any notification can appear.
+// Individual alerts override this default with their notification-type icon.
 Future<void> _initNotifications({bool requestPermission = true}) async {
-  const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const android = AndroidInitializationSettings('@drawable/ic_stat_edutrack');
   await _notifications.initialize(const InitializationSettings(android: android));
   final impl = _notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
   await impl?.createNotificationChannel(_channel);
@@ -44,8 +45,106 @@ Future<bool> ensureParentNotificationPermission() async {
   }
 }
 
-Future<void> showParentNotification(String title, String body, {int? id}) async {
+// Per-type monochrome small icon shown in the status bar and notification.
+// Unknown types fall back to the launcher icon (always present).
+String _androidNotificationIcon(String type) {
+  switch (type.toLowerCase()) {
+    case 'attendance_time_in':
+      return '@drawable/ic_n_in';
+    case 'attendance_late_time_in':
+      return '@drawable/ic_n_late';
+    case 'attendance_pm_time_in':
+      return '@drawable/ic_n_pm';
+    case 'attendance_pm_late_time_in':
+      return '@drawable/ic_n_pm_late';
+    case 'attendance_lunch_out':
+      return '@drawable/ic_n_lunch';
+    case 'attendance_returned':
+      return '@drawable/ic_n_returned';
+    case 'attendance_early_out':
+      return '@drawable/ic_n_out';
+    case 'attendance_completed':
+      return '@drawable/ic_n_done';
+    case 'attendance_absent':
+      return '@drawable/ic_n_absent';
+    case 'attendance_flagged':
+      return '@drawable/ic_n_flag';
+    case 'announcement_emergency':
+      return '@drawable/ic_n_alert';
+    case 'announcement_parent_meeting':
+    case 'announcement_class_meeting':
+      return '@drawable/ic_n_meeting';
+    case 'announcement_holiday':
+      return '@drawable/ic_n_holiday';
+    case 'announcement_general':
+      return '@drawable/ic_n_announce';
+    case 'announcement_school_event':
+      return '@drawable/ic_n_event';
+    case 'announcement_reminder':
+      return '@drawable/ic_n_reminder';
+  }
+  return '@drawable/ic_stat_edutrack';
+}
+
+// Accent color that tints the small icon + app name per type.
+Color _androidNotificationColor(String type) {
+  final t = type.toLowerCase();
+  if (t.contains('emergency') || t.contains('absent') || t.contains('flagged') || t.contains('early')) {
+    return const Color(0xFFDC2626);
+  }
+  if (t.contains('late') || t.contains('holiday') || t.contains('meeting') || t.contains('lunch')) {
+    return const Color(0xFFEA580C);
+  }
+  if (t.contains('completed') || t.contains('returned') || t.contains('time_in')) {
+    return kGreen;
+  }
+  return const Color(0xFF2563EB);
+}
+
+// Render the same Material icon used by the in-app card into the large Android
+// notification icon. This is the colored icon shown at the right of the popup.
+Future<ByteArrayAndroidBitmap?> _androidNotificationLargeIcon(String type) async {
+  if (type.trim().isEmpty) return null;
   try {
+    final note = <String, dynamic>{'type': type};
+    final icon = parentNotificationIcon(note);
+    final color = parentNotificationColor(note);
+    const size = 96.0;
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    final background = ui.Paint()..color = color.withValues(alpha: .14);
+    canvas.drawCircle(const ui.Offset(size / 2, size / 2), size / 2, background);
+
+    final painter = TextPainter(
+      text: TextSpan(
+        text: String.fromCharCode(icon.codePoint),
+        style: TextStyle(
+          color: color,
+          fontSize: 48,
+          fontFamily: icon.fontFamily,
+          package: icon.fontPackage,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    painter.paint(
+      canvas,
+      ui.Offset((size - painter.width) / 2, (size - painter.height) / 2),
+    );
+
+    final image = await recorder.endRecording().toImage(size.toInt(), size.toInt());
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    image.dispose();
+    if (bytes == null) return null;
+    return ByteArrayAndroidBitmap(bytes.buffer.asUint8List());
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<void> showParentNotification(String title, String body, {int? id, String type = ''}) async {
+  try {
+    final largeIcon = await _androidNotificationLargeIcon(type);
     await _notifications.show(
       id ?? DateTime.now().millisecondsSinceEpoch.remainder(100000),
       title,
@@ -57,8 +156,9 @@ Future<void> showParentNotification(String title, String body, {int? id}) async 
           channelDescription: 'Attendance alerts for your child',
           importance: Importance.high,
           priority: Priority.high,
-          icon: '@mipmap/ic_launcher',
-          largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+          icon: _androidNotificationIcon(type),
+          color: _androidNotificationColor(type),
+          largeIcon: largeIcon ?? const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
           styleInformation: BigTextStyleInformation(body, contentTitle: title),
         ),
       ),
@@ -135,6 +235,7 @@ Future<bool> _syncGuardianNotificationsInBackground() async {
         '${note['title'] ?? 'EduTrack Guardian'}',
         '${note['message'] ?? ''}',
         id: _systemNotificationId(note),
+        type: '${note['type'] ?? ''}',
       );
       notified.add(_notificationKey(note));
     }
@@ -1367,7 +1468,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     final body = '${note['message'] ?? ''}';
     // Every notification still fires an Android system notification.
     try {
-      await showParentNotification(title, body);
+      await showParentNotification(title, body, type: '${note['type'] ?? ''}');
     } catch (_) {}
     if (!mounted) return;
     // Only announcements surface the in-app banner; attendance alerts do not.
@@ -2404,7 +2505,12 @@ class _NotificationPreviewSheet extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
-            showParentNotification('${n['title']}', '${n['message']}', id: 42000 + index);
+            showParentNotification(
+              '${n['title']}',
+              '${n['message']}',
+              id: 42000 + index,
+              type: '${n['type'] ?? ''}',
+            );
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('Sent "${n['title']}" to your notification tray.'), duration: const Duration(seconds: 2)),
             );
