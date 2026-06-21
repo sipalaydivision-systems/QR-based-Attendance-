@@ -21,10 +21,11 @@ const AndroidNotificationChannel _channel = AndroidNotificationChannel(
   importance: Importance.high,
 );
 
-// Android requires a monochrome small icon before any notification can appear.
-// Individual alerts override this default with their notification-type icon.
+// Use the launcher icon for the notification — it is the only icon guaranteed to
+// resolve on every device (a custom drawable that a device rejects makes show()
+// throw and no notification appears at all).
 Future<void> _initNotifications({bool requestPermission = true}) async {
-  const android = AndroidInitializationSettings('ic_stat_edutrack');
+  const android = AndroidInitializationSettings('@mipmap/ic_launcher');
   await _notifications.initialize(const InitializationSettings(android: android));
   final impl = _notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
   await impl?.createNotificationChannel(_channel);
@@ -42,47 +43,6 @@ Future<bool> ensureParentNotificationPermission() async {
   } catch (_) {
     return false;
   }
-}
-
-// Per-type monochrome small icon shown in the status bar and notification.
-// Unknown types fall back to the launcher icon (always present).
-String _androidNotificationIcon(String type) {
-  switch (type.toLowerCase()) {
-    case 'attendance_time_in':
-      return 'ic_n_in';
-    case 'attendance_late_time_in':
-      return 'ic_n_late';
-    case 'attendance_pm_time_in':
-      return 'ic_n_pm';
-    case 'attendance_pm_late_time_in':
-      return 'ic_n_pm_late';
-    case 'attendance_lunch_out':
-      return 'ic_n_lunch';
-    case 'attendance_returned':
-      return 'ic_n_returned';
-    case 'attendance_early_out':
-      return 'ic_n_out';
-    case 'attendance_completed':
-      return 'ic_n_done';
-    case 'attendance_absent':
-      return 'ic_n_absent';
-    case 'attendance_flagged':
-      return 'ic_n_flag';
-    case 'announcement_emergency':
-      return 'ic_n_alert';
-    case 'announcement_parent_meeting':
-    case 'announcement_class_meeting':
-      return 'ic_n_meeting';
-    case 'announcement_holiday':
-      return 'ic_n_holiday';
-    case 'announcement_general':
-      return 'ic_n_announce';
-    case 'announcement_school_event':
-      return 'ic_n_event';
-    case 'announcement_reminder':
-      return 'ic_n_reminder';
-  }
-  return 'ic_stat_edutrack';
 }
 
 // Accent color that tints the small icon + app name per type.
@@ -117,7 +77,7 @@ Future<bool> showParentNotification(String title, String body, {int? id, String 
           channelDescription: 'Attendance alerts for your child',
           importance: Importance.high,
           priority: Priority.high,
-          icon: _androidNotificationIcon(type),
+          icon: '@mipmap/ic_launcher',
           color: _androidNotificationColor(type),
           largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
           styleInformation: BigTextStyleInformation(body, contentTitle: title),
