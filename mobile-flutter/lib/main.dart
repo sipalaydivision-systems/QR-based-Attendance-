@@ -4,6 +4,8 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -214,11 +216,84 @@ const dailySummaryChannel = AndroidNotificationChannel(
   importance: Importance.high,
 );
 
+// ---------------------------------------------------------------------------
+// Firebase Cloud Messaging — instant push even when the app is fully closed.
+// ---------------------------------------------------------------------------
+@pragma('vm:entry-point')
+Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
+  try {
+    await Firebase.initializeApp();
+  } catch (_) {/* already initialised */}
+}
+
+Future<void> _registerMainDevice(SharedPreferences prefs, String token) async {
+  final cookie = prefs.getString('cookie') ?? '';
+  if (cookie.isEmpty) return;
+  try {
+    await http
+        .post(
+          Uri.parse('${AppConfig.baseUrl}/api/user-device-token'),
+          headers: {'Content-Type': 'application/json', 'Cookie': cookie},
+          body: jsonEncode({
+            'push_token': token,
+            'platform': Platform.isAndroid ? 'android' : Platform.operatingSystem,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+  } catch (_) {/* retried on next token refresh / launch */}
+}
+
+Future<void> _setupMainFcm(SharedPreferences prefs) async {
+  try {
+    final messaging = FirebaseMessaging.instance;
+    await messaging.requestPermission(alert: true, badge: true, sound: true);
+    await messaging.setForegroundNotificationPresentationOptions(alert: true, badge: true, sound: true);
+    final token = await messaging.getToken();
+    if (token != null && token.isNotEmpty) {
+      await prefs.setString('fcm_token', token);
+      await _registerMainDevice(prefs, token);
+    }
+    messaging.onTokenRefresh.listen((t) {
+      prefs.setString('fcm_token', t);
+      _registerMainDevice(prefs, t);
+    });
+    FirebaseMessaging.onMessage.listen((message) {
+      final n = message.notification;
+      final title = n?.title ?? '${message.data['title'] ?? 'EduTrack'}';
+      final body = n?.body ?? '${message.data['body'] ?? ''}';
+      if (title.isEmpty && body.isEmpty) return;
+      notifications.show(
+        DateTime.now().millisecondsSinceEpoch.remainder(100000),
+        title,
+        body,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'edutrack_alerts',
+            'Edutrack Alerts',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+          ),
+        ),
+      );
+    });
+  } catch (e) {
+    debugPrint('Main FCM setup failed: $e');
+  }
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   tz_data.initializeTimeZones();
   tz.setLocalLocation(tz.getLocation('Asia/Manila'));
-  loadCachedBranding(await SharedPreferences.getInstance());
+  final prefs = await SharedPreferences.getInstance();
+  loadCachedBranding(prefs);
+  try {
+    await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(_fcmBackgroundHandler);
+  } catch (e) {
+    debugPrint('Firebase init failed: $e');
+  }
   await notifications.initialize(
     const InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
@@ -234,6 +309,7 @@ Future<void> main() async {
       .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
   await androidPlugin?.createNotificationChannel(alertsChannel);
   await androidPlugin?.createNotificationChannel(dailySummaryChannel);
+  unawaited(_setupMainFcm(prefs));
   final launchDetails = await notifications.getNotificationAppLaunchDetails();
   if (launchDetails?.didNotificationLaunchApp == true) {
     startupNotificationPayload = launchDetails?.notificationResponse?.payload;

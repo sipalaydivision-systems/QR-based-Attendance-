@@ -1757,6 +1757,35 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
 // Fetched only when the logo_version from /dashboard-data changes, so the
 // heavy base64 logo is not re-downloaded on every poll.
 // =============================================
+// Store a main-app (SDS/ASDS/admin) user's FCM token for push delivery.
+router.post('/user-device-token', requireAuth, async (req, res) => {
+    const pushToken = String(req.body.push_token || '').trim();
+    if (!pushToken) return res.status(400).json({ success: false, error: 'push_token required.' });
+    try {
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS user_devices (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                push_token VARCHAR(255) NOT NULL,
+                platform VARCHAR(20),
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_user_device_token (push_token),
+                INDEX idx_user_devices_user (user_id)
+            ) ENGINE=InnoDB
+        `).catch(() => {});
+        await db.query(
+            `INSERT INTO user_devices (user_id, push_token, platform)
+             VALUES (?, ?, ?)
+             ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), platform = VALUES(platform), updated_at = CURRENT_TIMESTAMP`,
+            [req.session.user.id, pushToken, String(req.body.platform || 'android')]
+        );
+        return res.json({ success: true });
+    } catch (err) {
+        console.error('User device token error:', err);
+        return res.status(500).json({ success: false, error: 'Failed to register device.' });
+    }
+});
+
 router.get('/mobile-branding', requireAuth, async (req, res) => {
     try {
         const [rows] = await db.query(
