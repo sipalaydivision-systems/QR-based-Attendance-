@@ -45,6 +45,47 @@ Future<bool> ensureParentNotificationPermission() async {
   }
 }
 
+// Per-type monochrome status-bar icon (vector drawable). Unknown types use the
+// launcher icon. Delivery is still guaranteed by the launcher fallback below.
+String _androidNotificationIcon(String type) {
+  switch (type.toLowerCase()) {
+    case 'attendance_time_in':
+      return 'ic_n_in';
+    case 'attendance_late_time_in':
+      return 'ic_n_late';
+    case 'attendance_pm_time_in':
+      return 'ic_n_pm';
+    case 'attendance_pm_late_time_in':
+      return 'ic_n_pm_late';
+    case 'attendance_lunch_out':
+      return 'ic_n_lunch';
+    case 'attendance_returned':
+      return 'ic_n_returned';
+    case 'attendance_early_out':
+      return 'ic_n_out';
+    case 'attendance_completed':
+      return 'ic_n_done';
+    case 'attendance_absent':
+      return 'ic_n_absent';
+    case 'attendance_flagged':
+      return 'ic_n_flag';
+    case 'announcement_emergency':
+      return 'ic_n_alert';
+    case 'announcement_parent_meeting':
+    case 'announcement_class_meeting':
+      return 'ic_n_meeting';
+    case 'announcement_holiday':
+      return 'ic_n_holiday';
+    case 'announcement_general':
+      return 'ic_n_announce';
+    case 'announcement_school_event':
+      return 'ic_n_event';
+    case 'announcement_reminder':
+      return 'ic_n_reminder';
+  }
+  return '@mipmap/ic_launcher';
+}
+
 // Accent color that tints the small icon + app name per type.
 Color _androidNotificationColor(String type) {
   final t = type.toLowerCase();
@@ -61,34 +102,38 @@ Color _androidNotificationColor(String type) {
 }
 
 Future<bool> showParentNotification(String title, String body, {int? id, String type = ''}) async {
-  try {
-    // Per-type monochrome small icon + tint color. The large icon is the static
-    // school seal — never rendered at runtime, so it can never block delivery
-    // (a previous version awaited Picture.toImage() which hangs in the background
-    // isolate and silently stopped notifications from firing).
-    await _notifications.show(
-      id ?? DateTime.now().millisecondsSinceEpoch.remainder(100000),
-      title,
-      body,
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          'edutrack_parent',
-          'EduTrack Guardian',
-          channelDescription: 'Attendance alerts for your child',
-          importance: Importance.high,
-          priority: Priority.high,
-          icon: '@mipmap/ic_launcher',
-          color: _androidNotificationColor(type),
-          largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
-          styleInformation: BigTextStyleInformation(body, contentTitle: title),
+  final nid = id ?? DateTime.now().millisecondsSinceEpoch.remainder(100000);
+  final color = _androidNotificationColor(type);
+  // Try the per-type status-bar icon first; if this device rejects that drawable
+  // (some skins do), retry with the launcher icon so the alert ALWAYS posts.
+  // The large icon stays the static school seal (no runtime rendering = no hang).
+  final iconsToTry = <String>{_androidNotificationIcon(type), '@mipmap/ic_launcher'};
+  for (final icon in iconsToTry) {
+    try {
+      await _notifications.show(
+        nid,
+        title,
+        body,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            'edutrack_parent',
+            'EduTrack Guardian',
+            channelDescription: 'Attendance alerts for your child',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: icon,
+            color: color,
+            largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+            styleInformation: BigTextStyleInformation(body, contentTitle: title),
+          ),
         ),
-      ),
-    );
-    return true;
-  } catch (error) {
-    debugPrint('Guardian notification failed: $error');
-    return false;
+      );
+      return true;
+    } catch (error) {
+      debugPrint('Guardian notification icon "$icon" failed: $error');
+    }
   }
+  return false;
 }
 
 const String _guardianBackgroundTask = 'guardianNotificationSync';
