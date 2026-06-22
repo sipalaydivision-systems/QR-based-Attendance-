@@ -127,49 +127,6 @@
 </div>
 <% } %>
 
-<!-- 2-Day Consecutive Absence Alerts -->
-<div class="alert-card">
-    <div class="alert-card-header">
-        <i class="fa-solid fa-triangle-exclamation"></i> 2-Day Consecutive Absence Alerts <span class="alert-count" id="absenceCount">0</span>
-    </div>
-
-    <div class="sub-title"><i class="fa-solid fa-user-graduate"></i> Students</div>
-    <div class="table-responsive">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Student</th>
-                    <th>Grade</th>
-                    <th>Section</th>
-                    <th>LRN</th>
-                    <th>Days Absent</th>
-                    <th>Adviser</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody id="absStudents">
-                <tr><td colspan="7" class="text-center text-muted">No consecutive absences detected</td></tr>
-            </tbody>
-        </table>
-    </div>
-
-    <div class="sub-title" style="margin-top:1.25rem;"><i class="fa-solid fa-chalkboard-user"></i> Teachers</div>
-    <div class="table-responsive">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Employee ID</th>
-                    <th>School</th>
-                </tr>
-            </thead>
-            <tbody id="absTeachers">
-                <tr><td colspan="3" class="text-center text-muted">No consecutive absences detected</td></tr>
-            </tbody>
-        </table>
-    </div>
-</div>
-
 <% if (user && user.role === 'super_admin') { %>
 <!-- User Activity -->
 <div class="activity-card">
@@ -429,77 +386,28 @@ async function sendAnnouncement(event) {
         });
         var json = await res.json();
         if (!res.ok || json.error) throw new Error(json.error || 'Failed to send announcement.');
-        status.textContent = 'Sent to ' + (json.sent_to_parents || 0) + ' parent account(s).';
+        var count = json.sent_to_parents || 0;
+        status.textContent = 'Sent to ' + count + ' parent account(s).';
         document.getElementById('announcementSentCount').textContent = 'Sent';
         form.reset();
         updateAnnouncementAudience();
         await loadAnnouncementRows();
+        showAnnSentModal(count);
     } catch(e) {
         status.textContent = e.message || 'Failed to send announcement.';
     }
 }
-function buildAdviserAction(flag) {
-    var adviser = flag.adviser || 'Assigned adviser';
-    var adviserEmail = (flag.adviser_email || '').trim();
-    var adviserContact = (flag.adviser_contact || '').trim();
-    var schoolContact = (flag.school_contact || '').trim();
-    var email = '';
-    var phone = '';
-    if (adviserEmail && /@/.test(adviserEmail)) email = adviserEmail;
-    if (!email && adviserContact && /@/.test(adviserContact)) email = adviserContact;
-    if (!email && schoolContact && /@/.test(schoolContact)) email = schoolContact;
-    if (adviserContact && !/@/.test(adviserContact)) phone = adviserContact.replace(/[^0-9+]/g, '');
-    if (!phone && schoolContact && !/@/.test(schoolContact)) phone = schoolContact.replace(/[^0-9+]/g, '');
-    var student = flag.name || ((flag.lastname || '') + ', ' + (flag.firstname || '')).trim() || 'Student';
-    var gradeSection = (flag.grade_name || '-') + ' / ' + (flag.section_name || '-');
-    var body = 'Please check absence alert for ' + student + ' (' + gradeSection + ', LRN: ' + (flag.lrn || '-') + '). Total days absent: ' + (flag.absent_days || 2) + '.';
-    var encodedBody = encodeURIComponent(body);
-    var encodedTitle = encodeURIComponent('Absence Alert - ' + student);
-    var actions = [];
-    if (phone) {
-        actions.push('<a class="btn btn-sm btn-outline" href="tel:' + encodeURIComponent(phone) + '">Call Adviser</a>');
-        actions.push('<a class="btn btn-sm btn-outline" href="sms:' + encodeURIComponent(phone) + '?body=' + encodedBody + '">Send SMS</a>');
-    }
-    if (email) {
-        actions.push('<a class="btn btn-sm btn-outline" href="mailto:' + encodeURIComponent(email) + '?subject=' + encodedTitle + '&body=' + encodedBody + '">Send Email</a>');
-    }
-    if (actions.length) return '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + actions.join('') + '</div>';
-    return '<button class="btn btn-sm btn-secondary" type="button" onclick="alert(\'No adviser contact saved for ' + escapeHtml(adviser) + '. Please update the school/adviser contact details first.\')">Please contact adviser</button>';
+function showAnnSentModal(count) {
+    var modal = document.getElementById('annSentModal');
+    var text = document.getElementById('annSentModalText');
+    if (text) text.textContent = 'Your announcement was delivered to ' + count + ' parent account' + (count === 1 ? '' : 's') + '.';
+    if (modal) modal.style.display = 'flex';
+}
+function closeAnnSentModal() {
+    var modal = document.getElementById('annSentModal');
+    if (modal) modal.style.display = 'none';
 }
 async function loadNotifications() {
-    try {
-        // Load absence flags
-        var flagRes = await fetch('/api/absence-flags');
-        var flags = await flagRes.json();
-        var studentFlags = flags.filter(function(f){return f.person_type==='student';});
-        var teacherFlags = flags.filter(function(f){return f.person_type==='teacher';});
-        document.getElementById('absenceCount').textContent = flags.length;
-
-        if (studentFlags.length > 0) {
-            document.getElementById('absStudents').innerHTML = studentFlags.map(function(f){
-                return '<tr><td><div style="display:flex;align-items:center;gap:8px;"><span>' + schoolLogo(f, 28) + '</span><div><strong>' + escapeHtml(f.name || f.person_name || '-')
-                    +'</strong><div style="font-size:0.72rem;color:var(--gray-500);margin-top:2px;">'+ escapeHtml(f.school_name || '-') +'</div></div></div></td>'
-                    +'<td>' + escapeHtml(f.grade_name || '-') + '</td>'
-                    +'<td>' + escapeHtml(f.section_name || '-') + '</td>'
-                    +'<td><span class="lrn-badge">' + escapeHtml(f.lrn || '-') + '</span></td>'
-                    +'<td><span class="badge badge-absent">' + escapeHtml(f.absent_days || 2) + ' days</span></td>'
-                    +'<td>' + escapeHtml(f.adviser || '-') + '</td>'
-                    +'<td>' + buildAdviserAction(f) + '</td></tr>';
-            }).join('');
-        } else {
-            document.getElementById('absStudents').innerHTML = '<tr><td colspan="7" class="text-center text-muted">No consecutive absences detected</td></tr>';
-        }
-        if (teacherFlags.length > 0) {
-            document.getElementById('absTeachers').innerHTML = teacherFlags.map(function(f){
-                return '<tr><td><div style="display:flex;align-items:center;gap:8px;"><span>' + schoolLogo(f, 24) + '</span><strong>'+(f.name || f.person_name || '-')
-                    +'</strong></div></td><td>'+(f.employee_id||'-')
-                    +'</td><td><span class="school-code">'+(f.school_name||'-')+'</span></td></tr>';
-            }).join('');
-        } else {
-            document.getElementById('absTeachers').innerHTML = '<tr><td colspan="3" class="text-center text-muted">No consecutive absences detected</td></tr>';
-        }
-    } catch(e) { console.error('Absence flags:', e); }
-
     var userActivityEl = document.getElementById('userActivity');
     if (userActivityEl) {
         try {
@@ -532,6 +440,18 @@ document.getElementById('annGrade').addEventListener('change', loadSections);
 setInterval(loadNotifications, 5000);
 setInterval(loadAnnouncementRows, 30000);
 </script>
+
+<!-- Announcement sent confirmation modal -->
+<div id="annSentModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.55);align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this)closeAnnSentModal()">
+    <div style="background:#fff;border-radius:18px;max-width:420px;width:100%;padding:30px 26px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.28);">
+        <div style="width:66px;height:66px;border-radius:50%;background:var(--primary-bg,#dcfce7);color:var(--success,#16a34a);display:flex;align-items:center;justify-content:center;font-size:34px;margin:0 auto 16px;">
+            <i class="fa-solid fa-circle-check"></i>
+        </div>
+        <h3 style="margin:0 0 6px;font-size:1.25rem;color:var(--gray-800,#1f2937);">Announcement Sent</h3>
+        <p id="annSentModalText" style="margin:0 0 20px;color:var(--gray-500,#6b7280);font-size:.92rem;line-height:1.5;">Your announcement was delivered to parents.</p>
+        <button type="button" class="btn btn-primary" style="min-width:130px;" onclick="closeAnnSentModal()">OK</button>
+    </div>
+</div>
 
 <div class="live-indicator"><div class="live-dot"></div> Live</div>
 <%- include('partials/footer') %>
