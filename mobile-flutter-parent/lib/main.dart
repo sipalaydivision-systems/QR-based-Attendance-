@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -101,12 +102,52 @@ Color _androidNotificationColor(String type) {
   return const Color(0xFF2563EB);
 }
 
-Future<bool> showParentNotification(String title, String body, {int? id, String type = ''}) async {
+// Render the per-type Material icon (white on a colored circle) to a PNG bitmap
+// for the large notification icon. A raster PNG is the only large-icon form every
+// device accepts (vector drawables decode to null). Foreground only — see richIcon.
+Future<ByteArrayAndroidBitmap?> _renderTypeLargeIcon(String type) async {
+  if (type.trim().isEmpty) return null;
+  try {
+    final note = <String, dynamic>{'type': type};
+    final icon = parentNotificationIcon(note);
+    final color = parentNotificationColor(note);
+    const size = 128.0;
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    canvas.drawCircle(const ui.Offset(size / 2, size / 2), size / 2, ui.Paint()..color = color);
+    final painter = TextPainter(
+      text: TextSpan(
+        text: String.fromCharCode(icon.codePoint),
+        style: TextStyle(color: Colors.white, fontSize: 74, fontFamily: icon.fontFamily, package: icon.fontPackage),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    painter.paint(canvas, ui.Offset((size - painter.width) / 2, (size - painter.height) / 2));
+    final image = await recorder.endRecording().toImage(size.toInt(), size.toInt());
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    image.dispose();
+    if (bytes == null) return null;
+    return ByteArrayAndroidBitmap(bytes.buffer.asUint8List());
+  } catch (_) {
+    return null;
+  }
+}
+
+// richIcon=true (foreground) renders the per-type large icon; the background
+// isolate passes false (no render surface there — rendering can hang).
+Future<bool> showParentNotification(String title, String body, {int? id, String type = '', bool richIcon = true}) async {
   final nid = id ?? DateTime.now().millisecondsSinceEpoch.remainder(100000);
   final color = _androidNotificationColor(type);
-  // Try the per-type status-bar icon first; if this device rejects that drawable
-  // (some skins do), retry with the launcher icon so the alert ALWAYS posts.
-  // The large icon stays the static school seal (no runtime rendering = no hang).
+  // Large icon: per-type PNG in the foreground, static school seal otherwise.
+  AndroidBitmap<Object> largeIcon = const DrawableResourceAndroidBitmap('@mipmap/ic_launcher');
+  if (richIcon && type.trim().isNotEmpty) {
+    try {
+      final rendered = await _renderTypeLargeIcon(type).timeout(const Duration(seconds: 3));
+      if (rendered != null) largeIcon = rendered;
+    } catch (_) {/* keep the seal */}
+  }
+  // Small icon: try the per-type drawable, fall back to the launcher so a device
+  // that rejects the custom icon still always posts the notification.
   final iconsToTry = <String>{_androidNotificationIcon(type), '@mipmap/ic_launcher'};
   for (final icon in iconsToTry) {
     try {
@@ -123,7 +164,7 @@ Future<bool> showParentNotification(String title, String body, {int? id, String 
             priority: Priority.high,
             icon: icon,
             color: color,
-            largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+            largeIcon: largeIcon,
             styleInformation: BigTextStyleInformation(body, contentTitle: title),
           ),
         ),
@@ -204,6 +245,7 @@ Future<bool> _syncGuardianNotificationsInBackground() async {
         '${note['message'] ?? ''}',
         id: _systemNotificationId(note),
         type: '${note['type'] ?? ''}',
+        richIcon: false, // background isolate: no render surface
       );
       notified.add(_notificationKey(note));
     }
