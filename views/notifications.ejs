@@ -116,10 +116,11 @@
                     <th>Target</th>
                     <th>Created By</th>
                     <th>Date</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody id="announcementRows">
-                <tr><td colspan="5" class="text-center text-muted">Loading announcements...</td></tr>
+                <tr><td colspan="6" class="text-center text-muted">Loading announcements...</td></tr>
             </tbody>
         </table>
     </div>
@@ -149,6 +150,17 @@
 <% } %>
 
 <script>
+var CURRENT_USER = {
+    id: '<%= user && user.id ? user.id : "" %>',
+    role: '<%= user ? user.role : "" %>',
+    school_id: '<%= user && user.school_id ? user.school_id : "" %>'
+};
+function canManageAnnouncement(row) {
+    if (CURRENT_USER.role === 'super_admin') return true;
+    if (CURRENT_USER.role === 'principal') return CURRENT_USER.school_id && String(row.school_id) === String(CURRENT_USER.school_id);
+    if (CURRENT_USER.role === 'adviser') return String(row.created_by) === String(CURRENT_USER.id);
+    return false;
+}
 function escapeHtml(value) {
     return String(value == null ? '' : value)
         .replace(/&/g, '&amp;')
@@ -286,23 +298,40 @@ var MAX_TABLE_ROWS = 6;
 var announcementsData = [];
 var announcementsExpanded = false;
 function announcementRowHtml(row) {
+    var actions = canManageAnnouncement(row)
+        ? '<div style="display:flex;gap:6px;flex-wrap:wrap;">'
+            + '<button type="button" class="btn btn-sm btn-outline" onclick="editAnnouncement(' + Number(row.id) + ')">Edit</button>'
+            + '<button type="button" class="btn btn-sm btn-danger" onclick="deleteAnnouncement(' + Number(row.id) + ')">Delete</button></div>'
+        : '<span class="text-muted">—</span>';
     return '<tr>'
         + '<td><span class="badge badge-active">' + escapeHtml(announcementTypeLabel(row.type)) + '</span></td>'
         + '<td><strong>' + escapeHtml(row.title || '-') + '</strong><div class="text-muted" style="font-size:.75rem;">' + escapeHtml(row.message || '') + '</div></td>'
         + '<td>' + escapeHtml(targetLabel(row)) + '</td>'
         + '<td>' + escapeHtml(row.created_by_name || row.created_by_role || 'System') + '</td>'
         + '<td>' + escapeHtml(row.created_at ? new Date(row.created_at).toLocaleString() : '-') + '</td>'
+        + '<td>' + actions + '</td>'
         + '</tr>';
 }
-function renderTable(body, toggle, data, expanded, rowHtml) {
+function renderTable(body, toggle, data, expanded, rowHtml, animate) {
     if (!body) return;
+    var cols = 5;
+    var tbl = body.closest('table');
+    if (tbl) { var th = tbl.querySelectorAll('thead th'); if (th.length) cols = th.length; }
     if (!data.length) {
-        body.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No records found.</td></tr>';
+        body.innerHTML = '<tr><td colspan="' + cols + '" class="text-center text-muted">No records found.</td></tr>';
         if (toggle) toggle.style.display = 'none';
         return;
     }
     var list = expanded ? data : data.slice(0, MAX_TABLE_ROWS);
     body.innerHTML = list.map(rowHtml).join('');
+    if (animate && expanded) {
+        // Smoothly reveal the newly shown rows (staggered fade + slide).
+        var rows = body.querySelectorAll('tr');
+        for (var i = MAX_TABLE_ROWS; i < rows.length; i++) {
+            rows[i].style.animation = 'annRowReveal .34s ease both';
+            rows[i].style.animationDelay = ((i - MAX_TABLE_ROWS) * 40) + 'ms';
+        }
+    }
     if (toggle) {
         if (data.length > MAX_TABLE_ROWS) {
             toggle.style.display = '';
@@ -312,11 +341,11 @@ function renderTable(body, toggle, data, expanded, rowHtml) {
         }
     }
 }
-function renderAnnouncements() {
+function renderAnnouncements(animate) {
     renderTable(document.getElementById('announcementRows'), document.getElementById('announcementsToggle'),
-        announcementsData, announcementsExpanded, announcementRowHtml);
+        announcementsData, announcementsExpanded, announcementRowHtml, animate);
 }
-function toggleAnnouncements() { announcementsExpanded = !announcementsExpanded; renderAnnouncements(); }
+function toggleAnnouncements() { announcementsExpanded = !announcementsExpanded; renderAnnouncements(announcementsExpanded); }
 async function loadAnnouncementRows() {
     if (!document.getElementById('announcementRows')) return; // hidden for advisers
     try {
@@ -346,11 +375,11 @@ function parentContactRowHtml(c) {
         + '<td>' + action + '</td>'
         + '</tr>';
 }
-function renderParentContacts() {
+function renderParentContacts(animate) {
     renderTable(document.getElementById('parentContactRows'), document.getElementById('contactsToggle'),
-        parentContactsData, parentContactsExpanded, parentContactRowHtml);
+        parentContactsData, parentContactsExpanded, parentContactRowHtml, animate);
 }
-function toggleParentContacts() { parentContactsExpanded = !parentContactsExpanded; renderParentContacts(); }
+function toggleParentContacts() { parentContactsExpanded = !parentContactsExpanded; renderParentContacts(parentContactsExpanded); }
 async function loadParentContacts() {
     try {
         var rows = await (await fetch('/api/parent-contacts')).json();
@@ -405,6 +434,58 @@ function closeAnnSentModal() {
     var modal = document.getElementById('annSentModal');
     if (modal) modal.style.display = 'none';
 }
+var editingAnnId = null;
+function editAnnouncement(id) {
+    var row = announcementsData.filter(function(r){ return String(r.id) === String(id); })[0];
+    if (!row) return;
+    editingAnnId = id;
+    document.getElementById('editAnnType').value = row.type || 'announcement_general';
+    document.getElementById('editAnnTitle').value = row.title || '';
+    document.getElementById('editAnnMessage').value = row.message || '';
+    document.getElementById('editAnnError').textContent = '';
+    document.getElementById('editAnnModal').style.display = 'flex';
+}
+function closeEditAnnModal() {
+    document.getElementById('editAnnModal').style.display = 'none';
+    editingAnnId = null;
+}
+async function submitEditAnnouncement() {
+    if (!editingAnnId) return;
+    var title = document.getElementById('editAnnTitle').value.trim();
+    var message = document.getElementById('editAnnMessage').value.trim();
+    var type = document.getElementById('editAnnType').value;
+    var errEl = document.getElementById('editAnnError');
+    var btn = document.getElementById('editAnnSaveBtn');
+    if (!title || !message) { errEl.textContent = 'Title and message are required.'; return; }
+    errEl.textContent = '';
+    btn.disabled = true;
+    try {
+        var res = await fetch('/api/notifications/' + editingAnnId, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: title, message: message, type: type })
+        });
+        var json = await res.json();
+        if (!res.ok || json.error) throw new Error(json.error || 'Failed to update announcement.');
+        closeEditAnnModal();
+        await loadAnnouncementRows();
+    } catch(e) {
+        errEl.textContent = e.message || 'Failed to update announcement.';
+    } finally {
+        btn.disabled = false;
+    }
+}
+async function deleteAnnouncement(id) {
+    if (!confirm('Delete this announcement? It will also be removed from the parents\' notifications.')) return;
+    try {
+        var res = await fetch('/api/notifications/' + id, { method: 'DELETE' });
+        var json = await res.json();
+        if (!res.ok || json.error) throw new Error(json.error || 'Failed to delete.');
+        await loadAnnouncementRows();
+    } catch(e) {
+        alert(e.message || 'Failed to delete announcement.');
+    }
+}
 async function loadNotifications() {
     var userActivityEl = document.getElementById('userActivity');
     if (userActivityEl) {
@@ -429,7 +510,7 @@ async function loadNotifications() {
 }
 // Move the modal to <body> so position:fixed centers over the viewport even if a
 // layout ancestor has a transform/overflow that would otherwise clip it.
-(function(){ var m = document.getElementById('annSentModal'); if (m && m.parentNode !== document.body) document.body.appendChild(m); })();
+(function(){ ['annSentModal','editAnnModal'].forEach(function(idv){ var m = document.getElementById(idv); if (m && m.parentNode !== document.body) document.body.appendChild(m); }); })();
 loadNotifications();
 populateAnnouncementFilters();
 loadAnnouncementRows();
@@ -453,6 +534,42 @@ setInterval(loadAnnouncementRows, 30000);
         <button type="button" class="btn btn-primary" style="min-width:130px;" onclick="closeAnnSentModal()">OK</button>
     </div>
 </div>
+
+<!-- Edit announcement modal -->
+<div id="editAnnModal" style="display:none;position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.55);align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this)closeEditAnnModal()">
+    <div style="background:#fff;border-radius:18px;max-width:520px;width:100%;padding:24px;box-shadow:0 24px 60px rgba(0,0,0,.28);max-height:90vh;overflow:auto;">
+        <h3 style="margin:0 0 14px;font-size:1.2rem;color:var(--gray-800,#1f2937);"><i class="fa-solid fa-pen-to-square"></i> Edit Announcement</h3>
+        <div id="editAnnError" style="color:#dc2626;font-size:.85rem;margin-bottom:8px;"></div>
+        <div class="form-group" style="margin-bottom:12px;">
+            <label>Announcement Type</label>
+            <select id="editAnnType" class="form-control">
+                <option value="announcement_general">General Announcement</option>
+                <option value="announcement_parent_meeting">Parent Meeting</option>
+                <option value="announcement_class_meeting">Class Meeting</option>
+                <option value="announcement_holiday">Holiday / No Classes</option>
+                <option value="announcement_school_event">School Event</option>
+                <option value="announcement_emergency">Emergency Announcement</option>
+                <option value="announcement_reminder">Reminder</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom:12px;">
+            <label>Title</label>
+            <input id="editAnnTitle" class="form-control" maxlength="255">
+        </div>
+        <div class="form-group" style="margin-bottom:16px;">
+            <label>Message / Content</label>
+            <textarea id="editAnnMessage" class="form-control" rows="4"></textarea>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+            <button type="button" class="btn btn-secondary" onclick="closeEditAnnModal()">Cancel</button>
+            <button type="button" id="editAnnSaveBtn" class="btn btn-primary" onclick="submitEditAnnouncement()">Save Changes</button>
+        </div>
+    </div>
+</div>
+
+<style>
+@keyframes annRowReveal { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+</style>
 
 <div class="live-indicator"><div class="live-dot"></div> Live</div>
 <%- include('partials/footer') %>

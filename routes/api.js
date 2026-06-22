@@ -3838,12 +3838,59 @@ router.post('/notifications', requireRole('super_admin', 'principal', 'adviser')
     }
 });
 
-router.delete('/notifications/:id', requireRole('super_admin'), async (req, res) => {
+// Returns { row } if the user may manage this announcement, else { error: 403|404 }.
+async function loadManageableAnnouncement(id, user) {
+    const [[row]] = await db.query('SELECT id, school_id, created_by FROM notifications WHERE id = ? LIMIT 1', [id]);
+    if (!row) return { error: 404 };
+    if (user.role === 'super_admin') return { row };
+    if (user.role === 'principal') {
+        return (user.school_id && Number(row.school_id) === Number(user.school_id)) ? { row } : { error: 403 };
+    }
+    if (user.role === 'adviser') {
+        return (Number(row.created_by) === Number(user.id)) ? { row } : { error: 403 };
+    }
+    return { error: 403 };
+}
+
+router.delete('/notifications/:id', requireRole('super_admin', 'principal', 'adviser'), async (req, res) => {
     try {
-        await db.query('DELETE FROM notifications WHERE id = ?', [req.params.id]);
+        const id = parseInt(req.params.id, 10);
+        if (!id) return res.status(400).json({ error: 'Invalid announcement id.' });
+        const check = await loadManageableAnnouncement(id, req.session.user);
+        if (check.error === 404) return res.status(404).json({ error: 'Announcement not found.' });
+        if (check.error === 403) return res.status(403).json({ error: 'You can only delete your own announcements.' });
+        // Remove the delivered parent copies first, then the announcement itself.
+        await db.query('DELETE FROM parent_notifications WHERE source_notification_id = ?', [id]);
+        await db.query('DELETE FROM notifications WHERE id = ?', [id]);
         return res.json({ success: true });
     } catch (err) {
-        return res.status(500).json({ error: 'Failed to delete notification.' });
+        console.error('Delete notification error:', err);
+        return res.status(500).json({ error: 'Failed to delete announcement.' });
+    }
+});
+
+// Edit an announcement's title/message/type. Re-fans-out so the copies already
+// delivered to parents are updated in place (same source key).
+router.put('/notifications/:id', requireRole('super_admin', 'principal', 'adviser'), async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (!id) return res.status(400).json({ error: 'Invalid announcement id.' });
+        const title = String(req.body.title || '').trim();
+        const message = String(req.body.message || '').trim();
+        if (!title || !message) return res.status(400).json({ error: 'Title and message are required.' });
+        const check = await loadManageableAnnouncement(id, req.session.user);
+        if (check.error === 404) return res.status(404).json({ error: 'Announcement not found.' });
+        if (check.error === 403) return res.status(403).json({ error: 'You can only edit your own announcements.' });
+        const normalizedType = normalizeAnnouncementType(req.body.type);
+        await db.query(
+            'UPDATE notifications SET title = ?, message = ?, type = ? WHERE id = ?',
+            [title, message, normalizedType, id]
+        );
+        const sentToParents = await fanOutAnnouncement(id);
+        return res.json({ success: true, sent_to_parents: sentToParents });
+    } catch (err) {
+        console.error('Update notification error:', err);
+        return res.status(500).json({ error: 'Failed to update announcement.' });
     }
 });
 
