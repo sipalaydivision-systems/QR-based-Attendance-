@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "888242310799",
+    "project_id": "edutrack-guardian",
+    "storage_bucket": "edutrack-guardian.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:888242310799:android:cc925cd1263b3b68722afa",
+        "android_client_info": {
+          "package_name": "ph.gov.sipalay.edutrack.parent"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC49sN5jfM03s_Dgebu_Ku_AG5vWITVz3o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

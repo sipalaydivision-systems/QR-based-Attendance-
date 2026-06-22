@@ -4,6 +4,8 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
@@ -175,6 +177,51 @@ Future<bool> showParentNotification(String title, String body, {int? id, String 
     }
   }
   return false;
+}
+
+// ---------------------------------------------------------------------------
+// Firebase Cloud Messaging — instant push even when the app is fully closed.
+// ---------------------------------------------------------------------------
+String gFcmToken = '';
+
+// Runs in a separate isolate when a push arrives with the app closed/background.
+// The server sends "notification" messages, which Android displays automatically,
+// so this only needs to keep Firebase initialised.
+@pragma('vm:entry-point')
+Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
+  try {
+    await Firebase.initializeApp();
+  } catch (_) {/* already initialised */}
+}
+
+// Initialise FCM, request permission, capture the token, and show foreground
+// pushes via the local-notification path. Best-effort — never throws upward.
+Future<void> _setupFirebaseMessaging(ParentApi api) async {
+  try {
+    final messaging = FirebaseMessaging.instance;
+    await messaging.requestPermission(alert: true, badge: true, sound: true);
+    await messaging.setForegroundNotificationPresentationOptions(alert: true, badge: true, sound: true);
+    final token = await messaging.getToken();
+    if (token != null && token.isNotEmpty) {
+      gFcmToken = token;
+      await api.prefs.setString('parent_fcm_token', token);
+      unawaited(api.registerDeviceToken());
+    }
+    messaging.onTokenRefresh.listen((t) {
+      gFcmToken = t;
+      api.prefs.setString('parent_fcm_token', t);
+      unawaited(api.registerDeviceToken());
+    });
+    // Foreground messages don't auto-display — show them ourselves.
+    FirebaseMessaging.onMessage.listen((message) {
+      final n = message.notification;
+      final title = n?.title ?? '${message.data['title'] ?? 'EduTrack Guardian'}';
+      final body = n?.body ?? '${message.data['body'] ?? ''}';
+      unawaited(showParentNotification(title, body, type: '${message.data['type'] ?? ''}'));
+    });
+  } catch (e) {
+    debugPrint('FCM setup failed: $e');
+  }
 }
 
 const String _guardianBackgroundTask = 'guardianNotificationSync';
@@ -442,16 +489,25 @@ Widget instantBrandLogo({BoxFit fit = BoxFit.contain}) {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
+    await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(_fcmBackgroundHandler);
+  } catch (e) {
+    debugPrint('Firebase init failed: $e');
+  }
+  try {
     await _initNotifications();
     await _initializeGuardianBackgroundSync();
   } catch (_) {/* notifications are best-effort */}
   final prefs = await SharedPreferences.getInstance();
   gSchoolLogo = prefs.getString('parent_school_logo') ?? '';
   gSchoolArt = prefs.getString('parent_school_art') ?? '';
+  gFcmToken = prefs.getString('parent_fcm_token') ?? '';
+  final api = ParentApi(prefs);
+  unawaited(_setupFirebaseMessaging(api));
   if ((prefs.getString('cookie') ?? '').isNotEmpty) {
     unawaited(scheduleGuardianBackgroundSync());
   }
-  runApp(ParentApp(api: ParentApi(prefs)));
+  runApp(ParentApp(api: api));
 }
 
 // ---------------------------------------------------------------------------
@@ -556,6 +612,7 @@ class ParentApi {
       await http
           .post(Uri.parse('$kBaseUrl/api/parent/device-token'), headers: _headers, body: {
             'device_token': token,
+            'push_token': gFcmToken,
             'platform': Platform.isAndroid ? 'android' : Platform.operatingSystem,
             'app_version': info.version,
           })
