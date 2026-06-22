@@ -213,11 +213,42 @@ Future<void> _setupFirebaseMessaging(ParentApi api) async {
       unawaited(api.registerDeviceToken());
     });
     // Foreground messages don't auto-display — show them ourselves.
-    FirebaseMessaging.onMessage.listen((message) {
+    FirebaseMessaging.onMessage.listen((message) async {
       final n = message.notification;
       final title = n?.title ?? '${message.data['title'] ?? 'EduTrack Guardian'}';
       final body = n?.body ?? '${message.data['body'] ?? ''}';
-      unawaited(showParentNotification(title, body, type: '${message.data['type'] ?? ''}'));
+      // Mark the inbox row as delivered before displaying it. This prevents the
+      // dashboard refresh from treating the same FCM event as a new local alert.
+      final notificationId =
+          '${message.data['notification_id'] ?? message.messageId ?? ''}'.trim();
+      if (notificationId.isNotEmpty) {
+        final fcmDelivered =
+            (api.prefs.getStringList(_fcmDeliveredPreference) ??
+                    const <String>[])
+                .toSet();
+        if (fcmDelivered.contains(notificationId)) return;
+        fcmDelivered.add(notificationId);
+        await api.prefs.setStringList(
+          _fcmDeliveredPreference,
+          fcmDelivered.toList().reversed.take(200).toList(),
+        );
+        final delivered =
+            (api.prefs.getStringList(_notifiedPreference) ?? const <String>[])
+                .toSet();
+        delivered.add(notificationId);
+        await api.prefs.setStringList(
+          _notifiedPreference,
+          delivered.toList().reversed.take(200).toList(),
+        );
+        await api.prefs.setBool(_workerReadyPreference, true);
+      }
+      final stableId = int.tryParse(notificationId);
+      await showParentNotification(
+        title,
+        body,
+        id: stableId,
+        type: '${message.data['type'] ?? ''}',
+      );
     });
   } catch (e) {
     debugPrint('FCM setup failed: $e');
@@ -228,6 +259,7 @@ const String _guardianBackgroundTask = 'guardianNotificationSync';
 const String _guardianPeriodicWork = 'edutrack-guardian-notifications-periodic';
 const String _guardianImmediateWork = 'edutrack-guardian-notifications-immediate';
 const String _notifiedPreference = 'parent_notified_notifications';
+const String _fcmDeliveredPreference = 'parent_fcm_delivered_notifications';
 const String _workerReadyPreference = 'parent_notification_worker_ready';
 
 String _notificationKey(Map<String, dynamic> note) =>
@@ -318,26 +350,9 @@ Future<void> _initializeGuardianBackgroundSync() async {
 }
 
 Future<void> scheduleGuardianBackgroundSync() async {
-  if (!Platform.isAndroid) return;
-  try {
-    final constraints = Constraints(networkType: NetworkType.connected);
-    await Workmanager().registerPeriodicTask(
-      _guardianPeriodicWork,
-      _guardianBackgroundTask,
-      frequency: const Duration(minutes: 15),
-      constraints: constraints,
-      existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
-    );
-    await Workmanager().registerOneOffTask(
-      _guardianImmediateWork,
-      _guardianBackgroundTask,
-      initialDelay: const Duration(seconds: 10),
-      constraints: constraints,
-      existingWorkPolicy: ExistingWorkPolicy.replace,
-    );
-  } catch (_) {
-    // Android may defer background registration while system services start.
-  }
+  // FCM now owns closed-app delivery. Cancel tasks created by older Guardian
+  // builds so polling cannot display the same inbox item a second time.
+  await cancelGuardianBackgroundSync();
 }
 
 Future<void> cancelGuardianBackgroundSync() async {
@@ -504,9 +519,7 @@ Future<void> main() async {
   gFcmToken = prefs.getString('parent_fcm_token') ?? '';
   final api = ParentApi(prefs);
   unawaited(_setupFirebaseMessaging(api));
-  if ((prefs.getString('cookie') ?? '').isNotEmpty) {
-    unawaited(scheduleGuardianBackgroundSync());
-  }
+  unawaited(cancelGuardianBackgroundSync());
   runApp(ParentApp(api: api));
 }
 
@@ -722,6 +735,7 @@ class ParentApi {
     await prefs.remove('parent_contact');
     await prefs.remove('parent_username');
     await prefs.remove('parent_notified_notifications');
+    await prefs.remove(_fcmDeliveredPreference);
     await prefs.remove(_workerReadyPreference);
   }
 
@@ -1531,14 +1545,9 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   }
 
   Future<void> _showNotificationPopup(Map<String, dynamic> note) async {
-    final title = '${note['title'] ?? 'EduTrack Guardian'}';
-    final body = '${note['message'] ?? ''}';
-    // Every notification still fires an Android system notification.
-    try {
-      await showParentNotification(title, body, type: '${note['type'] ?? ''}');
-    } catch (_) {}
     if (!mounted) return;
-    // Only announcements surface the in-app banner; attendance alerts do not.
+    // FCM is the sole Android system-notification path. Dashboard polling only
+    // supplies the in-app banner for announcements.
     if (!_isAnnouncement(note)) return;
     setState(() => _bannerNote = note);
     _bannerTimer?.cancel();
