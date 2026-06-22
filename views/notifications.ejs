@@ -102,11 +102,10 @@
     </div>
 </div>
 
-<% if (!(user && user.role === 'adviser')) { %>
 <div class="card" style="margin-bottom:1rem;">
     <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
         <h3 style="margin:0;"><i class="fa-solid fa-list-check"></i> Recent Parent Notices</h3>
-        <button type="button" id="announcementsToggle" class="btn btn-sm btn-outline" style="display:none;" onclick="toggleAnnouncements()">See all</button>
+        <button type="button" id="announcementsToggle" class="btn btn-sm btn-outline" style="display:none;" onclick="toggleAnnouncements()">View all</button>
     </div>
     <div class="table-responsive">
         <table class="data-table">
@@ -125,7 +124,6 @@
         </table>
     </div>
 </div>
-<% } %>
 
 <% if (user && user.role === 'super_admin') { %>
 <!-- User Activity -->
@@ -308,7 +306,7 @@ function renderTable(body, toggle, data, expanded, rowHtml) {
     if (toggle) {
         if (data.length > MAX_TABLE_ROWS) {
             toggle.style.display = '';
-            toggle.textContent = expanded ? 'Show less' : ('See all (' + data.length + ')');
+            toggle.textContent = expanded ? 'Show less' : ('View all (' + data.length + ')');
         } else {
             toggle.style.display = 'none';
         }
@@ -429,6 +427,9 @@ async function loadNotifications() {
         } catch(e) { console.error('User activity:', e); }
     }
 }
+// Move the modal to <body> so position:fixed centers over the viewport even if a
+// layout ancestor has a transform/overflow that would otherwise clip it.
+(function(){ var m = document.getElementById('annSentModal'); if (m && m.parentNode !== document.body) document.body.appendChild(m); })();
 loadNotifications();
 populateAnnouncementFilters();
 loadAnnouncementRows();
@@ -442,7 +443,7 @@ setInterval(loadAnnouncementRows, 30000);
 </script>
 
 <!-- Announcement sent confirmation modal -->
-<div id="annSentModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.55);align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this)closeAnnSentModal()">
+<div id="annSentModal" style="display:none;position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.55);align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this)closeAnnSentModal()">
     <div style="background:#fff;border-radius:18px;max-width:420px;width:100%;padding:30px 26px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.28);">
         <div style="width:66px;height:66px;border-radius:50%;background:var(--primary-bg,#dcfce7);color:var(--success,#16a34a);display:flex;align-items:center;justify-content:center;font-size:34px;margin:0 auto 16px;">
             <i class="fa-solid fa-circle-check"></i>
