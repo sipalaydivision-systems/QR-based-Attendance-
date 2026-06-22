@@ -1,6 +1,7 @@
 const db = require('../config/database');
 const { nowDateTime, formatTime12 } = require('./appTime');
 const { ATTENDANCE_SCAN_LABELS, normalizeEventLabel } = require('./attendanceStatus');
+const { sendPushToParent } = require('./firebasePush');
 
 function normalizeContact(value) {
     let digits = String(value || '').replace(/\D/g, '');
@@ -180,7 +181,7 @@ async function getLinkedParentsForContact(contact) {
 
 async function insertParentNotification(payload) {
     if (!payload || !payload.parentId || !payload.sourceKey || !payload.title || !payload.message) return false;
-    await db.query(
+    const [result] = await db.query(
         `INSERT INTO parent_notifications
             (parent_id, student_id, school_id, grade_level_id, section_id, type, title, message,
              source_key, source_notification_id, created_by, created_by_role, created_at)
@@ -212,6 +213,17 @@ async function insertParentNotification(payload) {
             normalizeCreatedAt(payload.createdAt)
         ]
     );
+    // Only a genuinely new inbox row should create a device push. Existing rows
+    // are refreshed during app sync and must not notify the guardian again.
+    if (result.affectedRows === 1) {
+        sendPushToParent(payload.parentId, {
+            notificationId: result.insertId,
+            studentId: payload.studentId,
+            type: payload.type,
+            title: payload.title,
+            message: payload.message
+        }).catch(error => console.error('Parent FCM send error:', error.message));
+    }
     return true;
 }
 

@@ -7,6 +7,7 @@ const db = require('./config/database');
 const MySQLSessionStore = require('./config/mysqlSessionStore');
 const { getScannerKioskToken } = require('./utils/scannerKiosk');
 const { todayDate, currentMonth, nowIso } = require('./utils/appTime');
+const { firebasePushStatus } = require('./utils/firebasePush');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -881,5 +882,6 @@ ensureRuntimeSchema()
     .finally(() => {
         app.listen(PORT, () => {
             console.log(`Edutrack running on port ${PORT}`);
+            firebasePushStatus();
         });
     });
