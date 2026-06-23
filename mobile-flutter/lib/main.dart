@@ -226,21 +226,42 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
   } catch (_) {/* already initialised */}
 }
 
-Future<void> _registerMainDevice(SharedPreferences prefs, String token) async {
+String gMainFcmToken = '';
+DateTime? _lastMainFcmRegistration;
+bool _registeringMainFcm = false;
+
+Future<void> _registerMainDevice(
+  SharedPreferences prefs,
+  String token, {
+  bool force = false,
+}) async {
   final cookie = prefs.getString('cookie') ?? '';
-  if (cookie.isEmpty) return;
+  final cleanToken = token.trim();
+  if (cookie.isEmpty || cleanToken.isEmpty || _registeringMainFcm) return;
+  final now = DateTime.now();
+  if (!force &&
+      _lastMainFcmRegistration != null &&
+      now.difference(_lastMainFcmRegistration!) < const Duration(minutes: 5)) {
+    return;
+  }
+  _registeringMainFcm = true;
   try {
-    await http
+    final response = await http
         .post(
           Uri.parse('${AppConfig.baseUrl}/api/user-device-token'),
           headers: {'Content-Type': 'application/json', 'Cookie': cookie},
           body: jsonEncode({
-            'push_token': token,
+            'push_token': cleanToken,
             'platform': Platform.isAndroid ? 'android' : Platform.operatingSystem,
           }),
         )
         .timeout(const Duration(seconds: 15));
-  } catch (_) {/* retried on next token refresh / launch */}
+    if (response.statusCode == 200) _lastMainFcmRegistration = now;
+  } catch (_) {
+    // Retried after login and during dashboard refresh.
+  } finally {
+    _registeringMainFcm = false;
+  }
 }
 
 Future<void> _setupMainFcm(SharedPreferences prefs) async {
@@ -250,12 +271,14 @@ Future<void> _setupMainFcm(SharedPreferences prefs) async {
     await messaging.setForegroundNotificationPresentationOptions(alert: true, badge: true, sound: true);
     final token = await messaging.getToken();
     if (token != null && token.isNotEmpty) {
+      gMainFcmToken = token;
       await prefs.setString('fcm_token', token);
-      await _registerMainDevice(prefs, token);
+      await _registerMainDevice(prefs, token, force: true);
     }
     messaging.onTokenRefresh.listen((t) {
+      gMainFcmToken = t;
       prefs.setString('fcm_token', t);
-      _registerMainDevice(prefs, t);
+      _registerMainDevice(prefs, t, force: true);
     });
     FirebaseMessaging.onMessage.listen((message) {
       final n = message.notification;
@@ -1071,6 +1094,8 @@ class _LoginScreenState extends State<LoginScreen>
     });
     try {
       await widget.api.login(username.text.trim(), password.text);
+      final fcmToken = widget.api.prefs.getString('fcm_token') ?? gMainFcmToken;
+      unawaited(_registerMainDevice(widget.api.prefs, fcmToken, force: true));
       await showLocalNotification(
         'WELCOME',
         '${greeting()}, ${widget.api.fullname}',
@@ -1346,6 +1371,8 @@ class _HomeShellState extends State<HomeShell>
       await syncBranding(dashboard, widget.api);
       await notifyAbsenceFlags(flags, widget.api.prefs);
       await checkAndShowEveningReport(dashboard, widget.api.prefs);
+      final fcmToken = widget.api.prefs.getString('fcm_token') ?? gMainFcmToken;
+      unawaited(_registerMainDevice(widget.api.prefs, fcmToken));
       if (mounted) {
         setState(() {
           loading = false;
@@ -1692,13 +1719,20 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
     if (saving) return;
     setState(() => saving = true);
     try {
-      await widget.api.postJson('/api/holidays', body);
+      final delivery = await widget.api.postJson('/api/holidays', body);
       await load(silent: true);
       if (!mounted) return;
       Navigator.pop(context);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Holiday saved.')));
+      final guardianPushes = (delivery['guardian_push_count'] as num?)?.toInt() ?? 0;
+      final edutrackPushes = (delivery['edutrack_push_count'] as num?)?.toInt() ?? 0;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Holiday saved • $guardianPushes Guardian push${guardianPushes == 1 ? '' : 'es'} • '
+            '$edutrackPushes EduTrack push${edutrackPushes == 1 ? '' : 'es'}',
+          ),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

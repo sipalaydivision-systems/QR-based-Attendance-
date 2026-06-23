@@ -330,8 +330,9 @@
                 <option value="">All Schools (Division)</option>
             </select>
         </div>
-        <button class="btn btn-primary" onclick="addHoliday()">+ Add Holiday</button>
+        <button class="btn btn-primary" id="holidayAddBtn" onclick="addHoliday()"><i class="fa-solid fa-calendar-plus"></i> Add Holiday</button>
     </div>
+    <div id="holidayMsg" style="margin-top:12px;"></div>
     <div id="holidaysEmpty" style="text-align:center; padding:2rem; color:var(--gray-400);">
         <i class="fa-solid fa-calendar-check" style="font-size:2rem; margin-bottom:0.5rem; display:block;"></i>
         No holidays configured yet. Weekends (Saturday &amp; Sunday) are automatically treated as non-school days.
@@ -548,7 +549,7 @@ async function loadHolidays() {
                 var dateStr = h.holiday_date ? h.holiday_date.substring(0,10) : '';
                 var typeBadge = holidayTypeBadge(h.is_national);
                 var scope = h.school_name || 'All Schools (Division)';
-                return '<tr><td>'+h.name+'</td><td>'+dateStr+'</td><td>'+typeBadge+'</td><td>'+scope+'</td>'+
+                return '<tr><td><strong>'+escapeHolidayHtml(h.name)+'</strong></td><td>'+escapeHolidayHtml(dateStr)+'</td><td>'+typeBadge+'</td><td>'+escapeHolidayHtml(scope)+'</td>'+
                     '<td><button class="action-btn delete" onclick="deleteHoliday('+h.id+')" title="Delete"><i class="fa-solid fa-trash-can"></i></button></td></tr>';
             }).join('');
         } else {
@@ -556,6 +557,12 @@ async function loadHolidays() {
             document.getElementById('holidaysTableWrap').style.display = 'none';
         }
     } catch(e) { console.error(e); }
+}
+
+function escapeHolidayHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function holidayTypeBadge(type) {
@@ -574,20 +581,49 @@ async function addHoliday() {
     var date = document.getElementById('holidayDate').value;
     var isNational = document.getElementById('holidayType').value;
     var schoolId = document.getElementById('holidayScope').value;
+    var button = document.getElementById('holidayAddBtn');
+    var msg = document.getElementById('holidayMsg');
     if (!name || !date) { alert('Please enter holiday name and date.'); return; }
-    await fetch('/api/holidays', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ name: name, holiday_date: date, is_national: isNational, school_id: schoolId || null })
-    });
-    document.getElementById('holidayName').value = '';
-    document.getElementById('holidayDate').value = '';
-    loadHolidays();
+    button.disabled = true;
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving &amp; notifying…';
+    msg.innerHTML = '';
+    try {
+        var res = await fetch('/api/holidays', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ name: name, holiday_date: date, is_national: isNational, school_id: schoolId || null })
+        });
+        var result = await res.json();
+        if (!res.ok || result.error) throw new Error(result.error || 'Unable to add holiday.');
+        var guardianPushes = Number(result.guardian_push_count || 0);
+        var edutrackPushes = Number(result.edutrack_push_count || 0);
+        var parentInboxes = Number(result.parent_inbox_count || 0);
+        msg.innerHTML = '<div class="alert alert-success"><strong><i class="fa-solid fa-circle-check"></i> Holiday saved and synchronized.</strong><br>' +
+            parentInboxes + ' parent inbox' + (parentInboxes === 1 ? '' : 'es') + ', ' +
+            guardianPushes + ' Guardian push' + (guardianPushes === 1 ? '' : 'es') + ', and ' +
+            edutrackPushes + ' EduTrack mobile push' + (edutrackPushes === 1 ? '' : 'es') + '.</div>';
+        document.getElementById('holidayName').value = '';
+        document.getElementById('holidayDate').value = '';
+        await loadHolidays();
+    } catch (error) {
+        msg.innerHTML = '<div class="alert alert-danger"><strong>Holiday was not saved.</strong> ' + escapeHolidayHtml(error.message || 'Please try again.') + '</div>';
+    } finally {
+        button.disabled = false;
+        button.innerHTML = '<i class="fa-solid fa-calendar-plus"></i> Add Holiday';
+    }
 }
 
 async function deleteHoliday(id) {
     if (!confirm('Delete this holiday?')) return;
-    await fetch('/api/holidays/' + id, { method: 'DELETE' });
-    loadHolidays();
+    var msg = document.getElementById('holidayMsg');
+    try {
+        var res = await fetch('/api/holidays/' + id, { method: 'DELETE' });
+        var result = await res.json();
+        if (!res.ok || result.error) throw new Error(result.error || 'Unable to delete holiday.');
+        msg.innerHTML = '<div class="alert alert-success">Holiday and its parent notice were removed.</div>';
+        await loadHolidays();
+    } catch (error) {
+        msg.innerHTML = '<div class="alert alert-danger">' + escapeHolidayHtml(error.message || 'Unable to delete holiday.') + '</div>';
+    }
 }
 
 function removeLogo() {

@@ -140,6 +140,46 @@ async function sendPushToParents(parentIds, notification) {
     return { ...result, registeredDeviceCount: tokens.length };
 }
 
+async function sendPushToUsers({ schoolId = null } = {}, notification) {
+    const params = [];
+    let scope = '';
+    if (schoolId) {
+        scope = `AND (u.school_id = ? OR u.role IN ('super_admin','superintendent','asst_superintendent'))`;
+        params.push(schoolId);
+    }
+    const [devices] = await db.query(
+        `SELECT DISTINCT ud.push_token
+         FROM user_devices ud
+         INNER JOIN users u ON u.id = ud.user_id
+         WHERE u.status = 'active'
+           AND ud.push_token IS NOT NULL
+           AND ud.push_token <> ''
+           ${scope}`,
+        params
+    );
+    const tokens = devices.map(device => device.push_token);
+    const result = await sendMulticast(tokens, {
+        title: notification.title,
+        body: notification.message,
+        channelId: 'edutrack_alerts',
+        collapseKey: 'edutrack_holiday_latest',
+        tag: 'edutrack_holiday_latest',
+        ttlMs: 60 * 60 * 1000,
+        data: {
+            type: notification.type || 'announcement_holiday',
+            title: notification.title,
+            body: notification.message,
+            holiday_id: notification.holidayId,
+            holiday_date: notification.holidayDate,
+            school_id: schoolId
+        }
+    });
+    if (result.invalidTokens.length) {
+        await db.query('DELETE FROM user_devices WHERE push_token IN (?)', [result.invalidTokens]);
+    }
+    return { ...result, registeredDeviceCount: tokens.length };
+}
+
 function firebasePushStatus() {
     return {
         configured: Boolean(String(process.env.FIREBASE_SERVICE_ACCOUNT || '').trim()),
@@ -147,4 +187,10 @@ function firebasePushStatus() {
     };
 }
 
-module.exports = { firebasePushStatus, sendMulticast, sendPushToParent, sendPushToParents };
+module.exports = {
+    firebasePushStatus,
+    sendMulticast,
+    sendPushToParent,
+    sendPushToParents,
+    sendPushToUsers
+};

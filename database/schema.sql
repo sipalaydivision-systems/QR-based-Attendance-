@@ -66,6 +66,17 @@ CREATE TABLE IF NOT EXISTS users (
     FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS user_devices (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    push_token VARCHAR(255) NOT NULL,
+    platform VARCHAR(20),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_user_device_token (push_token),
+    INDEX idx_user_devices_user (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 -- -----------------------------------------------------------
 -- Parent / Guardian Accounts
 -- -----------------------------------------------------------
@@ -354,6 +365,7 @@ CREATE TABLE IF NOT EXISTS holidays (
     name VARCHAR(255) NOT NULL,
     school_id INT DEFAULT NULL,
     is_national TINYINT(1) DEFAULT 1,
+    notification_id INT DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE SET NULL,
     UNIQUE KEY unique_holiday_date_school (holiday_date, school_id),

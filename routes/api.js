@@ -34,6 +34,7 @@ const {
     normalizeAnnouncementType,
     notifyParentsForStudentScan
 } = require('../utils/parentNotifications');
+const { sendPushToUsers } = require('../utils/firebasePush');
 
 function requireAuthOrScannerKiosk(req, res, next) {
     if (req.session && req.session.user) return next();
@@ -520,6 +521,18 @@ function holidayTypeLabel(type) {
     if (value === 2) return 'Class Suspension';
     if (value === 0) return 'Special Non-Working Day';
     return 'Regular Holiday';
+}
+
+function holidayDisplayDate(dateStr) {
+    const value = new Date(`${dateStr}T00:00:00+08:00`);
+    if (Number.isNaN(value.getTime())) return dateStr;
+    return new Intl.DateTimeFormat('en-PH', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'Asia/Manila'
+    }).format(value);
 }
 
 async function checkSchoolDay(dateStr, schoolId) {
@@ -2940,25 +2953,121 @@ router.get('/holidays', requireAuth, async (req, res) => {
 
 router.post('/holidays', requireRole('super_admin'), async (req, res) => {
     const { name, holiday_date, is_national, school_id } = req.body;
-    if (!name || !holiday_date) return res.status(400).json({ error: 'Name and date are required.' });
+    const holidayName = String(name || '').trim();
+    const holidayDate = String(holiday_date || '').trim();
+    if (!holidayName || !holidayDate) return res.status(400).json({ error: 'Name and date are required.' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(holidayDate) || Number.isNaN(new Date(`${holidayDate}T00:00:00+08:00`).getTime())) {
+        return res.status(400).json({ error: 'Enter a valid holiday date.' });
+    }
     const holidayType = ['0', '1', '2'].includes(String(is_national)) ? Number(is_national) : 1;
+    const schoolId = normalizeOptionalSchoolId(school_id);
+    let conn;
     try {
-        await db.query(
-            'INSERT INTO holidays (holiday_date, name, school_id, is_national) VALUES (?, ?, ?, ?)',
-            [holiday_date, name, school_id || null, holidayType]
+        let schoolName = '';
+        if (schoolId) {
+            const [[school]] = await db.query('SELECT id, name FROM schools WHERE id = ? LIMIT 1', [schoolId]);
+            if (!school) return res.status(400).json({ error: 'Selected school was not found.' });
+            schoolName = school.name || '';
+        }
+        const [[duplicate]] = await db.query(
+            `SELECT id FROM holidays
+             WHERE holiday_date = ?
+               AND ((? IS NULL AND school_id IS NULL) OR school_id = ?)
+             LIMIT 1`,
+            [holidayDate, schoolId, schoolId]
         );
-        return res.json({ success: true });
+        if (duplicate) return res.status(409).json({ error: 'Holiday already exists for that date and scope.' });
+        conn = await db.getConnection();
+        await conn.beginTransaction();
+        const [holidayResult] = await conn.query(
+            'INSERT INTO holidays (holiday_date, name, school_id, is_national) VALUES (?, ?, ?, ?)',
+            [holidayDate, holidayName, schoolId, holidayType]
+        );
+        const typeLabel = holidayTypeLabel(holidayType);
+        const scopeLabel = schoolName || 'all schools in the division';
+        const notificationTitle = `${typeLabel}: ${holidayName}`;
+        const notificationMessage = `No classes on ${holidayDisplayDate(holidayDate)} in observance of ${holidayName}. Attendance scanning is disabled for ${scopeLabel}.`;
+        const user = req.session.user;
+        const [notificationResult] = await conn.query(
+            `INSERT INTO notifications
+                (title, message, type, school_id, target_audience, created_by, created_by_name, created_by_role)
+             VALUES (?, ?, 'announcement_holiday', ?, 'school', ?, ?, ?)`,
+            [
+                notificationTitle,
+                notificationMessage,
+                schoolId,
+                user.id || null,
+                user.fullname || user.username || 'EduTrack Admin',
+                user.role || 'super_admin'
+            ]
+        );
+        await conn.query('UPDATE holidays SET notification_id = ? WHERE id = ?', [notificationResult.insertId, holidayResult.insertId]);
+        await conn.commit();
+        conn.release();
+        conn = null;
+
+        const [parentDelivery, userDelivery] = await Promise.all([
+            fanOutAnnouncement(notificationResult.insertId).catch(error => {
+                console.error('Holiday Guardian delivery error:', error.message);
+                return { parentCount: 0, pushSuccessCount: 0, pushFailureCount: 0, registeredDeviceCount: 0 };
+            }),
+            sendPushToUsers({ schoolId }, {
+                holidayId: holidayResult.insertId,
+                holidayDate,
+                type: 'announcement_holiday',
+                title: notificationTitle,
+                message: notificationMessage
+            }).catch(error => {
+                console.error('Holiday EduTrack FCM send error:', error.message);
+                return { successCount: 0, failureCount: 0, registeredDeviceCount: 0 };
+            })
+        ]);
+        return res.json({
+            success: true,
+            id: holidayResult.insertId,
+            notification_id: notificationResult.insertId,
+            parent_inbox_count: parentDelivery.parentCount,
+            guardian_push_count: parentDelivery.pushSuccessCount,
+            guardian_device_count: parentDelivery.registeredDeviceCount,
+            edutrack_push_count: userDelivery.successCount,
+            edutrack_device_count: userDelivery.registeredDeviceCount
+        });
     } catch (err) {
+        if (conn) {
+            try { await conn.rollback(); } catch (_) {}
+            conn.release();
+        }
         if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Holiday already exists for that date.' });
+        console.error('Add holiday error:', err);
         return res.status(500).json({ error: 'Failed to add holiday.' });
     }
 });
 
 router.delete('/holidays/:id', requireRole('super_admin'), async (req, res) => {
+    let conn;
     try {
-        await db.query('DELETE FROM holidays WHERE id = ?', [req.params.id]);
+        conn = await db.getConnection();
+        await conn.beginTransaction();
+        const [[holiday]] = await conn.query('SELECT id, notification_id FROM holidays WHERE id = ? LIMIT 1', [req.params.id]);
+        if (!holiday) {
+            await conn.rollback();
+            conn.release();
+            return res.status(404).json({ error: 'Holiday was not found.' });
+        }
+        if (holiday.notification_id) {
+            await conn.query('DELETE FROM parent_notifications WHERE source_notification_id = ?', [holiday.notification_id]);
+            await conn.query('DELETE FROM notifications WHERE id = ?', [holiday.notification_id]);
+        }
+        await conn.query('DELETE FROM holidays WHERE id = ?', [holiday.id]);
+        await conn.commit();
+        conn.release();
         return res.json({ success: true });
     } catch (err) {
+        if (conn) {
+            try { await conn.rollback(); } catch (_) {}
+            conn.release();
+        }
+        console.error('Delete holiday error:', err);
         return res.status(500).json({ error: 'Failed to delete holiday.' });
     }
 });

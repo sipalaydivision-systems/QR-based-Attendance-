@@ -328,6 +328,21 @@ async function ensureRuntimeSchema() {
         }
     }
 
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS holidays (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            holiday_date DATE NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            school_id INT DEFAULT NULL,
+            is_national TINYINT(1) DEFAULT 1,
+            notification_id INT DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_holiday_date_school (holiday_date, school_id),
+            INDEX idx_holiday_date (holiday_date),
+            FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB
+    `);
+
     await ensureRuntimeColumn('notifications', 'grade_level_id', 'INT NULL AFTER school_id');
     await ensureRuntimeColumn('notifications', 'section_id', 'INT NULL AFTER grade_level_id');
     await ensureRuntimeColumn('notifications', 'student_id', 'INT NULL AFTER section_id');
@@ -336,6 +351,20 @@ async function ensureRuntimeSchema() {
     await ensureRuntimeColumn('notifications', 'created_by', 'INT NULL AFTER attachment_url');
     await ensureRuntimeColumn('notifications', 'created_by_name', 'VARCHAR(255) NULL AFTER created_by');
     await ensureRuntimeColumn('notifications', 'created_by_role', 'VARCHAR(50) NULL AFTER created_by_name');
+    await ensureRuntimeColumn('holidays', 'notification_id', 'INT NULL AFTER is_national');
+
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS user_devices (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            push_token VARCHAR(255) NOT NULL,
+            platform VARCHAR(20),
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_user_device_token (push_token),
+            INDEX idx_user_devices_user (user_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB
+    `);
 
     await db.query(`
         CREATE TABLE IF NOT EXISTS parent_devices (
