@@ -58,8 +58,13 @@ async function sendMulticast(tokens, payload) {
             data: stringifyData(payload.data),
             android: {
                 priority: 'high',
+                // If a phone is offline, keep only the newest Guardian update
+                // and expire it quickly instead of replaying notification history.
+                collapseKey: payload.collapseKey || 'edutrack_parent_latest',
+                ttl: Number(payload.ttlMs || 5 * 60 * 1000),
                 notification: {
                     channelId: payload.channelId || 'edutrack_parent',
+                    tag: payload.tag || 'edutrack_parent_latest',
                     sound: 'default',
                     defaultSound: true,
                     priority: 'high'
@@ -85,6 +90,9 @@ async function sendPushToParent(parentId, notification) {
         title: notification.title,
         body: notification.message,
         channelId: 'edutrack_parent',
+        collapseKey: 'edutrack_parent_latest',
+        tag: 'edutrack_parent_latest',
+        ttlMs: 5 * 60 * 1000,
         data: {
             type: notification.type || 'announcement_general',
             title: notification.title,

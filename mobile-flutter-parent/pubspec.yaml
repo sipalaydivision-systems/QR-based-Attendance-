@@ -1,7 +1,7 @@
 name: edutrack_parent
 description: "EduTrack Guardian App — monitor your child's attendance in real time."
 publish_to: 'none'
-version: 1.0.24+26
+version: 1.0.25+27
 
 environment:
   sdk: ^3.11.5

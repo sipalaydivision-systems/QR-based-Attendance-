@@ -213,9 +213,10 @@ async function insertParentNotification(payload) {
             normalizeCreatedAt(payload.createdAt)
         ]
     );
-    // Only a genuinely new inbox row should create a device push. Existing rows
-    // are refreshed during app sync and must not notify the guardian again.
-    if (result.affectedRows === 1) {
+    // Only explicit real-time triggers may create a device push. Dashboard and
+    // login synchronization backfill inbox history through this same helper and
+    // must remain silent even when they insert a previously missing row.
+    if (result.affectedRows === 1 && payload.sendPush === true) {
         sendPushToParent(payload.parentId, {
             notificationId: result.insertId,
             studentId: payload.studentId,
@@ -237,6 +238,7 @@ async function notifyParentsForStudentScan({ personType, personId, label, eventT
     let count = 0;
     for (const parent of parents) {
         await insertParentNotification({
+            sendPush: true,
             parentId: parent.id,
             studentId: child.id,
             schoolId: child.school_id,
@@ -559,6 +561,7 @@ async function fanOutAnnouncement(notificationId) {
         if (!row.student_id && seenParents.has(key)) continue;
         seenParents.add(key);
         await insertParentNotification({
+            sendPush: true,
             parentId: target.parent.id,
             studentId: oneStudent,
             schoolId: row.school_id || target.student.school_id,

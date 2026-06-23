@@ -201,6 +201,14 @@ Future<void> _setupFirebaseMessaging(ParentApi api) async {
     final messaging = FirebaseMessaging.instance;
     await messaging.requestPermission(alert: true, badge: true, sound: true);
     await messaging.setForegroundNotificationPresentationOptions(alert: true, badge: true, sound: true);
+    // One-time migration: invalidate the token that may still have historical
+    // FCM messages queued against it, then register a clean token with the server.
+    if (api.prefs.getBool(_fcmQueueResetPreference) != true) {
+      await messaging.deleteToken();
+      await _notifications.cancelAll();
+      await api.prefs.remove('parent_fcm_token');
+      await api.prefs.setBool(_fcmQueueResetPreference, true);
+    }
     final token = await messaging.getToken();
     if (token != null && token.isNotEmpty) {
       gFcmToken = token;
@@ -242,11 +250,12 @@ Future<void> _setupFirebaseMessaging(ParentApi api) async {
         );
         await api.prefs.setBool(_workerReadyPreference, true);
       }
-      final stableId = int.tryParse(notificationId);
       await showParentNotification(
         title,
         body,
-        id: stableId,
+        // One stable Android ID means the newest update replaces the previous
+        // visible alert instead of building a stack of notification history.
+        id: _latestFcmNotificationId,
         type: '${message.data['type'] ?? ''}',
       );
     });
@@ -260,7 +269,9 @@ const String _guardianPeriodicWork = 'edutrack-guardian-notifications-periodic';
 const String _guardianImmediateWork = 'edutrack-guardian-notifications-immediate';
 const String _notifiedPreference = 'parent_notified_notifications';
 const String _fcmDeliveredPreference = 'parent_fcm_delivered_notifications';
+const String _fcmQueueResetPreference = 'parent_fcm_queue_reset_v1';
 const String _workerReadyPreference = 'parent_notification_worker_ready';
+const int _latestFcmNotificationId = 731002;
 
 String _notificationKey(Map<String, dynamic> note) =>
     '${note['notification_id'] ?? note['key'] ?? note['created_at'] ?? note['title']}';
