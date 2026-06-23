@@ -134,6 +134,45 @@ async function closeSchoolYear(id) {
     return getSchoolYearById(yearId);
 }
 
+// Enroll a student into the active school year for a given section. Upserts the
+// per-year enrollment record (so a student can have one enrollment per year) and
+// syncs the students cache columns (section/grade/school + attendance-eligible)
+// so the live scanner, dashboards, and current-year SF2 keep working unchanged.
+// Pass schoolYearId to avoid re-looking-up the active year in tight loops (import).
+async function enrollStudentInActiveYear({ studentId, schoolId, gradeLevelId, sectionId, enrolledBy = null, schoolYearId = null }) {
+    let syId = schoolYearId;
+    if (!syId) {
+        const active = await getActiveSchoolYear();
+        if (!active) {
+            throw new Error('There is no active school year yet. Ask the admin to open one first.');
+        }
+        syId = active.id;
+    }
+    await db.query(
+        `INSERT INTO student_enrollments
+            (student_id, school_year_id, school_id, grade_level_id, section_id, status, enrolled_by, created_at)
+         VALUES (?, ?, ?, ?, ?, 'enrolled', ?, NOW())
+         ON DUPLICATE KEY UPDATE
+            school_id = VALUES(school_id),
+            grade_level_id = VALUES(grade_level_id),
+            section_id = VALUES(section_id),
+            status = 'enrolled',
+            enrolled_by = VALUES(enrolled_by),
+            updated_at = NOW()`,
+        [studentId, syId, schoolId, gradeLevelId, sectionId, enrolledBy]
+    );
+    // Keep the denormalized cache in sync so the student appears in the active
+    // section and is attendance-eligible. active_from is preserved if already set.
+    await db.query(
+        `UPDATE students
+            SET school_id = ?, grade_level_id = ?, section_id = ?,
+                status = 'active', active_from = COALESCE(active_from, CURDATE())
+          WHERE id = ?`,
+        [schoolId, gradeLevelId, sectionId, studentId]
+    );
+    return syId;
+}
+
 module.exports = {
     isValidLabel,
     getActiveSchoolYear,
@@ -142,5 +181,6 @@ module.exports = {
     getSchoolYearForDate,
     createSchoolYear,
     setActiveSchoolYear,
-    closeSchoolYear
+    closeSchoolYear,
+    enrollStudentInActiveYear
 };

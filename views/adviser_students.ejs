@@ -115,6 +115,17 @@
     </span>
 </div>
 
+<div class="as-card" style="margin-bottom:16px;">
+    <div class="as-card-header">
+        <h3><i class="fa-solid fa-user-plus"></i> Enroll a Student</h3>
+        <input type="text" id="enrollSearch" class="as-search" placeholder="Search LRN or name…" oninput="enrollSearchDebounced()">
+    </div>
+    <div style="padding:4px 20px 16px;">
+        <p style="font-size:0.8rem;color:var(--gray-500);margin:12px 0;">Search the whole school for a student (for example from last year's class) and enroll them into <strong><%= teacher.grade_name || 'your grade' %> — <%= teacher.section_name || 'your section' %></strong> for this school year.</p>
+        <div id="enrollResults"></div>
+    </div>
+</div>
+
 <div class="as-card">
     <div class="as-card-header">
         <h3><i class="fa-solid fa-list-check"></i> Student List</h3>
@@ -544,6 +555,59 @@ function submitDelete() {
     })
     .catch(function() { errEl.textContent = 'Network error — try again.'; errEl.style.display = ''; })
     .finally(function() { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-trash"></i> Remove'; });
+}
+
+// ── Enroll a Student (search whole school → enroll to my section) ──
+function escapeHtml(str) {
+    return String(str == null ? '' : str).replace(/[&<>"']/g, function(c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+}
+var enrollTimer = null;
+function enrollSearchDebounced() {
+    clearTimeout(enrollTimer);
+    enrollTimer = setTimeout(runEnrollSearch, 300);
+}
+function runEnrollSearch() {
+    var q = document.getElementById('enrollSearch').value.trim();
+    var box = document.getElementById('enrollResults');
+    if (q.length < 2) {
+        box.innerHTML = '<div style="color:var(--gray-400);font-size:0.8rem;padding:8px 0;">Type at least 2 characters to search.</div>';
+        return;
+    }
+    box.innerHTML = '<div style="color:var(--gray-400);font-size:0.8rem;padding:8px 0;"><i class="fa-solid fa-spinner fa-spin"></i> Searching…</div>';
+    fetch('/admin/adviser-search-students?q=' + encodeURIComponent(q))
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (!data.success || !data.students || !data.students.length) {
+            box.innerHTML = '<div style="color:var(--gray-400);font-size:0.8rem;padding:8px 0;">No matching students found.</div>';
+            return;
+        }
+        box.innerHTML = data.students.map(function(s) {
+            var prior = s.prior ? (s.prior.year_label + ' · ' + (s.prior.grade_name || '—') + (s.prior.section_name ? ' ' + s.prior.section_name : '')) : 'No previous enrollment';
+            var action = s.already_mine
+                ? '<span class="as-status-pill active"><i class="fa-solid fa-check" style="font-size:0.6rem;"></i> In your section</span>'
+                : '<button class="btn btn-primary" style="font-size:0.75rem;padding:5px 12px;" onclick="enrollStudent(' + s.id + ', this)"><i class="fa-solid fa-user-plus"></i> Enroll</button>';
+            return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--gray-100);">' +
+                '<div><div class="as-name">' + escapeHtml(s.name) + '</div>' +
+                '<div class="as-lrn">LRN: ' + escapeHtml(s.lrn || '—') + ' · ' + escapeHtml(prior) + '</div></div>' +
+                '<div>' + action + '</div></div>';
+        }).join('');
+    })
+    .catch(function() { box.innerHTML = '<div style="color:#dc2626;font-size:0.8rem;padding:8px 0;">Search failed — try again.</div>'; });
+}
+function enrollStudent(id, btn) {
+    btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enrolling…';
+    fetch('/admin/adviser-enroll-student', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: id })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) { window.location.reload(); }
+        else { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Enroll'; alert(data.error || 'Enroll failed.'); }
+    })
+    .catch(function() { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Enroll'; alert('Network error — try again.'); });
 }
 </script>
 

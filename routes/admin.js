@@ -966,11 +966,106 @@ router.post('/adviser-add-student', express.json(), async (req, res) => {
              VALUES (?,?,?,?,?,?,?,?,?,?,?,CURDATE(),'active')`,
             [lrnVal, fn, ln, mn, gNorm, t.school_id, t.grade_level_id, t.section_id, gc, qr_code, 'student']
         );
+        // Record the per-year enrollment (best-effort — the student is already in
+        // the section via the cache columns even if the SY record can't be written).
+        try {
+            await schoolYears.enrollStudentInActiveYear({
+                studentId: result.insertId, schoolId: t.school_id, gradeLevelId: t.grade_level_id,
+                sectionId: t.section_id, enrolledBy: teacherId
+            });
+        } catch (enrollErr) {
+            console.error('Add student: enrollment record skipped:', enrollErr.message);
+        }
         res.json({ success: true, id: result.insertId });
     } catch (err) {
         if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'LRN already exists in the system' });
         console.error('Adviser add student error:', err);
         res.status(500).json({ error: 'Failed to add student' });
+    }
+});
+
+// ---- Adviser: Search students to enroll (by LRN or name, within own school) ----
+router.get('/adviser-search-students', async (req, res) => {
+    if (!req.session.user || req.session.user.role !== 'adviser') return res.status(403).json({ error: 'Unauthorized' });
+    const teacherId = req.session.user.teacher_id;
+    if (!teacherId) return res.status(400).json({ error: 'No teacher record' });
+    const q = String(req.query.q || '').trim();
+    if (q.length < 2) return res.json({ success: true, students: [] });
+    try {
+        const [[t]] = await db.query('SELECT section_id, school_id FROM teachers WHERE id = ?', [teacherId]);
+        if (!t) return res.status(400).json({ error: 'Teacher not found' });
+        const like = '%' + q + '%';
+        const [rows] = await db.query(
+            `SELECT s.id, s.lrn, s.firstname, s.lastname, s.middlename, s.section_id AS current_section_id,
+                    sec.name AS current_section_name, gl.name AS current_grade_name
+             FROM students s
+             LEFT JOIN sections sec ON s.section_id = sec.id
+             LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id
+             WHERE s.school_id = ? AND s.status <> 'deleted'
+               AND (s.lrn LIKE ? OR CONCAT_WS(' ', s.firstname, s.middlename, s.lastname) LIKE ?
+                    OR CONCAT_WS(' ', s.lastname, s.firstname) LIKE ?)
+             ORDER BY s.lastname, s.firstname
+             LIMIT 25`,
+            [t.school_id, like, like, like]
+        );
+        // One query for the latest prior enrollment of all results (avoids N+1).
+        const ids = rows.map((r) => r.id);
+        const priorByStudent = {};
+        if (ids.length) {
+            const [priors] = await db.query(
+                `SELECT e.student_id, sy.label AS year_label, e.status,
+                        gl.name AS grade_name, sec.name AS section_name
+                 FROM student_enrollments e
+                 JOIN school_years sy ON e.school_year_id = sy.id
+                 LEFT JOIN grade_levels gl ON e.grade_level_id = gl.id
+                 LEFT JOIN sections sec ON e.section_id = sec.id
+                 WHERE e.student_id IN (?)
+                 ORDER BY sy.label DESC, e.id DESC`,
+                [ids]
+            );
+            for (const p of priors) {
+                if (!priorByStudent[p.student_id]) priorByStudent[p.student_id] = p; // keep latest only
+            }
+        }
+        const students = rows.map((r) => ({
+            id: r.id,
+            lrn: r.lrn || '',
+            name: [r.lastname, r.firstname].filter(Boolean).join(', ') + (r.middlename ? ' ' + r.middlename.charAt(0) + '.' : ''),
+            already_mine: Number(r.current_section_id) === Number(t.section_id),
+            current_section_name: r.current_section_name || null,
+            current_grade_name: r.current_grade_name || null,
+            prior: priorByStudent[r.id] || null
+        }));
+        res.json({ success: true, students });
+    } catch (err) {
+        console.error('Adviser search students error:', err);
+        res.status(500).json({ error: 'Search failed' });
+    }
+});
+
+// ---- Adviser: Enroll an existing student into my section for the active year ----
+router.post('/adviser-enroll-student', express.json(), async (req, res) => {
+    if (!req.session.user || req.session.user.role !== 'adviser') return res.status(403).json({ error: 'Unauthorized' });
+    const teacherId = req.session.user.teacher_id;
+    if (!teacherId) return res.status(400).json({ error: 'No teacher record' });
+    const sid = parseInt(req.body.student_id, 10);
+    if (!sid) return res.status(400).json({ error: 'Invalid student' });
+    try {
+        const [[t]] = await db.query('SELECT section_id, school_id, grade_level_id FROM teachers WHERE id = ?', [teacherId]);
+        if (!t || !t.section_id) return res.status(400).json({ error: 'No section assigned to your account' });
+        const [[stu]] = await db.query("SELECT id, school_id FROM students WHERE id = ? AND status <> 'deleted'", [sid]);
+        if (!stu) return res.status(404).json({ error: 'Student not found' });
+        if (Number(stu.school_id) !== Number(t.school_id)) {
+            return res.status(403).json({ error: 'That student belongs to another school.' });
+        }
+        await schoolYears.enrollStudentInActiveYear({
+            studentId: sid, schoolId: t.school_id, gradeLevelId: t.grade_level_id,
+            sectionId: t.section_id, enrolledBy: teacherId
+        });
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Adviser enroll student error:', err);
+        res.status(500).json({ error: err.message || 'Failed to enroll student' });
     }
 });
 
@@ -1130,6 +1225,17 @@ router.post('/adviser-confirm-import', async (req, res) => {
     let imported = 0;
     let updated = 0;
 
+    // Resolve the active school year once so each row's enrollment record is a
+    // cheap insert rather than a repeated lookup.
+    const enrollTeacherId = req.session.user.teacher_id;
+    let activeSyId = null;
+    try {
+        const active = await schoolYears.getActiveSchoolYear();
+        activeSyId = active ? active.id : null;
+    } catch (e) {
+        console.error('Import: could not resolve active school year:', e.message);
+    }
+
     for (const pr of pendingRows) {
         try {
             if (pr.action === 'update') {
@@ -1139,6 +1245,11 @@ router.post('/adviser-confirm-import', async (req, res) => {
                     [pr.fn, pr.ln, pr.mn, pr.sex, teacherInfo.school_id, teacherInfo.grade_level_id, teacherInfo.section_id, pr.guardianContact, teacherInfo.category, pr.existingId]
                 );
                 updated++;
+                if (activeSyId) {
+                    try {
+                        await schoolYears.enrollStudentInActiveYear({ studentId: pr.existingId, schoolId: teacherInfo.school_id, gradeLevelId: teacherInfo.grade_level_id, sectionId: teacherInfo.section_id, enrolledBy: enrollTeacherId, schoolYearId: activeSyId });
+                    } catch (e) { console.error('Import enrollment skipped (update):', e.message); }
+                }
                 resultStudents.push({ row: pr.rowNum, action: 'Updated', status: 'success', lrn: pr.lrnVal || '', firstname: pr.fn, lastname: pr.ln, middlename: pr.mn || '', gender: pr.sex || '', guardian_contact: pr.guardianContact || '' });
             } else {
                 const qr_code = pr.lrnVal ? 'STU-' + pr.lrnVal : 'STU-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);
@@ -1148,6 +1259,11 @@ router.post('/adviser-confirm-import', async (req, res) => {
                     [pr.lrnVal, pr.fn, pr.ln, pr.mn, pr.sex, teacherInfo.school_id, teacherInfo.grade_level_id, teacherInfo.section_id, pr.guardianContact, qr_code, teacherInfo.category]
                 );
                 imported++;
+                if (activeSyId) {
+                    try {
+                        await schoolYears.enrollStudentInActiveYear({ studentId: ins.insertId, schoolId: teacherInfo.school_id, gradeLevelId: teacherInfo.grade_level_id, sectionId: teacherInfo.section_id, enrolledBy: enrollTeacherId, schoolYearId: activeSyId });
+                    } catch (e) { console.error('Import enrollment skipped (insert):', e.message); }
+                }
                 resultStudents.push({ row: pr.rowNum, action: 'Imported', status: 'success', id: ins.insertId, lrn: pr.lrnVal || '', firstname: pr.fn, lastname: pr.ln, middlename: pr.mn || '', gender: pr.sex || '', guardian_contact: pr.guardianContact || '' });
             }
         } catch (err) {
