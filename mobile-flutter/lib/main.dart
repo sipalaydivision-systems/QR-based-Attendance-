@@ -297,13 +297,19 @@ Future<void> _setupMainFcm(SharedPreferences prefs) async {
         DateTime.now().millisecondsSinceEpoch.remainder(100000),
         title,
         body,
-        const NotificationDetails(
+        NotificationDetails(
           android: AndroidNotificationDetails(
             'edutrack_alerts',
             'Edutrack Alerts',
             importance: Importance.high,
             priority: Priority.high,
             icon: '@mipmap/ic_launcher',
+            styleInformation: BigTextStyleInformation(
+              '<b>$body</b>',
+              htmlFormatBigText: true,
+              contentTitle: '<b>$title</b>',
+              htmlFormatContentTitle: true,
+            ),
           ),
         ),
       );
@@ -8296,6 +8302,12 @@ Future<bool> showLocalNotification(
     visibility: NotificationVisibility.public,
     ticker: 'Edutrack attendance alert',
     actions: actions,
+    styleInformation: BigTextStyleInformation(
+      '<b>$body</b>',
+      htmlFormatBigText: true,
+      contentTitle: '<b>$title</b>',
+      htmlFormatContentTitle: true,
+    ),
   );
   await notifications.show(
     id ?? (DateTime.now().microsecondsSinceEpoch % 2147483647),
@@ -8480,7 +8492,10 @@ Future<void> scheduleDailyFallbackNotification() async {
           visibility: NotificationVisibility.public,
           largeIcon: largeIcon,
           styleInformation: const BigTextStyleInformation(
-            'Today\'s attendance summary is ready. Open the app to view details.',
+            '<b>Today\'s attendance summary is ready. Open the app to view details.</b>',
+            htmlFormatBigText: true,
+            contentTitle: '<b>Daily Attendance Summary</b>',
+            htmlFormatContentTitle: true,
           ),
         ),
       ),
