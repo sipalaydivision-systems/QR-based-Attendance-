@@ -39,7 +39,15 @@ async function ensureColumnDefinition(tableName, columnName, definition) {
 async function init() {
     try {
         const schemaPath = path.join(__dirname, 'schema.sql');
-        const schema = fs.readFileSync(schemaPath, 'utf8');
+        const rawSchema = fs.readFileSync(schemaPath, 'utf8');
+        // Strip full-line SQL comments BEFORE splitting on ';'. A semicolon that
+        // appears inside a comment would otherwise split that comment in two,
+        // producing an invalid/empty fragment that aborts the entire deploy
+        // (init runs as `npm run db:init && node server.js`).
+        const schema = rawSchema
+            .split('\n')
+            .filter((line) => !line.trim().startsWith('--'))
+            .join('\n');
         const statements = schema
             .split(';')
             .map((statement) => statement.trim())

@@ -416,8 +416,8 @@ CREATE TABLE IF NOT EXISTS school_years (
 ) ENGINE=InnoDB;
 
 -- -----------------------------------------------------------
--- Student Enrollments (per-student, per-school-year history)
--- The 5 enrollment statuses live here; students.status stays the
+-- Student Enrollments (per-student, per-school-year history).
+-- The 5 enrollment statuses live on this table. students.status stays the
 -- attendance-eligibility flag (active/inactive/deleted) for the active year.
 -- -----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS student_enrollments (
