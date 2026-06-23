@@ -1013,7 +1013,7 @@ router.post('/adviser-add-student', express.json(), async (req, res) => {
 
         if (lrnVal) {
             const [dup] = await db.query(`SELECT id FROM students WHERE lrn = ?`, [lrnVal]);
-            if (dup.length > 0) return res.status(409).json({ error: 'LRN already exists in the system' });
+            if (dup.length > 0) return res.status(409).json({ error: 'A student with this LRN already exists. Use "Enroll a Student" above to find and enroll them — even if they are from another school.' });
         }
 
         const qr_code = lrnVal ? 'STU-' + lrnVal : 'STU-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);
@@ -1034,7 +1034,7 @@ router.post('/adviser-add-student', express.json(), async (req, res) => {
         }
         res.json({ success: true, id: result.insertId });
     } catch (err) {
-        if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'LRN already exists in the system' });
+        if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'A student with this LRN already exists. Use "Enroll a Student" above to find and enroll them — even if they are from another school.' });
         console.error('Adviser add student error:', err);
         res.status(500).json({ error: 'Failed to add student' });
     }
@@ -1051,18 +1051,23 @@ router.get('/adviser-search-students', async (req, res) => {
         const [[t]] = await db.query('SELECT section_id, school_id FROM teachers WHERE id = ?', [teacherId]);
         if (!t) return res.status(400).json({ error: 'Teacher not found' });
         const like = '%' + q + '%';
+        // Division-wide search: find the learner anywhere (e.g. an incoming Grade 7
+        // or SHS student still recorded under their feeder/previous school) so the
+        // adviser can transfer them in. The source school is returned for clarity.
         const [rows] = await db.query(
-            `SELECT s.id, s.lrn, s.firstname, s.lastname, s.middlename, s.section_id AS current_section_id,
-                    sec.name AS current_section_name, gl.name AS current_grade_name
+            `SELECT s.id, s.lrn, s.firstname, s.lastname, s.middlename,
+                    s.school_id AS current_school_id, s.section_id AS current_section_id,
+                    sch.name AS current_school_name, sec.name AS current_section_name, gl.name AS current_grade_name
              FROM students s
+             LEFT JOIN schools sch ON s.school_id = sch.id
              LEFT JOIN sections sec ON s.section_id = sec.id
              LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id
-             WHERE s.school_id = ? AND s.status <> 'deleted'
+             WHERE s.status <> 'deleted'
                AND (s.lrn LIKE ? OR CONCAT_WS(' ', s.firstname, s.middlename, s.lastname) LIKE ?
                     OR CONCAT_WS(' ', s.lastname, s.firstname) LIKE ?)
              ORDER BY s.lastname, s.firstname
              LIMIT 25`,
-            [t.school_id, like, like, like]
+            [like, like, like]
         );
         // One query for the latest prior enrollment of all results (avoids N+1).
         const ids = rows.map((r) => r.id);
@@ -1088,6 +1093,8 @@ router.get('/adviser-search-students', async (req, res) => {
             lrn: r.lrn || '',
             name: [r.lastname, r.firstname].filter(Boolean).join(', ') + (r.middlename ? ' ' + r.middlename.charAt(0) + '.' : ''),
             already_mine: Number(r.current_section_id) === Number(t.section_id),
+            from_other_school: Number(r.current_school_id) !== Number(t.school_id),
+            current_school_name: r.current_school_name || null,
             current_section_name: r.current_section_name || null,
             current_grade_name: r.current_grade_name || null,
             prior: priorByStudent[r.id] || null
@@ -1111,14 +1118,16 @@ router.post('/adviser-enroll-student', express.json(), async (req, res) => {
         if (!t || !t.section_id) return res.status(400).json({ error: 'No section assigned to your account' });
         const [[stu]] = await db.query("SELECT id, school_id FROM students WHERE id = ? AND status <> 'deleted'", [sid]);
         if (!stu) return res.status(404).json({ error: 'Student not found' });
-        if (Number(stu.school_id) !== Number(t.school_id)) {
-            return res.status(403).json({ error: 'That student belongs to another school.' });
-        }
+        // Division-wide enrollment: if the student is currently in another school
+        // (an incoming learner from a feeder/previous school), enrolling them moves
+        // them into this school + section for the active year — an immediate
+        // transfer-in. Their previous-school attendance and history stay intact.
+        const transferredIn = Number(stu.school_id) !== Number(t.school_id);
         await schoolYears.enrollStudentInActiveYear({
             studentId: sid, schoolId: t.school_id, gradeLevelId: t.grade_level_id,
             sectionId: t.section_id, enrolledBy: teacherId
         });
-        res.json({ success: true });
+        res.json({ success: true, transferred_in: transferredIn });
     } catch (err) {
         console.error('Adviser enroll student error:', err);
         res.status(500).json({ error: err.message || 'Failed to enroll student' });

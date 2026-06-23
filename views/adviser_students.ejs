@@ -681,19 +681,35 @@ function runEnrollSearch() {
         }
         box.innerHTML = data.students.map(function(s) {
             var prior = s.prior ? (s.prior.year_label + ' · ' + (s.prior.grade_name || '—') + (s.prior.section_name ? ' ' + s.prior.section_name : '')) : 'No previous enrollment';
-            var action = s.already_mine
-                ? '<span class="as-status-pill active"><i class="fa-solid fa-check" style="font-size:0.6rem;"></i> In your section</span>'
-                : '<button class="btn btn-primary" style="font-size:0.75rem;padding:5px 12px;" onclick="enrollStudent(' + s.id + ', this)"><i class="fa-solid fa-user-plus"></i> Enroll</button>';
+            var meta = 'LRN: ' + escapeHtml(s.lrn || '—') + ' · ' + escapeHtml(prior);
+            if (s.from_other_school && s.current_school_name) {
+                meta += ' · <span style="color:#c2410c;font-weight:700;"><i class="fa-solid fa-school"></i> from ' + escapeHtml(s.current_school_name) + '</span>';
+            }
+            var action;
+            if (s.already_mine) {
+                action = '<span class="as-status-pill active"><i class="fa-solid fa-check" style="font-size:0.6rem;"></i> In your section</span>';
+            } else if (s.from_other_school) {
+                action = '<button class="btn as-btn-xs" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;" data-transfer="1" data-name="' + escapeHtml(s.name) + '" data-school="' + escapeHtml(s.current_school_name || 'another school') + '" onclick="enrollStudent(' + s.id + ', this)"><i class="fa-solid fa-right-to-bracket"></i> Transfer In</button>';
+            } else {
+                action = '<button class="btn btn-primary as-btn-xs" onclick="enrollStudent(' + s.id + ', this)"><i class="fa-solid fa-user-plus"></i> Enroll</button>';
+            }
             return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--gray-100);">' +
                 '<div><div class="as-name">' + escapeHtml(s.name) + '</div>' +
-                '<div class="as-lrn">LRN: ' + escapeHtml(s.lrn || '—') + ' · ' + escapeHtml(prior) + '</div></div>' +
+                '<div class="as-lrn">' + meta + '</div></div>' +
                 '<div>' + action + '</div></div>';
         }).join('');
     })
     .catch(function() { box.innerHTML = '<div style="color:#dc2626;font-size:0.8rem;padding:8px 0;">Search failed — try again.</div>'; });
 }
 function enrollStudent(id, btn) {
-    btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enrolling…';
+    var isTransfer = btn && btn.dataset && btn.dataset.transfer === '1';
+    if (isTransfer) {
+        if (!confirm('Transfer ' + (btn.dataset.name || 'this student') + ' into your section?\n\nThey will move from ' + (btn.dataset.school || 'their current school') + ' into your school for this school year. Their previous records are kept.')) return;
+    }
+    var restoreLabel = isTransfer
+        ? '<i class="fa-solid fa-right-to-bracket"></i> Transfer In'
+        : '<i class="fa-solid fa-user-plus"></i> Enroll';
+    btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ' + (isTransfer ? 'Transferring…' : 'Enrolling…');
     fetch('/admin/adviser-enroll-student', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ student_id: id })
@@ -701,9 +717,9 @@ function enrollStudent(id, btn) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.success) { window.location.reload(); }
-        else { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Enroll'; alert(data.error || 'Enroll failed.'); }
+        else { btn.disabled = false; btn.innerHTML = restoreLabel; alert(data.error || 'Enroll failed.'); }
     })
-    .catch(function() { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Enroll'; alert('Network error — try again.'); });
+    .catch(function() { btn.disabled = false; btn.innerHTML = restoreLabel; alert('Network error — try again.'); });
 }
 
 // ── Status tabs ──
