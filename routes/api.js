@@ -7,6 +7,7 @@ const router = express.Router();
 const db = require('../config/database');
 const { requireAuth, requireRole, applySchoolFilter } = require('../middleware/auth');
 const { getScannerKioskToken, getScannerKioskTokenFromRequest, isValidScannerKioskToken } = require('../utils/scannerKiosk');
+const schoolYears = require('../utils/schoolYear');
 const {
     todayDate,
     nowDateTime,
@@ -1286,6 +1287,39 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
                 non_school_day_type: schoolDay.type,
                 non_school_day_reason: schoolDay.reason
             });
+        }
+
+        // School Year enforcement (students only): only students enrolled in the
+        // ACTIVE school year may record attendance. This is FAIL-OPEN by design —
+        // a live scanning station must never be blocked by a school-year lookup
+        // problem. We reject ONLY when we are confident the student exists in the
+        // enrollment system but has no active 'enrolled' record (e.g. transferred
+        // out, or not re-enrolled after a year rollover). A student with no
+        // enrollment records at all (data gap / pre-existing) still scans.
+        if (personType === 'student') {
+            try {
+                const activeYear = await schoolYears.getActiveSchoolYear();
+                if (activeYear) {
+                    const [enrRows] = await db.query(
+                        `SELECT
+                            MAX(CASE WHEN school_year_id = ? AND status = 'enrolled' THEN 1 ELSE 0 END) AS enrolled_active,
+                            COUNT(*) AS total_rows
+                         FROM student_enrollments WHERE student_id = ?`,
+                        [activeYear.id, person.id]
+                    );
+                    const enrolledActive = Number(enrRows[0] && enrRows[0].enrolled_active) === 1;
+                    const hasAnyRecord = Number(enrRows[0] && enrRows[0].total_rows) > 0;
+                    if (!enrolledActive && hasAnyRecord) {
+                        return res.json({
+                            success: false,
+                            error: 'Student is not enrolled in the active school year.',
+                            not_enrolled: true
+                        });
+                    }
+                }
+            } catch (syErr) {
+                console.error('Scan: school-year enrollment check skipped:', syErr.message);
+            }
         }
 
         // Imported students become attendance-eligible only after their first valid QR scan.
