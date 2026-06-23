@@ -1,0 +1,284 @@
+<%- include('partials/header') %>
+
+<style>
+.as-wrap { width: 100%; }
+.as-header-bar { display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, var(--primary), #16a34a); border-radius: var(--radius-lg); padding: 20px 24px; color: #fff; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+.as-header-bar h2 { font-size: 1.125rem; font-weight: 800; margin: 0; }
+.as-header-bar p  { font-size: 0.8125rem; opacity: 0.85; margin: 4px 0 0; }
+.as-header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-left: auto; }
+.as-header-actions .btn { background: #fff; color: var(--primary); font-weight: 700; padding: 9px 18px; border: 0; }
+
+.as-section-badges { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+.as-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; font-size: 0.8125rem; font-weight: 600; }
+.as-school-logo { width: 20px; height: 20px; object-fit: contain; border-radius: 50%; background: #fff; padding: 2px; box-shadow: 0 0 0 1px rgba(79,70,229,0.12); flex: 0 0 auto; }
+.as-badge.school  { background: #eef2ff; color: #4f46e5; }
+.as-badge.grade   { background: #fef3c7; color: #92400e; }
+.as-badge.section { background: #dcfce7; color: #16a34a; }
+
+.as-card { background: #fff; border-radius: var(--radius-lg); border: 1px solid var(--gray-200); box-shadow: var(--shadow); margin-bottom: 16px; }
+.as-card-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--gray-100); flex-wrap: wrap; gap: 10px; }
+.as-card-header h3 { font-size: 0.9375rem; font-weight: 700; color: var(--gray-800); margin: 0; display: flex; align-items: center; gap: 8px; }
+.as-card-header h3 i { color: var(--primary); }
+.as-search { padding: 7px 12px; border: 1px solid var(--gray-300); border-radius: var(--radius); font-size: 0.8125rem; width: 220px; }
+.as-name { font-weight: 600; color: var(--gray-900); }
+.as-lrn  { font-size: 0.75rem; color: var(--gray-400); margin-top: 2px; }
+
+.as-status-pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 12px; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; }
+.as-status-pill.active   { background: #dcfce7; color: #16a34a; }
+.as-status-pill.inactive { background: var(--gray-100); color: var(--gray-400); }
+
+.as-empty { text-align: center; padding: 40px 20px; color: var(--gray-400); font-size: 0.875rem; }
+.as-empty i { font-size: 2.5rem; display: block; margin-bottom: 10px; color: var(--gray-300); }
+.as-no-section { background: #fef3c7; border: 1px solid #fde68a; border-radius: var(--radius-lg); padding: 32px; text-align: center; color: #92400e; }
+.as-no-section i { font-size: 2.5rem; display: block; margin-bottom: 12px; }
+
+.as-tabs { display: flex; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid var(--gray-200); flex-wrap: wrap; }
+.as-tab { background: none; border: 0; padding: 11px 16px; font-size: 0.8125rem; font-weight: 700; color: var(--gray-500); cursor: pointer; border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 7px; }
+.as-tab:hover { color: var(--gray-800); }
+.as-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.as-tab-count { background: var(--gray-100); color: var(--gray-600); border-radius: 10px; padding: 1px 8px; font-size: 0.7rem; font-weight: 800; }
+.as-tab.active .as-tab-count { background: var(--primary); color: #fff; }
+.as-list-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--gray-100); }
+.as-list-row:hover { background: var(--gray-50); }
+.as-meta { font-size: 0.72rem; color: var(--gray-400); margin-top: 2px; }
+.as-btn-xs { font-size: 0.75rem; padding: 5px 10px; }
+</style>
+
+<div class="as-wrap">
+
+<% if (!teacher.section_id) { %>
+<div class="as-no-section">
+    <i class="fa-solid fa-triangle-exclamation"></i>
+    <h3>No Section Assigned</h3>
+    <p>Please contact the administrator to assign your grade level and section before managing students.</p>
+</div>
+<% } else { %>
+
+<div class="as-header-bar">
+    <div>
+        <h2><i class="fa-solid fa-user-gear"></i> Student Management</h2>
+        <p>Enroll, add, and manage students for <%= activeYearLabel || 'this school year' %></p>
+    </div>
+    <div class="as-header-actions">
+        <button class="btn" onclick="openAddModal()"><i class="fa-solid fa-user-plus"></i> Add Student</button>
+        <a class="btn" href="/admin/adviser-import-students"><i class="fa-solid fa-file-arrow-up"></i> Import Students</a>
+    </div>
+</div>
+
+<div class="as-section-badges">
+    <span class="as-badge school">
+        <img class="as-school-logo" src="<%= teacher.school_logo || ((typeof settings !== 'undefined' && settings && settings.system_logo) ? settings.system_logo : '/uploads/logos/system-logo.png') %>" alt="" onerror="this.onerror=null;this.src='/uploads/logos/system-logo.png';">
+        <%= teacher.school_name || 'N/A' %>
+    </span>
+    <span class="as-badge grade"><i class="fa-solid fa-layer-group"></i> <%= teacher.grade_name || 'N/A' %></span>
+    <span class="as-badge section"><i class="fa-solid fa-users"></i> <%= teacher.section_name || 'N/A' %></span>
+</div>
+
+<!-- Enroll a Student -->
+<div class="as-card">
+    <div class="as-card-header">
+        <h3><i class="fa-solid fa-user-plus"></i> Enroll a Student</h3>
+        <input type="text" id="enrollSearch" class="as-search" placeholder="Search LRN or name…" oninput="enrollSearchDebounced()">
+    </div>
+    <div style="padding:4px 20px 16px;">
+        <p style="font-size:0.8rem;color:var(--gray-500);margin:12px 0;">Search across <strong>all schools</strong> — last year's class or an incoming learner from another school — and enroll them into <strong><%= teacher.grade_name || 'your grade' %> — <%= teacher.section_name || 'your section' %></strong> for this school year. A learner from another school is <strong>transferred in</strong> (their previous records are kept).</p>
+        <div id="enrollResults"></div>
+    </div>
+</div>
+
+<!-- Status groups -->
+<div class="as-card">
+    <div class="as-tabs">
+        <button class="as-tab active" data-tab="notEnrolled" onclick="switchTab('notEnrolled')"><i class="fa-solid fa-user-clock"></i> Not Enrolled <span class="as-tab-count"><%= groups.notEnrolled.length %></span></button>
+        <button class="as-tab" data-tab="transferred" onclick="switchTab('transferred')"><i class="fa-solid fa-right-from-bracket"></i> Transferred <span class="as-tab-count"><%= groups.transferred.length %></span></button>
+        <button class="as-tab" data-tab="archived" onclick="switchTab('archived')"><i class="fa-solid fa-box-archive"></i> Archived <span class="as-tab-count"><%= groups.archived.length %></span></button>
+    </div>
+
+    <!-- Not Enrolled -->
+    <div class="as-panel" data-panel="notEnrolled">
+        <% if (groups.notEnrolled.length === 0) { %>
+            <div class="as-empty"><i class="fa-solid fa-user-clock"></i> No students waiting to be enrolled. After a school year is closed, last year's students appear here to re-enroll.</div>
+        <% } else { groups.notEnrolled.forEach(function(s) { %>
+            <div class="as-list-row">
+                <div>
+                    <div class="as-name"><%= s.lastname.toUpperCase() %>, <%= s.firstname %><%= s.middlename ? ' ' + s.middlename.charAt(0).toUpperCase() + '.' : '' %></div>
+                    <div class="as-meta">LRN: <%= s.lrn || '—' %></div>
+                </div>
+                <button class="btn btn-primary as-btn-xs" onclick="enrollStudent(<%= s.id %>, this)"><i class="fa-solid fa-user-plus"></i> Enroll</button>
+            </div>
+        <% }); } %>
+    </div>
+
+    <!-- Transferred -->
+    <div class="as-panel" data-panel="transferred" style="display:none;">
+        <% if (groups.transferred.length === 0) { %>
+            <div class="as-empty"><i class="fa-solid fa-right-from-bracket"></i> No transferred students.</div>
+        <% } else { groups.transferred.forEach(function(s) { %>
+            <div class="as-list-row">
+                <div>
+                    <div class="as-name"><%= s.lastname.toUpperCase() %>, <%= s.firstname %><%= s.middlename ? ' ' + s.middlename.charAt(0).toUpperCase() + '.' : '' %></div>
+                    <div class="as-meta">To: <%= s.transfer_to_school || '—' %><%= s.transfer_date ? ' · ' + s.transfer_date : '' %><%= s.remarks ? ' · ' + s.remarks : '' %></div>
+                </div>
+                <button class="btn btn-secondary as-btn-xs" onclick="enrollStudent(<%= s.id %>, this)"><i class="fa-solid fa-rotate-left"></i> Re-enroll</button>
+            </div>
+        <% }); } %>
+    </div>
+
+    <!-- Archived -->
+    <div class="as-panel" data-panel="archived" style="display:none;">
+        <% if (groups.archived.length === 0) { %>
+            <div class="as-empty"><i class="fa-solid fa-box-archive"></i> No archived records. Students from previous, closed school years appear here.</div>
+        <% } else { groups.archived.forEach(function(s) { %>
+            <div class="as-list-row">
+                <div>
+                    <div class="as-name"><%= s.lastname.toUpperCase() %>, <%= s.firstname %><%= s.middlename ? ' ' + s.middlename.charAt(0).toUpperCase() + '.' : '' %></div>
+                    <div class="as-meta">LRN: <%= s.lrn || '—' %> · <%= s.year_label %> · <%= s.grade_name || '—' %><%= s.section_name ? ' ' + s.section_name : '' %></div>
+                </div>
+                <span class="as-status-pill inactive">Archived</span>
+            </div>
+        <% }); } %>
+    </div>
+</div>
+
+<% } %>
+</div>
+
+<!-- ── Add Student Modal ── -->
+<div class="modal-overlay" id="addModal" style="display:none;">
+    <div class="modal" style="max-width:500px;">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-user-plus"></i> Add Student</h3>
+            <button class="modal-close" onclick="closeAddModal()">&times;</button>
+        </div>
+        <div style="padding:24px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                <div class="form-group"><label class="form-label">Last Name *</label><input type="text" id="addLastname" class="form-control" placeholder="e.g. Dela Cruz" style="width:100%;box-sizing:border-box;"></div>
+                <div class="form-group"><label class="form-label">First Name *</label><input type="text" id="addFirstname" class="form-control" placeholder="e.g. Juan" style="width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                <div class="form-group"><label class="form-label">Middle Name</label><input type="text" id="addMiddlename" class="form-control" placeholder="Optional" style="width:100%;box-sizing:border-box;"></div>
+                <div class="form-group"><label class="form-label">LRN <span style="font-weight:400;color:var(--gray-400);">(12 digits)</span></label><input type="text" id="addLrn" class="form-control" maxlength="12" placeholder="Optional" style="width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;">
+                <div class="form-group">
+                    <label class="form-label">Sex</label>
+                    <select id="addGender" class="form-control" style="width:100%;box-sizing:border-box;">
+                        <option value="">— Select —</option><option value="Male">Male</option><option value="Female">Female</option>
+                    </select>
+                </div>
+                <div class="form-group"><label class="form-label">Guardian Contact</label><input type="text" id="addGuardian" class="form-control" placeholder="09XXXXXXXXX" style="width:100%;box-sizing:border-box;"></div>
+            </div>
+            <div id="addError" style="color:#dc2626;font-size:0.8125rem;margin-bottom:12px;display:none;"></div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeAddModal()">Cancel</button>
+                <button class="btn btn-primary" id="addSaveBtn" onclick="submitAdd()"><i class="fa-solid fa-user-plus"></i> Add Student</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function escapeHtml(str) {
+    return String(str == null ? '' : str).replace(/[&<>"']/g, function(c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+}
+
+// ── Status tabs ──
+function switchTab(name) {
+    document.querySelectorAll('.as-tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === name); });
+    document.querySelectorAll('.as-panel').forEach(function(p) { p.style.display = p.getAttribute('data-panel') === name ? '' : 'none'; });
+}
+
+// ── Enroll a Student (division-wide search → enroll / transfer in) ──
+var enrollTimer = null;
+function enrollSearchDebounced() { clearTimeout(enrollTimer); enrollTimer = setTimeout(runEnrollSearch, 300); }
+function runEnrollSearch() {
+    var q = document.getElementById('enrollSearch').value.trim();
+    var box = document.getElementById('enrollResults');
+    if (q.length < 2) { box.innerHTML = '<div style="color:var(--gray-400);font-size:0.8rem;padding:8px 0;">Type at least 2 characters to search.</div>'; return; }
+    box.innerHTML = '<div style="color:var(--gray-400);font-size:0.8rem;padding:8px 0;"><i class="fa-solid fa-spinner fa-spin"></i> Searching…</div>';
+    fetch('/admin/adviser-search-students?q=' + encodeURIComponent(q))
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (!data.success || !data.students || !data.students.length) {
+            box.innerHTML = '<div style="color:var(--gray-400);font-size:0.8rem;padding:8px 0;">No matching students found.</div>';
+            return;
+        }
+        box.innerHTML = data.students.map(function(s) {
+            var prior = s.prior ? (s.prior.year_label + ' · ' + (s.prior.grade_name || '—') + (s.prior.section_name ? ' ' + s.prior.section_name : '')) : 'No previous enrollment';
+            var meta = 'LRN: ' + escapeHtml(s.lrn || '—') + ' · ' + escapeHtml(prior);
+            if (s.from_other_school && s.current_school_name) {
+                meta += ' · <span style="color:#c2410c;font-weight:700;"><i class="fa-solid fa-school"></i> from ' + escapeHtml(s.current_school_name) + '</span>';
+            }
+            var action;
+            if (s.already_mine) {
+                action = '<span class="as-status-pill active"><i class="fa-solid fa-check" style="font-size:0.6rem;"></i> In your section</span>';
+            } else if (s.from_other_school) {
+                action = '<button class="btn as-btn-xs" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;" data-transfer="1" data-name="' + escapeHtml(s.name) + '" data-school="' + escapeHtml(s.current_school_name || 'another school') + '" onclick="enrollStudent(' + s.id + ', this)"><i class="fa-solid fa-right-to-bracket"></i> Transfer In</button>';
+            } else {
+                action = '<button class="btn btn-primary as-btn-xs" onclick="enrollStudent(' + s.id + ', this)"><i class="fa-solid fa-user-plus"></i> Enroll</button>';
+            }
+            return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--gray-100);">' +
+                '<div><div class="as-name">' + escapeHtml(s.name) + '</div><div class="as-lrn">' + meta + '</div></div>' +
+                '<div>' + action + '</div></div>';
+        }).join('');
+    })
+    .catch(function() { box.innerHTML = '<div style="color:#dc2626;font-size:0.8rem;padding:8px 0;">Search failed — try again.</div>'; });
+}
+function enrollStudent(id, btn) {
+    var isTransfer = btn && btn.dataset && btn.dataset.transfer === '1';
+    if (isTransfer) {
+        if (!confirm('Transfer ' + (btn.dataset.name || 'this student') + ' into your section?\n\nThey will move from ' + (btn.dataset.school || 'their current school') + ' into your school for this school year. Their previous records are kept.')) return;
+    }
+    var restoreLabel = isTransfer ? '<i class="fa-solid fa-right-to-bracket"></i> Transfer In' : '<i class="fa-solid fa-user-plus"></i> Enroll';
+    btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ' + (isTransfer ? 'Transferring…' : 'Enrolling…');
+    fetch('/admin/adviser-enroll-student', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: id })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) { window.location.reload(); }
+        else { btn.disabled = false; btn.innerHTML = restoreLabel; alert(data.error || 'Enroll failed.'); }
+    })
+    .catch(function() { btn.disabled = false; btn.innerHTML = restoreLabel; alert('Network error — try again.'); });
+}
+
+// ── Add Student ──
+function openAddModal() {
+    ['addLastname','addFirstname','addMiddlename','addLrn','addGuardian'].forEach(function(id) { document.getElementById(id).value = ''; });
+    document.getElementById('addGender').value = '';
+    document.getElementById('addError').style.display = 'none';
+    document.getElementById('addModal').style.display = 'flex';
+    document.getElementById('addLastname').focus();
+}
+function closeAddModal() { document.getElementById('addModal').style.display = 'none'; }
+function submitAdd() {
+    var fn = document.getElementById('addFirstname').value.trim();
+    var ln = document.getElementById('addLastname').value.trim();
+    var errEl = document.getElementById('addError');
+    if (!fn || !ln) { errEl.textContent = 'First name and last name are required.'; errEl.style.display = ''; return; }
+    var btn = document.getElementById('addSaveBtn');
+    btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Adding…';
+    fetch('/admin/adviser-add-student', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            firstname: fn, lastname: ln,
+            middlename: document.getElementById('addMiddlename').value.trim(),
+            lrn: document.getElementById('addLrn').value.trim(),
+            gender: document.getElementById('addGender').value,
+            guardian_contact: document.getElementById('addGuardian').value.trim()
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) { window.location.href = '/admin/adviser-students'; }
+        else { errEl.textContent = data.error || 'Add failed.'; errEl.style.display = ''; }
+    })
+    .catch(function() { errEl.textContent = 'Network error — try again.'; errEl.style.display = ''; })
+    .finally(function() { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Add Student'; });
+}
+</script>
+
+<%- include('partials/footer') %>

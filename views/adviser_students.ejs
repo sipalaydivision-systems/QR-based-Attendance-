@@ -2,7 +2,6 @@
 
 <style>
 .as-wrap { width: 100%; }
-
 .as-header-bar {
     display: flex; align-items: center; justify-content: space-between;
     background: linear-gradient(135deg, var(--primary), #16a34a);
@@ -15,77 +14,49 @@
 .as-header-actions .btn { background: #fff; color: var(--primary); font-weight: 700; padding: 9px 18px; border: 0; }
 
 .as-section-badges { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
-.as-badge {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 6px 14px; border-radius: 20px; font-size: 0.8125rem; font-weight: 600;
-}
-.as-school-logo {
-    width: 20px;
-    height: 20px;
-    object-fit: contain;
-    border-radius: 50%;
-    background: #fff;
-    padding: 2px;
-    box-shadow: 0 0 0 1px rgba(79,70,229,0.12);
-    flex: 0 0 auto;
-}
+.as-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; font-size: 0.8125rem; font-weight: 600; }
+.as-school-logo { width: 20px; height: 20px; object-fit: contain; border-radius: 50%; background: #fff; padding: 2px; box-shadow: 0 0 0 1px rgba(79,70,229,0.12); flex: 0 0 auto; }
 .as-badge.school  { background: #eef2ff; color: #4f46e5; }
 .as-badge.grade   { background: #fef3c7; color: #92400e; }
 .as-badge.section { background: #dcfce7; color: #16a34a; }
 
-.as-card {
-    background: #fff; border-radius: var(--radius-lg);
-    border: 1px solid var(--gray-200); box-shadow: var(--shadow); overflow: hidden;
-}
-.as-card-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 16px 20px; border-bottom: 1px solid var(--gray-100); flex-wrap: wrap; gap: 10px;
-}
+.as-card { background: #fff; border-radius: var(--radius-lg); border: 1px solid var(--gray-200); box-shadow: var(--shadow); }
+.as-card-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--gray-100); flex-wrap: wrap; gap: 10px; }
 .as-card-header h3 { font-size: 0.9375rem; font-weight: 700; color: var(--gray-800); margin: 0; display: flex; align-items: center; gap: 8px; }
 .as-card-header h3 i { color: var(--primary); }
 .as-search { padding: 7px 12px; border: 1px solid var(--gray-300); border-radius: var(--radius); font-size: 0.8125rem; width: 220px; }
 
 .as-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
-.as-table th {
-    text-align: left; padding: 10px 16px;
-    font-size: 0.6875rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.05em; color: var(--gray-500);
-    background: var(--gray-50); border-bottom: 1px solid var(--gray-200);
-}
+.as-table th { text-align: left; padding: 10px 16px; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--gray-500); background: var(--gray-50); border-bottom: 1px solid var(--gray-200); }
 .as-table td { padding: 11px 16px; border-bottom: 1px solid var(--gray-100); color: var(--gray-700); vertical-align: middle; }
 .as-table tr:hover td { background: var(--gray-50); }
 .as-name { font-weight: 600; color: var(--gray-900); }
 .as-lrn  { font-size: 0.75rem; color: var(--gray-400); margin-top: 2px; }
 
-.as-status-pill {
-    display: inline-flex; align-items: center; gap: 4px;
-    padding: 3px 10px; border-radius: 12px; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase;
-}
+.as-status-pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 12px; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; }
 .as-status-pill.active   { background: #dcfce7; color: #16a34a; }
 .as-status-pill.inactive { background: var(--gray-100); color: var(--gray-400); }
 
 .as-empty { text-align: center; padding: 48px 20px; color: var(--gray-400); font-size: 0.875rem; }
 .as-empty i { font-size: 2.5rem; display: block; margin-bottom: 10px; color: var(--gray-300); }
 
-.as-no-section {
-    background: #fef3c7; border: 1px solid #fde68a; border-radius: var(--radius-lg);
-    padding: 32px; text-align: center; color: #92400e;
-}
+.as-no-section { background: #fef3c7; border: 1px solid #fde68a; border-radius: var(--radius-lg); padding: 32px; text-align: center; color: #92400e; }
 .as-no-section i { font-size: 2.5rem; display: block; margin-bottom: 12px; }
 .as-no-section h3 { margin: 0 0 8px; font-size: 1.125rem; }
 .adv-options summary::-webkit-details-marker { display: none; }
 .adv-options[open] summary { border-bottom: 1px solid var(--gray-200); }
 
-.as-tabs { display: flex; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid var(--gray-200); flex-wrap: wrap; }
-.as-tab { background: none; border: 0; padding: 11px 16px; font-size: 0.8125rem; font-weight: 700; color: var(--gray-500); cursor: pointer; border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 7px; }
-.as-tab:hover { color: var(--gray-800); }
-.as-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
-.as-tab-count { background: var(--gray-100); color: var(--gray-600); border-radius: 10px; padding: 1px 8px; font-size: 0.7rem; font-weight: 800; }
-.as-tab.active .as-tab-count { background: var(--primary); color: #fff; }
-.as-list-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--gray-100); }
-.as-list-row:hover { background: var(--gray-50); }
-.as-meta { font-size: 0.72rem; color: var(--gray-400); margin-top: 2px; }
-.as-btn-xs { font-size: 0.75rem; padding: 5px 10px; }
+/* Compact per-row action menu (declutters Edit / Transfer Out / Delete) */
+.as-actions { position: relative; display: inline-block; }
+.as-kebab { background: var(--gray-100); border: 0; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; color: var(--gray-600); display: inline-flex; align-items: center; justify-content: center; }
+.as-kebab:hover { background: var(--gray-200); color: var(--gray-800); }
+.as-menu { position: absolute; right: 0; top: 36px; background: #fff; border: 1px solid var(--gray-200); border-radius: 10px; box-shadow: 0 12px 32px rgba(15,23,42,0.16); min-width: 156px; z-index: 60; overflow: hidden; display: none; }
+.as-menu.open { display: block; }
+.as-menu button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: 0; padding: 10px 14px; font-size: 0.82rem; font-weight: 600; color: var(--gray-700); cursor: pointer; }
+.as-menu button:hover { background: var(--gray-50); }
+.as-menu button.warn   { color: #c2410c; }
+.as-menu button.danger { color: #dc2626; }
+.as-menu .as-menu-div { height: 1px; background: var(--gray-100); margin: 2px 0; }
 </style>
 
 <div class="as-wrap">
@@ -101,14 +72,11 @@
 <div class="as-header-bar">
     <div>
         <h2><i class="fa-solid fa-users"></i> My Students</h2>
-        <p>Manage students enrolled in your section</p>
+        <p>Students enrolled in your section this school year<%= activeYearLabel ? ' · ' + activeYearLabel : '' %></p>
     </div>
     <div class="as-header-actions">
-        <button class="btn" onclick="openAddModal()">
-            <i class="fa-solid fa-user-plus"></i> Add Student
-        </button>
-        <a class="btn" href="/admin/adviser-import-students">
-            <i class="fa-solid fa-file-arrow-up"></i> Import Students
+        <a class="btn" href="/admin/adviser-student-management">
+            <i class="fa-solid fa-user-gear"></i> Manage / Enroll Students
         </a>
     </div>
 </div>
@@ -122,207 +90,57 @@
     <span class="as-badge section"><i class="fa-solid fa-users"></i> <%= teacher.section_name || 'N/A' %></span>
     <span class="as-badge" style="background:#f0f9ff;color:#0369a1;">
         <i class="fa-solid fa-graduation-cap"></i>
-        <span id="totalCount"><%= students.length %></span> student<%= students.length !== 1 ? 's' : '' %>
+        <span id="totalCount"><%= students.length %></span> enrolled
     </span>
 </div>
 
-<div class="as-card" style="margin-bottom:16px;">
-    <div class="as-card-header">
-        <h3><i class="fa-solid fa-user-plus"></i> Enroll a Student</h3>
-        <input type="text" id="enrollSearch" class="as-search" placeholder="Search LRN or name…" oninput="enrollSearchDebounced()">
-    </div>
-    <div style="padding:4px 20px 16px;">
-        <p style="font-size:0.8rem;color:var(--gray-500);margin:12px 0;">Search across <strong>all schools</strong> — last year's class or an incoming learner from another school — and enroll them into <strong><%= teacher.grade_name || 'your grade' %> — <%= teacher.section_name || 'your section' %></strong> for this school year. A learner from another school is <strong>transferred in</strong> (their previous records are kept).</p>
-        <div id="enrollResults"></div>
-    </div>
-</div>
-
 <div class="as-card">
-    <div class="as-tabs">
-        <button class="as-tab active" data-tab="enrolled" onclick="switchTab('enrolled')"><i class="fa-solid fa-user-check"></i> Enrolled <span class="as-tab-count"><%= groups.enrolled.length %></span></button>
-        <button class="as-tab" data-tab="notEnrolled" onclick="switchTab('notEnrolled')"><i class="fa-solid fa-user-clock"></i> Not Enrolled <span class="as-tab-count"><%= groups.notEnrolled.length %></span></button>
-        <button class="as-tab" data-tab="transferred" onclick="switchTab('transferred')"><i class="fa-solid fa-right-from-bracket"></i> Transferred <span class="as-tab-count"><%= groups.transferred.length %></span></button>
-        <button class="as-tab" data-tab="archived" onclick="switchTab('archived')"><i class="fa-solid fa-box-archive"></i> Archived <span class="as-tab-count"><%= groups.archived.length %></span></button>
+    <div class="as-card-header">
+        <h3><i class="fa-solid fa-user-check"></i> Enrolled Students</h3>
+        <input type="text" id="asSearch" class="as-search" placeholder="Search by name or LRN…" oninput="filterTable()">
     </div>
-
-    <!-- Enrolled (active roster) -->
-    <div class="as-panel" data-panel="enrolled">
-        <div class="as-card-header" style="border-top:0;">
-            <h3><i class="fa-solid fa-user-check"></i> Enrolled this year<%= activeYearLabel ? ' · ' + activeYearLabel : '' %></h3>
-            <input type="text" id="asSearch" class="as-search" placeholder="Search by name or LRN…" oninput="filterTable()">
-        </div>
-        <div style="overflow-x:auto;">
-            <table class="as-table" id="asTable">
-                <thead>
-                    <tr><th>#</th><th>Student</th><th>Sex</th><th>Guardian Contact</th><th>Status</th><th>Actions</th></tr>
-                </thead>
-                <tbody id="asBody">
-                <% if (groups.enrolled.length === 0) { %>
-                    <tr><td colspan="6" class="as-empty"><i class="fa-solid fa-user-slash"></i> No enrolled students yet. Use <strong>Enroll a Student</strong> or <strong>Add Student</strong>.</td></tr>
-                <% } else { groups.enrolled.forEach(function(s, idx) { %>
-                    <tr data-search="<%= (s.lastname + ' ' + s.firstname + ' ' + (s.middlename||'') + ' ' + (s.lrn||'')).toLowerCase() %>">
-                        <td><%= idx + 1 %></td>
-                        <td>
-                            <div class="as-name"><%= s.lastname.toUpperCase() %>, <%= s.firstname %><%= s.middlename ? ' ' + s.middlename.charAt(0).toUpperCase() + '.' : '' %></div>
-                            <div class="as-lrn">LRN: <%= s.lrn || '—' %></div>
-                        </td>
-                        <td><%= s.gender || '—' %></td>
-                        <td><%= s.guardian_contact || '—' %></td>
-                        <td>
-                            <span class="as-status-pill <%= s.status === 'active' ? 'active' : 'inactive' %>">
-                                <i class="fa-solid fa-circle" style="font-size:0.5rem;"></i>
-                                <%= s.status === 'active' ? 'Active' : 'Inactive' %>
-                            </span>
-                        </td>
-                        <td>
-                            <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                                <button class="btn btn-secondary as-btn-xs"
-                                    onclick='openEditModal(<%- JSON.stringify({id:s.id,lrn:s.lrn||"",firstname:s.firstname,lastname:s.lastname,middlename:s.middlename||"",gender:s.gender||"",guardian_contact:s.guardian_contact||""}) %>)'>
-                                    <i class="fa-solid fa-pen-to-square"></i> Edit
-                                </button>
-                                <button class="btn as-btn-xs" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;"
-                                    onclick="openTransferModal(<%= s.id %>, '<%= (s.lastname + ', ' + s.firstname).replace(/'/g,"\\'") %>')">
-                                    <i class="fa-solid fa-right-from-bracket"></i> Transfer Out
-                                </button>
-                                <button class="btn as-btn-xs" style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;"
-                                    onclick="confirmDelete(<%= s.id %>, '<%= (s.lastname + ', ' + s.firstname).replace(/'/g,"\\'") %>')">
-                                    <i class="fa-solid fa-trash"></i> Delete
-                                </button>
+    <div>
+        <table class="as-table" id="asTable">
+            <thead>
+                <tr><th>#</th><th>Student</th><th>Sex</th><th>Guardian Contact</th><th>Status</th><th style="text-align:right;">Actions</th></tr>
+            </thead>
+            <tbody id="asBody">
+            <% if (students.length === 0) { %>
+                <tr><td colspan="6" class="as-empty"><i class="fa-solid fa-user-slash"></i> No enrolled students yet. Use <strong>Manage / Enroll Students</strong> to enroll or add students.</td></tr>
+            <% } else { students.forEach(function(s, idx) { %>
+                <tr data-search="<%= (s.lastname + ' ' + s.firstname + ' ' + (s.middlename||'') + ' ' + (s.lrn||'')).toLowerCase() %>">
+                    <td><%= idx + 1 %></td>
+                    <td>
+                        <div class="as-name"><%= s.lastname.toUpperCase() %>, <%= s.firstname %><%= s.middlename ? ' ' + s.middlename.charAt(0).toUpperCase() + '.' : '' %></div>
+                        <div class="as-lrn">LRN: <%= s.lrn || '—' %></div>
+                    </td>
+                    <td><%= s.gender || '—' %></td>
+                    <td><%= s.guardian_contact || '—' %></td>
+                    <td>
+                        <span class="as-status-pill <%= s.status === 'active' ? 'active' : 'inactive' %>">
+                            <i class="fa-solid fa-circle" style="font-size:0.5rem;"></i>
+                            <%= s.status === 'active' ? 'Active' : 'Inactive' %>
+                        </span>
+                    </td>
+                    <td style="text-align:right;">
+                        <div class="as-actions">
+                            <button class="as-kebab" onclick="toggleRowMenu(this)" aria-label="Actions"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+                            <div class="as-menu">
+                                <button onclick='openEditModal(<%- JSON.stringify({id:s.id,lrn:s.lrn||"",firstname:s.firstname,lastname:s.lastname,middlename:s.middlename||"",gender:s.gender||"",guardian_contact:s.guardian_contact||""}) %>)'><i class="fa-solid fa-pen-to-square"></i> Edit</button>
+                                <button class="warn" onclick="openTransferModal(<%= s.id %>, '<%= (s.lastname + ', ' + s.firstname).replace(/'/g,"\\'") %>')"><i class="fa-solid fa-right-from-bracket"></i> Transfer Out</button>
+                                <div class="as-menu-div"></div>
+                                <button class="danger" onclick="confirmDelete(<%= s.id %>, '<%= (s.lastname + ', ' + s.firstname).replace(/'/g,"\\'") %>')"><i class="fa-solid fa-trash"></i> Delete</button>
                             </div>
-                        </td>
-                    </tr>
-                <% }); } %>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- Not Enrolled (awaiting re-enrollment) -->
-    <div class="as-panel" data-panel="notEnrolled" style="display:none;">
-        <% if (groups.notEnrolled.length === 0) { %>
-            <div class="as-empty"><i class="fa-solid fa-user-clock"></i> No students waiting to be enrolled. After a school year is closed, last year's students appear here to re-enroll.</div>
-        <% } else { groups.notEnrolled.forEach(function(s) { %>
-            <div class="as-list-row">
-                <div>
-                    <div class="as-name"><%= s.lastname.toUpperCase() %>, <%= s.firstname %><%= s.middlename ? ' ' + s.middlename.charAt(0).toUpperCase() + '.' : '' %></div>
-                    <div class="as-meta">LRN: <%= s.lrn || '—' %></div>
-                </div>
-                <button class="btn btn-primary as-btn-xs" onclick="enrollStudent(<%= s.id %>, this)"><i class="fa-solid fa-user-plus"></i> Enroll</button>
-            </div>
-        <% }); } %>
-    </div>
-
-    <!-- Transferred Out -->
-    <div class="as-panel" data-panel="transferred" style="display:none;">
-        <% if (groups.transferred.length === 0) { %>
-            <div class="as-empty"><i class="fa-solid fa-right-from-bracket"></i> No transferred students.</div>
-        <% } else { groups.transferred.forEach(function(s) { %>
-            <div class="as-list-row">
-                <div>
-                    <div class="as-name"><%= s.lastname.toUpperCase() %>, <%= s.firstname %><%= s.middlename ? ' ' + s.middlename.charAt(0).toUpperCase() + '.' : '' %></div>
-                    <div class="as-meta">To: <%= s.transfer_to_school || '—' %><%= s.transfer_date ? ' · ' + s.transfer_date : '' %><%= s.remarks ? ' · ' + s.remarks : '' %></div>
-                </div>
-                <button class="btn btn-secondary as-btn-xs" onclick="enrollStudent(<%= s.id %>, this)"><i class="fa-solid fa-rotate-left"></i> Re-enroll</button>
-            </div>
-        <% }); } %>
-    </div>
-
-    <!-- Archived (previous, closed years) -->
-    <div class="as-panel" data-panel="archived" style="display:none;">
-        <% if (groups.archived.length === 0) { %>
-            <div class="as-empty"><i class="fa-solid fa-box-archive"></i> No archived records. Students from previous, closed school years appear here.</div>
-        <% } else { groups.archived.forEach(function(s) { %>
-            <div class="as-list-row">
-                <div>
-                    <div class="as-name"><%= s.lastname.toUpperCase() %>, <%= s.firstname %><%= s.middlename ? ' ' + s.middlename.charAt(0).toUpperCase() + '.' : '' %></div>
-                    <div class="as-meta">LRN: <%= s.lrn || '—' %> · <%= s.year_label %> · <%= s.grade_name || '—' %><%= s.section_name ? ' ' + s.section_name : '' %></div>
-                </div>
-                <span class="as-status-pill inactive">Archived</span>
-            </div>
-        <% }); } %>
+                        </div>
+                    </td>
+                </tr>
+            <% }); } %>
+            </tbody>
+        </table>
     </div>
 </div>
 
 <% } %>
-</div>
-
-<!-- Import Students Modal -->
-<div class="modal-overlay" id="importModal" style="display:none;">
-    <div class="modal" style="max-width:520px;">
-        <div class="modal-header">
-            <h3><i class="fa-solid fa-file-arrow-up"></i> Import Students</h3>
-            <button class="modal-close" onclick="closeImportModal()">&times;</button>
-        </div>
-        <div style="padding:24px;">
-            <p style="font-size:0.875rem;color:var(--gray-600);margin:0 0 16px;">
-                Imported students will be assigned to <strong><%= teacher.grade_name || 'your grade' %> - <%= teacher.section_name || 'your section' %></strong>.
-            </p>
-            <div class="form-group" style="margin-bottom:14px;">
-                <label class="form-label">Excel or CSV File</label>
-                <input type="file" id="importFile" class="form-control" accept=".xlsx,.xls,.csv" style="width:100%;box-sizing:border-box;">
-            </div>
-            <div style="font-size:0.8125rem;color:var(--gray-500);margin-bottom:16px;">
-                Use columns like LRN, Student Name, Sex/Gender, and Guardian Contact. School, grade, and section columns are ignored for adviser imports.
-                <a href="/export/template/student" style="color:var(--primary);font-weight:700;">Download template</a>
-            </div>
-            <div id="importResult" style="display:none;font-size:0.8125rem;margin-bottom:12px;"></div>
-            <div style="display:flex;gap:10px;justify-content:flex-end;">
-                <button class="btn btn-secondary" onclick="closeImportModal()">Cancel</button>
-                <button class="btn btn-primary" id="importBtn" onclick="submitImport()"><i class="fa-solid fa-file-arrow-up"></i> Import</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ── Add Student Modal ── -->
-<div class="modal-overlay" id="addModal" style="display:none;">
-    <div class="modal" style="max-width:500px;">
-        <div class="modal-header">
-            <h3><i class="fa-solid fa-user-plus"></i> Add Student</h3>
-            <button class="modal-close" onclick="closeAddModal()">&times;</button>
-        </div>
-        <div style="padding:24px;">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
-                <div class="form-group">
-                    <label class="form-label">Last Name *</label>
-                    <input type="text" id="addLastname" class="form-control" placeholder="e.g. Dela Cruz" style="width:100%;box-sizing:border-box;">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">First Name *</label>
-                    <input type="text" id="addFirstname" class="form-control" placeholder="e.g. Juan" style="width:100%;box-sizing:border-box;">
-                </div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
-                <div class="form-group">
-                    <label class="form-label">Middle Name</label>
-                    <input type="text" id="addMiddlename" class="form-control" placeholder="Optional" style="width:100%;box-sizing:border-box;">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">LRN <span style="font-weight:400;color:var(--gray-400);">(12 digits)</span></label>
-                    <input type="text" id="addLrn" class="form-control" maxlength="12" placeholder="Optional" style="width:100%;box-sizing:border-box;">
-                </div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;">
-                <div class="form-group">
-                    <label class="form-label">Sex</label>
-                    <select id="addGender" class="form-control" style="width:100%;box-sizing:border-box;">
-                        <option value="">— Select —</option>
-                        <option value="Male">Male</option>
-                        <option value="Female">Female</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Guardian Contact</label>
-                    <input type="text" id="addGuardian" class="form-control" placeholder="09XXXXXXXXX" style="width:100%;box-sizing:border-box;">
-                </div>
-            </div>
-            <div id="addError" style="color:#dc2626;font-size:0.8125rem;margin-bottom:12px;display:none;"></div>
-            <div style="display:flex;gap:10px;justify-content:flex-end;">
-                <button class="btn btn-secondary" onclick="closeAddModal()">Cancel</button>
-                <button class="btn btn-primary" id="addSaveBtn" onclick="submitAdd()"><i class="fa-solid fa-user-plus"></i> Add Student</button>
-            </div>
-        </div>
-    </div>
 </div>
 
 <!-- ── Edit Student Modal ── -->
@@ -335,38 +153,21 @@
         <div style="padding:24px;">
             <input type="hidden" id="editId">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
-                <div class="form-group">
-                    <label class="form-label">Last Name *</label>
-                    <input type="text" id="editLastname" class="form-control" style="width:100%;box-sizing:border-box;">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">First Name *</label>
-                    <input type="text" id="editFirstname" class="form-control" style="width:100%;box-sizing:border-box;">
-                </div>
+                <div class="form-group"><label class="form-label">Last Name *</label><input type="text" id="editLastname" class="form-control" style="width:100%;box-sizing:border-box;"></div>
+                <div class="form-group"><label class="form-label">First Name *</label><input type="text" id="editFirstname" class="form-control" style="width:100%;box-sizing:border-box;"></div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
-                <div class="form-group">
-                    <label class="form-label">Middle Name</label>
-                    <input type="text" id="editMiddlename" class="form-control" style="width:100%;box-sizing:border-box;">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">LRN</label>
-                    <input type="text" id="editLrn" class="form-control" maxlength="12" style="width:100%;box-sizing:border-box;">
-                </div>
+                <div class="form-group"><label class="form-label">Middle Name</label><input type="text" id="editMiddlename" class="form-control" style="width:100%;box-sizing:border-box;"></div>
+                <div class="form-group"><label class="form-label">LRN</label><input type="text" id="editLrn" class="form-control" maxlength="12" style="width:100%;box-sizing:border-box;"></div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;">
                 <div class="form-group">
                     <label class="form-label">Sex</label>
                     <select id="editGender" class="form-control" style="width:100%;box-sizing:border-box;">
-                        <option value="">— Select —</option>
-                        <option value="Male">Male</option>
-                        <option value="Female">Female</option>
+                        <option value="">— Select —</option><option value="Male">Male</option><option value="Female">Female</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Guardian Contact</label>
-                    <input type="text" id="editGuardian" class="form-control" style="width:100%;box-sizing:border-box;">
-                </div>
+                <div class="form-group"><label class="form-label">Guardian Contact</label><input type="text" id="editGuardian" class="form-control" style="width:100%;box-sizing:border-box;"></div>
             </div>
             <details class="adv-options" style="margin-bottom:18px;border:1px solid var(--gray-200);border-radius:10px;background:var(--gray-50,#f9fafb);">
                 <summary style="cursor:pointer;padding:11px 14px;font-weight:700;font-size:0.78rem;color:var(--gray-600);text-transform:uppercase;letter-spacing:.04em;list-style:none;display:flex;align-items:center;gap:8px;"><i class="fa-solid fa-sliders"></i> Advanced Options</summary>
@@ -380,6 +181,30 @@
             <div style="display:flex;gap:10px;justify-content:flex-end;">
                 <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
                 <button class="btn btn-primary" id="editSaveBtn" onclick="submitEdit()"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Transfer Out Modal ── -->
+<div class="modal-overlay" id="transferModal" style="display:none;">
+    <div class="modal" style="max-width:460px;">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-right-from-bracket"></i> Transfer Student Out</h3>
+            <button class="modal-close" onclick="closeTransferModal()">&times;</button>
+        </div>
+        <div style="padding:24px;">
+            <p style="font-size:0.875rem;color:var(--gray-700);margin:0 0 4px;">Transferring out:</p>
+            <p style="font-size:1rem;font-weight:700;color:var(--gray-900);margin:0 0 16px;" id="transferNameLabel"></p>
+            <input type="hidden" id="transferId">
+            <div class="form-group" style="margin-bottom:14px;"><label class="form-label">Transferred To (School) *</label><input type="text" id="transferSchool" class="form-control" placeholder="e.g. Sipalay City National High School" style="width:100%;box-sizing:border-box;"></div>
+            <div class="form-group" style="margin-bottom:14px;"><label class="form-label">Date Transferred</label><input type="date" id="transferDate" class="form-control" style="width:100%;box-sizing:border-box;"></div>
+            <div class="form-group" style="margin-bottom:16px;"><label class="form-label">Remarks</label><textarea id="transferRemarks" class="form-control" rows="2" placeholder="Optional notes" style="width:100%;box-sizing:border-box;"></textarea></div>
+            <div style="font-size:0.78rem;color:var(--gray-500);margin-bottom:16px;"><i class="fa-solid fa-circle-info"></i> The student will be removed from your active list and can no longer scan attendance. Their records are kept.</div>
+            <div id="transferError" style="color:#dc2626;font-size:0.8125rem;margin-bottom:12px;display:none;"></div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeTransferModal()">Cancel</button>
+                <button class="btn" style="background:#c2410c;color:#fff;" id="transferBtn" onclick="submitTransferOut()"><i class="fa-solid fa-right-from-bracket"></i> Transfer Out</button>
             </div>
         </div>
     </div>
@@ -406,39 +231,6 @@
     </div>
 </div>
 
-<!-- ── Transfer Out Modal ── -->
-<div class="modal-overlay" id="transferModal" style="display:none;">
-    <div class="modal" style="max-width:460px;">
-        <div class="modal-header">
-            <h3><i class="fa-solid fa-right-from-bracket"></i> Transfer Student Out</h3>
-            <button class="modal-close" onclick="closeTransferModal()">&times;</button>
-        </div>
-        <div style="padding:24px;">
-            <p style="font-size:0.875rem;color:var(--gray-700);margin:0 0 4px;">Transferring out:</p>
-            <p style="font-size:1rem;font-weight:700;color:var(--gray-900);margin:0 0 16px;" id="transferNameLabel"></p>
-            <input type="hidden" id="transferId">
-            <div class="form-group" style="margin-bottom:14px;">
-                <label class="form-label">Transferred To (School) *</label>
-                <input type="text" id="transferSchool" class="form-control" placeholder="e.g. Sipalay City National High School" style="width:100%;box-sizing:border-box;">
-            </div>
-            <div class="form-group" style="margin-bottom:14px;">
-                <label class="form-label">Date Transferred</label>
-                <input type="date" id="transferDate" class="form-control" style="width:100%;box-sizing:border-box;">
-            </div>
-            <div class="form-group" style="margin-bottom:16px;">
-                <label class="form-label">Remarks</label>
-                <textarea id="transferRemarks" class="form-control" rows="2" placeholder="Optional notes" style="width:100%;box-sizing:border-box;"></textarea>
-            </div>
-            <div style="font-size:0.78rem;color:var(--gray-500);margin-bottom:16px;"><i class="fa-solid fa-circle-info"></i> The student will be removed from your active list and can no longer scan attendance. Their records are kept.</div>
-            <div id="transferError" style="color:#dc2626;font-size:0.8125rem;margin-bottom:12px;display:none;"></div>
-            <div style="display:flex;gap:10px;justify-content:flex-end;">
-                <button class="btn btn-secondary" onclick="closeTransferModal()">Cancel</button>
-                <button class="btn" style="background:#c2410c;color:#fff;" id="transferBtn" onclick="submitTransferOut()"><i class="fa-solid fa-right-from-bracket"></i> Transfer Out</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <script>
 // Section transfer: destination sections in the adviser's own school.
 var advSections = [];
@@ -456,106 +248,25 @@ fetch('/admin/adviser-sections')
     .then(function(rows) { advSections = Array.isArray(rows) ? rows : []; populateEditSections(); })
     .catch(function() { /* transfer dropdown stays empty if this fails */ });
 
-function openImportModal() {
-    document.getElementById('importFile').value = '';
-    document.getElementById('importResult').style.display = 'none';
-    document.getElementById('importModal').style.display = 'flex';
+// ── Row action menu (kebab) ──
+function toggleRowMenu(btn) {
+    var menu = btn.nextElementSibling;
+    var isOpen = menu.classList.contains('open');
+    document.querySelectorAll('.as-menu.open').forEach(function(m) { m.classList.remove('open'); });
+    if (!isOpen) menu.classList.add('open');
 }
-function closeImportModal() { document.getElementById('importModal').style.display = 'none'; }
-
-function submitImport() {
-    var file = document.getElementById('importFile').files[0];
-    var resultEl = document.getElementById('importResult');
-    if (!file) {
-        resultEl.style.display = '';
-        resultEl.style.color = '#dc2626';
-        resultEl.textContent = 'Please choose an Excel or CSV file first.';
-        return;
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.as-actions')) {
+        document.querySelectorAll('.as-menu.open').forEach(function(m) { m.classList.remove('open'); });
     }
+});
 
-    var btn = document.getElementById('importBtn');
-    var fd = new FormData();
-    fd.append('file', file);
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Importing...';
-    resultEl.style.display = 'none';
-
-    fetch('/admin/adviser-import-students', { method: 'POST', body: fd })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        resultEl.style.display = '';
-        if (data.success) {
-            resultEl.style.color = '#047857';
-            resultEl.innerHTML = 'Imported ' + data.imported + ' student(s), updated ' + data.updated + ' student(s).' +
-                (data.errors && data.errors.length ? '<br><span style="color:#dc2626;">Skipped ' + data.errors.length + ' row(s): ' + data.errors.slice(0, 3).map(function(e) { return 'Row ' + e.row + ' - ' + e.message; }).join('; ') + '</span>' : '');
-            setTimeout(function() { window.location.reload(); }, 1200);
-        } else {
-            resultEl.style.color = '#dc2626';
-            resultEl.textContent = data.error || 'Import failed.';
-        }
-    })
-    .catch(function() {
-        resultEl.style.display = '';
-        resultEl.style.color = '#dc2626';
-        resultEl.textContent = 'Network error - try again.';
-    })
-    .finally(function() {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fa-solid fa-file-arrow-up"></i> Import';
-    });
-}
-
-if (window.location.hash === '#import') {
-    setTimeout(openImportModal, 150);
-}
-
-// ── Search ──
+// ── Search filter ──
 function filterTable() {
     var q = document.getElementById('asSearch').value.toLowerCase();
-    var rows = document.querySelectorAll('#asBody tr[data-search]');
-    rows.forEach(function(r) {
+    document.querySelectorAll('#asBody tr[data-search]').forEach(function(r) {
         r.style.display = r.getAttribute('data-search').indexOf(q) !== -1 ? '' : 'none';
     });
-}
-
-// ── Add Modal ──
-function openAddModal() {
-    ['addLastname','addFirstname','addMiddlename','addLrn','addGuardian'].forEach(function(id) {
-        document.getElementById(id).value = '';
-    });
-    document.getElementById('addGender').value = '';
-    document.getElementById('addError').style.display = 'none';
-    document.getElementById('addModal').style.display = 'flex';
-    document.getElementById('addLastname').focus();
-}
-function closeAddModal() { document.getElementById('addModal').style.display = 'none'; }
-
-function submitAdd() {
-    var fn = document.getElementById('addFirstname').value.trim();
-    var ln = document.getElementById('addLastname').value.trim();
-    var errEl = document.getElementById('addError');
-    if (!fn || !ln) { errEl.textContent = 'First name and last name are required.'; errEl.style.display = ''; return; }
-
-    var btn = document.getElementById('addSaveBtn');
-    btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Adding…';
-
-    fetch('/admin/adviser-add-student', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            firstname: fn, lastname: ln,
-            middlename: document.getElementById('addMiddlename').value.trim(),
-            lrn: document.getElementById('addLrn').value.trim(),
-            gender: document.getElementById('addGender').value,
-            guardian_contact: document.getElementById('addGuardian').value.trim()
-        })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.success) { window.location.reload(); }
-        else { errEl.textContent = data.error || 'Add failed.'; errEl.style.display = ''; }
-    })
-    .catch(function() { errEl.textContent = 'Network error — try again.'; errEl.style.display = ''; })
-    .finally(function() { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Add Student'; });
 }
 
 // ── Edit Modal ──
@@ -600,8 +311,7 @@ function submitEdit() {
     fetch('/admin/adviser-edit-student', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            student_id: studentId,
-            firstname: fn, lastname: ln,
+            student_id: studentId, firstname: fn, lastname: ln,
             middlename: document.getElementById('editMiddlename').value.trim(),
             lrn: document.getElementById('editLrn').value.trim(),
             gender: document.getElementById('editGender').value,
@@ -624,112 +334,6 @@ function submitEdit() {
         });
     })
     .catch(function() { fail('Network error — try again.'); });
-}
-
-// ── Delete Modal ──
-function confirmDelete(id, name) {
-    document.getElementById('deleteId').value = id;
-    document.getElementById('deleteNameLabel').textContent = name;
-    document.getElementById('deleteError').style.display = 'none';
-    document.getElementById('deleteModal').style.display = 'flex';
-}
-function closeDeleteModal() { document.getElementById('deleteModal').style.display = 'none'; }
-
-function submitDelete() {
-    var btn = document.getElementById('deleteConfirmBtn');
-    btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Removing…';
-    var errEl = document.getElementById('deleteError');
-
-    fetch('/admin/adviser-delete-student', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ student_id: document.getElementById('deleteId').value })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.success) { window.location.reload(); }
-        else { errEl.textContent = data.error || 'Remove failed.'; errEl.style.display = ''; }
-    })
-    .catch(function() { errEl.textContent = 'Network error — try again.'; errEl.style.display = ''; })
-    .finally(function() { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-trash"></i> Remove'; });
-}
-
-// ── Enroll a Student (search whole school → enroll to my section) ──
-function escapeHtml(str) {
-    return String(str == null ? '' : str).replace(/[&<>"']/g, function(c) {
-        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
-}
-var enrollTimer = null;
-function enrollSearchDebounced() {
-    clearTimeout(enrollTimer);
-    enrollTimer = setTimeout(runEnrollSearch, 300);
-}
-function runEnrollSearch() {
-    var q = document.getElementById('enrollSearch').value.trim();
-    var box = document.getElementById('enrollResults');
-    if (q.length < 2) {
-        box.innerHTML = '<div style="color:var(--gray-400);font-size:0.8rem;padding:8px 0;">Type at least 2 characters to search.</div>';
-        return;
-    }
-    box.innerHTML = '<div style="color:var(--gray-400);font-size:0.8rem;padding:8px 0;"><i class="fa-solid fa-spinner fa-spin"></i> Searching…</div>';
-    fetch('/admin/adviser-search-students?q=' + encodeURIComponent(q))
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (!data.success || !data.students || !data.students.length) {
-            box.innerHTML = '<div style="color:var(--gray-400);font-size:0.8rem;padding:8px 0;">No matching students found.</div>';
-            return;
-        }
-        box.innerHTML = data.students.map(function(s) {
-            var prior = s.prior ? (s.prior.year_label + ' · ' + (s.prior.grade_name || '—') + (s.prior.section_name ? ' ' + s.prior.section_name : '')) : 'No previous enrollment';
-            var meta = 'LRN: ' + escapeHtml(s.lrn || '—') + ' · ' + escapeHtml(prior);
-            if (s.from_other_school && s.current_school_name) {
-                meta += ' · <span style="color:#c2410c;font-weight:700;"><i class="fa-solid fa-school"></i> from ' + escapeHtml(s.current_school_name) + '</span>';
-            }
-            var action;
-            if (s.already_mine) {
-                action = '<span class="as-status-pill active"><i class="fa-solid fa-check" style="font-size:0.6rem;"></i> In your section</span>';
-            } else if (s.from_other_school) {
-                action = '<button class="btn as-btn-xs" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;" data-transfer="1" data-name="' + escapeHtml(s.name) + '" data-school="' + escapeHtml(s.current_school_name || 'another school') + '" onclick="enrollStudent(' + s.id + ', this)"><i class="fa-solid fa-right-to-bracket"></i> Transfer In</button>';
-            } else {
-                action = '<button class="btn btn-primary as-btn-xs" onclick="enrollStudent(' + s.id + ', this)"><i class="fa-solid fa-user-plus"></i> Enroll</button>';
-            }
-            return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--gray-100);">' +
-                '<div><div class="as-name">' + escapeHtml(s.name) + '</div>' +
-                '<div class="as-lrn">' + meta + '</div></div>' +
-                '<div>' + action + '</div></div>';
-        }).join('');
-    })
-    .catch(function() { box.innerHTML = '<div style="color:#dc2626;font-size:0.8rem;padding:8px 0;">Search failed — try again.</div>'; });
-}
-function enrollStudent(id, btn) {
-    var isTransfer = btn && btn.dataset && btn.dataset.transfer === '1';
-    if (isTransfer) {
-        if (!confirm('Transfer ' + (btn.dataset.name || 'this student') + ' into your section?\n\nThey will move from ' + (btn.dataset.school || 'their current school') + ' into your school for this school year. Their previous records are kept.')) return;
-    }
-    var restoreLabel = isTransfer
-        ? '<i class="fa-solid fa-right-to-bracket"></i> Transfer In'
-        : '<i class="fa-solid fa-user-plus"></i> Enroll';
-    btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ' + (isTransfer ? 'Transferring…' : 'Enrolling…');
-    fetch('/admin/adviser-enroll-student', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ student_id: id })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.success) { window.location.reload(); }
-        else { btn.disabled = false; btn.innerHTML = restoreLabel; alert(data.error || 'Enroll failed.'); }
-    })
-    .catch(function() { btn.disabled = false; btn.innerHTML = restoreLabel; alert('Network error — try again.'); });
-}
-
-// ── Status tabs ──
-function switchTab(name) {
-    document.querySelectorAll('.as-tab').forEach(function(t) {
-        t.classList.toggle('active', t.getAttribute('data-tab') === name);
-    });
-    document.querySelectorAll('.as-panel').forEach(function(p) {
-        p.style.display = p.getAttribute('data-panel') === name ? '' : 'none';
-    });
 }
 
 // ── Transfer Out ──
@@ -765,6 +369,31 @@ function submitTransferOut() {
         else { fail(data.error || 'Failed to transfer the student.'); }
     })
     .catch(function() { fail('Network error — try again.'); });
+}
+
+// ── Delete Modal ──
+function confirmDelete(id, name) {
+    document.getElementById('deleteId').value = id;
+    document.getElementById('deleteNameLabel').textContent = name;
+    document.getElementById('deleteError').style.display = 'none';
+    document.getElementById('deleteModal').style.display = 'flex';
+}
+function closeDeleteModal() { document.getElementById('deleteModal').style.display = 'none'; }
+function submitDelete() {
+    var btn = document.getElementById('deleteConfirmBtn');
+    btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Removing…';
+    var errEl = document.getElementById('deleteError');
+    fetch('/admin/adviser-delete-student', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: document.getElementById('deleteId').value })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) { window.location.reload(); }
+        else { errEl.textContent = data.error || 'Remove failed.'; errEl.style.display = ''; }
+    })
+    .catch(function() { errEl.textContent = 'Network error — try again.'; errEl.style.display = ''; })
+    .finally(function() { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-trash"></i> Remove'; });
 }
 </script>
 
