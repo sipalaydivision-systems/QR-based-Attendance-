@@ -2,12 +2,11 @@
 
 <div class="page-header">
     <div class="page-header-left">
-        <h1><i class="fa-solid fa-bell"></i> Notifications</h1>
+        <h1><i class="fa-solid fa-bullhorn"></i> Announcements</h1>
     </div>
 </div>
 
-<!-- Parent Announcement Composer (hidden for principal/adviser — they use the Announcements page) -->
-<% if (user && user.role !== 'principal' && user.role !== 'adviser') { %>
+<!-- Parent Announcement Composer -->
 <div class="card" style="margin-bottom:1rem;">
     <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
         <div>
@@ -78,32 +77,8 @@
         </div>
     </form>
 </div>
-<% } %>
 
-<!-- Parent Contact Directory -->
-<div class="card" style="margin-bottom:1rem;">
-    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-        <h3 style="margin:0;"><i class="fa-solid fa-address-book"></i> Parent Contacts</h3>
-        <button type="button" id="contactsToggle" class="btn btn-sm btn-outline" style="display:none;" onclick="toggleParentContacts()">See all</button>
-    </div>
-    <div class="table-responsive">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Child</th>
-                    <th>Grade / Section</th>
-                    <th>Parent / Guardian</th>
-                    <th>Contact Number</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody id="parentContactRows">
-                <tr><td colspan="5" class="text-center text-muted">Loading parent contacts...</td></tr>
-            </tbody>
-        </table>
-    </div>
-</div>
-
+<!-- Recent Parent Notices -->
 <div class="card" style="margin-bottom:1rem;">
     <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
         <h3 style="margin:0;"><i class="fa-solid fa-list-check"></i> Recent Parent Notices</h3>
@@ -128,29 +103,6 @@
     </div>
 </div>
 
-<% if (user && user.role === 'super_admin') { %>
-<!-- User Activity -->
-<div class="activity-card">
-    <h3><i class="fa-solid fa-user-clock"></i> User Activity</h3>
-    <div class="table-responsive">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Role</th>
-                    <th>School</th>
-                    <th>Last Login</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody id="userActivity">
-                <tr><td colspan="5" class="text-center text-muted">Loading...</td></tr>
-            </tbody>
-        </table>
-    </div>
-</div>
-<% } %>
-
 <script>
 var CURRENT_USER = {
     id: '<%= user && user.id ? user.id : "" %>',
@@ -170,23 +122,6 @@ function escapeHtml(value) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
-}
-function normalizeLogo(logo) {
-    var value = String(logo || '').trim();
-    if (!value) return '';
-    if (/^data:image\//i.test(value) || /^https?:\/\//i.test(value)) return value;
-    value = value.replace(/^public\//, '');
-    return value.charAt(0) === '/' ? value : '/' + value;
-}
-function schoolLogo(flag, size) {
-    var safeSize = size || 28;
-    var school = flag.school_name || 'School';
-    var initial = school.charAt(0).toUpperCase();
-    var src = normalizeLogo(flag.school_logo);
-    if (!src) {
-        return '<span style="width:' + safeSize + 'px;height:' + safeSize + 'px;border-radius:8px;background:var(--primary-bg);color:var(--primary);display:inline-flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;flex-shrink:0;">' + escapeHtml(initial) + '</span>';
-    }
-    return '<img src="' + escapeHtml(src) + '" alt="" style="width:' + safeSize + 'px;height:' + safeSize + 'px;border-radius:8px;object-fit:cover;border:1px solid var(--border);background:#fff;flex-shrink:0;">';
 }
 function announcementTypeLabel(type) {
     var labels = {
@@ -216,14 +151,12 @@ function applyAnnouncementScope() {
     var audienceEl = document.getElementById('annAudience');
     var schoolGroup = schoolEl.closest('.form-group');
     var gradeGroup = document.getElementById('annGrade').closest('.form-group');
-    // Lock the school to the principal's / adviser's own school.
     if (annScope.lock_school && annScope.school) {
         schoolEl.innerHTML = '<option value="' + escapeHtml(annScope.school.id) + '">' + escapeHtml(annScope.school.name) + '</option>';
         schoolEl.value = String(annScope.school.id);
         schoolEl.disabled = true;
     }
     if (role === 'adviser') {
-        // Advisers may only message their own advisory section (or one student in it).
         audienceEl.innerHTML = '<option value="section">All parents in my section</option>'
             + '<option value="student">One student in my section</option>';
         audienceEl.value = 'section';
@@ -267,7 +200,7 @@ async function loadGradesAndSections() {
     await loadSections();
 }
 async function loadSections() {
-    if (annScope && annScope.lock_section) return; // adviser section is fixed
+    if (annScope && annScope.lock_section) return;
     var schoolId = document.getElementById('annSchool').value;
     var gradeId = document.getElementById('annGrade').value;
     var url = '/api/sections?' + new URLSearchParams({
@@ -288,7 +221,6 @@ function updateAnnouncementAudience() {
     var sectionGroup = document.getElementById('annSection').closest('.form-group');
     document.getElementById('annStudentWrap').style.display = audience === 'student' ? '' : 'none';
     if (isAdviser) {
-        // Grade/school are implied; the locked section is always shown.
         if (gradeGroup) gradeGroup.style.display = 'none';
         if (sectionGroup) sectionGroup.style.display = '';
         return;
@@ -327,7 +259,6 @@ function renderTable(body, toggle, data, expanded, rowHtml, animate) {
     var list = expanded ? data : data.slice(0, MAX_TABLE_ROWS);
     body.innerHTML = list.map(rowHtml).join('');
     if (animate && expanded) {
-        // Smoothly reveal the newly shown rows (staggered fade + slide).
         var rows = body.querySelectorAll('tr');
         for (var i = MAX_TABLE_ROWS; i < rows.length; i++) {
             rows[i].style.animation = 'annRowReveal .34s ease both';
@@ -349,46 +280,13 @@ function renderAnnouncements(animate) {
 }
 function toggleAnnouncements() { announcementsExpanded = !announcementsExpanded; renderAnnouncements(announcementsExpanded); }
 async function loadAnnouncementRows() {
-    if (!document.getElementById('announcementRows')) return; // hidden for advisers
     try {
         var rows = await (await fetch('/api/notifications')).json();
         announcementsData = Array.isArray(rows) ? rows : [];
         renderAnnouncements();
     } catch(e) {
         var el = document.getElementById('announcementRows');
-        if (el) el.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Failed to load announcements.</td></tr>';
-    }
-}
-
-var parentContactsData = [];
-var parentContactsExpanded = false;
-function parentContactRowHtml(c) {
-    var phone = String(c.guardian_contact || '').replace(/[^0-9+]/g, '');
-    var action = phone
-        ? '<div style="display:flex;gap:6px;flex-wrap:wrap;">'
-            + '<a class="btn btn-sm btn-outline" href="tel:' + encodeURIComponent(phone) + '">Call</a>'
-            + '<a class="btn btn-sm btn-outline" href="sms:' + encodeURIComponent(phone) + '">SMS</a></div>'
-        : '<span class="text-muted">No number</span>';
-    return '<tr>'
-        + '<td><strong>' + escapeHtml(c.student_name || '-') + '</strong></td>'
-        + '<td>' + escapeHtml((c.grade_name || '-') + ' / ' + (c.section_name || '-')) + '</td>'
-        + '<td>' + escapeHtml(c.guardian_name || '—') + '</td>'
-        + '<td>' + escapeHtml(c.guardian_contact || '—') + '</td>'
-        + '<td>' + action + '</td>'
-        + '</tr>';
-}
-function renderParentContacts(animate) {
-    renderTable(document.getElementById('parentContactRows'), document.getElementById('contactsToggle'),
-        parentContactsData, parentContactsExpanded, parentContactRowHtml, animate);
-}
-function toggleParentContacts() { parentContactsExpanded = !parentContactsExpanded; renderParentContacts(parentContactsExpanded); }
-async function loadParentContacts() {
-    try {
-        var rows = await (await fetch('/api/parent-contacts')).json();
-        parentContactsData = Array.isArray(rows) ? rows : [];
-        renderParentContacts();
-    } catch(e) {
-        document.getElementById('parentContactRows').innerHTML = '<tr><td colspan="5" class="text-center text-danger">Failed to load parent contacts.</td></tr>';
+        if (el) el.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Failed to load announcements.</td></tr>';
     }
 }
 async function sendAnnouncement(event) {
@@ -417,7 +315,8 @@ async function sendAnnouncement(event) {
         if (!res.ok || json.error) throw new Error(json.error || 'Failed to send announcement.');
         var count = json.sent_to_parents || 0;
         status.textContent = 'Sent to ' + count + ' parent account(s).';
-        document.getElementById('announcementSentCount').textContent = 'Sent';
+        var sentBadge = document.getElementById('announcementSentCount');
+        if (sentBadge) sentBadge.textContent = 'Sent';
         form.reset();
         updateAnnouncementAudience();
         await loadAnnouncementRows();
@@ -488,42 +387,13 @@ async function deleteAnnouncement(id) {
         alert(e.message || 'Failed to delete announcement.');
     }
 }
-async function loadNotifications() {
-    var userActivityEl = document.getElementById('userActivity');
-    if (userActivityEl) {
-        try {
-            // Load user activity
-            var userRes = await fetch('/api/users');
-            var users = await userRes.json();
-            if (users.length > 0) {
-                userActivityEl.innerHTML = users.map(function(u){
-                    var roleClass = u.role === 'super_admin' ? 'super-admin' : u.role === 'principal' ? 'principal' : u.role === 'superintendent' ? 'superintendent' : 'asst-superintendent';
-                    var roleName = u.role.replace(/_/g, ' ');
-                    var isOnline = u.last_login && (Date.now() - new Date(u.last_login).getTime() < 300000);
-                    return '<tr><td><strong>'+u.fullname+'</strong></td>'+
-                        '<td><span class="role-badge '+roleClass+'">'+ roleName +'</span></td>'+
-                        '<td>'+(u.school_name||'Division Office')+'</td>'+
-                        '<td>'+(u.last_login ? new Date(u.last_login).toLocaleString() : 'Never')+'</td>'+
-                        '<td><span class="status-dot '+(isOnline?'online':'offline')+'"></span>'+(isOnline?'Active':'Offline')+'</td></tr>';
-                }).join('');
-            }
-        } catch(e) { console.error('User activity:', e); }
-    }
-}
-// Move the modals to <body> so position:fixed centers over the viewport even if a
-// layout ancestor has a transform/overflow that would otherwise clip it.
 (function(){ ['annSentModal','editAnnModal'].forEach(function(idv){ var m = document.getElementById(idv); if (m && m.parentNode !== document.body) document.body.appendChild(m); }); })();
-loadNotifications();
+populateAnnouncementFilters();
 loadAnnouncementRows();
-loadParentContacts();
-if (document.getElementById('announcementForm')) {
-    populateAnnouncementFilters();
-    document.getElementById('announcementForm').addEventListener('submit', sendAnnouncement);
-    document.getElementById('annAudience').addEventListener('change', updateAnnouncementAudience);
-    document.getElementById('annSchool').addEventListener('change', loadGradesAndSections);
-    document.getElementById('annGrade').addEventListener('change', loadSections);
-}
-setInterval(loadNotifications, 5000);
+document.getElementById('announcementForm').addEventListener('submit', sendAnnouncement);
+document.getElementById('annAudience').addEventListener('change', updateAnnouncementAudience);
+document.getElementById('annSchool').addEventListener('change', loadGradesAndSections);
+document.getElementById('annGrade').addEventListener('change', loadSections);
 setInterval(loadAnnouncementRows, 30000);
 </script>
 

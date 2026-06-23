@@ -136,14 +136,21 @@
                 </a>
             </li>
             <li>
-                <a href="/admin/notifications" class="<%= page === 'notifications' ? 'active' : '' %>">
-                    <i class="nav-icon fa-solid fa-bell"></i> Announcements
+                <a href="/admin/announcements" class="<%= page === 'announcements' ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-bullhorn"></i> Announcements
                 </a>
             </li>
             <% } %>
 
             <% if (user.role !== 'adviser') { %>
             <li class="nav-section"><span class="nav-section-label">Communication</span></li>
+            <% if (user.role === 'principal') { %>
+            <li>
+                <a href="/admin/announcements" class="<%= page === 'announcements' ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-bullhorn"></i> Announcements
+                </a>
+            </li>
+            <% } %>
             <li>
                 <a href="/admin/notifications" class="<%= page === 'notifications' ? 'active' : '' %>">
                     <i class="nav-icon fa-solid fa-bell"></i> Notifications

@@ -1487,6 +1487,11 @@ router.get('/notifications', async (req, res) => {
     res.render('notifications', { title: 'Notifications', page: 'notifications' });
 });
 
+// ---- Announcements (principal / adviser compose page) ----
+router.get('/announcements', async (req, res) => {
+    res.render('announcements', { title: 'Announcements', page: 'announcements' });
+});
+
 // ---- Backups ----
 router.get('/backups', requireRole('super_admin'), async (req, res) => {
     res.render('backups', { title: 'Backups', page: 'backups' });
