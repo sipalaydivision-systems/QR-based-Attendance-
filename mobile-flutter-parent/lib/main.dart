@@ -167,7 +167,12 @@ Future<bool> showParentNotification(String title, String body, {int? id, String 
             icon: icon,
             color: color,
             largeIcon: largeIcon,
-            styleInformation: BigTextStyleInformation(body, contentTitle: title),
+            styleInformation: BigTextStyleInformation(
+              '<b>$body</b>',
+              htmlFormatBigText: true,
+              contentTitle: '<b>$title</b>',
+              htmlFormatContentTitle: true,
+            ),
           ),
         ),
       );
