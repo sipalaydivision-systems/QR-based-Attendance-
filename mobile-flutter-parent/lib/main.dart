@@ -1806,8 +1806,7 @@ class BadgeIcon extends StatelessWidget {
   }
 }
 
-// Prominent "Important"-style announcement banner. Shown only for announcements;
-// a colored header strip + type badge make it read as a priority alert.
+// In-app announcement banner — clean card design with pill type badge.
 class ParentNotificationBanner extends StatelessWidget {
   const ParentNotificationBanner({super.key, required this.note, required this.onTap, required this.onClose});
   final Map<String, dynamic> note;
@@ -1817,76 +1816,124 @@ class ParentNotificationBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = parentNotificationColor(note);
+    final label = parentNotificationTypeLabel(note);
+    final icon = parentNotificationIcon(note);
+    final time = parentNotificationTime(note);
     return Material(
-      elevation: 14,
-      borderRadius: BorderRadius.circular(18),
-      shadowColor: color.withValues(alpha: .45),
+      elevation: 18,
+      borderRadius: BorderRadius.circular(20),
+      shadowColor: Colors.black.withValues(alpha: .18),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         child: Container(
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: color.withValues(alpha: .35), width: 1.5),
+            borderRadius: BorderRadius.circular(20),
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Colored header strip with the IMPORTANT label + close.
-              Container(
-                color: color,
-                padding: const EdgeInsets.fromLTRB(14, 7, 8, 7),
-                child: Row(
-                  children: [
-                    const Icon(Icons.priority_high_rounded, color: Colors.white, size: 16),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        parentNotificationTypeLabel(note).toUpperCase(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: .4),
-                      ),
-                    ),
-                    Text(parentNotificationTime(note), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
-                    GestureDetector(
-                      onTap: onClose,
-                      child: const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.close_rounded, size: 17, color: Colors.white)),
-                    ),
-                  ],
-                ),
-              ),
+              // Thin accent bar at top
+              Container(height: 4, color: color),
               Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
+                padding: const EdgeInsets.fromLTRB(14, 10, 10, 12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(color: color.withValues(alpha: .12), borderRadius: BorderRadius.circular(14)),
-                      child: Icon(parentNotificationIcon(note), color: color, size: 22),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text('${note['title'] ?? 'EduTrack Guardian'}', maxLines: 1, overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: kInk)),
-                          const SizedBox(height: 3),
-                          Text('${note['message'] ?? ''}', maxLines: 2, overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: kMuted, height: 1.25)),
-                          const SizedBox(height: 5),
-                          Row(
+                    // Row 1: type pill + time + close
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: .1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text('Tap to open full details', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: color)),
+                              Icon(icon, color: color, size: 11),
                               const SizedBox(width: 4),
-                              Icon(Icons.arrow_forward_rounded, size: 12, color: color),
+                              Text(
+                                label.toUpperCase(),
+                                style: TextStyle(color: color, fontSize: 9.5, fontWeight: FontWeight.w900, letterSpacing: .5),
+                              ),
                             ],
                           ),
+                        ),
+                        const Spacer(),
+                        Text(time, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: kMuted)),
+                        const SizedBox(width: 4),
+                        GestureDetector(
+                          onTap: onClose,
+                          child: Container(
+                            width: 26, height: 26,
+                            decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(13)),
+                            child: const Icon(Icons.close_rounded, size: 15, color: kMuted),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    // Row 2: content
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 42, height: 42,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [color.withValues(alpha: .15), color.withValues(alpha: .06)],
+                            ),
+                            borderRadius: BorderRadius.circular(13),
+                          ),
+                          child: Icon(icon, color: color, size: 20),
+                        ),
+                        const SizedBox(width: 11),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '${note['title'] ?? 'EduTrack Guardian'}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: kInk, height: 1.2),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                '${note['message'] ?? ''}',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: kMuted, height: 1.35),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    // Row 3: CTA
+                    Container(
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: .07),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Tap to open full details',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color),
+                          ),
+                          const SizedBox(width: 5),
+                          Icon(Icons.arrow_forward_rounded, size: 13, color: color),
                         ],
                       ),
                     ),
