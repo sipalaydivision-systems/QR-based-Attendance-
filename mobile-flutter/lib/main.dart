@@ -229,6 +229,7 @@ Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
 String gMainFcmToken = '';
 DateTime? _lastMainFcmRegistration;
 bool _registeringMainFcm = false;
+const String _mainFcmTokenResetPreference = 'main_fcm_token_reset_v1';
 
 Future<void> _registerMainDevice(
   SharedPreferences prefs,
@@ -269,6 +270,13 @@ Future<void> _setupMainFcm(SharedPreferences prefs) async {
     final messaging = FirebaseMessaging.instance;
     await messaging.requestPermission(alert: true, badge: true, sound: true);
     await messaging.setForegroundNotificationPresentationOptions(alert: true, badge: true, sound: true);
+    // Refresh tokens created by older builds before closed-app FCM was fully
+    // wired. This runs once and immediately re-registers the replacement token.
+    if (prefs.getBool(_mainFcmTokenResetPreference) != true) {
+      await messaging.deleteToken();
+      await prefs.remove('fcm_token');
+      await prefs.setBool(_mainFcmTokenResetPreference, true);
+    }
     final token = await messaging.getToken();
     if (token != null && token.isNotEmpty) {
       gMainFcmToken = token;
