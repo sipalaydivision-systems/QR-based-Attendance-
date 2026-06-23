@@ -75,6 +75,17 @@
 .as-no-section h3 { margin: 0 0 8px; font-size: 1.125rem; }
 .adv-options summary::-webkit-details-marker { display: none; }
 .adv-options[open] summary { border-bottom: 1px solid var(--gray-200); }
+
+.as-tabs { display: flex; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid var(--gray-200); flex-wrap: wrap; }
+.as-tab { background: none; border: 0; padding: 11px 16px; font-size: 0.8125rem; font-weight: 700; color: var(--gray-500); cursor: pointer; border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 7px; }
+.as-tab:hover { color: var(--gray-800); }
+.as-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.as-tab-count { background: var(--gray-100); color: var(--gray-600); border-radius: 10px; padding: 1px 8px; font-size: 0.7rem; font-weight: 800; }
+.as-tab.active .as-tab-count { background: var(--primary); color: #fff; }
+.as-list-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--gray-100); }
+.as-list-row:hover { background: var(--gray-50); }
+.as-meta { font-size: 0.72rem; color: var(--gray-400); margin-top: 2px; }
+.as-btn-xs { font-size: 0.75rem; padding: 5px 10px; }
 </style>
 
 <div class="as-wrap">
@@ -127,56 +138,108 @@
 </div>
 
 <div class="as-card">
-    <div class="as-card-header">
-        <h3><i class="fa-solid fa-list-check"></i> Student List</h3>
-        <input type="text" id="asSearch" class="as-search" placeholder="Search by name or LRN…" oninput="filterTable()">
+    <div class="as-tabs">
+        <button class="as-tab active" data-tab="enrolled" onclick="switchTab('enrolled')"><i class="fa-solid fa-user-check"></i> Enrolled <span class="as-tab-count"><%= groups.enrolled.length %></span></button>
+        <button class="as-tab" data-tab="notEnrolled" onclick="switchTab('notEnrolled')"><i class="fa-solid fa-user-clock"></i> Not Enrolled <span class="as-tab-count"><%= groups.notEnrolled.length %></span></button>
+        <button class="as-tab" data-tab="transferred" onclick="switchTab('transferred')"><i class="fa-solid fa-right-from-bracket"></i> Transferred <span class="as-tab-count"><%= groups.transferred.length %></span></button>
+        <button class="as-tab" data-tab="archived" onclick="switchTab('archived')"><i class="fa-solid fa-box-archive"></i> Archived <span class="as-tab-count"><%= groups.archived.length %></span></button>
     </div>
-    <div style="overflow-x:auto;">
-        <table class="as-table" id="asTable">
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>Student</th>
-                    <th>Sex</th>
-                    <th>Guardian Contact</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody id="asBody">
-            <% if (students.length === 0) { %>
-                <tr><td colspan="6" class="as-empty"><i class="fa-solid fa-user-slash"></i> No students yet. Click <strong>Add Student</strong> to enroll one.</td></tr>
-            <% } else { students.forEach(function(s, idx) { %>
-                <tr data-search="<%= (s.lastname + ' ' + s.firstname + ' ' + (s.middlename||'') + ' ' + (s.lrn||'')).toLowerCase() %>">
-                    <td><%= idx + 1 %></td>
-                    <td>
-                        <div class="as-name"><%= s.lastname.toUpperCase() %>, <%= s.firstname %><%= s.middlename ? ' ' + s.middlename.charAt(0).toUpperCase() + '.' : '' %></div>
-                        <div class="as-lrn">LRN: <%= s.lrn || '—' %></div>
-                    </td>
-                    <td><%= s.gender || '—' %></td>
-                    <td><%= s.guardian_contact || '—' %></td>
-                    <td>
-                        <span class="as-status-pill <%= s.status === 'active' ? 'active' : 'inactive' %>">
-                            <i class="fa-solid fa-circle" style="font-size:0.5rem;"></i>
-                            <%= s.status === 'active' ? 'Active' : 'Inactive' %>
-                        </span>
-                    </td>
-                    <td>
-                        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                            <button class="btn btn-secondary" style="font-size:0.75rem;padding:5px 10px;"
-                                onclick='openEditModal(<%- JSON.stringify({id:s.id,lrn:s.lrn||"",firstname:s.firstname,lastname:s.lastname,middlename:s.middlename||"",gender:s.gender||"",guardian_contact:s.guardian_contact||""}) %>)'>
-                                <i class="fa-solid fa-pen-to-square"></i> Edit
-                            </button>
-                            <button class="btn" style="font-size:0.75rem;padding:5px 10px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;"
-                                onclick="confirmDelete(<%= s.id %>, '<%= (s.lastname + ', ' + s.firstname).replace(/'/g,"\\'"  ) %>')">
-                                <i class="fa-solid fa-trash"></i> Delete
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            <% }); } %>
-            </tbody>
-        </table>
+
+    <!-- Enrolled (active roster) -->
+    <div class="as-panel" data-panel="enrolled">
+        <div class="as-card-header" style="border-top:0;">
+            <h3><i class="fa-solid fa-user-check"></i> Enrolled this year<%= activeYearLabel ? ' · ' + activeYearLabel : '' %></h3>
+            <input type="text" id="asSearch" class="as-search" placeholder="Search by name or LRN…" oninput="filterTable()">
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="as-table" id="asTable">
+                <thead>
+                    <tr><th>#</th><th>Student</th><th>Sex</th><th>Guardian Contact</th><th>Status</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="asBody">
+                <% if (groups.enrolled.length === 0) { %>
+                    <tr><td colspan="6" class="as-empty"><i class="fa-solid fa-user-slash"></i> No enrolled students yet. Use <strong>Enroll a Student</strong> or <strong>Add Student</strong>.</td></tr>
+                <% } else { groups.enrolled.forEach(function(s, idx) { %>
+                    <tr data-search="<%= (s.lastname + ' ' + s.firstname + ' ' + (s.middlename||'') + ' ' + (s.lrn||'')).toLowerCase() %>">
+                        <td><%= idx + 1 %></td>
+                        <td>
+                            <div class="as-name"><%= s.lastname.toUpperCase() %>, <%= s.firstname %><%= s.middlename ? ' ' + s.middlename.charAt(0).toUpperCase() + '.' : '' %></div>
+                            <div class="as-lrn">LRN: <%= s.lrn || '—' %></div>
+                        </td>
+                        <td><%= s.gender || '—' %></td>
+                        <td><%= s.guardian_contact || '—' %></td>
+                        <td>
+                            <span class="as-status-pill <%= s.status === 'active' ? 'active' : 'inactive' %>">
+                                <i class="fa-solid fa-circle" style="font-size:0.5rem;"></i>
+                                <%= s.status === 'active' ? 'Active' : 'Inactive' %>
+                            </span>
+                        </td>
+                        <td>
+                            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                                <button class="btn btn-secondary as-btn-xs"
+                                    onclick='openEditModal(<%- JSON.stringify({id:s.id,lrn:s.lrn||"",firstname:s.firstname,lastname:s.lastname,middlename:s.middlename||"",gender:s.gender||"",guardian_contact:s.guardian_contact||""}) %>)'>
+                                    <i class="fa-solid fa-pen-to-square"></i> Edit
+                                </button>
+                                <button class="btn as-btn-xs" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;"
+                                    onclick="openTransferModal(<%= s.id %>, '<%= (s.lastname + ', ' + s.firstname).replace(/'/g,"\\'") %>')">
+                                    <i class="fa-solid fa-right-from-bracket"></i> Transfer Out
+                                </button>
+                                <button class="btn as-btn-xs" style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;"
+                                    onclick="confirmDelete(<%= s.id %>, '<%= (s.lastname + ', ' + s.firstname).replace(/'/g,"\\'") %>')">
+                                    <i class="fa-solid fa-trash"></i> Delete
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                <% }); } %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Not Enrolled (awaiting re-enrollment) -->
+    <div class="as-panel" data-panel="notEnrolled" style="display:none;">
+        <% if (groups.notEnrolled.length === 0) { %>
+            <div class="as-empty"><i class="fa-solid fa-user-clock"></i> No students waiting to be enrolled. After a school year is closed, last year's students appear here to re-enroll.</div>
+        <% } else { groups.notEnrolled.forEach(function(s) { %>
+            <div class="as-list-row">
+                <div>
+                    <div class="as-name"><%= s.lastname.toUpperCase() %>, <%= s.firstname %><%= s.middlename ? ' ' + s.middlename.charAt(0).toUpperCase() + '.' : '' %></div>
+                    <div class="as-meta">LRN: <%= s.lrn || '—' %></div>
+                </div>
+                <button class="btn btn-primary as-btn-xs" onclick="enrollStudent(<%= s.id %>, this)"><i class="fa-solid fa-user-plus"></i> Enroll</button>
+            </div>
+        <% }); } %>
+    </div>
+
+    <!-- Transferred Out -->
+    <div class="as-panel" data-panel="transferred" style="display:none;">
+        <% if (groups.transferred.length === 0) { %>
+            <div class="as-empty"><i class="fa-solid fa-right-from-bracket"></i> No transferred students.</div>
+        <% } else { groups.transferred.forEach(function(s) { %>
+            <div class="as-list-row">
+                <div>
+                    <div class="as-name"><%= s.lastname.toUpperCase() %>, <%= s.firstname %><%= s.middlename ? ' ' + s.middlename.charAt(0).toUpperCase() + '.' : '' %></div>
+                    <div class="as-meta">To: <%= s.transfer_to_school || '—' %><%= s.transfer_date ? ' · ' + s.transfer_date : '' %><%= s.remarks ? ' · ' + s.remarks : '' %></div>
+                </div>
+                <button class="btn btn-secondary as-btn-xs" onclick="enrollStudent(<%= s.id %>, this)"><i class="fa-solid fa-rotate-left"></i> Re-enroll</button>
+            </div>
+        <% }); } %>
+    </div>
+
+    <!-- Archived (previous, closed years) -->
+    <div class="as-panel" data-panel="archived" style="display:none;">
+        <% if (groups.archived.length === 0) { %>
+            <div class="as-empty"><i class="fa-solid fa-box-archive"></i> No archived records. Students from previous, closed school years appear here.</div>
+        <% } else { groups.archived.forEach(function(s) { %>
+            <div class="as-list-row">
+                <div>
+                    <div class="as-name"><%= s.lastname.toUpperCase() %>, <%= s.firstname %><%= s.middlename ? ' ' + s.middlename.charAt(0).toUpperCase() + '.' : '' %></div>
+                    <div class="as-meta">LRN: <%= s.lrn || '—' %> · <%= s.year_label %> · <%= s.grade_name || '—' %><%= s.section_name ? ' ' + s.section_name : '' %></div>
+                </div>
+                <span class="as-status-pill inactive">Archived</span>
+            </div>
+        <% }); } %>
     </div>
 </div>
 
@@ -338,6 +401,39 @@
             <div style="display:flex;gap:10px;justify-content:flex-end;">
                 <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
                 <button class="btn" style="background:#dc2626;color:#fff;" id="deleteConfirmBtn" onclick="submitDelete()"><i class="fa-solid fa-trash"></i> Remove</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Transfer Out Modal ── -->
+<div class="modal-overlay" id="transferModal" style="display:none;">
+    <div class="modal" style="max-width:460px;">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-right-from-bracket"></i> Transfer Student Out</h3>
+            <button class="modal-close" onclick="closeTransferModal()">&times;</button>
+        </div>
+        <div style="padding:24px;">
+            <p style="font-size:0.875rem;color:var(--gray-700);margin:0 0 4px;">Transferring out:</p>
+            <p style="font-size:1rem;font-weight:700;color:var(--gray-900);margin:0 0 16px;" id="transferNameLabel"></p>
+            <input type="hidden" id="transferId">
+            <div class="form-group" style="margin-bottom:14px;">
+                <label class="form-label">Transferred To (School) *</label>
+                <input type="text" id="transferSchool" class="form-control" placeholder="e.g. Sipalay City National High School" style="width:100%;box-sizing:border-box;">
+            </div>
+            <div class="form-group" style="margin-bottom:14px;">
+                <label class="form-label">Date Transferred</label>
+                <input type="date" id="transferDate" class="form-control" style="width:100%;box-sizing:border-box;">
+            </div>
+            <div class="form-group" style="margin-bottom:16px;">
+                <label class="form-label">Remarks</label>
+                <textarea id="transferRemarks" class="form-control" rows="2" placeholder="Optional notes" style="width:100%;box-sizing:border-box;"></textarea>
+            </div>
+            <div style="font-size:0.78rem;color:var(--gray-500);margin-bottom:16px;"><i class="fa-solid fa-circle-info"></i> The student will be removed from your active list and can no longer scan attendance. Their records are kept.</div>
+            <div id="transferError" style="color:#dc2626;font-size:0.8125rem;margin-bottom:12px;display:none;"></div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeTransferModal()">Cancel</button>
+                <button class="btn" style="background:#c2410c;color:#fff;" id="transferBtn" onclick="submitTransferOut()"><i class="fa-solid fa-right-from-bracket"></i> Transfer Out</button>
             </div>
         </div>
     </div>
@@ -608,6 +704,51 @@ function enrollStudent(id, btn) {
         else { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Enroll'; alert(data.error || 'Enroll failed.'); }
     })
     .catch(function() { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Enroll'; alert('Network error — try again.'); });
+}
+
+// ── Status tabs ──
+function switchTab(name) {
+    document.querySelectorAll('.as-tab').forEach(function(t) {
+        t.classList.toggle('active', t.getAttribute('data-tab') === name);
+    });
+    document.querySelectorAll('.as-panel').forEach(function(p) {
+        p.style.display = p.getAttribute('data-panel') === name ? '' : 'none';
+    });
+}
+
+// ── Transfer Out ──
+function openTransferModal(id, name) {
+    document.getElementById('transferId').value = id;
+    document.getElementById('transferNameLabel').textContent = name;
+    document.getElementById('transferSchool').value = '';
+    document.getElementById('transferDate').value = '';
+    document.getElementById('transferRemarks').value = '';
+    document.getElementById('transferError').style.display = 'none';
+    document.getElementById('transferModal').style.display = 'flex';
+}
+function closeTransferModal() { document.getElementById('transferModal').style.display = 'none'; }
+function submitTransferOut() {
+    var school = document.getElementById('transferSchool').value.trim();
+    var errEl = document.getElementById('transferError');
+    if (!school) { errEl.textContent = 'Please enter the school the student transferred to.'; errEl.style.display = ''; return; }
+    var btn = document.getElementById('transferBtn');
+    btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+    function fail(msg) { errEl.textContent = msg; errEl.style.display = ''; btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-right-from-bracket"></i> Transfer Out'; }
+    fetch('/admin/adviser-transfer-out', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            student_id: document.getElementById('transferId').value,
+            to_school: school,
+            transfer_date: document.getElementById('transferDate').value || null,
+            remarks: document.getElementById('transferRemarks').value.trim()
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) { window.location.reload(); }
+        else { fail(data.error || 'Failed to transfer the student.'); }
+    })
+    .catch(function() { fail('Network error — try again.'); });
 }
 </script>
 

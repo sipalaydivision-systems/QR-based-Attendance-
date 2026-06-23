@@ -118,10 +118,29 @@ async function closeSchoolYear(id) {
     }
     const conn = await db.getConnection();
     try {
+        await conn.query('SET SESSION innodb_lock_wait_timeout = 15');
         await conn.beginTransaction();
         await conn.query("UPDATE school_years SET status = 'closed' WHERE id = ?", [yearId]);
         await conn.query(
             "UPDATE student_enrollments SET status = 'archived' WHERE school_year_id = ? AND status = 'enrolled'",
+            [yearId]
+        );
+        // Drop students from the active roster / scanner once their year closes,
+        // UNLESS they already have an 'enrolled' record in a still-active year.
+        // Their attendance, SF2, and QR records are all preserved.
+        await conn.query(
+            `UPDATE students s
+                SET s.status = 'inactive', s.active_from = NULL
+              WHERE s.status = 'active'
+                AND EXISTS (
+                    SELECT 1 FROM student_enrollments e
+                    WHERE e.student_id = s.id AND e.school_year_id = ?
+                )
+                AND NOT EXISTS (
+                    SELECT 1 FROM student_enrollments ae
+                    JOIN school_years sy ON sy.id = ae.school_year_id AND sy.status = 'active'
+                    WHERE ae.student_id = s.id AND ae.status = 'enrolled'
+                )`,
             [yearId]
         );
         await conn.commit();

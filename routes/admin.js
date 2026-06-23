@@ -868,21 +868,77 @@ router.get('/adviser-students', async (req, res) => {
         );
         if (!teacher) return res.render('error', { title: 'Error', message: 'Teacher not found.', user: req.session.user });
 
-        let students = [];
-        if (teacher.section_id) {
-            [students] = await db.query(
+        const sectionId = teacher.section_id;
+        const active = await schoolYears.getActiveSchoolYear();
+        const activeId = active ? active.id : null;
+        const groups = { enrolled: [], notEnrolled: [], transferred: [], archived: [] };
+
+        if (sectionId) {
+            // Enrolled (active roster) — cache-based so no student is ever lost to a
+            // missing enrollment record. These are attendance-eligible right now.
+            const [enrolled] = await db.query(
                 `SELECT id, lrn, firstname, lastname, middlename, gender, guardian_contact, status, active_from, created_at
                  FROM students
-                 WHERE section_id = ? AND status != 'deleted'
+                 WHERE section_id = ? AND status = 'active'
                  ORDER BY lastname, firstname`,
-                [teacher.section_id]
+                [sectionId]
             );
+            groups.enrolled = enrolled;
+
+            if (activeId) {
+                // Transferred out (this section, active year)
+                const [transferred] = await db.query(
+                    `SELECT s.id, s.lrn, s.firstname, s.lastname, s.middlename, s.gender,
+                            e.transfer_to_school, e.transfer_date, e.remarks
+                     FROM student_enrollments e
+                     JOIN students s ON s.id = e.student_id
+                     WHERE e.section_id = ? AND e.school_year_id = ? AND e.status = 'transferred_out'
+                       AND s.status <> 'deleted'
+                     ORDER BY s.lastname, s.firstname`,
+                    [sectionId, activeId]
+                );
+                groups.transferred = transferred;
+
+                // Not enrolled — were in this section before but are not on the active
+                // roster now and were not transferred out (i.e. awaiting re-enrollment).
+                const [notEnrolled] = await db.query(
+                    `SELECT DISTINCT s.id, s.lrn, s.firstname, s.lastname, s.middlename, s.gender, s.guardian_contact
+                     FROM student_enrollments e
+                     JOIN students s ON s.id = e.student_id
+                     WHERE e.section_id = ? AND s.status NOT IN ('active', 'deleted')
+                       AND NOT EXISTS (
+                           SELECT 1 FROM student_enrollments te
+                           WHERE te.student_id = s.id AND te.school_year_id = ? AND te.status = 'transferred_out'
+                       )
+                     ORDER BY s.lastname, s.firstname`,
+                    [sectionId, activeId]
+                );
+                groups.notEnrolled = notEnrolled;
+            }
+
+            // Archived — this section's enrollments in CLOSED school years (history).
+            const [archived] = await db.query(
+                `SELECT s.id, s.lrn, s.firstname, s.lastname, s.middlename,
+                        sy.label AS year_label, gl.name AS grade_name, sec.name AS section_name
+                 FROM student_enrollments e
+                 JOIN students s ON s.id = e.student_id
+                 JOIN school_years sy ON sy.id = e.school_year_id AND sy.status = 'closed'
+                 LEFT JOIN grade_levels gl ON gl.id = e.grade_level_id
+                 LEFT JOIN sections sec ON sec.id = e.section_id
+                 WHERE e.section_id = ? AND s.status <> 'deleted'
+                 ORDER BY sy.label DESC, s.lastname, s.firstname`,
+                [sectionId]
+            );
+            groups.archived = archived;
         }
+
         res.render('adviser_students', {
             title: 'My Students',
             page: 'adviser_students',
             teacher,
-            students
+            groups,
+            students: groups.enrolled,
+            activeYearLabel: active ? active.label : null
         });
     } catch (err) {
         console.error('Adviser students error:', err);
@@ -1066,6 +1122,51 @@ router.post('/adviser-enroll-student', express.json(), async (req, res) => {
     } catch (err) {
         console.error('Adviser enroll student error:', err);
         res.status(500).json({ error: err.message || 'Failed to enroll student' });
+    }
+});
+
+// ---- Adviser: Mark a student Transferred Out (to another school) ----
+router.post('/adviser-transfer-out', express.json(), async (req, res) => {
+    if (!req.session.user || req.session.user.role !== 'adviser') return res.status(403).json({ error: 'Unauthorized' });
+    const teacherId = req.session.user.teacher_id;
+    if (!teacherId) return res.status(400).json({ error: 'No teacher record' });
+    const sid = parseInt(req.body.student_id, 10);
+    const toSchool = String(req.body.to_school || '').trim();
+    const transferDate = String(req.body.transfer_date || '').trim() || null;
+    const remarks = String(req.body.remarks || '').trim() || null;
+    if (!sid) return res.status(400).json({ error: 'Invalid student' });
+    if (!toSchool) return res.status(400).json({ error: 'Please enter the school the student transferred to.' });
+    try {
+        const [[t]] = await db.query('SELECT section_id, school_id FROM teachers WHERE id = ?', [teacherId]);
+        if (!t || !t.section_id) return res.status(400).json({ error: 'No section assigned to your account' });
+        const [[stu]] = await db.query("SELECT id, school_id, grade_level_id FROM students WHERE id = ? AND status <> 'deleted'", [sid]);
+        if (!stu) return res.status(404).json({ error: 'Student not found' });
+        if (Number(stu.school_id) !== Number(t.school_id)) {
+            return res.status(403).json({ error: 'That student belongs to another school.' });
+        }
+        const active = await schoolYears.getActiveSchoolYear();
+        if (!active) return res.status(400).json({ error: 'There is no active school year.' });
+        // Mark the active-year enrollment transferred_out (upsert so it works even
+        // if the enrollment record was missing).
+        await db.query(
+            `INSERT INTO student_enrollments
+                (student_id, school_year_id, school_id, grade_level_id, section_id, status,
+                 transfer_to_school, transfer_date, remarks, enrolled_by, created_at)
+             VALUES (?, ?, ?, ?, ?, 'transferred_out', ?, ?, ?, ?, NOW())
+             ON DUPLICATE KEY UPDATE
+                status = 'transferred_out',
+                transfer_to_school = VALUES(transfer_to_school),
+                transfer_date = VALUES(transfer_date),
+                remarks = VALUES(remarks),
+                updated_at = NOW()`,
+            [sid, active.id, t.school_id, stu.grade_level_id, t.section_id, toSchool, transferDate, remarks, teacherId]
+        );
+        // Cache inactive: drop from the active roster and block scanning; records kept.
+        await db.query("UPDATE students SET status = 'inactive' WHERE id = ?", [sid]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Adviser transfer out error:', err);
+        res.status(500).json({ error: 'Failed to mark the student as transferred.' });
     }
 });
 
