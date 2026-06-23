@@ -402,6 +402,45 @@ CREATE TABLE IF NOT EXISTS transfer_requests (
 ) ENGINE=InnoDB;
 
 -- -----------------------------------------------------------
+-- School Years (yearly cycle — exactly one 'active' at a time)
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS school_years (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    label VARCHAR(20) NOT NULL UNIQUE,
+    start_date DATE NULL,
+    end_date DATE NULL,
+    status ENUM('upcoming','active','closed') DEFAULT 'upcoming',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_school_years_status (status)
+) ENGINE=InnoDB;
+
+-- -----------------------------------------------------------
+-- Student Enrollments (per-student, per-school-year history)
+-- The 5 enrollment statuses live here; students.status stays the
+-- attendance-eligibility flag (active/inactive/deleted) for the active year.
+-- -----------------------------------------------------------
+CREATE TABLE IF NOT EXISTS student_enrollments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    student_id INT NOT NULL,
+    school_year_id INT NOT NULL,
+    school_id INT NULL,
+    grade_level_id INT NULL,
+    section_id INT NULL,
+    status ENUM('enrolled','not_enrolled','transferred_out','graduated','archived') DEFAULT 'enrolled',
+    transfer_to_school VARCHAR(255) NULL,
+    transfer_date DATE NULL,
+    remarks VARCHAR(500) NULL,
+    enrolled_by INT NULL,
+    activated_at DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_enrollment_student_year (student_id, school_year_id),
+    INDEX idx_enrollment_year_section_status (school_year_id, section_id, status),
+    INDEX idx_enrollment_student (student_id)
+) ENGINE=InnoDB;
+
+-- -----------------------------------------------------------
 -- Seed Data
 -- -----------------------------------------------------------
 

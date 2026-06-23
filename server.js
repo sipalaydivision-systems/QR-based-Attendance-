@@ -455,6 +455,100 @@ async function ensureRuntimeSchema() {
         WHERE type IN ('attendance_absent', 'attendance_flagged')
           AND (TIME(created_at) = '16:00:00' OR TIME(created_at) = '16:01:00')
     `);
+
+    // -----------------------------------------------------------------
+    // School Year Transition System — foundation tables.
+    // Many school years are supported but exactly ONE is active at a time.
+    // Per-year enrollment records give every student a history (Grade 6 Rizal
+    // last year, Grade 7 Mabini this year) and let old class lists be archived
+    // while attendance, SF2, and QR records are preserved.
+    //
+    // SAFETY: this runs on a SINGLE dedicated connection with a short lock-wait
+    // timeout so a busy table can never make startup hang, and the whole block
+    // is wrapped so any failure is logged and retried next boot instead of
+    // taking the app down. It deliberately creates only NEW, empty tables —
+    // it does NOT alter the hot `attendance`/`attendance_events` tables, and
+    // student_enrollments has no FK back to the in-use `students` table (which
+    // would require a blocking metadata lock). Those are deferred to a later
+    // phase where they can be done with care.
+    // -----------------------------------------------------------------
+    try {
+        const syConn = await db.getConnection();
+        try {
+            // Bound every lock wait to a few seconds — fail fast, never hang.
+            await syConn.query('SET SESSION lock_wait_timeout = 15');
+            await syConn.query('SET SESSION innodb_lock_wait_timeout = 15');
+
+            await syConn.query(`
+                CREATE TABLE IF NOT EXISTS school_years (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    label VARCHAR(20) NOT NULL UNIQUE,
+                    start_date DATE NULL,
+                    end_date DATE NULL,
+                    status ENUM('upcoming','active','closed') DEFAULT 'upcoming',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX idx_school_years_status (status)
+                ) ENGINE=InnoDB
+            `);
+
+            await syConn.query(`
+                CREATE TABLE IF NOT EXISTS student_enrollments (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    student_id INT NOT NULL,
+                    school_year_id INT NOT NULL,
+                    school_id INT NULL,
+                    grade_level_id INT NULL,
+                    section_id INT NULL,
+                    status ENUM('enrolled','not_enrolled','transferred_out','graduated','archived') DEFAULT 'enrolled',
+                    transfer_to_school VARCHAR(255) NULL,
+                    transfer_date DATE NULL,
+                    remarks VARCHAR(500) NULL,
+                    enrolled_by INT NULL,
+                    activated_at DATETIME NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY uk_enrollment_student_year (student_id, school_year_id),
+                    INDEX idx_enrollment_year_section_status (school_year_id, section_id, status),
+                    INDEX idx_enrollment_student (student_id)
+                ) ENGINE=InnoDB
+            `);
+
+            // Seed the first two school years once: 2025-2026 (closed shell for
+            // history) and 2026-2027 (the active year existing students roll
+            // into). Dates are defaults the admin can edit later.
+            const [[syCount]] = await syConn.query('SELECT COUNT(*) AS c FROM school_years');
+            if (syCount.c === 0) {
+                await syConn.query(`
+                    INSERT INTO school_years (label, start_date, end_date, status) VALUES
+                    ('2025-2026', '2025-08-01', '2026-06-30', 'closed'),
+                    ('2026-2027', '2026-08-01', '2027-06-30', 'active')
+                `);
+                console.log('Seeded initial school years (2025-2026 closed, 2026-2027 active).');
+            }
+
+            // Backfill: give every non-deleted student an enrollment in the
+            // active year, carrying their current grade/section. Idempotent —
+            // the unique key + INSERT IGNORE make repeat startups a no-op.
+            const [[activeYear]] = await syConn.query("SELECT id FROM school_years WHERE status = 'active' ORDER BY id DESC LIMIT 1");
+            if (activeYear) {
+                const [backfill] = await syConn.query(`
+                    INSERT IGNORE INTO student_enrollments
+                        (student_id, school_year_id, school_id, grade_level_id, section_id, status, activated_at, created_at)
+                    SELECT s.id, ?, s.school_id, s.grade_level_id, s.section_id, 'enrolled', s.active_from, NOW()
+                    FROM students s
+                    WHERE s.status <> 'deleted'
+                `, [activeYear.id]);
+                if (backfill.affectedRows) {
+                    console.log(`Backfilled ${backfill.affectedRows} student enrollment(s) into the active school year.`);
+                }
+            }
+        } finally {
+            syConn.release();
+        }
+    } catch (err) {
+        console.error('School Year foundation migration skipped (will retry next boot):', err.message);
+    }
 }
 
 // Root redirect
