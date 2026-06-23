@@ -155,8 +155,8 @@ Future<bool> showParentNotification(String title, String body, {int? id, String 
     try {
       await _notifications.show(
         nid,
-        title,
-        body,
+        '<b>$title</b>',
+        '<b>$body</b>',
         NotificationDetails(
           android: AndroidNotificationDetails(
             'edutrack_parent',
@@ -167,12 +167,7 @@ Future<bool> showParentNotification(String title, String body, {int? id, String 
             icon: icon,
             color: color,
             largeIcon: largeIcon,
-            styleInformation: BigTextStyleInformation(
-              '<b>$body</b>',
-              htmlFormatBigText: true,
-              contentTitle: '<b>$title</b>',
-              htmlFormatContentTitle: true,
-            ),
+            styleInformation: const DefaultStyleInformation(true, true),
           ),
         ),
       );

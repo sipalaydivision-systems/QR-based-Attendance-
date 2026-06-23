@@ -295,21 +295,16 @@ Future<void> _setupMainFcm(SharedPreferences prefs) async {
       if (title.isEmpty && body.isEmpty) return;
       notifications.show(
         DateTime.now().millisecondsSinceEpoch.remainder(100000),
-        title,
-        body,
-        NotificationDetails(
+        '<b>$title</b>',
+        '<b>$body</b>',
+        const NotificationDetails(
           android: AndroidNotificationDetails(
             'edutrack_alerts',
             'Edutrack Alerts',
             importance: Importance.high,
             priority: Priority.high,
             icon: '@mipmap/ic_launcher',
-            styleInformation: BigTextStyleInformation(
-              '<b>$body</b>',
-              htmlFormatBigText: true,
-              contentTitle: '<b>$title</b>',
-              htmlFormatContentTitle: true,
-            ),
+            styleInformation: DefaultStyleInformation(true, true),
           ),
         ),
       );
@@ -8302,17 +8297,12 @@ Future<bool> showLocalNotification(
     visibility: NotificationVisibility.public,
     ticker: 'Edutrack attendance alert',
     actions: actions,
-    styleInformation: BigTextStyleInformation(
-      '<b>$body</b>',
-      htmlFormatBigText: true,
-      contentTitle: '<b>$title</b>',
-      htmlFormatContentTitle: true,
-    ),
+    styleInformation: const DefaultStyleInformation(true, true),
   );
   await notifications.show(
     id ?? (DateTime.now().microsecondsSinceEpoch % 2147483647),
-    title,
-    body,
+    '<b>$title</b>',
+    '<b>$body</b>',
     NotificationDetails(android: android),
     payload: payload,
   );
