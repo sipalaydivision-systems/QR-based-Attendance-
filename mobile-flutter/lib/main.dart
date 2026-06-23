@@ -341,6 +341,9 @@ Future<void> main() async {
       .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
   await androidPlugin?.createNotificationChannel(alertsChannel);
   await androidPlugin?.createNotificationChannel(dailySummaryChannel);
+  // Server-side FCM now owns scheduled delivery. Remove the repeating local
+  // alarm left by older builds so it cannot duplicate the Railway report.
+  await notifications.cancel(_kDailySummaryFallbackId);
   unawaited(_setupMainFcm(prefs));
   final launchDetails = await notifications.getNotificationAppLaunchDetails();
   if (launchDetails?.didNotificationLaunchApp == true) {
@@ -1350,7 +1353,6 @@ class _HomeShellState extends State<HomeShell>
       duration: const Duration(seconds: 9),
     )..repeat();
     load();
-    scheduleDailyFallbackNotification();
     syncNativeBackgroundNotifications(widget.api);
     // Poll often so edited student and absence details show quickly.
     timer = Timer.periodic(
@@ -1378,8 +1380,8 @@ class _HomeShellState extends State<HomeShell>
       dashboard = results[0] as Map<String, dynamic>;
       flags = results[1] as List<dynamic>;
       await syncBranding(dashboard, widget.api);
-      await notifyAbsenceFlags(flags, widget.api.prefs);
-      await checkAndShowEveningReport(dashboard, widget.api.prefs);
+      // Daily reports and 2-day flags are delivered by Railway FCM. They stay
+      // visible in the UI here without generating a second local notification.
       final fcmToken = widget.api.prefs.getString('fcm_token') ?? gMainFcmToken;
       unawaited(_registerMainDevice(widget.api.prefs, fcmToken));
       if (mounted) {

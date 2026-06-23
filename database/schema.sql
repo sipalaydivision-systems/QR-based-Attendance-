@@ -77,6 +77,17 @@ CREATE TABLE IF NOT EXISTS user_devices (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS system_push_deliveries (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    delivery_key VARCHAR(191) NOT NULL,
+    user_id INT NOT NULL,
+    notification_type VARCHAR(60) NOT NULL,
+    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_system_push_delivery (delivery_key),
+    INDEX idx_system_push_user (user_id, sent_at),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 -- -----------------------------------------------------------
 -- Parent / Guardian Accounts
 -- -----------------------------------------------------------

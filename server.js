@@ -8,6 +8,7 @@ const MySQLSessionStore = require('./config/mysqlSessionStore');
 const { getScannerKioskToken } = require('./utils/scannerKiosk');
 const { todayDate, currentMonth, nowIso } = require('./utils/appTime');
 const { firebasePushStatus } = require('./utils/firebasePush');
+const { startSystemPushScheduler } = require('./utils/systemPushScheduler');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -28,7 +29,12 @@ app.use(express.urlencoded({ extended: true }));
 app.get('/mobile-config.json', (req, res) => {
     res.json({
         base_url: getPublicAppBaseUrl(req),
-        fallback_urls: []
+        fallback_urls: [],
+        notification_capabilities: {
+            closed_app_fcm: true,
+            daily_report_7pm: true,
+            two_day_absence_flags: true
+        }
     });
 });
 
@@ -362,6 +368,19 @@ async function ensureRuntimeSchema() {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             UNIQUE KEY uk_user_device_token (push_token),
             INDEX idx_user_devices_user (user_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB
+    `);
+
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS system_push_deliveries (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            delivery_key VARCHAR(191) NOT NULL,
+            user_id INT NOT NULL,
+            notification_type VARCHAR(60) NOT NULL,
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_system_push_delivery (delivery_key),
+            INDEX idx_system_push_user (user_id, sent_at),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         ) ENGINE=InnoDB
     `);
@@ -1017,5 +1036,6 @@ ensureRuntimeSchema()
         app.listen(PORT, () => {
             console.log(`Edutrack running on port ${PORT}`);
             firebasePushStatus();
+            startSystemPushScheduler();
         });
     });
