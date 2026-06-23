@@ -107,6 +107,39 @@ async function sendPushToParent(parentId, notification) {
     return result;
 }
 
+async function sendPushToParents(parentIds, notification) {
+    const uniqueParentIds = [...new Set(
+        (parentIds || []).map(id => Number(id)).filter(id => Number.isInteger(id) && id > 0)
+    )];
+    if (!uniqueParentIds.length) {
+        return { successCount: 0, failureCount: 0, invalidTokens: [], registeredDeviceCount: 0 };
+    }
+    const [devices] = await db.query(
+        `SELECT DISTINCT push_token FROM parent_devices
+         WHERE parent_id IN (?) AND push_token IS NOT NULL AND push_token <> ''`,
+        [uniqueParentIds]
+    );
+    const tokens = devices.map(device => device.push_token);
+    const result = await sendMulticast(tokens, {
+        title: notification.title,
+        body: notification.message,
+        channelId: 'edutrack_parent',
+        collapseKey: 'edutrack_parent_latest',
+        tag: 'edutrack_parent_latest',
+        ttlMs: 5 * 60 * 1000,
+        data: {
+            type: notification.type || 'announcement_general',
+            title: notification.title,
+            body: notification.message,
+            notification_id: notification.notificationId
+        }
+    });
+    if (result.invalidTokens.length) {
+        await db.query('DELETE FROM parent_devices WHERE push_token IN (?)', [result.invalidTokens]);
+    }
+    return { ...result, registeredDeviceCount: tokens.length };
+}
+
 function firebasePushStatus() {
     return {
         configured: Boolean(String(process.env.FIREBASE_SERVICE_ACCOUNT || '').trim()),
@@ -114,4 +147,4 @@ function firebasePushStatus() {
     };
 }
 
-module.exports = { firebasePushStatus, sendMulticast, sendPushToParent };
+module.exports = { firebasePushStatus, sendMulticast, sendPushToParent, sendPushToParents };

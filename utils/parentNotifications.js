@@ -1,7 +1,7 @@
 const db = require('../config/database');
 const { nowDateTime, formatTime12 } = require('./appTime');
 const { ATTENDANCE_SCAN_LABELS, normalizeEventLabel } = require('./attendanceStatus');
-const { sendPushToParent } = require('./firebasePush');
+const { sendPushToParent, sendPushToParents } = require('./firebasePush');
 
 function normalizeContact(value) {
     let digits = String(value || '').replace(/\D/g, '');
@@ -554,14 +554,15 @@ async function fanOutAnnouncement(notificationId) {
     });
     const type = normalizeAnnouncementType(row.type);
     const seenParents = new Set();
+    const pushParentIds = new Set();
     let count = 0;
     for (const target of targets) {
         const oneStudent = row.student_id ? target.student.id : null;
         const key = `${target.parent.id}:${oneStudent || 'all'}`;
         if (!row.student_id && seenParents.has(key)) continue;
         seenParents.add(key);
+        pushParentIds.add(target.parent.id);
         await insertParentNotification({
-            sendPush: true,
             parentId: target.parent.id,
             studentId: oneStudent,
             schoolId: row.school_id || target.student.school_id,
@@ -578,7 +579,24 @@ async function fanOutAnnouncement(notificationId) {
         });
         count++;
     }
-    return count;
+    let push = { successCount: 0, failureCount: 0, registeredDeviceCount: 0 };
+    try {
+        push = await sendPushToParents([...pushParentIds], {
+            notificationId: `announcement:${row.id}`,
+            type,
+            title: row.title || notificationTypeLabel(type),
+            message: row.message || ''
+        });
+    } catch (error) {
+        console.error('Announcement FCM send error:', error.message);
+        push.failureCount = pushParentIds.size;
+    }
+    return {
+        parentCount: count,
+        pushSuccessCount: push.successCount,
+        pushFailureCount: push.failureCount,
+        registeredDeviceCount: push.registeredDeviceCount
+    };
 }
 
 module.exports = {

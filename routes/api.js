@@ -3859,8 +3859,15 @@ router.post('/notifications', requireRole('super_admin', 'principal', 'adviser')
                 user.role || null
             ]
         );
-        const sentToParents = await fanOutAnnouncement(result.insertId);
-        return res.json({ success: true, id: result.insertId, sent_to_parents: sentToParents });
+        const delivery = await fanOutAnnouncement(result.insertId);
+        return res.json({
+            success: true,
+            id: result.insertId,
+            sent_to_parents: delivery.parentCount,
+            push_success_count: delivery.pushSuccessCount,
+            push_failure_count: delivery.pushFailureCount,
+            registered_device_count: delivery.registeredDeviceCount
+        });
     } catch (err) {
         console.error('Create notification error:', err);
         return res.status(500).json({ error: 'Failed to create notification.' });
@@ -3915,8 +3922,14 @@ router.put('/notifications/:id', requireRole('super_admin', 'principal', 'advise
             'UPDATE notifications SET title = ?, message = ?, type = ? WHERE id = ?',
             [title, message, normalizedType, id]
         );
-        const sentToParents = await fanOutAnnouncement(id);
-        return res.json({ success: true, sent_to_parents: sentToParents });
+        const delivery = await fanOutAnnouncement(id);
+        return res.json({
+            success: true,
+            sent_to_parents: delivery.parentCount,
+            push_success_count: delivery.pushSuccessCount,
+            push_failure_count: delivery.pushFailureCount,
+            registered_device_count: delivery.registeredDeviceCount
+        });
     } catch (err) {
         console.error('Update notification error:', err);
         return res.status(500).json({ error: 'Failed to update announcement.' });

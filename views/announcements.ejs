@@ -1,5 +1,31 @@
 <%- include('partials/header') %>
 
+<style>
+.announcement-title-input { font-weight:800; color:#162033; letter-spacing:.01em; }
+.announcement-title-input::placeholder { font-weight:500; color:#94a3b8; }
+.ann-success-overlay { display:none; position:fixed; inset:0; z-index:100000; background:rgba(15,23,42,.62); backdrop-filter:blur(5px); align-items:center; justify-content:center; padding:20px; }
+.ann-success-card { position:relative; overflow:hidden; background:#fff; border:1px solid rgba(148,163,184,.25); border-radius:24px; max-width:470px; width:100%; padding:30px; text-align:left; box-shadow:0 30px 80px rgba(15,23,42,.32); }
+.ann-success-card::before { content:""; position:absolute; inset:0 0 auto; height:6px; background:linear-gradient(90deg,#059669,#10b981,#34d399); }
+.ann-success-close { position:absolute; top:16px; right:16px; width:34px; height:34px; border:0; border-radius:50%; background:#f1f5f9; color:#64748b; cursor:pointer; }
+.ann-success-hero { display:flex; align-items:center; gap:16px; padding-right:34px; margin-bottom:20px; }
+.ann-success-icon { width:58px; height:58px; flex:0 0 58px; border-radius:18px; background:linear-gradient(145deg,#d1fae5,#ecfdf5); color:#059669; display:grid; place-items:center; font-size:28px; box-shadow:inset 0 0 0 1px rgba(16,185,129,.12); }
+.ann-success-eyebrow { display:block; color:#059669; font-size:.7rem; font-weight:900; letter-spacing:.12em; margin-bottom:4px; }
+.ann-success-card h3 { margin:0; color:#172033; font-size:1.35rem; font-weight:900; }
+.ann-success-preview { background:#f8fafc; border:1px solid #e2e8f0; border-radius:14px; padding:13px 15px; margin-bottom:14px; }
+.ann-success-preview span { display:block; color:#64748b; font-size:.67rem; font-weight:800; letter-spacing:.08em; margin-bottom:4px; }
+.ann-success-preview strong { display:block; color:#172033; font-size:1rem; line-height:1.35; }
+.ann-success-copy { margin:0 0 16px; color:#64748b; font-size:.9rem; line-height:1.55; }
+.ann-delivery-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
+.ann-delivery-stat { border:1px solid #dbe4ee; border-radius:14px; padding:12px 14px; background:#fff; }
+.ann-delivery-stat span { display:block; color:#172033; font-size:1.35rem; font-weight:900; }
+.ann-delivery-stat small { color:#64748b; font-size:.75rem; font-weight:700; }
+.ann-push-status { display:flex; align-items:flex-start; gap:8px; border-radius:12px; padding:10px 12px; margin-bottom:18px; font-size:.78rem; font-weight:700; line-height:1.4; }
+.ann-push-status.success { background:#ecfdf5; color:#047857; }
+.ann-push-status.warning { background:#fff7ed; color:#c2410c; }
+.ann-success-done { width:100%; min-height:44px; border-radius:12px; font-weight:800; }
+@media (max-width:520px) { .ann-success-card { padding:26px 20px 20px; border-radius:20px; } }
+</style>
+
 <div class="page-header">
     <div class="page-header-left">
         <h1><i class="fa-solid fa-bullhorn"></i> Announcements</h1>
@@ -65,7 +91,7 @@
         </div>
         <div class="form-group">
             <label>Title</label>
-            <input id="annTitle" name="title" class="form-control" maxlength="255" placeholder="Example: Parent Meeting" required>
+            <input id="annTitle" name="title" class="form-control announcement-title-input" maxlength="255" placeholder="Example: Parent Meeting" required>
         </div>
         <div class="form-group">
             <label>Message / Content</label>
@@ -314,21 +340,45 @@ async function sendAnnouncement(event) {
         var json = await res.json();
         if (!res.ok || json.error) throw new Error(json.error || 'Failed to send announcement.');
         var count = json.sent_to_parents || 0;
-        status.textContent = 'Sent to ' + count + ' parent account(s).';
+        var pushCount = json.push_success_count || 0;
+        status.textContent = 'Saved to ' + count + ' parent inbox' + (count === 1 ? '' : 'es') + ' • ' + pushCount + ' phone push' + (pushCount === 1 ? '' : 'es');
         var sentBadge = document.getElementById('announcementSentCount');
         if (sentBadge) sentBadge.textContent = 'Sent';
+        var sentAnnouncement = { title: data.title, message: data.message };
         form.reset();
         updateAnnouncementAudience();
         await loadAnnouncementRows();
-        showAnnSentModal(count);
+        showAnnSentModal(json, sentAnnouncement);
     } catch(e) {
         status.textContent = e.message || 'Failed to send announcement.';
     }
 }
-function showAnnSentModal(count) {
+function showAnnSentModal(delivery, announcement) {
     var modal = document.getElementById('annSentModal');
     var text = document.getElementById('annSentModalText');
-    if (text) text.textContent = 'Your announcement was delivered to ' + count + ' parent account' + (count === 1 ? '' : 's') + '.';
+    var count = Number(delivery.sent_to_parents || 0);
+    var pushCount = Number(delivery.push_success_count || 0);
+    var devices = Number(delivery.registered_device_count || 0);
+    var title = document.getElementById('annSentModalTitle');
+    var parentCount = document.getElementById('annSentParentCount');
+    var pushCountEl = document.getElementById('annSentPushCount');
+    var pushStatus = document.getElementById('annSentPushStatus');
+    if (title) title.textContent = announcement.title || 'School Announcement';
+    if (parentCount) parentCount.textContent = count;
+    if (pushCountEl) pushCountEl.textContent = pushCount;
+    if (text) text.textContent = 'The announcement is now available in the targeted parent inbox' + (count === 1 ? '.' : 'es.');
+    if (pushStatus) {
+        if (pushCount > 0) {
+            pushStatus.className = 'ann-push-status success';
+            pushStatus.innerHTML = '<i class="fa-solid fa-mobile-screen-button"></i><span>Firebase accepted ' + pushCount + ' phone push' + (pushCount === 1 ? '' : 'es') + ' for immediate delivery.</span>';
+        } else if (devices === 0) {
+            pushStatus.className = 'ann-push-status warning';
+            pushStatus.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i><span>Saved to the inbox, but no Guardian phone is registered. Ask the parent to open Guardian v1.0.25 once.</span>';
+        } else {
+            pushStatus.className = 'ann-push-status warning';
+            pushStatus.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i><span>Saved to the inbox, but Firebase did not accept the phone push. Please check the server logs.</span>';
+        }
+    }
     if (modal) modal.style.display = 'flex';
 }
 function closeAnnSentModal() {
@@ -398,14 +448,27 @@ setInterval(loadAnnouncementRows, 30000);
 </script>
 
 <!-- Announcement sent confirmation modal -->
-<div id="annSentModal" style="display:none;position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.55);align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this)closeAnnSentModal()">
-    <div style="background:#fff;border-radius:18px;max-width:420px;width:100%;padding:30px 26px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.28);">
-        <div style="width:66px;height:66px;border-radius:50%;background:var(--primary-bg,#dcfce7);color:var(--success,#16a34a);display:flex;align-items:center;justify-content:center;font-size:34px;margin:0 auto 16px;">
-            <i class="fa-solid fa-circle-check"></i>
+<div id="annSentModal" class="ann-success-overlay" role="dialog" aria-modal="true" aria-labelledby="annSentModalHeading" onclick="if(event.target===this)closeAnnSentModal()">
+    <div class="ann-success-card">
+        <button type="button" class="ann-success-close" aria-label="Close" onclick="closeAnnSentModal()"><i class="fa-solid fa-xmark"></i></button>
+        <div class="ann-success-hero">
+            <div class="ann-success-icon"><i class="fa-solid fa-check"></i></div>
+            <div>
+                <span class="ann-success-eyebrow">DELIVERY COMPLETE</span>
+                <h3 id="annSentModalHeading">Announcement Sent</h3>
+            </div>
         </div>
-        <h3 style="margin:0 0 6px;font-size:1.25rem;color:var(--gray-800,#1f2937);">Announcement Sent</h3>
-        <p id="annSentModalText" style="margin:0 0 20px;color:var(--gray-500,#6b7280);font-size:.92rem;line-height:1.5;">Your announcement was delivered to parents.</p>
-        <button type="button" class="btn btn-primary" style="min-width:130px;" onclick="closeAnnSentModal()">OK</button>
+        <div class="ann-success-preview">
+            <span>ANNOUNCEMENT TITLE</span>
+            <strong id="annSentModalTitle">School Announcement</strong>
+        </div>
+        <p id="annSentModalText" class="ann-success-copy">The announcement is now available in the targeted parent inbox.</p>
+        <div class="ann-delivery-grid">
+            <div class="ann-delivery-stat"><span id="annSentParentCount">0</span><small>Parent inboxes</small></div>
+            <div class="ann-delivery-stat"><span id="annSentPushCount">0</span><small>Phone pushes</small></div>
+        </div>
+        <div id="annSentPushStatus" class="ann-push-status success"><i class="fa-solid fa-mobile-screen-button"></i><span>Checking phone delivery…</span></div>
+        <button type="button" class="btn btn-primary ann-success-done" onclick="closeAnnSentModal()"><i class="fa-solid fa-check"></i> Done</button>
     </div>
 </div>
 
