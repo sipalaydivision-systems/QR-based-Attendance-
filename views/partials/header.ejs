@@ -167,6 +167,11 @@
             <li class="nav-section"><span class="nav-section-label">System</span></li>
             <% if (user.role === 'super_admin') { %>
             <li>
+                <a href="/admin/school-years" class="<%= page === 'school_years' ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-calendar-days"></i> School Years
+                </a>
+            </li>
+            <li>
                 <a href="/admin/settings" class="<%= page === 'settings' ? 'active' : '' %>">
                     <i class="nav-icon fa-solid fa-gear"></i> Settings
                 </a>
