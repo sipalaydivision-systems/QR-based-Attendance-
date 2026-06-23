@@ -292,7 +292,7 @@ async function syncAttendanceNotificationsForParent(parent, children, date) {
                 sourceKey: `absent:${child.id}:${date}`,
                 createdBy: 'EduTrack',
                 createdByRole: 'system',
-                createdAt: `${date} 16:00:00`
+                createdAt: nowDateTime()
             });
         }
         if (Number(child.consecutive_absences || 0) >= 2) {
@@ -308,7 +308,7 @@ async function syncAttendanceNotificationsForParent(parent, children, date) {
                 sourceKey: `flagged:${child.id}:${date}`,
                 createdBy: 'EduTrack',
                 createdByRole: 'system',
-                createdAt: `${date} 16:01:00`
+                createdAt: nowDateTime()
             });
         }
     }
