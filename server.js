@@ -444,6 +444,17 @@ async function ensureRuntimeSchema() {
             INDEX idx_tr_school (school_id, status)
         ) ENGINE=InnoDB
     `);
+
+    // One-time fix: parent_notifications for absent/flagged types were previously
+    // inserted with a hardcoded 16:00:00 / 16:01:00 time. Replace those stale
+    // timestamps with the actual current time so the inbox sort order and the
+    // "Today HH:MM" label shown in the Flutter app are both accurate.
+    await db.query(`
+        UPDATE parent_notifications
+        SET created_at = NOW()
+        WHERE type IN ('attendance_absent', 'attendance_flagged')
+          AND (TIME(created_at) = '16:00:00' OR TIME(created_at) = '16:01:00')
+    `);
 }
 
 // Root redirect
