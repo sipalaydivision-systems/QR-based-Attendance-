@@ -132,7 +132,7 @@
         <input type="text" id="enrollSearch" class="as-search" placeholder="Search LRN or name…" oninput="enrollSearchDebounced()">
     </div>
     <div style="padding:4px 20px 16px;">
-        <p style="font-size:0.8rem;color:var(--gray-500);margin:12px 0;">Search the whole school for a student (for example from last year's class) and enroll them into <strong><%= teacher.grade_name || 'your grade' %> — <%= teacher.section_name || 'your section' %></strong> for this school year.</p>
+        <p style="font-size:0.8rem;color:var(--gray-500);margin:12px 0;">Search across <strong>all schools</strong> — last year's class or an incoming learner from another school — and enroll them into <strong><%= teacher.grade_name || 'your grade' %> — <%= teacher.section_name || 'your section' %></strong> for this school year. A learner from another school is <strong>transferred in</strong> (their previous records are kept).</p>
         <div id="enrollResults"></div>
     </div>
 </div>
