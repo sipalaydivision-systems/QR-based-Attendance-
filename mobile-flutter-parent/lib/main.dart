@@ -1713,7 +1713,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       return ListView(children: [
         Padding(
           padding: const EdgeInsets.all(40),
-          child: _emptyState(_error != null ? Icons.wifi_off : Icons.child_care,
+          child: _emptyState(_error != null ? Icons.wifi_off : Icons.person_rounded,
               _error ?? 'No linked students found for your contact number. Please contact the school adviser.'),
         ),
       ]);
@@ -2700,7 +2700,7 @@ class _NotificationPreviewSheet extends StatelessWidget {
                       Row(
                         children: [
                           if (student.isNotEmpty) ...[
-                            const Icon(Icons.child_care_rounded, size: 13, color: Color(0xFF94A3B8)),
+                            const Icon(Icons.person_rounded, size: 13, color: Color(0xFF94A3B8)),
                             const SizedBox(width: 4),
                             Text(student, style: const TextStyle(color: kMuted, fontSize: 11, fontWeight: FontWeight.w700)),
                           ],
@@ -2877,7 +2877,7 @@ class _NotificationsTabState extends State<NotificationsTab> {
                         spacing: 8,
                         runSpacing: 4,
                         children: [
-                          if (student.isNotEmpty) _miniMeta(Icons.child_care_rounded, student),
+                          if (student.isNotEmpty) _miniMeta(Icons.person_rounded, student),
                           if (school.isNotEmpty) _miniMeta(Icons.school_rounded, school),
                           _miniMeta(Icons.schedule_rounded, parentNotificationTime(n)),
                         ],
@@ -2977,7 +2977,7 @@ class _NotificationDetailSheet extends StatelessWidget {
             const SizedBox(height: 14),
             Text('${note['message'] ?? ''}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF334155), height: 1.4)),
             const SizedBox(height: 16),
-            if (student.isNotEmpty) _metaRow(Icons.child_care_rounded, 'Student', student),
+            if (student.isNotEmpty) _metaRow(Icons.person_rounded, 'Student', student),
             if (school.isNotEmpty) _metaRow(Icons.school_rounded, 'School', school),
             _metaRow(Icons.schedule_rounded, 'Received', parentNotificationTime(note)),
             if (isAlert && (phone.isNotEmpty || email.isNotEmpty)) ...[
