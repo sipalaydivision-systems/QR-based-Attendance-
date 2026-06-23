@@ -1631,6 +1631,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                 compact: _headerCompact,
                 unreadCount: _unreadCount,
                 onBell: () => setState(() => _tab = 2),
+                logoData: _schoolLogo,
               ),
               Expanded(
                 child: _loading
@@ -1958,11 +1959,13 @@ class ParentHeader extends StatelessWidget {
     required this.compact,
     this.unreadCount = 0,
     this.onBell,
+    this.logoData,
   });
   final VoidCallback onLogout;
   final bool compact;
   final int unreadCount;
   final VoidCallback? onBell;
+  final String? logoData;
 
   @override
   Widget build(BuildContext context) {
@@ -2071,7 +2074,7 @@ class ParentHeader extends StatelessWidget {
           border: Border.all(color: Colors.white.withValues(alpha: .45), width: 3),
           boxShadow: [BoxShadow(color: const Color(0xFF06301F).withValues(alpha: .28), blurRadius: 12, offset: const Offset(0, 4))],
         ),
-        child: ClipOval(child: brandLogoImage(gSchoolLogo, fit: BoxFit.cover)),
+        child: ClipOval(child: brandLogoImage(logoData ?? gSchoolLogo, fit: BoxFit.cover)),
       );
 
   Widget _headerAction(IconData icon, VoidCallback onTap, double size) => Material(
