@@ -9,7 +9,6 @@ const db = require('../config/database');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { getScannerKioskToken } = require('../utils/scannerKiosk');
 const { todayDate, currentMonth, nowDateTime, normalizeTime, sqlDateTime, compareDateTime } = require('../utils/appTime');
-const schoolYears = require('../utils/schoolYear');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -1518,51 +1517,6 @@ router.get('/events', async (req, res) => {
 // ---- School Days ----
 router.get('/school-days', requireRole('super_admin'), async (req, res) => {
     res.render('school_days', { title: 'School Days', page: 'school_days' });
-});
-
-// ---- School Years (super_admin) ----
-// Admin-only management of the yearly cycle: create years, open one as active
-// (closes the others), and close a year to archive its class lists.
-router.get('/school-years', requireRole('super_admin'), async (req, res) => {
-    try {
-        const years = await schoolYears.listSchoolYears();
-        res.render('school_years', { title: 'School Years', page: 'school_years', years });
-    } catch (err) {
-        console.error('School years page error:', err);
-        res.render('error', { title: 'Error', message: 'Failed to load school years.', user: req.session.user });
-    }
-});
-
-router.post('/school-years/create', requireRole('super_admin'), express.json(), async (req, res) => {
-    try {
-        const year = await schoolYears.createSchoolYear({
-            label: req.body.label,
-            startDate: req.body.start_date,
-            endDate: req.body.end_date,
-            makeActive: req.body.make_active === true || req.body.make_active === 'true'
-        });
-        return res.json({ success: true, year });
-    } catch (err) {
-        return res.status(400).json({ success: false, error: err.message || 'Failed to create school year.' });
-    }
-});
-
-router.post('/school-years/:id/activate', requireRole('super_admin'), async (req, res) => {
-    try {
-        const year = await schoolYears.setActiveSchoolYear(req.params.id);
-        return res.json({ success: true, year });
-    } catch (err) {
-        return res.status(400).json({ success: false, error: err.message || 'Failed to activate school year.' });
-    }
-});
-
-router.post('/school-years/:id/close', requireRole('super_admin'), async (req, res) => {
-    try {
-        const year = await schoolYears.closeSchoolYear(req.params.id);
-        return res.json({ success: true, year });
-    } catch (err) {
-        return res.status(400).json({ success: false, error: err.message || 'Failed to close school year.' });
-    }
 });
 
 // ---- Bulk Import ----
