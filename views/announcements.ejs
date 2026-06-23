@@ -373,7 +373,7 @@ function showAnnSentModal(delivery, announcement) {
             pushStatus.innerHTML = '<i class="fa-solid fa-mobile-screen-button"></i><span>Firebase accepted ' + pushCount + ' phone push' + (pushCount === 1 ? '' : 'es') + ' for immediate delivery.</span>';
         } else if (devices === 0) {
             pushStatus.className = 'ann-push-status warning';
-            pushStatus.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i><span>Saved to the inbox, but no Guardian phone is registered. Ask the parent to open Guardian v1.0.25 once.</span>';
+            pushStatus.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i><span>Saved to the inbox, but no Guardian phone is registered. Ask the parent to open Guardian v1.0.26 once.</span>';
         } else {
             pushStatus.className = 'ann-push-status warning';
             pushStatus.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i><span>Saved to the inbox, but Firebase did not accept the phone push. Please check the server logs.</span>';

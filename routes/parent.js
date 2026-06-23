@@ -1030,13 +1030,13 @@ router.post('/api/parent/profile', requireParentAuth, async (req, res) => {
 
 // Latest published parent-app version. Bump this (and the Flutter pubspec version)
 // whenever a new APK is released so the in-app updater offers the update.
-const PARENT_APP_LATEST = { version: '1.0.25', version_code: 27 };
+const PARENT_APP_LATEST = { version: '1.0.26', version_code: 28 };
 router.get('/api/parent/app-version', (req, res) => {
     return res.json({
         latest_version: PARENT_APP_LATEST.version,
         latest_version_code: PARENT_APP_LATEST.version_code,
         apk_url: `${req.protocol}://${req.get('host')}/download/parent-app`,
-        notes: 'Shows only fresh updates and prevents notification history from replaying.'
+        notes: 'Improves announcement push registration and shows only fresh notification updates.'
     });
 });
 

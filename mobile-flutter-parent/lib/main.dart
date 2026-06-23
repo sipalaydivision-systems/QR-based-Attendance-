@@ -213,12 +213,12 @@ Future<void> _setupFirebaseMessaging(ParentApi api) async {
     if (token != null && token.isNotEmpty) {
       gFcmToken = token;
       await api.prefs.setString('parent_fcm_token', token);
-      unawaited(api.registerDeviceToken());
+      unawaited(api.registerDeviceToken(force: true));
     }
     messaging.onTokenRefresh.listen((t) {
       gFcmToken = t;
       api.prefs.setString('parent_fcm_token', t);
-      unawaited(api.registerDeviceToken());
+      unawaited(api.registerDeviceToken(force: true));
     });
     // Foreground messages don't auto-display — show them ourselves.
     FirebaseMessaging.onMessage.listen((message) async {
@@ -540,6 +540,8 @@ Future<void> main() async {
 class ParentApi {
   ParentApi(this.prefs);
   final SharedPreferences prefs;
+  DateTime? _lastDeviceRegistration;
+  bool _registeringDevice = false;
 
   String get cookie => prefs.getString('cookie') ?? '';
   bool get isLoggedIn => cookie.isNotEmpty;
@@ -628,12 +630,19 @@ class ParentApi {
     return token;
   }
 
-  Future<void> registerDeviceToken() async {
-    if (!isLoggedIn) return;
+  Future<void> registerDeviceToken({bool force = false}) async {
+    if (!isLoggedIn || gFcmToken.trim().isEmpty || _registeringDevice) return;
+    final now = DateTime.now();
+    if (!force &&
+        _lastDeviceRegistration != null &&
+        now.difference(_lastDeviceRegistration!) < const Duration(minutes: 5)) {
+      return;
+    }
+    _registeringDevice = true;
     try {
       final info = await PackageInfo.fromPlatform();
       final token = await ensureDeviceToken();
-      await http
+      final response = await http
           .post(Uri.parse('$kBaseUrl/api/parent/device-token'), headers: _headers, body: {
             'device_token': token,
             'push_token': gFcmToken,
@@ -641,8 +650,11 @@ class ParentApi {
             'app_version': info.version,
           })
           .timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) _lastDeviceRegistration = now;
     } catch (_) {
       // Device registration is retried on the next dashboard refresh.
+    } finally {
+      _registeringDevice = false;
     }
   }
 
@@ -1500,6 +1512,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         _error = null;
       });
       await _processNotificationUpdates(data, showPopups: !_firstDashboardLoad);
+      unawaited(widget.api.registerDeviceToken());
       _firstDashboardLoad = false;
     } catch (e) {
       if (!mounted) return;
