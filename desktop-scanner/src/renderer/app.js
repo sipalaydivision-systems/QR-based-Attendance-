@@ -377,7 +377,8 @@ function resultTone(data) {
   if (!data.success && !data.offline) return 'error';
   if (data.offline && !data.success) return 'warning';
   if (data.offline) return 'warning';
-  if (['ALREADY_RECORDED', 'PENDING_TIME_OUT', 'CONFIRM_TIME_OUT'].includes(data.action) || data.status === 'late' || data.status === 'half_day') return 'warning';
+  const isLateTimeIn = data.action === 'TIME_IN' && data.status === 'late';
+  if (['ALREADY_RECORDED', 'PENDING_TIME_OUT', 'CONFIRM_TIME_OUT'].includes(data.action) || isLateTimeIn || data.status === 'half_day') return 'warning';
   return 'success';
 }
 
@@ -474,6 +475,8 @@ function resolveLogBadge(scan) {
     case 'LUNCH OUT':  return { label: 'Lunch Out',  cls: 'lunch-out' };
     case 'COMPLETED':  return { label: 'Completed',  cls: 'completed' };
     case 'EARLY OUT':  return { label: 'Early Dismissal',  cls: 'early-out' };
+    case 'TIME OUT':
+    case 'TIME_OUT':   return { label: 'Out', cls: 'out' };
     case 'OUT':
       // A time-out that already makes the whole day a half-day means the person
       // left the afternoon session early — surface it as an early dismissal.
@@ -483,11 +486,20 @@ function resolveLogBadge(scan) {
     default: break;
   }
 
-  // Legacy rows without a display label: fall back to the daily status.
+  // A time-out can carry the day's status (for example, "late" because the
+  // person arrived late that morning). The event action must win here: showing
+  // "Late" beneath a TIME OUT incorrectly describes the current scan.
+  if (isTimeOut) {
+    return daily === 'half_day'
+      ? { label: 'Half-Day', cls: 'half-day' }
+      : { label: 'Out', cls: 'out' };
+  }
+
+  // Legacy time-in rows without a display label fall back to the daily status.
   if (daily === 'half_day') return { label: 'Half-Day', cls: 'half-day' };
   if (daily === 'late')     return { label: 'Late',     cls: 'late' };
   if (daily === 'absent')   return { label: 'Absent',   cls: 'absent' };
-  return isTimeOut ? { label: 'Out', cls: 'out' } : { label: 'Present', cls: 'present' };
+  return { label: 'Present', cls: 'present' };
 }
 
 function humanizeSync(value) {

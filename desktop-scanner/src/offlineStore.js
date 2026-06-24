@@ -243,6 +243,8 @@ function normalizeEvent(event) {
     timeIn: String(event.timeIn || event.time_in || '').trim() || null,
     timeOut: String(event.timeOut || event.time_out || '').trim() || null,
     graceAnchor: String(event.graceAnchor || event.grace_anchor || '').trim() || null,
+    category: String(event.category || '').trim().toLowerCase() || null,
+    displayStatus: String(event.displayStatus || event.display_status || '').trim() || null,
     syncStatus: String(event.syncStatus || event.sync_status || 'pending').trim().toLowerCase(),
     serverMessage: String(event.serverMessage || event.server_message || '').trim() || null,
     lastError: String(event.lastError || event.last_error || '').trim() || null,
