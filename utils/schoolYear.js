@@ -192,6 +192,25 @@ async function enrollStudentInActiveYear({ studentId, schoolId, gradeLevelId, se
     return syId;
 }
 
+// Update a school year's start/end dates after it was created (admin edit).
+async function updateSchoolYearDates(id, startDate, endDate) {
+    const yearId = Number(id);
+    const year = await getSchoolYearById(yearId);
+    if (!year) {
+        throw new Error('School year not found.');
+    }
+    const start = startDate ? String(startDate).trim() : null;
+    const end = endDate ? String(endDate).trim() : null;
+    const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+    if (start && !DATE_RE.test(start)) throw new Error('Invalid start date.');
+    if (end && !DATE_RE.test(end)) throw new Error('Invalid end date.');
+    if (start && end && start > end) {
+        throw new Error('Start date must be on or before the end date.');
+    }
+    await db.query('UPDATE school_years SET start_date = ?, end_date = ? WHERE id = ?', [start, end, yearId]);
+    return getSchoolYearById(yearId);
+}
+
 module.exports = {
     isValidLabel,
     getActiveSchoolYear,
@@ -201,5 +220,6 @@ module.exports = {
     createSchoolYear,
     setActiveSchoolYear,
     closeSchoolYear,
-    enrollStudentInActiveYear
+    enrollStudentInActiveYear,
+    updateSchoolYearDates
 };

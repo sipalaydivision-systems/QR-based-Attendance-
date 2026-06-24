@@ -503,6 +503,15 @@ router.get('/sf2-report', async (req, res) => {
             monthParam = currentMonth();
         }
     }
+    // Keep direct links and AJAX requests inside the selected school year's
+    // configured month range. The browser picker enforces this too, but the
+    // server remains authoritative for manually edited URLs.
+    if (selectedYear && selectedYear.start_date && selectedYear.end_date) {
+        const startMonth = String(selectedYear.start_date).slice(0, 7);
+        const endMonth = String(selectedYear.end_date).slice(0, 7);
+        if (monthParam < startMonth) monthParam = startMonth;
+        if (monthParam > endMonth) monthParam = endMonth;
+    }
     const [year, month] = monthParam.split('-').map(Number);
 
     try {
@@ -1848,6 +1857,19 @@ router.post('/school-years/:id/close', requireRole('super_admin'), async (req, r
         return res.json({ success: true, year });
     } catch (err) {
         return res.status(400).json({ success: false, error: err.message || 'Failed to close school year.' });
+    }
+});
+
+router.post('/school-years/:id/update-dates', requireRole('super_admin'), express.json(), async (req, res) => {
+    try {
+        const year = await schoolYears.updateSchoolYearDates(
+            req.params.id,
+            req.body.start_date,
+            req.body.end_date
+        );
+        return res.json({ success: true, year });
+    } catch (err) {
+        return res.status(400).json({ success: false, error: err.message || 'Failed to update school year dates.' });
     }
 });
 

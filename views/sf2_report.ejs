@@ -7,6 +7,8 @@
     padding: 14px 18px; margin-bottom: 18px; box-shadow: var(--shadow);
 }
 .sf2-controls h2 { font-size: 1rem; font-weight: 700; margin: 0; flex: 1; color: var(--gray-800); }
+.sf2-controls.sf2-loading { opacity: .68; pointer-events: none; }
+.sf2-filter-status { min-width: 100px; font-size: .75rem; color: var(--gray-500); }
 
 /* ── SF2 Paper ── */
 .sf2-paper {
@@ -120,9 +122,12 @@
     <label for="sf2YearPicker" style="font-size:0.8125rem;font-weight:600;color:var(--gray-600);">School Year:</label>
     <select id="sf2YearPicker"
             style="padding:8px 12px;border:1.5px solid var(--gray-300);border-radius:8px;font-size:0.8125rem;"
-            onchange="if(this.value) window.location.href='/admin/sf2-report?sy=' + this.value;">
+            onchange="sf2ChangeFilters('year');">
         <% schoolYearsList.forEach(function(sy) { %>
-        <option value="<%= sy.id %>" <%= (typeof selectedSyId !== 'undefined' && Number(selectedSyId) === Number(sy.id)) ? 'selected' : '' %>><%= sy.label %><%= sy.status === 'active' ? ' (Active)' : '' %></option>
+        <option value="<%= sy.id %>"
+                data-start="<%= sy.start_date ? String(sy.start_date).slice(0,10) : '' %>"
+                data-end="<%= sy.end_date ? String(sy.end_date).slice(0,10) : '' %>"
+                <%= (typeof selectedSyId !== 'undefined' && Number(selectedSyId) === Number(sy.id)) ? 'selected' : '' %>><%= sy.label %><%= sy.status === 'active' ? ' (Active)' : '' %></option>
         <% }); %>
     </select>
     <% } %>
@@ -132,7 +137,8 @@
            <% if (typeof syStart !== 'undefined' && syStart) { %>min="<%= String(syStart).slice(0,7) %>"<% } %>
            <% if (typeof syEnd !== 'undefined' && syEnd) { %>max="<%= String(syEnd).slice(0,7) %>"<% } %>
            style="padding:8px 12px;border:1.5px solid var(--gray-300);border-radius:8px;font-size:0.8125rem;"
-           onchange="if(this.value) window.location.href='/admin/sf2-report?<%= (typeof selectedSyId !== 'undefined' && selectedSyId) ? 'sy=' + selectedSyId + '&' : '' %>month=' + this.value;">
+           onchange="sf2ChangeFilters('month');">
+    <span class="sf2-filter-status" id="sf2FilterStatus" role="status" aria-live="polite"></span>
     <button class="btn btn-secondary" id="sf2EditBtn" onclick="sf2EnterEdit()"><i class="fa-solid fa-pen-to-square"></i> Edit</button>
     <button class="btn btn-primary" id="sf2SaveBtn" onclick="sf2Save()"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
     <button class="btn btn-secondary" id="sf2CancelBtn" onclick="sf2CancelEdit()"><i class="fa-solid fa-xmark"></i> Cancel</button>
@@ -602,6 +608,79 @@ function cellHtml(s, d) {
 
 <script>
 var sf2Month = '<%= monthParam %>';
+var sf2FilterLoading = false;
+
+function sf2MonthInsideRange(month, startDate, endDate) {
+    if (!month) return false;
+    var monthKey = String(month).slice(0, 7);
+    var startKey = startDate ? String(startDate).slice(0, 7) : '';
+    var endKey = endDate ? String(endDate).slice(0, 7) : '';
+    if (startKey && monthKey < startKey) return false;
+    if (endKey && monthKey > endKey) return false;
+    return true;
+}
+
+async function sf2ChangeFilters(source) {
+    if (sf2FilterLoading) return;
+    var yearPicker = document.getElementById('sf2YearPicker');
+    var monthPicker = document.getElementById('sf2MonthPicker');
+    if (!monthPicker || !monthPicker.value) return;
+
+    if (source === 'year' && yearPicker) {
+        var selected = yearPicker.options[yearPicker.selectedIndex];
+        var startDate = selected ? selected.getAttribute('data-start') || '' : '';
+        var endDate = selected ? selected.getAttribute('data-end') || '' : '';
+        monthPicker.min = startDate ? startDate.slice(0, 7) : '';
+        monthPicker.max = endDate ? endDate.slice(0, 7) : '';
+        if (!sf2MonthInsideRange(monthPicker.value, startDate, endDate)) {
+            monthPicker.value = startDate ? startDate.slice(0, 7) : monthPicker.value;
+        }
+    }
+
+    var params = new URLSearchParams();
+    if (yearPicker && yearPicker.value) params.set('sy', yearPicker.value);
+    params.set('month', monthPicker.value);
+    await sf2LoadReport('/admin/sf2-report?' + params.toString());
+}
+
+async function sf2LoadReport(url) {
+    var currentPaper = document.getElementById('sf2Paper');
+    if (currentPaper && currentPaper.classList.contains('edit-mode')) {
+        if (!window.confirm('Change the report period? Any unsaved SF2 edits will be discarded.')) return;
+    }
+
+    var controls = document.querySelector('.sf2-controls');
+    var status = document.getElementById('sf2FilterStatus');
+    sf2FilterLoading = true;
+    if (controls) controls.classList.add('sf2-loading');
+    if (status) status.textContent = 'Loading report...';
+
+    try {
+        var response = await fetch(url, { headers: { 'Accept': 'text/html', 'X-Requested-With': 'XMLHttpRequest' } });
+        if (!response.ok) throw new Error('Report request failed.');
+        if (response.redirected && response.url.indexOf('/admin/sf2-report') === -1) {
+            window.location.href = response.url;
+            return;
+        }
+        var html = await response.text();
+        var parsed = new DOMParser().parseFromString(html, 'text/html');
+        var nextControls = parsed.querySelector('.sf2-controls');
+        var nextPaper = parsed.getElementById('sf2Paper');
+        if (!nextControls || !nextPaper) throw new Error('The updated report could not be read.');
+
+        controls.replaceWith(nextControls);
+        currentPaper.replaceWith(nextPaper);
+        var nextMonth = document.getElementById('sf2MonthPicker');
+        sf2Month = nextMonth ? nextMonth.value : sf2Month;
+        if (parsed.title) document.title = parsed.title;
+        window.history.replaceState({ sf2: true }, '', url);
+    } catch (error) {
+        if (controls) controls.classList.remove('sf2-loading');
+        if (status) status.textContent = 'Could not load. Please try again.';
+    } finally {
+        sf2FilterLoading = false;
+    }
+}
 
 function sf2EnterEdit() {
     document.getElementById('sf2Paper').classList.add('edit-mode');

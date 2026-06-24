@@ -7,6 +7,7 @@
 <div class="card">
     <h3><i class="fa-solid fa-calendar-days"></i> School Years</h3>
     <p style="color:#64748b;margin-bottom:16px;">Manage the yearly cycle. Only <strong>one</strong> school year can be active at a time — opening a year automatically closes the others. Closing a year archives its class lists; attendance, SF2 reports, and QR records are always preserved.</p>
+    <div id="syNotice" role="status" style="display:none;margin-bottom:12px;padding:10px 12px;border-radius:8px;background:#ecfdf5;color:#047857;font-size:.85rem;font-weight:600;"></div>
     <div class="table-responsive">
         <table class="data-table">
             <thead>
@@ -23,9 +24,9 @@
                     <tr><td colspan="5" class="text-center">No school years yet. Create one to begin.</td></tr>
                 <% } else { %>
                     <% years.forEach(function(y) { %>
-                        <tr>
+                        <tr id="schoolYearRow-<%= y.id %>">
                             <td><strong><%= y.label %></strong></td>
-                            <td>
+                            <td id="syDuration-<%= y.id %>">
                                 <% if (y.start_date && y.end_date) { %>
                                     <%= y.start_date %> &rarr; <%= y.end_date %>
                                 <% } else { %>
@@ -43,11 +44,19 @@
                             </td>
                             <td><%= y.enrollment_count || 0 %></td>
                             <td>
-                                <% if (y.status === 'active') { %>
-                                    <button class="btn btn-sm btn-danger" onclick="closeYear(<%= y.id %>, '<%= y.label %>')">Close Year</button>
-                                <% } else { %>
-                                    <button class="btn btn-sm btn-primary" onclick="activateYear(<%= y.id %>, '<%= y.label %>')">Set Active</button>
-                                <% } %>
+                                <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+                                    <button class="btn btn-sm btn-secondary" id="syEdit-<%= y.id %>"
+                                            data-school-year-id="<%= y.id %>"
+                                            data-label="<%= y.label %>"
+                                            data-start="<%= y.start_date || '' %>"
+                                            data-end="<%= y.end_date || '' %>"
+                                            onclick="openEditDates(this)"><i class="fa-solid fa-pen-to-square"></i> Edit Dates</button>
+                                    <% if (y.status === 'active') { %>
+                                        <button class="btn btn-sm btn-danger" onclick="closeYear(<%= y.id %>, '<%= y.label %>')">Close Year</button>
+                                    <% } else { %>
+                                        <button class="btn btn-sm btn-primary" onclick="activateYear(<%= y.id %>, '<%= y.label %>')">Set Active</button>
+                                    <% } %>
+                                </div>
                             </td>
                         </tr>
                     <% }); %>
@@ -85,7 +94,94 @@
     </div>
 </div>
 
+<!-- Edit School Year Dates Modal -->
+<div class="modal-overlay" id="edModal" style="display:none">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Edit School Year Dates</h3>
+            <button class="modal-close" onclick="document.getElementById('edModal').style.display='none'">&times;</button>
+        </div>
+        <form id="edForm" onsubmit="saveEditDates(event)">
+            <div id="edError" style="color:#dc2626;font-size:.85rem;margin-bottom:8px;display:none;"></div>
+            <input type="hidden" id="edId">
+            <div class="form-group">
+                <label>School Year</label>
+                <input type="text" id="edLabel" disabled style="background:#f1f5f9;color:#475569;">
+            </div>
+            <div class="form-group"><label>Start Date</label><input type="date" id="edStart"></div>
+            <div class="form-group"><label>End Date</label><input type="date" id="edEnd"></div>
+            <small style="color:#94a3b8;">These dates scope the SF2 month picker and stamp historical attendance to the right year.</small>
+            <div class="form-actions" style="margin-top:12px;">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('edModal').style.display='none'">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="edSaveBtn">Save Dates</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
+function openEditDates(button) {
+    var id = button.getAttribute('data-school-year-id');
+    var label = button.getAttribute('data-label');
+    var start = button.getAttribute('data-start');
+    var end = button.getAttribute('data-end');
+    document.getElementById('edId').value = id;
+    document.getElementById('edLabel').value = label;
+    document.getElementById('edStart').value = start || '';
+    document.getElementById('edEnd').value = end || '';
+    document.getElementById('edError').style.display = 'none';
+    document.getElementById('edModal').style.display = 'flex';
+}
+async function saveEditDates(e) {
+    e.preventDefault();
+    var errBox = document.getElementById('edError');
+    errBox.style.display = 'none';
+    var id = document.getElementById('edId').value;
+    var saveBtn = document.getElementById('edSaveBtn');
+    var startDate = document.getElementById('edStart').value || null;
+    var endDate = document.getElementById('edEnd').value || null;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+    try {
+        var res = await fetch('/admin/school-years/' + id + '/update-dates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                start_date: startDate,
+                end_date: endDate
+            })
+        });
+        var data = await res.json();
+        if (!data.success) {
+            errBox.textContent = data.error || 'Failed to update dates.';
+            errBox.style.display = 'block';
+            return;
+        }
+        var savedStart = data.year && data.year.start_date ? String(data.year.start_date).slice(0, 10) : '';
+        var savedEnd = data.year && data.year.end_date ? String(data.year.end_date).slice(0, 10) : '';
+        var durationCell = document.getElementById('syDuration-' + id);
+        var editButton = document.getElementById('syEdit-' + id);
+        if (durationCell) {
+            durationCell.textContent = savedStart && savedEnd ? savedStart + ' \u2192 ' + savedEnd : 'Not set';
+            durationCell.style.color = savedStart && savedEnd ? '' : '#94a3b8';
+        }
+        if (editButton) {
+            editButton.setAttribute('data-start', savedStart);
+            editButton.setAttribute('data-end', savedEnd);
+        }
+        document.getElementById('edModal').style.display = 'none';
+        var notice = document.getElementById('syNotice');
+        notice.textContent = 'School year dates updated successfully.';
+        notice.style.display = 'block';
+        window.setTimeout(function() { notice.style.display = 'none'; }, 4000);
+    } catch (err) {
+        errBox.textContent = 'Network error. Please try again.';
+        errBox.style.display = 'block';
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Save Dates';
+    }
+}
 function openSyModal() {
     document.getElementById('syForm').reset();
     document.getElementById('syError').style.display = 'none';
