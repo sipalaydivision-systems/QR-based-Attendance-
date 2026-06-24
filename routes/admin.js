@@ -100,6 +100,16 @@ function parseGradeNumber(value) {
     return match ? parseInt(match[1], 10) : NaN;
 }
 
+function deriveTrackFromSection(sectionName) {
+    const match = String(sectionName || '').trim().match(/^(STEM|ABM|HUMSS|GAS|TVL(?:-[A-Z]+)?|Sports|Arts(?:\s+and\s+| & )Design)\s*-\s*/i);
+    if (!match) return '';
+    const track = match[1].replace(/\s*&\s*/g, ' and ');
+    if (/^arts/i.test(track)) return 'Arts and Design';
+    if (/^sports$/i.test(track)) return 'Sports';
+    if (/^tvl/i.test(track)) return 'TVL';
+    return track.toUpperCase();
+}
+
 function formatGradeLabel(value) {
     const key = normalizeGradeKey(value);
     const numberMatch = key.match(/^grade\s+(\d+)$/);
@@ -886,9 +896,13 @@ router.get('/adviser-sections', async (req, res) => {
     const teacherId = req.session.user.teacher_id;
     if (!teacherId) return res.status(400).json({ error: 'No teacher record' });
     try {
-        const [[t]] = await db.query(`SELECT school_id FROM teachers WHERE id = ?`, [teacherId]);
+        const [[t]] = await db.query(
+            `SELECT t.school_id, t.grade_level_id, t.category, gl.name AS grade_name
+             FROM teachers t LEFT JOIN grade_levels gl ON gl.id = t.grade_level_id
+             WHERE t.id = ?`, [teacherId]
+        );
         if (!t) return res.status(403).json({ error: 'Teacher not found' });
-        const [rows] = await db.query(
+        let [rows] = await db.query(
             `SELECT sec.id, sec.name, gl.name AS grade_name
              FROM sections sec
              LEFT JOIN grade_levels gl ON sec.grade_level_id = gl.id
@@ -896,6 +910,12 @@ router.get('/adviser-sections', async (req, res) => {
              ORDER BY gl.name, sec.name`,
             [t.school_id]
         );
+        const teacherGrade = parseGradeNumber(t.grade_name || '');
+        const teacherIsShs = t.category === 'shs_teacher' || (teacherGrade >= 11 && teacherGrade <= 12);
+        rows = rows.filter(row => {
+            const grade = parseGradeNumber(row.grade_name || '');
+            return teacherIsShs ? grade >= 11 && grade <= 12 : grade >= 1 && grade <= 10;
+        });
         res.json(rows);
     } catch (err) {
         console.error('Adviser sections error:', err);
@@ -906,7 +926,7 @@ router.get('/adviser-sections', async (req, res) => {
 // Shared: load the adviser's teacher record (with school/grade/section names).
 async function loadAdviserTeacher(teacherId) {
     const [[teacher]] = await db.query(
-        `SELECT t.firstname, t.lastname, t.section_id, t.school_id, t.grade_level_id,
+        `SELECT t.firstname, t.lastname, t.section_id, t.school_id, t.grade_level_id, t.category,
                 sc.name as school_name, sc.logo as school_logo, gl.name as grade_name, sec.name as section_name
          FROM teachers t
          LEFT JOIN schools sc ON t.school_id = sc.id
@@ -914,6 +934,11 @@ async function loadAdviserTeacher(teacherId) {
          LEFT JOIN sections sec ON t.section_id = sec.id
          WHERE t.id = ?`, [teacherId]
     );
+    if (teacher) {
+        const gradeNumber = parseGradeNumber(teacher.grade_name || '');
+        teacher.is_shs = teacher.category === 'shs_teacher' || (gradeNumber >= 11 && gradeNumber <= 12);
+        teacher.track = teacher.is_shs ? deriveTrackFromSection(teacher.section_name) : '';
+    }
     return teacher;
 }
 
@@ -1076,7 +1101,9 @@ router.post('/adviser-add-student', express.json(), async (req, res) => {
 
     try {
         const [[t]] = await db.query(
-            `SELECT section_id, school_id, grade_level_id FROM teachers WHERE id = ?`, [teacherId]
+            `SELECT t.section_id, t.school_id, t.grade_level_id, t.category, gl.name AS grade_name
+             FROM teachers t LEFT JOIN grade_levels gl ON gl.id = t.grade_level_id
+             WHERE t.id = ?`, [teacherId]
         );
         if (!t || !t.section_id) return res.status(400).json({ error: 'No section assigned to your account' });
 
@@ -1089,7 +1116,8 @@ router.post('/adviser-add-student', express.json(), async (req, res) => {
         const [result] = await db.query(
             `INSERT INTO students (lrn, firstname, lastname, middlename, gender, school_id, grade_level_id, section_id, guardian_contact, qr_code, category, active_from, status)
              VALUES (?,?,?,?,?,?,?,?,?,?,?,CURDATE(),'active')`,
-            [lrnVal, fn, ln, mn, gNorm, t.school_id, t.grade_level_id, t.section_id, gc, qr_code, 'student']
+            [lrnVal, fn, ln, mn, gNorm, t.school_id, t.grade_level_id, t.section_id, gc, qr_code,
+             (t.category === 'shs_teacher' || (parseGradeNumber(t.grade_name) >= 11 && parseGradeNumber(t.grade_name) <= 12)) ? 'shs_student' : 'student']
         );
         // Record the per-year enrollment (best-effort — the student is already in
         // the section via the cache columns even if the SY record can't be written).

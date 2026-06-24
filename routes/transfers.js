@@ -38,14 +38,22 @@ async function loadSection(id) {
 }
 
 async function applyStudentMove(studentId, toSectionId, toGradeLevelId) {
-    await db.query('UPDATE students SET section_id = ?, grade_level_id = ? WHERE id = ?',
-        [toSectionId, toGradeLevelId || null, studentId]);
+    const [[grade]] = await db.query('SELECT name FROM grade_levels WHERE id = ? LIMIT 1', [toGradeLevelId]);
+    const match = String(grade?.name || '').match(/\d+/);
+    const gradeNumber = match ? parseInt(match[0], 10) : NaN;
+    const category = gradeNumber >= 11 && gradeNumber <= 12 ? 'shs_student' : 'student';
+    await db.query('UPDATE students SET section_id = ?, grade_level_id = ?, category = ? WHERE id = ?',
+        [toSectionId, toGradeLevelId || null, category, studentId]);
 }
 // Move a teacher's advisory section and keep sections.adviser_teacher_id in sync.
 async function applyTeacherMove(teacherId, toSectionId, toGradeLevelId, teacherName) {
+    const [[grade]] = await db.query('SELECT name FROM grade_levels WHERE id = ? LIMIT 1', [toGradeLevelId]);
+    const match = String(grade?.name || '').match(/\d+/);
+    const gradeNumber = match ? parseInt(match[0], 10) : NaN;
+    const category = gradeNumber >= 11 && gradeNumber <= 12 ? 'shs_teacher' : 'teacher';
     await db.query('UPDATE sections SET adviser = NULL, adviser_teacher_id = NULL WHERE adviser_teacher_id = ?', [teacherId]);
-    await db.query('UPDATE teachers SET section_id = ?, grade_level_id = ? WHERE id = ?',
-        [toSectionId, toGradeLevelId || null, teacherId]);
+    await db.query('UPDATE teachers SET section_id = ?, grade_level_id = ?, category = ? WHERE id = ?',
+        [toSectionId, toGradeLevelId || null, category, teacherId]);
     if (toSectionId) {
         await db.query('UPDATE sections SET adviser = ?, adviser_teacher_id = ? WHERE id = ?',
             [teacherName || null, teacherId, toSectionId]);

@@ -182,12 +182,16 @@ async function enrollStudentInActiveYear({ studentId, schoolId, gradeLevelId, se
     );
     // Keep the denormalized cache in sync so the student appears in the active
     // section and is attendance-eligible. active_from is preserved if already set.
+    const [[grade]] = await db.query('SELECT name FROM grade_levels WHERE id = ? LIMIT 1', [gradeLevelId]);
+    const gradeMatch = String(grade?.name || '').match(/\d+/);
+    const gradeNumber = gradeMatch ? parseInt(gradeMatch[0], 10) : NaN;
+    const category = gradeNumber >= 11 && gradeNumber <= 12 ? 'shs_student' : 'student';
     await db.query(
         `UPDATE students
             SET school_id = ?, grade_level_id = ?, section_id = ?,
-                status = 'active', active_from = COALESCE(active_from, CURDATE())
+                category = ?, status = 'active', active_from = COALESCE(active_from, CURDATE())
           WHERE id = ?`,
-        [schoolId, gradeLevelId, sectionId, studentId]
+        [schoolId, gradeLevelId, sectionId, category, studentId]
     );
     return syId;
 }

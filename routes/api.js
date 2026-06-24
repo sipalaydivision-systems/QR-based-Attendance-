@@ -1051,6 +1051,21 @@ async function validateTeacherAssignment({ teacherId, schoolId, gradeLevelId, se
     return { section };
 }
 
+async function validateTeacherGradeCategory({ schoolId, gradeLevelId, category }) {
+    if (!gradeLevelId) return null;
+    const [[grade]] = await db.query('SELECT id, name, school_id FROM grade_levels WHERE id = ? LIMIT 1', [gradeLevelId]);
+    if (!grade) return 'Selected grade level was not found.';
+    if (grade.school_id && Number(grade.school_id) !== Number(schoolId)) {
+        return 'Selected grade level does not belong to the selected school.';
+    }
+    const match = String(grade.name || '').match(/\d+/);
+    const number = match ? parseInt(match[0], 10) : NaN;
+    const isShs = category === 'shs_teacher';
+    if (isShs && !(number >= 11 && number <= 12)) return 'SHS teachers can only be assigned to Grades 11-12.';
+    if (!isShs && !(number >= 1 && number <= 10)) return 'Regular teachers can only be assigned to Grades 1-10.';
+    return null;
+}
+
 async function syncTeacherAdviserAssignment({ teacherId, oldSectionId, newSectionId, adviserName }) {
     if (oldSectionId && Number(oldSectionId) !== Number(newSectionId || 0)) {
         await db.query(
@@ -2307,6 +2322,42 @@ router.get('/teachers', requireAuth, async (req, res) => {
     }
 });
 
+// Resolve a typed advisory section to a real section record. This keeps the
+// teacher form free-text while preserving all report/adviser relationships.
+router.post('/teacher-sections/resolve', requireRole('super_admin', 'principal'), async (req, res) => {
+    const name = String(req.body.name || '').trim().replace(/\s+/g, ' ');
+    const schoolId = parseInt(req.body.school_id, 10);
+    const gradeLevelId = parseInt(req.body.grade_level_id, 10);
+    if (!name || !schoolId || !gradeLevelId) {
+        return res.status(400).json({ error: 'School, grade level, and section name are required.' });
+    }
+    const scopedSchool = applySchoolFilter(req);
+    if (scopedSchool && Number(scopedSchool) !== Number(schoolId)) {
+        return res.status(403).json({ error: 'You can only create sections in your school.' });
+    }
+    try {
+        const [[grade]] = await db.query('SELECT id, school_id FROM grade_levels WHERE id = ? LIMIT 1', [gradeLevelId]);
+        if (!grade || (grade.school_id && Number(grade.school_id) !== Number(schoolId))) {
+            return res.status(400).json({ error: 'The selected grade does not belong to this school.' });
+        }
+        const [[existing]] = await db.query(
+            `SELECT id FROM sections
+             WHERE school_id = ? AND grade_level_id = ? AND LOWER(TRIM(name)) = LOWER(?)
+               AND (status IS NULL OR status != 'deleted') LIMIT 1`,
+            [schoolId, gradeLevelId, name]
+        );
+        if (existing) return res.json({ success: true, id: existing.id, created: false });
+        const [result] = await db.query(
+            'INSERT INTO sections (name, school_id, grade_level_id, status) VALUES (?, ?, ?, ?)',
+            [name, schoolId, gradeLevelId, 'active']
+        );
+        return res.json({ success: true, id: result.insertId, created: true });
+    } catch (err) {
+        console.error('Resolve teacher section error:', err);
+        return res.status(500).json({ error: 'Failed to save the advisory section.' });
+    }
+});
+
 // POST /api/teachers
 router.post('/teachers', requireAuth, async (req, res) => {
     const { employee_id, firstname, lastname, middlename, department, subject, contact, email, school_id, grade_level_id, section_id, category } = req.body;
@@ -2314,6 +2365,8 @@ router.post('/teachers', requireAuth, async (req, res) => {
         return res.status(400).json({ error: 'First name, last name, and school are required.' });
     }
     try {
+        const gradeError = await validateTeacherGradeCategory({ schoolId: school_id, gradeLevelId: grade_level_id, category });
+        if (gradeError) return res.status(400).json({ error: gradeError });
         const assignment = await validateTeacherAssignment({ schoolId: school_id, gradeLevelId: grade_level_id, sectionId: section_id });
         if (assignment?.error) return res.status(400).json({ error: assignment.error });
         const qr_code = 'TCH-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);
@@ -2354,16 +2407,18 @@ router.put('/teachers/:id', requireAuth, async (req, res) => {
     try {
         const [[existing]] = await db.query('SELECT id, section_id, status FROM teachers WHERE id = ? AND status != ?', [req.params.id, 'deleted']);
         if (!existing) return res.status(404).json({ error: 'Teacher not found.' });
+        const gradeError = await validateTeacherGradeCategory({ schoolId: school_id, gradeLevelId: grade_level_id, category });
+        if (gradeError) return res.status(400).json({ error: gradeError });
         const assignment = await validateTeacherAssignment({ teacherId: req.params.id, schoolId: school_id, gradeLevelId: grade_level_id, sectionId: section_id });
         if (assignment?.error) return res.status(400).json({ error: assignment.error });
         const validStatus = ['active', 'inactive', 'deleted'].includes(status) ? status : (existing.status || 'inactive');
         const teacherCategory = category === 'shs_teacher' ? 'shs_teacher' : 'teacher';
         const fields = [
-            'employee_id=?', 'firstname=?', 'lastname=?', 'middlename=?', 'department=?', 'subject=?',
+            'employee_id=?', 'firstname=?', 'lastname=?', 'middlename=?',
             'contact=?', 'email=?', 'school_id=?', 'grade_level_id=?', 'section_id=?', 'category=?', 'status=?'
         ];
         const params = [
-            employee_id || null, firstname, lastname, middlename || null, department || null, subject || null,
+            employee_id || null, firstname, lastname, middlename || null,
             contact || null, email || null, school_id, grade_level_id || null, section_id || null, teacherCategory, validStatus
         ];
         if (new_password) {
@@ -4277,7 +4332,7 @@ router.get('/adviser-dashboard', requireAuth, async (req, res) => {
         if (!sectionId) return res.json({ teacher: teacher[0], students: [], kpi: { total: 0, present: 0, late: 0, half_day: 0, absent: 0 } });
 
         const [students] = await db.query(
-            `SELECT s.id, s.lrn, s.firstname, s.lastname, s.middlename, s.guardian_contact, s.category, s.status,
+            `SELECT s.id, s.lrn, s.firstname, s.lastname, s.middlename, s.gender, s.guardian_contact, s.category, s.status,
                     s.active_from, s.created_at,
                     a.id as attendance_id, a.time_in, a.time_out, a.last_time_in, a.status as att_status, a.monitoring_status
              FROM students s

@@ -102,11 +102,11 @@
     <div>
         <table class="as-table" id="asTable">
             <thead>
-                <tr><th>#</th><th>Student</th><th>Sex</th><th>Guardian Contact</th><th>Status</th><th style="text-align:right;">Actions</th></tr>
+                <tr><th>#</th><th>Student</th><th>Grade</th><% if (teacher.is_shs) { %><th>Track / Strand</th><% } %><th>Sex</th><th>Guardian Contact</th><th>Status</th><th style="text-align:right;">Actions</th></tr>
             </thead>
             <tbody id="asBody">
             <% if (students.length === 0) { %>
-                <tr><td colspan="6" class="as-empty"><i class="fa-solid fa-user-slash"></i> No enrolled students yet. Use <strong>Manage / Enroll Students</strong> to enroll or add students.</td></tr>
+                <tr><td colspan="<%= teacher.is_shs ? 8 : 7 %>" class="as-empty"><i class="fa-solid fa-user-slash"></i> No enrolled students yet. Use <strong>Manage / Enroll Students</strong> to enroll or add students.</td></tr>
             <% } else { students.forEach(function(s, idx) { %>
                 <tr data-search="<%= (s.lastname + ' ' + s.firstname + ' ' + (s.middlename||'') + ' ' + (s.lrn||'')).toLowerCase() %>">
                     <td><%= idx + 1 %></td>
@@ -114,6 +114,8 @@
                         <div class="as-name"><%= s.lastname.toUpperCase() %>, <%= s.firstname %><%= s.middlename ? ' ' + s.middlename.charAt(0).toUpperCase() + '.' : '' %></div>
                         <div class="as-lrn">LRN: <%= s.lrn || '—' %></div>
                     </td>
+                    <td><%= teacher.grade_name || '—' %></td>
+                    <% if (teacher.is_shs) { %><td><%= teacher.track || 'Not specified' %></td><% } %>
                     <td><%= s.gender || '—' %></td>
                     <td><%= s.guardian_contact || '—' %></td>
                     <td>
