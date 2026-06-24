@@ -123,13 +123,14 @@
                     <span class="nav-group-label"><i class="nav-icon fa-solid fa-user-graduate"></i> Students</span>
                     <i class="fa-solid fa-chevron-down nav-group-caret"></i>
                 </button>
+                <% var sv = (typeof studentView !== 'undefined') ? studentView : null; %>
                 <ul class="nav-group-items">
                     <li><a href="/admin/adviser-students" class="<%= page === 'adviser_students' ? 'active' : '' %>">Enrolled Students</a></li>
-                    <li><a href="/admin/adviser-student-management#notEnrolled" data-hash="#notEnrolled">Not Enrolled Students</a></li>
-                    <li><a href="/admin/adviser-student-management#transferred" data-hash="#transferred">Transferred Students</a></li>
-                    <li><a href="/admin/adviser-student-management#archived" data-hash="#archived">Archived Students</a></li>
+                    <li><a href="/admin/adviser-student-management?view=notEnrolled" class="<%= (page === 'adviser_student_management' && sv === 'notEnrolled') ? 'active' : '' %>">Not Enrolled Students</a></li>
+                    <li><a href="/admin/adviser-student-management?view=transferred" class="<%= (page === 'adviser_student_management' && sv === 'transferred') ? 'active' : '' %>">Transferred Students</a></li>
+                    <li><a href="/admin/adviser-student-management?view=archived" class="<%= (page === 'adviser_student_management' && sv === 'archived') ? 'active' : '' %>">Archived Students</a></li>
                     <li><a href="/admin/adviser-import-students" class="<%= page === 'adviser_student_import' ? 'active' : '' %>">Import Students</a></li>
-                    <li><a href="/admin/adviser-student-management#enroll" data-hash="#enroll">Enroll a Student</a></li>
+                    <li><a href="/admin/adviser-student-management?view=enroll" class="<%= (page === 'adviser_student_management' && sv === 'enroll') ? 'active' : '' %>">Enroll a Student</a></li>
                 </ul>
             </li>
             <li class="nav-section"><span class="nav-section-label">Tools</span></li>
@@ -316,14 +317,8 @@
         var g = document.getElementById('studentsNavGroup');
         if (!g) return;
         try { if (localStorage.getItem('nav_studentsNavGroup') === '1') g.classList.add('collapsed'); } catch (e) {}
-        // On the management page, highlight the sub-item matching the URL hash.
-        if (location.pathname.indexOf('/adviser-student-management') !== -1) {
-            g.classList.remove('collapsed');
-            var hash = location.hash || '#enroll';
-            g.querySelectorAll('a[data-hash]').forEach(function (a) {
-                if (a.getAttribute('data-hash') === hash) a.classList.add('active');
-            });
-        }
+        // Keep the group expanded whenever one of its pages is active.
+        if (g.querySelector('a.active')) g.classList.remove('collapsed');
     })();
 
     // Advisers act on the teachers table; all other roles on the users table.

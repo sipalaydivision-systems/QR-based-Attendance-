@@ -937,7 +937,13 @@ router.get('/adviser-students', async (req, res) => {
     }
 });
 
-// ---- Adviser: Student Management (enroll search + status groups) ----
+// ---- Adviser: Student Management — one focused view per sidebar item ----
+const STUDENT_VIEWS = {
+    enroll: 'Enroll a Student',
+    notEnrolled: 'Not Enrolled Students',
+    transferred: 'Transferred Students',
+    archived: 'Archived Students'
+};
 router.get('/adviser-student-management', async (req, res) => {
     if (!req.session.user || req.session.user.role !== 'adviser') return res.redirect('/adviser-login');
     const teacherId = req.session.user.teacher_id;
@@ -945,9 +951,10 @@ router.get('/adviser-student-management', async (req, res) => {
     try {
         const teacher = await loadAdviserTeacher(teacherId);
         if (!teacher) return res.render('error', { title: 'Error', message: 'Teacher not found.', user: req.session.user });
+        const view = Object.prototype.hasOwnProperty.call(STUDENT_VIEWS, req.query.view) ? req.query.view : 'enroll';
         const { groups, activeYearLabel } = await loadAdviserGroups(teacher);
         res.render('adviser_student_management', {
-            title: 'Student Management', page: 'adviser_student_management', teacher,
+            title: STUDENT_VIEWS[view], page: 'adviser_student_management', studentView: view, teacher,
             groups, activeYearLabel
         });
     } catch (err) {
