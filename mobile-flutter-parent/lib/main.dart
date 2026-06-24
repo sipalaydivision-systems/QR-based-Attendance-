@@ -2444,13 +2444,26 @@ class AttendanceTab extends StatelessWidget {
           ...timeline.map((e) {
             final entry = e as Map<String, dynamic>;
             final tone = '${entry['tone'] ?? 'in'}';
+            final label = '${entry['label_display'] ?? entry['label'] ?? ''}';
+            final studentName = '${child['name'] ?? ''}'.trim();
             return Container(
               margin: const EdgeInsets.only(bottom: 10),
               decoration: _cardDecoration(),
               child: ListTile(
-                leading: CircleAvatar(backgroundColor: toneColor(tone).withValues(alpha: 0.12), child: Icon(toneIcon(tone), color: toneColor(tone), size: 20)),
-                title: Text('${entry['label_display'] ?? entry['label']}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: kInk)),
-                subtitle: Text('${entry['time_display'] ?? ''}', style: const TextStyle(fontSize: 12, color: kMuted)),
+                leading: CircleAvatar(backgroundColor: toneColor(tone).withValues(alpha: 0.12), child: Icon(scanTypeIcon(label, tone), color: toneColor(tone), size: 20)),
+                title: Text(label, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: kInk)),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (studentName.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2, bottom: 1),
+                        child: Text(studentName, maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: kInk)),
+                      ),
+                    Text('${entry['time_display'] ?? ''}', style: const TextStyle(fontSize: 12, color: kMuted)),
+                  ],
+                ),
               ),
             );
           }),
@@ -3667,6 +3680,21 @@ IconData toneIcon(String tone) {
     default:
       return Icons.login;
   }
+}
+
+// Distinct icon per scan TYPE so each row reads at a glance — early dismissal,
+// late, lunch, returned, completed, PM, and plain time in/out are all different.
+IconData scanTypeIcon(String label, String tone) {
+  final l = label.toUpperCase();
+  if (l.contains('EARLY')) return Icons.directions_run_rounded;     // early dismissal
+  if (l.contains('LATE')) return Icons.running_with_errors_rounded; // late
+  if (l.contains('LUNCH')) return Icons.restaurant_rounded;
+  if (l.contains('RETURN')) return Icons.keyboard_return_rounded;
+  if (l.contains('COMPLET')) return Icons.task_alt_rounded;
+  if (l.contains('PM') && l.contains('IN')) return Icons.wb_sunny_rounded;
+  if (l.contains('OUT')) return Icons.logout_rounded;
+  if (l.contains('IN')) return Icons.login_rounded;
+  return toneIcon(tone);
 }
 
 Color toneColor(String tone) {
