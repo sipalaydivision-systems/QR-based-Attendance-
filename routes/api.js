@@ -137,6 +137,22 @@ async function getScannerDesktopDirectory(schoolId) {
     const studentParams = [];
     const teacherParams = [];
 
+    // Offline enrollment gate: keep learners who are NOT enrolled in the active
+    // school year (transferred out, or not re-enrolled after a rollover) OUT of
+    // the offline directory, so the offline scanner won't accept them — matching
+    // the online rule. Fail-open: learners with no enrollment records at all, or
+    // when no active year is configured, are still included.
+    const [[activeYr]] = await db
+        .query("SELECT id FROM school_years WHERE status = 'active' ORDER BY id DESC LIMIT 1")
+        .catch(() => [[null]]);
+    const activeYearId = activeYr ? activeYr.id : null;
+    const enrollmentGate = activeYearId
+        ? ` AND (NOT EXISTS (SELECT 1 FROM student_enrollments e WHERE e.student_id = s.id)
+                 OR EXISTS (SELECT 1 FROM student_enrollments e WHERE e.student_id = s.id
+                            AND e.school_year_id = ? AND e.status = 'enrolled'))`
+        : '';
+    if (activeYearId) studentParams.push(activeYearId);
+
     let studentQuery = `
         SELECT
             s.id AS person_id,
@@ -161,7 +177,7 @@ async function getScannerDesktopDirectory(schoolId) {
         LEFT JOIN teachers at ON sec.adviser_teacher_id = at.id
         WHERE s.qr_code IS NOT NULL
           AND s.qr_code <> ''
-          AND s.status <> 'deleted'`;
+          AND s.status <> 'deleted'${enrollmentGate}`;
 
     let teacherQuery = `
         SELECT
