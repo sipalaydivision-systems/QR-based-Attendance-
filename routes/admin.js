@@ -481,13 +481,29 @@ router.get('/sf2-report', async (req, res) => {
     const teacherId = req.session.user.teacher_id;
     if (!teacherId) return res.render('error', { title: 'SF2 Error', message: 'No teacher record linked.', user: req.session.user });
 
-    // Month param optional — defaults to the current month (app timezone) so the sidebar link works directly
+    const pad2 = n => String(n).padStart(2, '0');
+    // School year + month selection. SF2 is monthly; the chosen school year labels
+    // the report and (for past years) drives the historical roster. Archived SF2
+    // stays reachable by picking an older school year from the dropdown.
+    const allSchoolYears = await schoolYears.listSchoolYears().catch(() => []);
+    let selectedYear = null;
+    if (req.query.sy) selectedYear = await schoolYears.getSchoolYearById(req.query.sy).catch(() => null);
     let monthParam = req.query.month; // e.g. "2026-06"
-    if (!monthParam || !/^\d{4}-\d{2}$/.test(monthParam)) {
-        monthParam = currentMonth();
+    const validMonth = monthParam && /^\d{4}-\d{2}$/.test(monthParam);
+    if (!selectedYear) {
+        if (validMonth) selectedYear = await schoolYears.getSchoolYearForDate(`${monthParam}-01`).catch(() => null);
+        if (!selectedYear) selectedYear = await schoolYears.getActiveSchoolYear().catch(() => null);
+    }
+    if (!validMonth) {
+        if (selectedYear && selectedYear.start_date && selectedYear.end_date) {
+            const cm = currentMonth();
+            monthParam = (`${cm}-01` >= selectedYear.start_date && `${cm}-01` <= selectedYear.end_date)
+                ? cm : selectedYear.start_date.slice(0, 7);
+        } else {
+            monthParam = currentMonth();
+        }
     }
     const [year, month] = monthParam.split('-').map(Number);
-    const pad2 = n => String(n).padStart(2, '0');
 
     try {
         // Teacher + school + section info
@@ -509,15 +525,32 @@ router.get('/sf2-report', async (req, res) => {
             [teacher.school_id]
         ).catch(() => [[null]]);
 
-        // Students in section, ordered by gender then lastname
-        const [students] = await db.query(
-            `SELECT id, lrn, firstname, lastname, middlename, gender,
-                    DATE_FORMAT(COALESCE(active_from, created_at), '%Y-%m-%d') as enrolled_from
-             FROM students
-             WHERE section_id = ? AND status = 'active'
-             ORDER BY FIELD(gender,'Male','Female','Other'), lastname, firstname`,
-            [teacher.section_id]
-        );
+        // Roster for the report. Active year => current section roster (cache).
+        // Past/closed year => the enrollment snapshot for that year + section,
+        // falling back to the current roster when no historical snapshot exists
+        // (e.g. the first year, before any archived enrollments were created).
+        let students;
+        if (selectedYear && selectedYear.status !== 'active') {
+            [students] = await db.query(
+                `SELECT s.id, s.lrn, s.firstname, s.lastname, s.middlename, s.gender,
+                        DATE_FORMAT(COALESCE(s.active_from, s.created_at), '%Y-%m-%d') as enrolled_from
+                 FROM student_enrollments e
+                 JOIN students s ON s.id = e.student_id
+                 WHERE e.school_year_id = ? AND e.section_id = ? AND s.status <> 'deleted'
+                 ORDER BY FIELD(s.gender,'Male','Female','Other'), s.lastname, s.firstname`,
+                [selectedYear.id, teacher.section_id]
+            );
+        }
+        if (!students || !students.length) {
+            [students] = await db.query(
+                `SELECT id, lrn, firstname, lastname, middlename, gender,
+                        DATE_FORMAT(COALESCE(active_from, created_at), '%Y-%m-%d') as enrolled_from
+                 FROM students
+                 WHERE section_id = ? AND status = 'active'
+                 ORDER BY FIELD(gender,'Male','Female','Other'), lastname, firstname`,
+                [teacher.section_id]
+            );
+        }
 
         // Month boundaries built from plain strings — no Date/UTC conversion that can shift days
         const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
@@ -615,9 +648,15 @@ router.get('/sf2-report', async (req, res) => {
             if (new Date(dstr + 'T00:00:00Z').getUTCDay() === 5) { firstFriday = dstr; break; }
         }
 
-        // School year from settings
-        const [[syRow]] = await db.query(`SELECT setting_value FROM settings WHERE setting_key = 'school_year'`).catch(() => [[null]]);
-        const schoolYear = syRow ? syRow.setting_value : `${year}-${year + 1}`;
+        // School year label — from the selected school_years row, falling back to
+        // the settings string, then a derived label.
+        let schoolYear;
+        if (selectedYear && selectedYear.label) {
+            schoolYear = selectedYear.label;
+        } else {
+            const [[syRow]] = await db.query(`SELECT setting_value FROM settings WHERE setting_key = 'school_year'`).catch(() => [[null]]);
+            schoolYear = syRow ? syRow.setting_value : `${year}-${year + 1}`;
+        }
 
         const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
@@ -710,7 +749,11 @@ router.get('/sf2-report', async (req, res) => {
             endDate,
             remarksMap,
             summaryMap,
-            monthParam
+            monthParam,
+            schoolYearsList: allSchoolYears,
+            selectedSyId: selectedYear ? selectedYear.id : null,
+            syStart: selectedYear ? selectedYear.start_date : null,
+            syEnd: selectedYear ? selectedYear.end_date : null
         });
     } catch (err) {
         console.error('SF2 report error:', err);

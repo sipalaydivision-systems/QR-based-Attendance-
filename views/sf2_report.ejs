@@ -116,11 +116,23 @@
 
 <div class="sf2-controls no-print">
     <h2><i class="fa-solid fa-file-lines"></i> SF2 — Daily Attendance Report &nbsp;|&nbsp; <%= monthName %> <%= year %></h2>
+    <% if (typeof schoolYearsList !== 'undefined' && schoolYearsList && schoolYearsList.length) { %>
+    <label for="sf2YearPicker" style="font-size:0.8125rem;font-weight:600;color:var(--gray-600);">School Year:</label>
+    <select id="sf2YearPicker"
+            style="padding:8px 12px;border:1.5px solid var(--gray-300);border-radius:8px;font-size:0.8125rem;"
+            onchange="if(this.value) window.location.href='/admin/sf2-report?sy=' + this.value;">
+        <% schoolYearsList.forEach(function(sy) { %>
+        <option value="<%= sy.id %>" <%= (typeof selectedSyId !== 'undefined' && Number(selectedSyId) === Number(sy.id)) ? 'selected' : '' %>><%= sy.label %><%= sy.status === 'active' ? ' (Active)' : '' %></option>
+        <% }); %>
+    </select>
+    <% } %>
     <label for="sf2MonthPicker" style="font-size:0.8125rem;font-weight:600;color:var(--gray-600);">Month:</label>
     <input type="month" id="sf2MonthPicker"
            value="<%= year %>-<%= String(month).padStart(2,'0') %>"
+           <% if (typeof syStart !== 'undefined' && syStart) { %>min="<%= String(syStart).slice(0,7) %>"<% } %>
+           <% if (typeof syEnd !== 'undefined' && syEnd) { %>max="<%= String(syEnd).slice(0,7) %>"<% } %>
            style="padding:8px 12px;border:1.5px solid var(--gray-300);border-radius:8px;font-size:0.8125rem;"
-           onchange="if(this.value) window.location.href='/admin/sf2-report?month=' + this.value;">
+           onchange="if(this.value) window.location.href='/admin/sf2-report?<%= (typeof selectedSyId !== 'undefined' && selectedSyId) ? 'sy=' + selectedSyId + '&' : '' %>month=' + this.value;">
     <button class="btn btn-secondary" id="sf2EditBtn" onclick="sf2EnterEdit()"><i class="fa-solid fa-pen-to-square"></i> Edit</button>
     <button class="btn btn-primary" id="sf2SaveBtn" onclick="sf2Save()"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
     <button class="btn btn-secondary" id="sf2CancelBtn" onclick="sf2CancelEdit()"><i class="fa-solid fa-xmark"></i> Cancel</button>
