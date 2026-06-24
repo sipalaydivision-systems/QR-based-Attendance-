@@ -300,6 +300,18 @@ async function isSchoolDay(dateStr, schoolId) {
 }
 
 async function countConsecutiveAbsences(studentId, schoolId, baseDate) {
+    // If the student is present today (has timed in), the streak is broken — no
+    // flag, even before the school day is "final". This prevents the
+    // "2 consecutive absences — contact the adviser" notice from showing for a
+    // student who already came to school today (e.g. a late time-in).
+    const [[presentToday]] = await db.query(
+        `SELECT 1 AS present FROM attendance
+         WHERE person_type = 'student' AND person_id = ? AND date = ? AND time_in IS NOT NULL
+         LIMIT 1`,
+        [studentId, baseDate]
+    );
+    if (presentToday) return 0;
+
     const schoolDates = [];
     const startOffset = isAbsenceFinal(baseDate) ? 0 : 1;
     for (let offset = startOffset; offset < 14 && schoolDates.length < 2; offset++) {
