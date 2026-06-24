@@ -34,21 +34,13 @@ final ValueNotifier<String?> brandLogoData = ValueNotifier<String?>(null);
 final ValueNotifier<String?> dashboardSchoolArtData = ValueNotifier<String?>(
   null,
 );
-final ValueNotifier<String> brandName = ValueNotifier<String>(AppConfig.appName);
-final ValueNotifier<String> brandSubtitle =
-    ValueNotifier<String>(AppConfig.subtitle);
+final ValueNotifier<String> brandName = ValueNotifier<String>(
+  AppConfig.appName,
+);
+final ValueNotifier<String> brandSubtitle = ValueNotifier<String>(
+  AppConfig.subtitle,
+);
 const MethodChannel nativeBridge = MethodChannel('edutrack/native');
-
-Future<void> syncNativeBackgroundNotifications(ApiService api) async {
-  if (!Platform.isAndroid || api.cookie.isEmpty) return;
-  try {
-    await nativeBridge.invokeMethod('scheduleBackgroundNotifications', {
-      'baseUrl': AppConfig.baseUrl,
-      'cookie': api.cookie,
-      'fullname': api.fullname,
-    });
-  } catch (_) {}
-}
 
 Future<void> cancelNativeBackgroundNotifications() async {
   if (!Platform.isAndroid) return;
@@ -223,13 +215,64 @@ const dailySummaryChannel = AndroidNotificationChannel(
 Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
   try {
     await Firebase.initializeApp();
-  } catch (_) {/* already initialised */}
+  } catch (_) {
+    /* already initialised */
+  }
 }
 
 String gMainFcmToken = '';
 DateTime? _lastMainFcmRegistration;
 bool _registeringMainFcm = false;
 const String _mainFcmTokenResetPreference = 'main_fcm_token_reset_v1';
+const String _mainFcmDeliveredPreference =
+    'main_fcm_delivered_notifications_v1';
+const int _mainAbsenceFcmNotificationId = 9101;
+const int _mainHolidayFcmNotificationId = 9201;
+
+String _mainFcmFingerprint(RemoteMessage message) {
+  final messageId = (message.messageId ?? '').trim();
+  if (messageId.isNotEmpty) return 'message:$messageId';
+  final data = message.data;
+  return [
+    data['type'],
+    data['notification_id'],
+    data['holiday_id'],
+    data['holiday_date'],
+    data['date'],
+    message.notification?.title ?? data['title'],
+    message.notification?.body ?? data['body'],
+  ].map((value) => '${value ?? ''}').join('|');
+}
+
+Future<bool> _rememberMainFcmMessage(
+  SharedPreferences prefs,
+  RemoteMessage message,
+) async {
+  final fingerprint = _mainFcmFingerprint(message);
+  final delivered =
+      prefs.getStringList(_mainFcmDeliveredPreference) ?? <String>[];
+  if (delivered.contains(fingerprint)) return false;
+  final updated = <String>[
+    ...delivered.where((item) => item != fingerprint),
+    fingerprint,
+  ];
+  await prefs.setStringList(
+    _mainFcmDeliveredPreference,
+    updated.length > 200 ? updated.sublist(updated.length - 200) : updated,
+  );
+  return true;
+}
+
+int _mainFcmNotificationId(RemoteMessage message) {
+  final type = '${message.data['type'] ?? ''}'.trim().toLowerCase();
+  if (type == 'daily_summary') return _kDailySummaryId;
+  if (type == 'attendance_flagged') return _mainAbsenceFcmNotificationId;
+  if (type == 'announcement_holiday') return _mainHolidayFcmNotificationId;
+  final sourceId = '${message.data['notification_id'] ?? ''}'.trim();
+  return stableNotificationId(
+    sourceId.isNotEmpty ? 'main-fcm:$sourceId' : _mainFcmFingerprint(message),
+  );
+}
 
 Future<void> _registerMainDevice(
   SharedPreferences prefs,
@@ -253,7 +296,9 @@ Future<void> _registerMainDevice(
           headers: {'Content-Type': 'application/json', 'Cookie': cookie},
           body: jsonEncode({
             'push_token': cleanToken,
-            'platform': Platform.isAndroid ? 'android' : Platform.operatingSystem,
+            'platform': Platform.isAndroid
+                ? 'android'
+                : Platform.operatingSystem,
           }),
         )
         .timeout(const Duration(seconds: 15));
@@ -269,7 +314,11 @@ Future<void> _setupMainFcm(SharedPreferences prefs) async {
   try {
     final messaging = FirebaseMessaging.instance;
     await messaging.requestPermission(alert: true, badge: true, sound: true);
-    await messaging.setForegroundNotificationPresentationOptions(alert: true, badge: true, sound: true);
+    await messaging.setForegroundNotificationPresentationOptions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
     // Refresh tokens created by older builds before closed-app FCM was fully
     // wired. This runs once and immediately re-registers the replacement token.
     if (prefs.getBool(_mainFcmTokenResetPreference) != true) {
@@ -288,13 +337,17 @@ Future<void> _setupMainFcm(SharedPreferences prefs) async {
       prefs.setString('fcm_token', t);
       _registerMainDevice(prefs, t, force: true);
     });
-    FirebaseMessaging.onMessage.listen((message) {
+    FirebaseMessaging.onMessage.listen((message) async {
       final n = message.notification;
       final title = n?.title ?? '${message.data['title'] ?? 'EduTrack'}';
       final body = n?.body ?? '${message.data['body'] ?? ''}';
       if (title.isEmpty && body.isEmpty) return;
-      notifications.show(
-        DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      // FCM can occasionally redeliver a message. Persist its ID and use one
+      // stable Android ID per report type so an update replaces the visible
+      // notification instead of creating another copy.
+      if (!await _rememberMainFcmMessage(prefs, message)) return;
+      await notifications.show(
+        _mainFcmNotificationId(message),
         '<b>$title</b>',
         '<b>$body</b>',
         const NotificationDetails(
@@ -338,12 +391,16 @@ Future<void> main() async {
     },
   );
   final androidPlugin = notifications
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin
+      >();
   await androidPlugin?.createNotificationChannel(alertsChannel);
   await androidPlugin?.createNotificationChannel(dailySummaryChannel);
   // Server-side FCM now owns scheduled delivery. Remove the repeating local
-  // alarm left by older builds so it cannot duplicate the Railway report.
+  // alarms and native WorkManager jobs left by older builds so they cannot
+  // duplicate the Railway report or 2-day absence alert.
   await notifications.cancel(_kDailySummaryFallbackId);
+  await cancelNativeBackgroundNotifications();
   unawaited(_setupMainFcm(prefs));
   final launchDetails = await notifications.getNotificationAppLaunchDetails();
   if (launchDetails?.didNotificationLaunchApp == true) {
@@ -539,7 +596,6 @@ class ApiService {
     await prefs.setString('cookie', sessionCookie);
     await prefs.setString('fullname', '${user['fullname'] ?? username}');
     await prefs.setString('role', '${user['role'] ?? 'division'}');
-    await syncNativeBackgroundNotifications(this);
   }
 
   Future<void> logout() async {
@@ -552,10 +608,7 @@ class ApiService {
 
   Future<Map<String, dynamic>> map(String path) async {
     final response = await _request(
-      () => http.get(
-        liveUri(path),
-        headers: authHeaders,
-      ),
+      () => http.get(liveUri(path), headers: authHeaders),
     );
     if (response.statusCode == 401) throw AuthExpired();
     if (response.statusCode >= 400) {
@@ -574,10 +627,7 @@ class ApiService {
 
   Future<List<dynamic>> list(String path) async {
     final response = await _request(
-      () => http.get(
-        liveUri(path),
-        headers: authHeaders,
-      ),
+      () => http.get(liveUri(path), headers: authHeaders),
     );
     if (response.statusCode == 401) throw AuthExpired();
     if (response.statusCode >= 400) {
@@ -1155,7 +1205,12 @@ class _LoginScreenState extends State<LoginScreen>
           child: Center(
             child: SingleChildScrollView(
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: EdgeInsets.fromLTRB(20, 28, 20, math.max(28, bottomInset + 24)),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                28,
+                20,
+                math.max(28, bottomInset + 24),
+              ),
               child: Container(
                 width: 420,
                 constraints: const BoxConstraints(maxWidth: 420),
@@ -1180,19 +1235,30 @@ class _LoginScreenState extends State<LoginScreen>
                     const Text(
                       AppConfig.appName,
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900, color: Color(0xFF111827)),
+                      style: TextStyle(
+                        fontSize: 23,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF111827),
+                      ),
                     ),
                     const SizedBox(height: 3),
                     const Text(
                       'Attendance Portal',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 13, color: Color(0xFF6B7280), fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF6B7280),
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     if (error != null) ...[
                       const SizedBox(height: 18),
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 11,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFEF2F2),
                           border: Border.all(color: const Color(0xFFFECACA)),
@@ -1200,16 +1266,33 @@ class _LoginScreenState extends State<LoginScreen>
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.error_outline, color: Color(0xFFDC2626), size: 18),
+                            const Icon(
+                              Icons.error_outline,
+                              color: Color(0xFFDC2626),
+                              size: 18,
+                            ),
                             const SizedBox(width: 8),
-                            Expanded(child: Text(error!, style: const TextStyle(color: Color(0xFFDC2626), fontSize: 12.5, fontWeight: FontWeight.w700))),
+                            Expanded(
+                              child: Text(
+                                error!,
+                                style: const TextStyle(
+                                  color: Color(0xFFDC2626),
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),
                     ],
                     const SizedBox(height: 22),
                     _label('Username'),
-                    _field(username, 'Enter your username', icon: Icons.person_outline_rounded),
+                    _field(
+                      username,
+                      'Enter your username',
+                      icon: Icons.person_outline_rounded,
+                    ),
                     const SizedBox(height: 14),
                     _label('Password'),
                     _field(
@@ -1218,7 +1301,8 @@ class _LoginScreenState extends State<LoginScreen>
                       secret: obscurePassword,
                       isPassword: true,
                       icon: Icons.lock_outline_rounded,
-                      onToggleSecret: () => setState(() => obscurePassword = !obscurePassword),
+                      onToggleSecret: () =>
+                          setState(() => obscurePassword = !obscurePassword),
                     ),
                     const SizedBox(height: 20),
                     SizedBox(
@@ -1226,11 +1310,15 @@ class _LoginScreenState extends State<LoginScreen>
                       height: 50,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(colors: [Color(0xFF16A34A), Color(0xFF059669)]),
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF16A34A), Color(0xFF059669)],
+                          ),
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF16A34A).withValues(alpha: .30),
+                              color: const Color(
+                                0xFF16A34A,
+                              ).withValues(alpha: .30),
                               blurRadius: 14,
                               offset: const Offset(0, 6),
                             ),
@@ -1241,11 +1329,27 @@ class _LoginScreenState extends State<LoginScreen>
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.transparent,
                             shadowColor: Colors.transparent,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                           child: loading
-                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                              : const Text('Sign In', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text(
+                                  'Sign In',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 16,
+                                  ),
+                                ),
                         ),
                       ),
                     ),
@@ -1253,7 +1357,11 @@ class _LoginScreenState extends State<LoginScreen>
                     const Text(
                       'For authorized EduTrack users only',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        color: Color(0xFF9CA3AF),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
@@ -1298,7 +1406,13 @@ class _LoginScreenState extends State<LoginScreen>
           ? null
           : IconButton(
               onPressed: onToggleSecret,
-              icon: Icon(secret ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: const Color(0xFF6B7280), size: 20),
+              icon: Icon(
+                secret
+                    ? Icons.visibility_off_rounded
+                    : Icons.visibility_rounded,
+                color: const Color(0xFF6B7280),
+                size: 20,
+              ),
             ),
       filled: true,
       fillColor: Colors.white,
@@ -1353,7 +1467,6 @@ class _HomeShellState extends State<HomeShell>
       duration: const Duration(seconds: 9),
     )..repeat();
     load();
-    syncNativeBackgroundNotifications(widget.api);
     // Poll often so edited student and absence details show quickly.
     timer = Timer.periodic(
       const Duration(seconds: 5),
@@ -1422,7 +1535,8 @@ class _HomeShellState extends State<HomeShell>
         error: error,
         onRefresh: load,
         onOpenTab: (value) => setState(() => tab = value.clamp(0, 4).toInt()),
-        onTestReport: () => testEveningReportNotification(dashboard, widget.api.prefs),
+        onTestReport: () =>
+            testEveningReportNotification(dashboard, widget.api.prefs),
       ),
       AttendancePage(api: widget.api),
       SchoolsPage(api: widget.api),
@@ -1734,8 +1848,10 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
       await load(silent: true);
       if (!mounted) return;
       Navigator.pop(context);
-      final guardianPushes = (delivery['guardian_push_count'] as num?)?.toInt() ?? 0;
-      final edutrackPushes = (delivery['edutrack_push_count'] as num?)?.toInt() ?? 0;
+      final guardianPushes =
+          (delivery['guardian_push_count'] as num?)?.toInt() ?? 0;
+      final edutrackPushes =
+          (delivery['edutrack_push_count'] as num?)?.toInt() ?? 0;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -3242,8 +3358,7 @@ class Header extends StatelessWidget {
         ],
       ),
       child: ClipRRect(
-        borderRadius:
-            const BorderRadius.vertical(bottom: Radius.circular(26)),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(26)),
         child: Stack(
           children: [
             Positioned.fill(
@@ -3386,22 +3501,20 @@ class Header extends StatelessWidget {
     child: const ClipOval(child: BrandLogoImage()),
   );
 
-  Widget _headerAction({
-    required IconData icon,
-    required VoidCallback onTap,
-  }) => Material(
-    color: Colors.white.withValues(alpha: .14),
-    borderRadius: BorderRadius.circular(14),
-    child: InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: onTap,
-      child: SizedBox(
-        width: 44,
-        height: 44,
-        child: Icon(icon, size: 20, color: Colors.white),
-      ),
-    ),
-  );
+  Widget _headerAction({required IconData icon, required VoidCallback onTap}) =>
+      Material(
+        color: Colors.white.withValues(alpha: .14),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: Icon(icon, size: 20, color: Colors.white),
+          ),
+        ),
+      );
 
   Widget _chip(Widget child, {bool dense = false}) => Container(
     padding: EdgeInsets.symmetric(
@@ -3521,8 +3634,11 @@ class DashboardPage extends StatelessWidget {
     final schools = (dashboard['schools'] as List?) ?? [];
     // Sort schools highest attendance rate first
     final sortedSchools = [...schools]
-      ..sort((a, b) => intValue((b as Map)['rate'])
-          .compareTo(intValue((a as Map)['rate'])));
+      ..sort(
+        (a, b) => intValue(
+          (b as Map)['rate'],
+        ).compareTo(intValue((a as Map)['rate'])),
+      );
 
     Future<void> openAbsentDetails({
       String? targetDate,
@@ -3566,11 +3682,8 @@ class DashboardPage extends StatelessWidget {
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
-        builder: (_) => DateAttendanceModal(
-          api: api,
-          targetDate: date(),
-          initialTab: tab,
-        ),
+        builder: (_) =>
+            DateAttendanceModal(api: api, targetDate: date(), initialTab: tab),
       );
     }
 
@@ -3861,7 +3974,10 @@ class DashboardPage extends StatelessWidget {
                   Center(
                     child: OutlinedButton.icon(
                       onPressed: onTestReport,
-                      icon: const Icon(Icons.notifications_active_outlined, size: 15),
+                      icon: const Icon(
+                        Icons.notifications_active_outlined,
+                        size: 15,
+                      ),
                       label: const Text('Test 7PM Notification'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF6B7280),
@@ -3909,33 +4025,36 @@ class FittedDashboardText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.maxWidth;
-          var selectedSize = maxFontSize;
-          if (width.isFinite && width > 0 && text.trim().isNotEmpty) {
-            selectedSize = minFontSize;
-            for (double size = maxFontSize; size >= minFontSize; size -= 1) {
-              final painter = TextPainter(
-                text: TextSpan(text: text, style: style.copyWith(fontSize: size)),
-                maxLines: maxLines,
-                textDirection: Directionality.of(context),
-              )..layout(maxWidth: width);
-              if (!painter.didExceedMaxLines) {
-                selectedSize = size;
-                break;
-              }
-            }
-          }
-
-          return Text(
-            text,
+    builder: (context, constraints) {
+      final width = constraints.maxWidth;
+      var selectedSize = maxFontSize;
+      if (width.isFinite && width > 0 && text.trim().isNotEmpty) {
+        selectedSize = minFontSize;
+        for (double size = maxFontSize; size >= minFontSize; size -= 1) {
+          final painter = TextPainter(
+            text: TextSpan(
+              text: text,
+              style: style.copyWith(fontSize: size),
+            ),
             maxLines: maxLines,
-            softWrap: true,
-            overflow: overflow,
-            style: style.copyWith(fontSize: selectedSize),
-          );
-        },
+            textDirection: Directionality.of(context),
+          )..layout(maxWidth: width);
+          if (!painter.didExceedMaxLines) {
+            selectedSize = size;
+            break;
+          }
+        }
+      }
+
+      return Text(
+        text,
+        maxLines: maxLines,
+        softWrap: true,
+        overflow: overflow,
+        style: style.copyWith(fontSize: selectedSize),
       );
+    },
+  );
 }
 
 class KpiPill extends StatelessWidget {
@@ -4546,8 +4665,18 @@ class _DailyAttendanceCalendarState extends State<DailyAttendanceCalendar> {
   late DateTime visibleMonth;
 
   static const _monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
   static const _weekdayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -4570,14 +4699,16 @@ class _DailyAttendanceCalendarState extends State<DailyAttendanceCalendar> {
 
   void _prevMonth() {
     if (!_canGoPrev) return;
-    setState(() =>
-        visibleMonth = DateTime(visibleMonth.year, visibleMonth.month - 1));
+    setState(
+      () => visibleMonth = DateTime(visibleMonth.year, visibleMonth.month - 1),
+    );
   }
 
   void _nextMonth() {
     if (!_canGoNext) return;
-    setState(() =>
-        visibleMonth = DateTime(visibleMonth.year, visibleMonth.month + 1));
+    setState(
+      () => visibleMonth = DateTime(visibleMonth.year, visibleMonth.month + 1),
+    );
   }
 
   void _goToday() {
@@ -4749,8 +4880,11 @@ class _DailyAttendanceCalendarState extends State<DailyAttendanceCalendar> {
     final firstOfMonth = DateTime(visibleMonth.year, visibleMonth.month, 1);
     // Sunday-first calendar: weekday Mon=1..Sun=7 -> Sun=0..Sat=6
     final leadingBlanks = firstOfMonth.weekday % 7;
-    final daysInMonth =
-        DateTime(visibleMonth.year, visibleMonth.month + 1, 0).day;
+    final daysInMonth = DateTime(
+      visibleMonth.year,
+      visibleMonth.month + 1,
+      0,
+    ).day;
 
     final cells = <Widget>[];
     for (var i = 0; i < leadingBlanks; i++) {
@@ -4776,9 +4910,11 @@ class _DailyAttendanceCalendarState extends State<DailyAttendanceCalendar> {
     final now = DateTime.now();
     final isToday = _sameDay(cellDate, now);
     final isSelected = _sameDay(cellDate, focusedDate) && !isToday;
-    final isWeekend = cellDate.weekday == DateTime.saturday ||
+    final isWeekend =
+        cellDate.weekday == DateTime.saturday ||
         cellDate.weekday == DateTime.sunday;
-    final isDisabled = cellDate.isBefore(
+    final isDisabled =
+        cellDate.isBefore(
           DateTime(_firstAllowed.year, _firstAllowed.month, _firstAllowed.day),
         ) ||
         cellDate.isAfter(
@@ -4877,8 +5013,7 @@ class _DailyAttendanceCalendarState extends State<DailyAttendanceCalendar> {
             child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.today_rounded,
-                    size: 13, color: Color(0xFF0F6E52)),
+                Icon(Icons.today_rounded, size: 13, color: Color(0xFF0F6E52)),
                 SizedBox(width: 5),
                 Text(
                   'Today',
@@ -5213,8 +5348,8 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
     final status = detailedStatus.isNotEmpty
         ? formatStatusLabel(detailedStatus)
         : (lateHalfDay && statusValue == 'half_day'
-            ? 'Half-Day (Late)'
-            : formatStatusLabel(row['att_status']));
+              ? 'Half-Day (Late)'
+              : formatStatusLabel(row['att_status']));
     final isAbsent = statusValue == 'absent';
     final isHalfDay = statusValue == 'half_day';
     final absentDays = intValue(row['absent_days']);
@@ -5247,12 +5382,16 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: .12),
                     borderRadius: BorderRadius.circular(99),
-                    border: Border.all(color: statusColor.withValues(alpha: .3)),
+                    border: Border.all(
+                      color: statusColor.withValues(alpha: .3),
+                    ),
                   ),
                   child: Text(
                     status,
@@ -5266,18 +5405,26 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
               ],
             ),
             const SizedBox(height: 10),
-            _detailRow(Icons.school_rounded, 'Grade & Section',
-                '$grade  •  $section'),
+            _detailRow(
+              Icons.school_rounded,
+              'Grade & Section',
+              '$grade  •  $section',
+            ),
             _detailRow(Icons.account_balance_rounded, 'School', schoolName),
             _detailRow(Icons.badge_rounded, 'LRN', lrn),
-            _detailRow(Icons.person_rounded, 'Adviser',
-                adviser.isEmpty ? 'Not assigned' : adviser),
+            _detailRow(
+              Icons.person_rounded,
+              'Adviser',
+              adviser.isEmpty ? 'Not assigned' : adviser,
+            ),
             if (isAbsent) ...[
               const SizedBox(height: 8),
               Container(
                 width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFEF2F2),
                   borderRadius: BorderRadius.circular(10),
@@ -5285,8 +5432,11 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.event_busy_rounded,
-                        size: 15, color: Color(0xFFDC2626)),
+                    const Icon(
+                      Icons.event_busy_rounded,
+                      size: 15,
+                      color: Color(0xFFDC2626),
+                    ),
                     const SizedBox(width: 7),
                     Expanded(
                       child: Text(
@@ -5616,8 +5766,11 @@ class SchoolLeaderboard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
             child: Row(
               children: [
-                const Icon(Icons.workspace_premium_rounded,
-                    color: Color(0xFFD4A017), size: 20),
+                const Icon(
+                  Icons.workspace_premium_rounded,
+                  color: Color(0xFFD4A017),
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
@@ -5686,10 +5839,7 @@ class _TopSchoolCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            const Color(0xFFF0FDF4),
-            const Color(0xFFDCFCE7),
-          ],
+          colors: [const Color(0xFFF0FDF4), const Color(0xFFDCFCE7)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -6055,113 +6205,113 @@ class ReportsPage extends StatelessWidget {
     List schools,
     Future<void> Function(String) openDateDetails,
   ) {
-      return ListView(
-        padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-        children: [
-          PremiumCard(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00885B),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Icon(
-                    Icons.insert_chart_rounded,
-                    color: Colors.white,
-                    size: 28,
-                  ),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+      children: [
+        PremiumCard(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00885B),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Reports',
-                        style: TextStyle(
-                          fontSize: 25,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -.65,
-                        ),
+                child: const Icon(
+                  Icons.insert_chart_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Reports',
+                      style: TextStyle(
+                        fontSize: 25,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -.65,
                       ),
-                      Text(
-                        'Live daily insight - ${shortDate()}',
-                        style: const TextStyle(
-                          color: Color(0xFF667872),
-                          fontWeight: FontWeight.w700,
-                        ),
+                    ),
+                    Text(
+                      'Live daily insight - ${shortDate()}',
+                      style: const TextStyle(
+                        color: Color(0xFF667872),
+                        fontWeight: FontWeight.w700,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                const LiveDot(color: Color(0xFFFF3B30)),
-              ],
-            ),
+              ),
+              const LiveDot(color: Color(0xFFFF3B30)),
+            ],
           ),
-          const SizedBox(height: 14),
-          PremiumCard(
-            title: 'Daily Summary',
-            subtitle: 'Live data overview',
-            child: GridView.count(
-              physics: const NeverScrollableScrollPhysics(),
-              shrinkWrap: true,
-              crossAxisCount: 2,
-              childAspectRatio: 1.62,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              children: [
-                Metric(
-                  Icons.groups,
-                  'Students',
-                  '${intValue(totals['enrolled'])}',
-                  'total',
-                ),
-                Metric(
-                  Icons.how_to_reg,
-                  'Present',
-                  '${intValue(totals['present'])}',
-                  'today',
-                  onTap: () => openDateDetails('present'),
-                ),
-                Metric(
-                  Icons.person_off,
-                  'Absent',
-                  '${intValue(totals['absent'])}',
-                  'today',
-                  color: const Color(0xFFDC2626),
-                  onTap: () => openDateDetails('absent'),
-                ),
-                Metric(
-                  Icons.percent,
-                  'Rate',
-                  '${intValue(totals['rate'])}%',
-                  'average',
-                ),
-              ],
-            ),
+        ),
+        const SizedBox(height: 14),
+        PremiumCard(
+          title: 'Daily Summary',
+          subtitle: 'Live data overview',
+          child: GridView.count(
+            physics: const NeverScrollableScrollPhysics(),
+            shrinkWrap: true,
+            crossAxisCount: 2,
+            childAspectRatio: 1.62,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            children: [
+              Metric(
+                Icons.groups,
+                'Students',
+                '${intValue(totals['enrolled'])}',
+                'total',
+              ),
+              Metric(
+                Icons.how_to_reg,
+                'Present',
+                '${intValue(totals['present'])}',
+                'today',
+                onTap: () => openDateDetails('present'),
+              ),
+              Metric(
+                Icons.person_off,
+                'Absent',
+                '${intValue(totals['absent'])}',
+                'today',
+                color: const Color(0xFFDC2626),
+                onTap: () => openDateDetails('absent'),
+              ),
+              Metric(
+                Icons.percent,
+                'Rate',
+                '${intValue(totals['rate'])}%',
+                'average',
+              ),
+            ],
           ),
-          const SizedBox(height: 14),
-          PremiumCard(
-            title: 'School Insights',
-            subtitle: '${schools.length} live school record(s)',
-            child: Column(
-              children: [
-                for (final item in schools.take(60))
-                  RateBar(
-                    '${(item as Map)['name'] ?? 'School'}',
-                    intValue(item['rate']),
-                  ),
-                if (schools.isEmpty)
-                  const EmptyText('No school report records yet.'),
-              ],
-            ),
+        ),
+        const SizedBox(height: 14),
+        PremiumCard(
+          title: 'School Insights',
+          subtitle: '${schools.length} live school record(s)',
+          child: Column(
+            children: [
+              for (final item in schools.take(60))
+                RateBar(
+                  '${(item as Map)['name'] ?? 'School'}',
+                  intValue(item['rate']),
+                ),
+              if (schools.isEmpty)
+                const EmptyText('No school report records yet.'),
+            ],
           ),
-        ],
-      );
+        ),
+      ],
+    );
   }
 }
 
@@ -7099,7 +7249,8 @@ class LiveMap extends StatefulWidget {
     BuildContext context,
     Map<String, dynamic> data,
     Future<void> Function() refresh,
-  ) builder;
+  )
+  builder;
   final String errorFallback;
   final Duration refreshInterval;
 
@@ -8343,8 +8494,18 @@ String _weekdayShortName(int weekday) =>
 
 String _readableReportDate(DateTime now) {
   const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   return '${_weekdayShortName(now.weekday)}, ${months[now.month - 1]} ${now.day}';
 }
@@ -8697,10 +8858,8 @@ String attendanceScoreLabel(int rate) {
   return 'Poor Attendance';
 }
 
-String statusKey(dynamic value) => '${value ?? ''}'
-    .trim()
-    .toLowerCase()
-    .replaceAll(RegExp(r'[\s-]+'), '_');
+String statusKey(dynamic value) =>
+    '${value ?? ''}'.trim().toLowerCase().replaceAll(RegExp(r'[\s-]+'), '_');
 
 String formatStatusLabel(dynamic value) {
   final raw = '${value ?? ''}'.trim();

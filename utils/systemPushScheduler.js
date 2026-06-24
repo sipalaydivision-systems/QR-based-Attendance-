@@ -193,19 +193,31 @@ async function wasDelivered(key) {
 }
 
 async function sendOnce(recipient, key, type, payload) {
-    if (await wasDelivered(key)) return false;
-    const result = await sendMulticast(recipient.tokens, payload);
-    if (result.invalidTokens.length) {
-        await db.query('DELETE FROM user_devices WHERE push_token IN (?)', [result.invalidTokens]);
-    }
-    if (result.successCount < 1) return false;
-    await db.query(
+    // Claim the logical notification before sending it. INSERT IGNORE is
+    // atomic, so overlapping Railway instances during a deploy cannot both
+    // send the same report after racing through a SELECT check.
+    const [claim] = await db.query(
         `INSERT IGNORE INTO system_push_deliveries
             (delivery_key, user_id, notification_type)
          VALUES (?, ?, ?)`,
         [key, recipient.userId, type]
     );
-    return true;
+    if (claim.affectedRows !== 1) return false;
+
+    try {
+        const result = await sendMulticast(recipient.tokens, payload);
+        if (result.invalidTokens.length) {
+            await db.query('DELETE FROM user_devices WHERE push_token IN (?)', [result.invalidTokens]);
+        }
+        if (result.successCount < 1) {
+            await db.query('DELETE FROM system_push_deliveries WHERE delivery_key = ?', [key]);
+            return false;
+        }
+        return true;
+    } catch (error) {
+        await db.query('DELETE FROM system_push_deliveries WHERE delivery_key = ?', [key]).catch(() => {});
+        throw error;
+    }
 }
 
 async function sendDailyReports(date) {

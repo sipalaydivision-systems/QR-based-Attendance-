@@ -11,11 +11,11 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "scheduleBackgroundNotifications" -> {
-                        val cookie = call.argument<String>("cookie").orEmpty()
-                        val baseUrl = call.argument<String>("baseUrl").orEmpty()
-                        val fullname = call.argument<String>("fullname").orEmpty()
-                        BackgroundNotificationStore.save(this, baseUrl, cookie, fullname)
-                        EdutrackBackgroundWorkers.schedule(this)
+                        // Kept as a migration-safe no-op for older Flutter
+                        // callers. Railway FCM is now the only system-alert
+                        // producer; native polling would duplicate it.
+                        EdutrackBackgroundWorkers.cancel(this)
+                        BackgroundNotificationStore.clear(this)
                         result.success(true)
                     }
                     "cancelBackgroundNotifications" -> {

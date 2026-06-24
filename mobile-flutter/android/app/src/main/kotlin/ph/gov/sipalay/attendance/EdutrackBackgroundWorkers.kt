@@ -34,6 +34,8 @@ import kotlin.math.abs
 private const val PREFS = "edutrack_native_background"
 private const val ABSENCE_WORK = "edutrack_absence_background_poll"
 private const val DAILY_WORK = "edutrack_daily_7pm_report"
+private const val LEGACY_ABSENCE_WORK = "two_day_absence_poll"
+private const val LEGACY_DAILY_WORK = "daily_7pm_attendance_report"
 private const val ABSENCE_CHANNEL = "edutrack_absence_background"
 private const val DAILY_CHANNEL = "edutrack_daily_report_background"
 private const val BASE_URL = "https://sdo-sipalay-edutrack.up.railway.app"
@@ -87,8 +89,23 @@ object EdutrackBackgroundWorkers {
     }
 
     fun cancel(context: Context) {
-        WorkManager.getInstance(context).cancelUniqueWork(ABSENCE_WORK)
-        WorkManager.getInstance(context).cancelUniqueWork(DAILY_WORK)
+        val workManager = WorkManager.getInstance(context)
+        workManager.cancelUniqueWork(ABSENCE_WORK)
+        workManager.cancelUniqueWork(DAILY_WORK)
+        // These names were used by the original native EduTrack application.
+        // The Flutter app has the same package ID, so its WorkManager database
+        // can survive an upgrade and continue producing duplicate alerts.
+        workManager.cancelUniqueWork(LEGACY_ABSENCE_WORK)
+        workManager.cancelUniqueWork(LEGACY_DAILY_WORK)
+
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        manager?.cancel(7001)
+        if (Build.VERSION.SDK_INT >= 26) {
+            manager?.deleteNotificationChannel(ABSENCE_CHANNEL)
+            manager?.deleteNotificationChannel(DAILY_CHANNEL)
+            manager?.deleteNotificationChannel("two_day_absence_alerts")
+            manager?.deleteNotificationChannel("daily_attendance_report")
+        }
     }
 }
 
