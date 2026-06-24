@@ -279,6 +279,24 @@ function submitAdd() {
     .catch(function() { errEl.textContent = 'Network error — try again.'; errEl.style.display = ''; })
     .finally(function() { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Add Student'; });
 }
+
+// ── Deep links from the sidebar (#notEnrolled / #transferred / #archived / #enroll) ──
+function applyHashView() {
+    var hash = location.hash || '#enroll';
+    var key = hash.replace('#', '');
+    if (key === 'notEnrolled' || key === 'transferred' || key === 'archived') {
+        switchTab(key);
+    } else if (key === 'enroll') {
+        var inp = document.getElementById('enrollSearch');
+        if (inp) inp.focus();
+    }
+    var grp = document.getElementById('studentsNavGroup');
+    if (grp) grp.querySelectorAll('a[data-hash]').forEach(function (a) {
+        a.classList.toggle('active', a.getAttribute('data-hash') === hash);
+    });
+}
+window.addEventListener('hashchange', applyHashView);
+applyHashView();
 </script>
 
 <%- include('partials/footer') %>

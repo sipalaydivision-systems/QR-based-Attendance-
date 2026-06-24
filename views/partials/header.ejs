@@ -118,21 +118,19 @@
                     <i class="nav-icon fa-solid fa-file-lines"></i> SF2 Report
                 </a>
             </li>
-            <li class="nav-section"><span class="nav-section-label">Students</span></li>
-            <li>
-                <a href="/admin/adviser-students" class="<%= page === 'adviser_students' ? 'active' : '' %>">
-                    <i class="nav-icon fa-solid fa-users"></i> Student List
-                </a>
-            </li>
-            <li>
-                <a href="/admin/adviser-student-management" class="<%= page === 'adviser_student_management' ? 'active' : '' %>">
-                    <i class="nav-icon fa-solid fa-user-gear"></i> Student Management
-                </a>
-            </li>
-            <li>
-                <a href="/admin/adviser-import-students" class="<%= page === 'adviser_student_import' ? 'active' : '' %>">
-                    <i class="nav-icon fa-solid fa-file-arrow-up"></i> Import Students
-                </a>
+            <li class="nav-group" id="studentsNavGroup">
+                <button type="button" class="nav-group-toggle" onclick="toggleNavGroup('studentsNavGroup')">
+                    <span class="nav-group-label"><i class="nav-icon fa-solid fa-user-graduate"></i> Students</span>
+                    <i class="fa-solid fa-chevron-down nav-group-caret"></i>
+                </button>
+                <ul class="nav-group-items">
+                    <li><a href="/admin/adviser-students" class="<%= page === 'adviser_students' ? 'active' : '' %>">Enrolled Students</a></li>
+                    <li><a href="/admin/adviser-student-management#notEnrolled" data-hash="#notEnrolled">Not Enrolled Students</a></li>
+                    <li><a href="/admin/adviser-student-management#transferred" data-hash="#transferred">Transferred Students</a></li>
+                    <li><a href="/admin/adviser-student-management#archived" data-hash="#archived">Archived Students</a></li>
+                    <li><a href="/admin/adviser-import-students" class="<%= page === 'adviser_student_import' ? 'active' : '' %>">Import Students</a></li>
+                    <li><a href="/admin/adviser-student-management#enroll" data-hash="#enroll">Enroll a Student</a></li>
+                </ul>
             </li>
             <li class="nav-section"><span class="nav-section-label">Tools</span></li>
             <li>
@@ -307,6 +305,27 @@
     </div>
 
     <script>
+    // Collapsible sidebar nav groups (e.g. the Students dropdown).
+    function toggleNavGroup(id) {
+        var g = document.getElementById(id);
+        if (!g) return;
+        g.classList.toggle('collapsed');
+        try { localStorage.setItem('nav_' + id, g.classList.contains('collapsed') ? '1' : '0'); } catch (e) {}
+    }
+    (function () {
+        var g = document.getElementById('studentsNavGroup');
+        if (!g) return;
+        try { if (localStorage.getItem('nav_studentsNavGroup') === '1') g.classList.add('collapsed'); } catch (e) {}
+        // On the management page, highlight the sub-item matching the URL hash.
+        if (location.pathname.indexOf('/adviser-student-management') !== -1) {
+            g.classList.remove('collapsed');
+            var hash = location.hash || '#enroll';
+            g.querySelectorAll('a[data-hash]').forEach(function (a) {
+                if (a.getAttribute('data-hash') === hash) a.classList.add('active');
+            });
+        }
+    })();
+
     // Advisers act on the teachers table; all other roles on the users table.
     var ACCOUNT = <%- JSON.stringify(
         user.role === 'adviser'
