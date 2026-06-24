@@ -141,7 +141,7 @@
       return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_OUT', status: 'half_day', attendance_status: 'Half-Day', half_day_type: 'pm_only', remarks: 'Afternoon Session Only', display_status: 'COMPLETED', message: 'PM time out recorded - marked as HALF-DAY (Afternoon Session Only).', person: SHS_STUDENT, time: _time(), time_in: '01:00 PM', time_out: '04:00 PM' });
     },
     function () {
-      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_OUT', status: 'half_day', attendance_status: 'Half-Day PM Early Dismissal', half_day_type: 'pm_early_out', remarks: 'Early Dismissal During PM Session', display_status: 'EARLY OUT', message: 'Half-Day PM Early Dismissal recorded.', person: SHS_TEACHER, time: _time(), time_in: '07:20 AM', time_out: '02:00 PM' });
+      return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_OUT', status: 'half_day', attendance_status: 'Early Dismissal (PM)', half_day_type: 'pm_early_out', remarks: 'Early Dismissal During PM Session', display_status: 'EARLY OUT', message: 'Early Dismissal (PM) recorded.', person: SHS_TEACHER, time: _time(), time_in: '07:20 AM', time_out: '02:00 PM' });
     },
     function () {
       return Object.assign({}, BASE_STATUS, { success: true, action: 'TIME_OUT', status: 'present', display_status: 'COMPLETED', completed: true, message: 'Time out recorded - attendance for today is complete.', person: TEACHER, time: _time(), time_in: '01:00 PM', time_out: _time() });

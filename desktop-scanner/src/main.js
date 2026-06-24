@@ -561,14 +561,14 @@ function computeOfflineDailyAttendanceStatus(input = {}) {
     if (schedule.lunchStart && compareSqlDateTimes(timeOut, schedule.lunchStart) < 0) {
       return {
         status: 'half_day',
-        label: 'Half-Day AM Early Dismissal',
+        label: 'Early Dismissal (AM)',
         halfDayType: 'am_early_out',
         remarks: 'Early Dismissal During AM Session'
       };
     }
     return {
       status: 'half_day',
-      label: 'Half-Day PM Early Dismissal',
+      label: 'Early Dismissal (PM)',
       halfDayType: 'pm_early_out',
       remarks: 'Early Dismissal During PM Session'
     };

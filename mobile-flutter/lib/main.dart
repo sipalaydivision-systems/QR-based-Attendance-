@@ -8880,9 +8880,9 @@ String formatStatusLabel(dynamic value) {
     case 'half day am':
       return 'Half-Day AM';
     case 'half day am early dismissal':
-      return 'Half-Day AM Early Dismissal';
+      return 'Early Dismissal (AM)';
     case 'half day pm early dismissal':
-      return 'Half-Day PM Early Dismissal';
+      return 'Early Dismissal (PM)';
     case 'completed':
       return 'Completed';
     case 'returned':
