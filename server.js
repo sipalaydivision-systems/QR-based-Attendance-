@@ -30,6 +30,7 @@ app.get('/mobile-config.json', (req, res) => {
     res.json({
         base_url: getPublicAppBaseUrl(req),
         fallback_urls: [],
+        mobile_app_version: '2.1.32',
         notification_capabilities: {
             closed_app_fcm: true,
             daily_report_7pm: true,
