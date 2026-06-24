@@ -73,19 +73,10 @@ object BackgroundNotificationStore {
 
 object EdutrackBackgroundWorkers {
     fun schedule(context: Context) {
-        if (BackgroundNotificationStore.cookie(context).isBlank()) return
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-        val absence = PeriodicWorkRequestBuilder<AbsenceFlagWorker>(15, TimeUnit.MINUTES)
-            .setConstraints(constraints)
-            .build()
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            ABSENCE_WORK,
-            ExistingPeriodicWorkPolicy.UPDATE,
-            absence,
-        )
-        DailyReportWorker.schedule(context)
+        // Railway FCM is the sole notification producer. Never recreate the
+        // legacy polling jobs, even if an older Flutter caller reaches here.
+        cancel(context)
+        BackgroundNotificationStore.clear(context)
     }
 
     fun cancel(context: Context) {
@@ -114,47 +105,13 @@ class AbsenceFlagWorker(
     params: WorkerParameters,
 ) : Worker(context, params) {
     override fun doWork(): Result {
+        // A WorkRequest queued by an older APK may start before asynchronous
+        // cancellation completes. Make the worker itself inert so it can never
+        // post the second "1 student absent 2+ days" notification.
         val context = applicationContext
-        val cookie = BackgroundNotificationStore.cookie(context)
-        if (cookie.isBlank()) return Result.success()
-        return try {
-            val flags = JSONArray(getRaw(context, "/api/absence-flags?days=2&include_teachers=0"))
-            val today = todayKey()
-            val storeKey = "absence_notified_flags_$today"
-            val prefs = BackgroundNotificationStore.prefs(context)
-            val notified = prefs.getStringSet(storeKey, emptySet())?.toMutableSet() ?: mutableSetOf()
-            val current = mutableSetOf<String>()
-
-            for (i in 0 until flags.length()) {
-                val row = flags.optJSONObject(i) ?: continue
-                val key = absenceKey(row, today)
-                current.add(key)
-                if (notified.contains(key)) continue
-                showNotification(
-                    context,
-                    ABSENCE_CHANNEL,
-                    "2-Day Absence Alerts",
-                    stableId(key, 4100),
-                    "1 student absent 2+ days",
-                    absenceBody(row),
-                    "alerts",
-                )
-                notified.add(key)
-            }
-
-            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-            notified.toList().forEach { key ->
-                if (!current.contains(key)) {
-                    manager?.cancel(stableId(key, 4100))
-                    notified.remove(key)
-                }
-            }
-
-            prefs.edit().putStringSet(storeKey, notified).apply()
-            Result.success()
-        } catch (_: Exception) {
-            Result.retry()
-        }
+        EdutrackBackgroundWorkers.cancel(context)
+        BackgroundNotificationStore.clear(context)
+        return Result.success()
     }
 }
 
@@ -163,49 +120,18 @@ class DailyReportWorker(
     params: WorkerParameters,
 ) : Worker(context, params) {
     override fun doWork(): Result {
+        // The 7 PM report now comes only from Railway FCM. A persisted native
+        // job must finish silently rather than showing a duplicate report.
         val context = applicationContext
-        if (BackgroundNotificationStore.cookie(context).isBlank()) {
-            return Result.success()
-        }
-        return try {
-            val today = todayKey()
-            val prefs = BackgroundNotificationStore.prefs(context)
-            val sentKey = "daily_report_sent_$today"
-            if (!prefs.getBoolean(sentKey, false)) {
-                val data = JSONObject(getRaw(context, "/api/dashboard-data?date=$today"))
-                showNotification(
-                    context,
-                    DAILY_CHANNEL,
-                    "Daily 7 PM Attendance Report",
-                    7001,
-                    "SDO Sipalay AI - Daily Report",
-                    dailyReportBody(data),
-                    "reports",
-                )
-                prefs.edit().putBoolean(sentKey, true).apply()
-            }
-            schedule(context, replaceExisting = true)
-            Result.success()
-        } catch (_: Exception) {
-            Result.retry()
-        }
+        EdutrackBackgroundWorkers.cancel(context)
+        BackgroundNotificationStore.clear(context)
+        return Result.success()
     }
 
     companion object {
         fun schedule(context: Context, replaceExisting: Boolean = false) {
-            if (BackgroundNotificationStore.cookie(context).isBlank()) return
-            val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build()
-            val request = OneTimeWorkRequestBuilder<DailyReportWorker>()
-                .setInitialDelay(millisUntilNextSevenPm(), TimeUnit.MILLISECONDS)
-                .setConstraints(constraints)
-                .build()
-            WorkManager.getInstance(context).enqueueUniqueWork(
-                DAILY_WORK,
-                if (replaceExisting) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP,
-                request,
-            )
+            EdutrackBackgroundWorkers.cancel(context)
+            BackgroundNotificationStore.clear(context)
         }
     }
 }
