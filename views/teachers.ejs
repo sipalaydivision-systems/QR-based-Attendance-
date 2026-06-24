@@ -155,7 +155,6 @@
 
 <script>
 var allTeachers = [];
-var allGrades = [];
 
 function esc(v) {
     return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -163,14 +162,6 @@ function esc(v) {
 
 function teacherName(t) {
     return [t.firstname, t.middlename ? t.middlename.charAt(0) + '.' : '', t.lastname].filter(Boolean).join(' ');
-}
-
-var lookupsLoaded = false;
-async function loadLookups() {
-    if (lookupsLoaded) return;
-    var gradeRes = await fetch('/api/grade-levels');
-    allGrades = await gradeRes.json();
-    lookupsLoaded = true;
 }
 
 async function loadTeachers() {
@@ -215,21 +206,49 @@ function renderTeachers() {
     }).join('') || '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon"><i class="fa-solid fa-chalkboard-user" style="font-size:2.5rem;color:var(--gray-300);"></i></div><h4>No teachers found</h4><p>Use Add Teacher or Import Teachers to create adviser records.</p></div></td></tr>';
 }
 
-function loadTeacherGrades(selectedId) {
+var teacherGradeRequest = 0;
+async function loadTeacherGrades(selectedId, selectedName) {
+    var requestId = ++teacherGradeRequest;
     var schoolId = document.getElementById('teacherSchool').value;
     var category = document.getElementById('teacherCategory').value;
-    var grades = allGrades.filter(function(g){
-        var schoolOk = !schoolId || String(g.school_id || '') === String(schoolId) || !g.school_id;
-        var match = String(g.name || '').match(/\d+/);
-        var gradeNumber = match ? parseInt(match[0], 10) : NaN;
-        var categoryOk = category === 'shs_teacher'
-            ? gradeNumber >= 11 && gradeNumber <= 12
-            : gradeNumber >= 1 && gradeNumber <= 10;
-        return schoolOk && categoryOk;
-    });
-    document.getElementById('teacherGrade').innerHTML = '<option value="">Select Grade</option>' + grades.map(function(g){ return '<option value="' + g.id + '">' + esc(g.name) + '</option>'; }).join('');
+    var gradeSelect = document.getElementById('teacherGrade');
+    if (!schoolId) {
+        gradeSelect.innerHTML = '<option value="">Select a school first</option>';
+        clearTeacherSection();
+        return;
+    }
+    gradeSelect.innerHTML = '<option value="">Loading grades...</option>';
+    var res, data;
+    try {
+        res = await fetch('/api/teacher-grade-options', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ school_id: schoolId, category: category })
+        });
+        data = await res.json();
+    } catch (err) {
+        if (requestId !== teacherGradeRequest) return;
+        gradeSelect.innerHTML = '<option value="">Unable to load grades</option>';
+        document.getElementById('teacherMsg').innerHTML = '<div class="alert alert-danger">Could not connect while loading grade choices.</div>';
+        return;
+    }
+    if (requestId !== teacherGradeRequest) return;
+    if (!res.ok || !Array.isArray(data.grades)) {
+        gradeSelect.innerHTML = '<option value="">Unable to load grades</option>';
+        document.getElementById('teacherMsg').innerHTML = '<div class="alert alert-danger">' + esc(data.error || 'Failed to load grade choices.') + '</div>';
+        return;
+    }
+    var grades = data.grades;
+    gradeSelect.innerHTML = '<option value="">Select Grade</option>' + grades.map(function(g){ return '<option value="' + g.id + '">' + esc(g.name) + '</option>'; }).join('');
     if (selectedId && grades.some(function(g){ return String(g.id) === String(selectedId); })) {
-        document.getElementById('teacherGrade').value = selectedId;
+        gradeSelect.value = selectedId;
+    } else if (selectedName) {
+        var selectedMatch = String(selectedName).match(/\d+/);
+        var selectedNumber = selectedMatch ? parseInt(selectedMatch[0], 10) : NaN;
+        var equivalent = grades.find(function(g) {
+            var match = String(g.name || '').match(/\d+/);
+            return match && parseInt(match[0], 10) === selectedNumber;
+        });
+        if (equivalent) gradeSelect.value = equivalent.id;
     }
     if (!selectedId) clearTeacherSection();
 }
@@ -265,8 +284,7 @@ async function openTeacherModal() {
     document.getElementById('teacherPasswordStatus').innerHTML = '';
     document.getElementById('teacherNewPassword').value = '';
     document.getElementById('teacherConfirmPassword').value = '';
-    await loadLookups();
-    loadTeacherGrades();
+    await loadTeacherGrades();
     document.getElementById('teacherModal').style.display = 'flex';
 }
 
@@ -294,7 +312,6 @@ var teacherOrigGrade = '';
 var teacherOrigCategory = 'teacher';
 
 async function editTeacherById(id) {
-    await loadLookups();
     var t = allTeachers.find(function(x) { return x.id === id; });
     if (!t) return;
     teacherOrigSection = t.section_id ? String(t.section_id) : '';
@@ -319,7 +336,7 @@ async function editTeacherById(id) {
         ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:700;background:#dcfce7;color:#166534;"><i class="fa-solid fa-circle-check"></i> Password Set</span>'
         : '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:700;background:#fef3c7;color:#92400e;"><i class="fa-solid fa-circle-exclamation"></i> No Password Yet</span>';
     document.getElementById('teacherPasswordStatus').innerHTML = psBadge;
-    loadTeacherGrades(t.grade_level_id || '');
+    await loadTeacherGrades(t.grade_level_id || '', t.grade_name || '');
     document.getElementById('teacherSectionName').value = t.section_name || '';
     document.getElementById('teacherModal').style.display = 'flex';
 }
@@ -375,7 +392,7 @@ async function saveTeacher(e) {
         if (tr.success) { alert('Reassignment request sent — the teacher must accept it before the section changes.'); }
         else { document.getElementById('teacherMsg').innerHTML = '<div class="alert alert-danger">' + esc(tr.error || 'Could not send reassignment request.') + '</div>'; return; }
     }
-    lookupsLoaded = false; closeTeacherModal(); loadTeachers();
+    closeTeacherModal(); loadTeachers();
 }
 
 async function deleteTeacher(id) {

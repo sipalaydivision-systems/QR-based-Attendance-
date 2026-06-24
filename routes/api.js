@@ -2322,6 +2322,43 @@ router.get('/teachers', requireAuth, async (req, res) => {
     }
 });
 
+// Return the grade choices required by the teacher type. Older schools may not
+// have grade-level rows yet, so create the missing rows once for that school.
+router.post('/teacher-grade-options', requireRole('super_admin', 'principal'), async (req, res) => {
+    const schoolId = parseInt(req.body.school_id, 10);
+    const category = req.body.category === 'shs_teacher' ? 'shs_teacher' : 'teacher';
+    if (!schoolId) return res.status(400).json({ error: 'Select a school first.' });
+    const scopedSchool = applySchoolFilter(req);
+    if (scopedSchool && Number(scopedSchool) !== Number(schoolId)) {
+        return res.status(403).json({ error: 'You can only manage grades in your school.' });
+    }
+    try {
+        const [[school]] = await db.query("SELECT id FROM schools WHERE id = ? AND status = 'active' LIMIT 1", [schoolId]);
+        if (!school) return res.status(404).json({ error: 'Selected school was not found.' });
+        const [existing] = await db.query('SELECT id, name, school_id FROM grade_levels WHERE school_id = ?', [schoolId]);
+        const byNumber = new Map();
+        existing.forEach(grade => {
+            const match = String(grade.name || '').match(/\bgrade\s*(\d+)\b/i);
+            if (match && !byNumber.has(parseInt(match[1], 10))) byNumber.set(parseInt(match[1], 10), grade);
+        });
+        const numbers = category === 'shs_teacher' ? [11, 12] : Array.from({ length: 10 }, (_, index) => index + 1);
+        const grades = [];
+        for (const number of numbers) {
+            let grade = byNumber.get(number);
+            if (!grade) {
+                const name = `Grade ${number}`;
+                const [result] = await db.query('INSERT INTO grade_levels (name, school_id) VALUES (?, ?)', [name, schoolId]);
+                grade = { id: result.insertId, name, school_id: schoolId };
+            }
+            grades.push(grade);
+        }
+        return res.json({ success: true, grades });
+    } catch (err) {
+        console.error('Teacher grade options error:', err);
+        return res.status(500).json({ error: 'Failed to load grade choices.' });
+    }
+});
+
 // Resolve a typed advisory section to a real section record. This keeps the
 // teacher form free-text while preserving all report/adviser relationships.
 router.post('/teacher-sections/resolve', requireRole('super_admin', 'principal'), async (req, res) => {
