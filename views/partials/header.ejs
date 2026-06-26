@@ -113,6 +113,7 @@
             <% } %>
 
             <% if (user.role === 'adviser') { %>
+            <% var isShsAdviserNav = (typeof adviserIsShs !== 'undefined' && adviserIsShs) || (typeof teacher !== 'undefined' && teacher && teacher.is_shs); %>
             <li>
                 <a href="/admin/sf2-report" class="<%= page === 'sf2_report' ? 'active' : '' %>">
                     <i class="nav-icon fa-solid fa-file-lines"></i> SF2 Report
@@ -134,11 +135,13 @@
                 </ul>
             </li>
             <li class="nav-section"><span class="nav-section-label">Tools</span></li>
+            <% if (!isShsAdviserNav) { %>
             <li>
                 <a href="/admin/scanner" class="<%= page === 'scanner' ? 'active' : '' %>">
                     <i class="nav-icon fa-solid fa-camera"></i> QR Scanner
                 </a>
             </li>
+            <% } %>
             <li>
                 <a href="/admin/print-qr" class="<%= page === 'print_qr' ? 'active' : '' %>">
                     <i class="nav-icon fa-solid fa-qrcode"></i> Print QR Codes

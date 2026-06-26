@@ -48,10 +48,12 @@ function requireRole(...roles) {
 // Apply school filter based on role
 function applySchoolFilter(req) {
     const user = req.session.user;
-    // Principals are hard-scoped to their own school and may NOT override via params.
-    if (user.role === 'principal') {
-        // Assigned school wins. If a principal has no school assigned, return a
-        // sentinel that matches no rows so they see nothing instead of every school.
+    // Principals and advisers are hard-scoped to their assigned school and may
+    // NOT override via params. The app middleware refreshes adviser school_id
+    // from the live teacher/section assignment on each request.
+    if (user.role === 'principal' || user.role === 'adviser') {
+        // Assigned school wins. If none is assigned, return a sentinel that
+        // matches no rows so they see nothing instead of every school.
         return user.school_id ? user.school_id : -1;
     }
     if (user.role === 'parent') {

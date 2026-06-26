@@ -43,6 +43,9 @@
 .ad-section-badge.school { background: #eef2ff; color: #4f46e5; }
 .ad-section-badge.grade  { background: #fef3c7; color: #92400e; }
 .ad-section-badge.section { background: #dcfce7; color: #16a34a; }
+.ad-section-badge.program { background: #f0f9ff; color: #0369a1; }
+.ad-section-badge.program.regular { background: #f0fdf4; color: #047857; }
+.ad-section-badge.track { background: #f5f3ff; color: #6d28d9; }
 
 
 .ad-analytics-grid {
@@ -212,6 +215,13 @@
         </span>
         <span class="ad-section-badge grade"><i class="fa-solid fa-layer-group"></i> <%= teacher.grade_name || 'N/A' %></span>
         <span class="ad-section-badge section"><i class="fa-solid fa-users"></i> <%= teacher.section_name || 'N/A' %></span>
+        <span class="ad-section-badge program <%= teacher.is_shs ? '' : 'regular' %>">
+            <i class="fa-solid <%= teacher.is_shs ? 'fa-user-graduate' : 'fa-school' %>"></i>
+            <%= teacher.is_shs ? 'SHS Adviser' : 'Regular Adviser' %>
+        </span>
+        <% if (teacher.is_shs && teacher.track) { %>
+        <span class="ad-section-badge track"><i class="fa-solid fa-route"></i> <%= teacher.track %></span>
+        <% } %>
     </div>
 
     <div class="stats-grid" style="grid-template-columns: repeat(6, minmax(0, 1fr));">
@@ -678,18 +688,6 @@ window.submitEditStudent = function() {
     .catch(function() { esFail('Network error — try again.'); });
 };
 
-function openSF2Modal() {
-    document.getElementById('sf2Modal').style.display = 'flex';
-    var now = new Date();
-    document.getElementById('sf2Month').value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
-}
-function closeSF2Modal() { document.getElementById('sf2Modal').style.display = 'none'; }
-function generateSF2() {
-    var month = document.getElementById('sf2Month').value;
-    if (!month) return;
-    window.open('/admin/sf2-report?month=' + month, '_blank');
-    closeSF2Modal();
-}
 </script>
 
 <!-- Student Edit Modal -->
@@ -747,26 +745,6 @@ function generateSF2() {
             <div style="display:flex;gap:10px;justify-content:flex-end;">
                 <button class="btn btn-secondary" onclick="closeEditStudent()">Cancel</button>
                 <button class="btn btn-primary" id="esSaveBtn" onclick="submitEditStudent()"><i class="fa-solid fa-floppy-disk"></i> Save Changes</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- SF2 Month Picker Modal -->
-<div class="modal-overlay" id="sf2Modal" style="display:none;">
-    <div class="modal" style="max-width:380px;">
-        <div class="modal-header">
-            <h3><i class="fa-solid fa-file-lines"></i> Generate SF2 Report</h3>
-            <button class="modal-close" onclick="closeSF2Modal()">&times;</button>
-        </div>
-        <div style="padding:24px;">
-            <div class="form-group" style="margin-bottom:20px;">
-                <label style="font-size:0.75rem;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:6px;">Select Month</label>
-                <input type="month" id="sf2Month" style="width:100%;padding:10px 14px;border:1.5px solid var(--gray-300);border-radius:8px;font-size:0.875rem;box-sizing:border-box;">
-            </div>
-            <div style="display:flex;gap:10px;justify-content:flex-end;">
-                <button class="btn btn-secondary" onclick="closeSF2Modal()">Cancel</button>
-                <button class="btn btn-primary" onclick="generateSF2()"><i class="fa-solid fa-print"></i> Generate</button>
             </div>
         </div>
     </div>

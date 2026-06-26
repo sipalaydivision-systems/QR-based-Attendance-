@@ -467,18 +467,16 @@ router.get('/adviser-dashboard', async (req, res) => {
         return res.render('error', { title: 'Setup Required', message: 'Your account is not linked to a teacher record. Please contact the administrator.', user: req.session.user });
     }
     try {
-        const [teacher] = await db.query(
-            `SELECT t.*, sc.name as school_name, sc.logo as school_logo, gl.name as grade_name, sec.name as section_name, sec.id as section_id
-             FROM teachers t
-             LEFT JOIN schools sc ON t.school_id = sc.id
-             LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
-             LEFT JOIN sections sec ON t.section_id = sec.id
-             WHERE t.id = ?`, [teacherId]
-        );
-        if (teacher.length === 0) {
+        const teacher = await loadAdviserTeacher(teacherId);
+        if (!teacher) {
             return res.render('error', { title: 'Teacher Not Found', message: 'The linked teacher record was not found.', user: req.session.user });
         }
-        res.render('adviser_dashboard', { title: 'Adviser Dashboard', page: 'adviser_dashboard', teacher: teacher[0] });
+        res.render('adviser_dashboard', {
+            title: 'Adviser Dashboard',
+            page: 'adviser_dashboard',
+            teacher,
+            headerSchool: teacher.school_id ? { name: teacher.school_name || 'My School', logo: teacher.school_logo || null } : null
+        });
     } catch (err) {
         console.error('Adviser dashboard error:', err);
         return res.render('error', { title: 'Error', message: 'Failed to load adviser dashboard.', user: req.session.user });
@@ -526,16 +524,7 @@ router.get('/sf2-report', async (req, res) => {
 
     try {
         // Teacher + school + section info
-        const [[teacher]] = await db.query(
-            `SELECT t.firstname, t.lastname, t.middlename, t.school_id, t.section_id,
-                    sc.name as school_name, sc.school_id_code,
-                    gl.name as grade_name, sec.name as section_name
-             FROM teachers t
-             LEFT JOIN schools sc ON t.school_id = sc.id
-             LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
-             LEFT JOIN sections sec ON t.section_id = sec.id
-             WHERE t.id = ?`, [teacherId]
-        );
+        const teacher = await loadAdviserTeacher(teacherId);
         if (!teacher) return res.render('error', { title: 'SF2 Error', message: 'Teacher not found.', user: req.session.user });
 
         // School head (principal user for this school)
@@ -896,11 +885,7 @@ router.get('/adviser-sections', async (req, res) => {
     const teacherId = req.session.user.teacher_id;
     if (!teacherId) return res.status(400).json({ error: 'No teacher record' });
     try {
-        const [[t]] = await db.query(
-            `SELECT t.school_id, t.grade_level_id, t.category, gl.name AS grade_name
-             FROM teachers t LEFT JOIN grade_levels gl ON gl.id = t.grade_level_id
-             WHERE t.id = ?`, [teacherId]
-        );
+        const t = await loadAdviserTeacher(teacherId);
         if (!t) return res.status(403).json({ error: 'Teacher not found' });
         let [rows] = await db.query(
             `SELECT sec.id, sec.name, gl.name AS grade_name
@@ -926,12 +911,19 @@ router.get('/adviser-sections', async (req, res) => {
 // Shared: load the adviser's teacher record (with school/grade/section names).
 async function loadAdviserTeacher(teacherId) {
     const [[teacher]] = await db.query(
-        `SELECT t.firstname, t.lastname, t.section_id, t.school_id, t.grade_level_id, t.category,
-                sc.name as school_name, sc.logo as school_logo, gl.name as grade_name, sec.name as section_name
+        `SELECT t.id, t.firstname, t.lastname, t.middlename, t.email, t.contact,
+                t.section_id,
+                COALESCE(sec.school_id, t.school_id) AS school_id,
+                COALESCE(sec.grade_level_id, t.grade_level_id) AS grade_level_id,
+                t.category,
+                sc.name as school_name, sc.logo as school_logo, sc.school_id_code,
+                gl.name as grade_name, sec.name as section_name,
+                t.school_id AS teacher_school_id,
+                sec.school_id AS section_school_id
          FROM teachers t
-         LEFT JOIN schools sc ON t.school_id = sc.id
-         LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
          LEFT JOIN sections sec ON t.section_id = sec.id
+         LEFT JOIN schools sc ON sc.id = COALESCE(sec.school_id, t.school_id)
+         LEFT JOIN grade_levels gl ON gl.id = COALESCE(sec.grade_level_id, t.grade_level_id)
          WHERE t.id = ?`, [teacherId]
     );
     if (teacher) {
@@ -1046,15 +1038,7 @@ router.get('/adviser-import-students', async (req, res) => {
     const teacherId = req.session.user.teacher_id;
     if (!teacherId) return res.render('error', { title: 'Error', message: 'No teacher record linked.', user: req.session.user });
     try {
-        const [[teacher]] = await db.query(
-            `SELECT t.firstname, t.lastname, t.section_id, t.school_id, t.grade_level_id,
-                    sc.name as school_name, sc.logo as school_logo, gl.name as grade_name, sec.name as section_name
-             FROM teachers t
-             LEFT JOIN schools sc ON t.school_id = sc.id
-             LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
-             LEFT JOIN sections sec ON t.section_id = sec.id
-             WHERE t.id = ?`, [teacherId]
-        );
+        const teacher = await loadAdviserTeacher(teacherId);
         if (!teacher) return res.render('error', { title: 'Error', message: 'Teacher not found.', user: req.session.user });
 
         let students = [];
@@ -1067,12 +1051,10 @@ router.get('/adviser-import-students', async (req, res) => {
                 [teacher.section_id]
             );
         }
-        const gradeNum = parseGradeNumber(teacher.grade_name || '');
-        const isShs = Number.isFinite(gradeNum) && gradeNum >= 11;
         res.render('adviser_import_students', {
             title: 'Import Students',
             page: 'adviser_student_import',
-            isShs,
+            isShs: !!teacher.is_shs,
             teacher,
             students
         });
@@ -1100,11 +1082,7 @@ router.post('/adviser-add-student', express.json(), async (req, res) => {
     const gNorm = gMap[(String(gender || '').trim().toLowerCase())] || null;
 
     try {
-        const [[t]] = await db.query(
-            `SELECT t.section_id, t.school_id, t.grade_level_id, t.category, gl.name AS grade_name
-             FROM teachers t LEFT JOIN grade_levels gl ON gl.id = t.grade_level_id
-             WHERE t.id = ?`, [teacherId]
-        );
+        const t = await loadAdviserTeacher(teacherId);
         if (!t || !t.section_id) return res.status(400).json({ error: 'No section assigned to your account' });
 
         if (lrnVal) {
@@ -1285,13 +1263,7 @@ router.post('/adviser-import-students', upload.single('file'), async (req, res) 
 
     let rawRows = [];
     try {
-        const [[t]] = await db.query(
-            `SELECT t.section_id, t.school_id, t.grade_level_id, gl.name as grade_name
-             FROM teachers t
-             LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
-             WHERE t.id = ?`,
-            [teacherId]
-        );
+        const t = await loadAdviserTeacher(teacherId);
         if (!t || !t.section_id) return res.status(400).json({ error: 'No section assigned to your account' });
 
         const ext = String(req.file.originalname || '').toLowerCase();
@@ -1527,9 +1499,9 @@ router.get('/adviser-profile-data', async (req, res) => {
             `SELECT t.id, t.firstname, t.lastname, t.middlename, t.email, t.contact, t.profile_photo,
                     sc.name as school_name, sc.logo as school_logo, gl.name as grade_name, sec.name as section_name
              FROM teachers t
-             LEFT JOIN schools sc ON t.school_id = sc.id
-             LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
              LEFT JOIN sections sec ON t.section_id = sec.id
+             LEFT JOIN schools sc ON sc.id = COALESCE(sec.school_id, t.school_id)
+             LEFT JOIN grade_levels gl ON gl.id = COALESCE(sec.grade_level_id, t.grade_level_id)
              WHERE t.id = ?`,
             [teacherId]
         );
@@ -1677,6 +1649,12 @@ async function schoolsForUser(req) {
     if (u && u.role === 'principal') {
         if (!u.school_id) return [];
         const [rows] = await db.query("SELECT * FROM schools WHERE id = ? AND status = 'active'", [u.school_id]);
+        return rows;
+    }
+    if (u && u.role === 'adviser' && u.teacher_id) {
+        const teacher = await loadAdviserTeacher(u.teacher_id);
+        if (!teacher || !teacher.school_id) return [];
+        const [rows] = await db.query("SELECT * FROM schools WHERE id = ? AND status = 'active'", [teacher.school_id]);
         return rows;
     }
     const [rows] = await db.query("SELECT * FROM schools WHERE status = 'active' ORDER BY name");
@@ -2522,15 +2500,12 @@ router.get('/print-qr/data', async (req, res) => {
     try {
         const user = req.session.user;
         if (user.role === 'adviser' && user.teacher_id) {
-            const [t] = await db.query(
-                'SELECT school_id, grade_level_id, section_id FROM teachers WHERE id = ?',
-                [user.teacher_id]
-            );
-            if (t.length > 0 && t[0].section_id) {
+            const t = await loadAdviserTeacher(user.teacher_id);
+            if (t && t.section_id) {
                 req.query.type = 'student';
-                req.query.school_id = String(t[0].school_id);
-                req.query.grade_level_id = String(t[0].grade_level_id);
-                req.query.section_id = String(t[0].section_id);
+                req.query.school_id = String(t.school_id);
+                req.query.grade_level_id = String(t.grade_level_id);
+                req.query.section_id = String(t.section_id);
             }
         }
         const filters = getPrintQrFilters(req.query);
@@ -2549,25 +2524,22 @@ router.get('/print-qr', async (req, res) => {
         let teacherQr = null;
 
         if (user.role === 'adviser' && user.teacher_id) {
-            const [t] = await db.query(
-                'SELECT school_id, grade_level_id, section_id FROM teachers WHERE id = ?',
-                [user.teacher_id]
-            );
-            if (t.length > 0 && t[0].section_id) {
-                adviserScope = { school_id: t[0].school_id, grade_level_id: t[0].grade_level_id, section_id: t[0].section_id };
+            const t = await loadAdviserTeacher(user.teacher_id);
+            if (t && t.section_id) {
+                adviserScope = { school_id: t.school_id, grade_level_id: t.grade_level_id, section_id: t.section_id };
                 req.query.type = 'student';
-                req.query.school_id = String(t[0].school_id);
-                req.query.grade_level_id = String(t[0].grade_level_id);
-                req.query.section_id = String(t[0].section_id);
+                req.query.school_id = String(t.school_id);
+                req.query.grade_level_id = String(t.grade_level_id);
+                req.query.section_id = String(t.section_id);
             }
             // fetch teacher's own QR card
             const [[tData]] = await db.query(
                 `SELECT t.id, t.firstname, t.lastname, t.middlename, t.employee_id, t.qr_code,
                         sc.name AS school_name, gl.name AS grade_name, sec.name AS section_name
                  FROM teachers t
-                 LEFT JOIN schools sc ON t.school_id = sc.id
-                 LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
                  LEFT JOIN sections sec ON t.section_id = sec.id
+                 LEFT JOIN schools sc ON sc.id = COALESCE(sec.school_id, t.school_id)
+                 LEFT JOIN grade_levels gl ON gl.id = COALESCE(sec.grade_level_id, t.grade_level_id)
                  WHERE t.id = ?`,
                 [user.teacher_id]
             );

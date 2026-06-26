@@ -3901,7 +3901,16 @@ router.get('/notifications', requireAuth, async (req, res) => {
         const params = [];
         if (schoolId) { query += ' AND n.school_id = ?'; params.push(schoolId); }
         if (user.role === 'adviser') {
-            const [[teacher]] = await db.query('SELECT school_id, grade_level_id, section_id FROM teachers WHERE id = ? LIMIT 1', [user.teacher_id || 0]);
+            const [[teacher]] = await db.query(
+                `SELECT COALESCE(sec.school_id, t.school_id) AS school_id,
+                        COALESCE(sec.grade_level_id, t.grade_level_id) AS grade_level_id,
+                        t.section_id
+                 FROM teachers t
+                 LEFT JOIN sections sec ON sec.id = t.section_id
+                 WHERE t.id = ?
+                 LIMIT 1`,
+                [user.teacher_id || 0]
+            );
             if (!teacher) return res.json([]);
             query += ' AND (n.section_id = ? OR (n.school_id = ? AND n.section_id IS NULL AND n.grade_level_id IS NULL AND n.student_id IS NULL))';
             params.push(teacher.section_id || -1, teacher.school_id || -1);
@@ -3929,12 +3938,14 @@ router.get('/notifications/scope', requireRole('super_admin', 'principal', 'advi
             }
         } else if (user.role === 'adviser') {
             const [[teacher]] = await db.query(
-                `SELECT t.school_id, t.grade_level_id, t.section_id,
+                `SELECT COALESCE(sec.school_id, t.school_id) AS school_id,
+                        COALESCE(sec.grade_level_id, t.grade_level_id) AS grade_level_id,
+                        t.section_id,
                         sc.name AS school_name, gl.name AS grade_name, sec.name AS section_name
                  FROM teachers t
-                 LEFT JOIN schools sc ON t.school_id = sc.id
-                 LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
                  LEFT JOIN sections sec ON t.section_id = sec.id
+                 LEFT JOIN schools sc ON sc.id = COALESCE(sec.school_id, t.school_id)
+                 LEFT JOIN grade_levels gl ON gl.id = COALESCE(sec.grade_level_id, t.grade_level_id)
                  WHERE t.id = ?
                  LIMIT 1`,
                 [user.teacher_id || 0]
@@ -4035,9 +4046,12 @@ router.post('/notifications', requireRole('super_admin', 'principal', 'adviser')
 
         if (user.role === 'adviser') {
             const [[teacher]] = await db.query(
-                `SELECT t.school_id, t.grade_level_id, t.section_id,
+                `SELECT COALESCE(sec.school_id, t.school_id) AS school_id,
+                        COALESCE(sec.grade_level_id, t.grade_level_id) AS grade_level_id,
+                        t.section_id,
                         TRIM(CONCAT_WS(' ', t.firstname, t.middlename, t.lastname)) AS adviser_name
                  FROM teachers t
+                 LEFT JOIN sections sec ON sec.id = t.section_id
                  WHERE t.id = ?
                  LIMIT 1`,
                 [user.teacher_id || 0]
@@ -4357,11 +4371,14 @@ router.get('/adviser-dashboard', requireAuth, async (req, res) => {
     const date = req.query.date || todayDate();
     try {
         const [teacher] = await db.query(
-            `SELECT t.section_id, t.school_id, sec.name as section_name, gl.name as grade_name, sc.name as school_name, sc.logo as school_logo
+            `SELECT t.section_id,
+                    COALESCE(sec.school_id, t.school_id) AS school_id,
+                    COALESCE(sec.grade_level_id, t.grade_level_id) AS grade_level_id,
+                    sec.name as section_name, gl.name as grade_name, sc.name as school_name, sc.logo as school_logo
              FROM teachers t
              LEFT JOIN sections sec ON t.section_id = sec.id
-             LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
-             LEFT JOIN schools sc ON t.school_id = sc.id
+             LEFT JOIN grade_levels gl ON gl.id = COALESCE(sec.grade_level_id, t.grade_level_id)
+             LEFT JOIN schools sc ON sc.id = COALESCE(sec.school_id, t.school_id)
              WHERE t.id = ?`, [user.teacher_id]
         );
         if (teacher.length === 0) return res.status(404).json({ error: 'Teacher not found' });

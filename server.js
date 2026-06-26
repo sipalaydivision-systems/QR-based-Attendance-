@@ -73,11 +73,38 @@ app.use(async (req, res, next) => {
     } catch (e) {
         res.locals.settings = {};
     }
-    // Header school context for adviser & principal (name + logo, shown big in the topbar)
+    // Header school context for adviser & principal (name + logo, shown big in the topbar).
+    // Advisers are resolved from their live teacher/section assignment instead of the
+    // session copy, because a reassignment can happen while the session is still active.
     res.locals.headerSchool = null;
+    res.locals.adviserIsShs = false;
     try {
         const u = req.session.user;
-        if (u && (u.role === 'adviser' || u.role === 'principal') && u.school_id) {
+        if (u && u.role === 'adviser' && u.teacher_id) {
+            const [[teacherSchool]] = await db.query(
+                `SELECT
+                    COALESCE(sec.school_id, t.school_id) AS school_id,
+                    t.category,
+                    sc.name,
+                    sc.logo,
+                    gl.name AS grade_name
+                 FROM teachers t
+                 LEFT JOIN sections sec ON sec.id = t.section_id
+                 LEFT JOIN schools sc ON sc.id = COALESCE(sec.school_id, t.school_id)
+                 LEFT JOIN grade_levels gl ON gl.id = COALESCE(sec.grade_level_id, t.grade_level_id)
+                 WHERE t.id = ?
+                 LIMIT 1`,
+                [u.teacher_id]
+            );
+            if (teacherSchool && teacherSchool.school_id) {
+                res.locals.headerSchool = { name: teacherSchool.name, logo: teacherSchool.logo || null };
+                // Keep legacy/session-scoped code from pointing at the old school.
+                u.school_id = teacherSchool.school_id;
+                u.school_logo = teacherSchool.logo || null;
+            }
+            const gradeNumber = parseInt(String(teacherSchool && teacherSchool.grade_name || '').match(/\d+/)?.[0] || '', 10);
+            res.locals.adviserIsShs = (teacherSchool && teacherSchool.category === 'shs_teacher') || (Number.isFinite(gradeNumber) && gradeNumber >= 11 && gradeNumber <= 12);
+        } else if (u && u.role === 'principal' && u.school_id) {
             const [[school]] = await db.query(
                 "SELECT name, logo FROM schools WHERE id = ? AND status = 'active'",
                 [u.school_id]
