@@ -1131,7 +1131,7 @@ router.get('/adviser-search-students', async (req, res) => {
         // adviser can transfer them in. The source school is returned for clarity.
         const [rows] = await db.query(
             `SELECT s.id, s.lrn, s.firstname, s.lastname, s.middlename,
-                    s.school_id AS current_school_id, s.section_id AS current_section_id,
+                    s.school_id AS current_school_id, s.section_id AS current_section_id, s.status AS current_status,
                     sch.name AS current_school_name, sec.name AS current_section_name, gl.name AS current_grade_name
              FROM students s
              LEFT JOIN schools sch ON s.school_id = sch.id
@@ -1167,7 +1167,7 @@ router.get('/adviser-search-students', async (req, res) => {
             id: r.id,
             lrn: r.lrn || '',
             name: [r.lastname, r.firstname].filter(Boolean).join(', ') + (r.middlename ? ' ' + r.middlename.charAt(0) + '.' : ''),
-            already_mine: Number(r.current_section_id) === Number(t.section_id),
+            already_mine: Number(r.current_section_id) === Number(t.section_id) && String(r.current_status) === 'active',
             from_other_school: Number(r.current_school_id) !== Number(t.school_id),
             current_school_name: r.current_school_name || null,
             current_section_name: r.current_section_name || null,
