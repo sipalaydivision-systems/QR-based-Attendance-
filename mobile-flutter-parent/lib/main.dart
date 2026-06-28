@@ -86,7 +86,9 @@ String _androidNotificationIcon(String type) {
     case 'announcement_reminder':
       return 'ic_n_reminder';
   }
-  return '@mipmap/ic_launcher';
+  // A proper monochrome status drawable — NEVER the color launcher, which Android
+  // renders as a blank white blob in the status bar ("no icon").
+  return 'ic_stat_edutrack';
 }
 
 // Accent color that tints the small icon + app name per type.
@@ -148,9 +150,10 @@ Future<bool> showParentNotification(String title, String body, {int? id, String 
       if (rendered != null) largeIcon = rendered;
     } catch (_) {/* keep the seal */}
   }
-  // Small icon: try the per-type drawable, fall back to the launcher so a device
-  // that rejects the custom icon still always posts the notification.
-  final iconsToTry = <String>{_androidNotificationIcon(type), '@mipmap/ic_launcher'};
+  // Small icon: try the per-type drawable, then the monochrome EduTrack status
+  // icon (a proper white silhouette). NEVER fall back to the color launcher —
+  // Android tints small icons and the launcher renders as a blank white square.
+  final iconsToTry = <String>{_androidNotificationIcon(type), 'ic_stat_edutrack'};
   for (final icon in iconsToTry) {
     try {
       await _notifications.show(
