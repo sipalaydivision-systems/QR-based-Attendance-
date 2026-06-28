@@ -620,8 +620,7 @@ function sf2MonthInsideRange(month, startDate, endDate) {
     return true;
 }
 
-async function sf2ChangeFilters(source) {
-    if (sf2FilterLoading) return;
+function sf2ChangeFilters(source) {
     var yearPicker = document.getElementById('sf2YearPicker');
     var monthPicker = document.getElementById('sf2MonthPicker');
     if (!monthPicker || !monthPicker.value) return;
@@ -630,17 +629,23 @@ async function sf2ChangeFilters(source) {
         var selected = yearPicker.options[yearPicker.selectedIndex];
         var startDate = selected ? selected.getAttribute('data-start') || '' : '';
         var endDate = selected ? selected.getAttribute('data-end') || '' : '';
-        monthPicker.min = startDate ? startDate.slice(0, 7) : '';
-        monthPicker.max = endDate ? endDate.slice(0, 7) : '';
-        if (!sf2MonthInsideRange(monthPicker.value, startDate, endDate)) {
-            monthPicker.value = startDate ? startDate.slice(0, 7) : monthPicker.value;
+        // If the current month is outside the chosen year, jump to the year's start.
+        if (startDate && !sf2MonthInsideRange(monthPicker.value, startDate, endDate)) {
+            monthPicker.value = startDate.slice(0, 7);
         }
+    }
+
+    // Warn before discarding unsaved SF2 edits.
+    var paper = document.getElementById('sf2Paper');
+    if (paper && paper.classList.contains('edit-mode')) {
+        if (!window.confirm('Change the report period? Any unsaved SF2 edits will be discarded.')) return;
     }
 
     var params = new URLSearchParams();
     if (yearPicker && yearPicker.value) params.set('sy', yearPicker.value);
     params.set('month', monthPicker.value);
-    await sf2LoadReport('/admin/sf2-report?' + params.toString());
+    // Full page reload so the report always reflects the chosen year/month.
+    window.location.href = '/admin/sf2-report?' + params.toString();
 }
 
 async function sf2LoadReport(url) {
