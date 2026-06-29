@@ -138,23 +138,27 @@ Future<ByteArrayAndroidBitmap?> _renderTypeLargeIcon(String type) async {
 }
 
 // richIcon=true (foreground) renders the per-type large icon; the background
-// isolate passes false (no render surface there — rendering can hang).
+// isolate passes false (no render surface there — rendering can hang), but it
+// can still ask Android to use the packaged per-type drawable as the large icon.
 Future<bool> showParentNotification(String title, String body, {int? id, String type = '', bool richIcon = true}) async {
   final nid = id ?? DateTime.now().millisecondsSinceEpoch.remainder(100000);
   final color = _androidNotificationColor(type);
-  // Large icon: per-type PNG in the foreground, static school seal otherwise.
-  AndroidBitmap<Object> largeIcon = const DrawableResourceAndroidBitmap('@mipmap/ic_launcher');
+  final largeIconsToTry = <AndroidBitmap<Object>>[];
   if (richIcon && type.trim().isNotEmpty) {
     try {
       final rendered = await _renderTypeLargeIcon(type).timeout(const Duration(seconds: 3));
-      if (rendered != null) largeIcon = rendered;
+      if (rendered != null) largeIconsToTry.add(rendered);
     } catch (_) {/* keep the seal */}
+  } else if (!richIcon && type.trim().isNotEmpty) {
+    largeIconsToTry.add(DrawableResourceAndroidBitmap(_androidNotificationIcon(type)));
   }
-  // Small icon: try the per-type drawable, then the monochrome EduTrack status
-  // icon (a proper white silhouette). NEVER fall back to the color launcher —
-  // Android tints small icons and the launcher renders as a blank white square.
-  final iconsToTry = <String>{_androidNotificationIcon(type), 'ic_stat_edutrack'};
-  for (final icon in iconsToTry) {
+  // Large/right icon fallback: the Guardian launcher/logo.
+  largeIconsToTry.add(const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'));
+
+  // Small/left icon must identify the app/channel. Android requires a
+  // monochrome drawable here, so use the Guardian status icon instead of the
+  // per-event icon. The event icon belongs on the large/right side.
+  for (final largeIcon in largeIconsToTry) {
     try {
       await _notifications.show(
         nid,
@@ -167,7 +171,7 @@ Future<bool> showParentNotification(String title, String body, {int? id, String 
             channelDescription: 'Attendance alerts for your child',
             importance: Importance.high,
             priority: Priority.high,
-            icon: icon,
+            icon: 'ic_stat_edutrack',
             color: color,
             largeIcon: largeIcon,
             styleInformation: const DefaultStyleInformation(true, true),
@@ -176,7 +180,7 @@ Future<bool> showParentNotification(String title, String body, {int? id, String 
       );
       return true;
     } catch (error) {
-      debugPrint('Guardian notification icon "$icon" failed: $error');
+      debugPrint('Guardian notification display failed: $error');
     }
   }
   return false;
@@ -188,13 +192,60 @@ Future<bool> showParentNotification(String title, String body, {int? id, String 
 String gFcmToken = '';
 
 // Runs in a separate isolate when a push arrives with the app closed/background.
-// The server sends "notification" messages, which Android displays automatically,
-// so this only needs to keep Firebase initialised.
+// Parent pushes are data-only so Android does not auto-render a duplicate/wrong
+// icon notification; this handler renders the single Guardian notification.
 @pragma('vm:entry-point')
 Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
   try {
+    WidgetsFlutterBinding.ensureInitialized();
+  } catch (_) {/* already initialised */}
+  try {
+    ui.DartPluginRegistrant.ensureInitialized();
+  } catch (_) {/* plugin registrant is best-effort */}
+  try {
     await Firebase.initializeApp();
   } catch (_) {/* already initialised */}
+  try {
+    await _initNotifications(requestPermission: false);
+    final title = '${message.data['title'] ?? message.notification?.title ?? 'EduTrack Guardian'}';
+    final body = '${message.data['body'] ?? message.notification?.body ?? ''}';
+    if (body.trim().isEmpty) return;
+
+    final notificationId =
+        '${message.data['notification_id'] ?? message.messageId ?? ''}'.trim();
+    if (notificationId.isNotEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      final fcmDelivered =
+          (prefs.getStringList(_fcmDeliveredPreference) ?? const <String>[])
+              .toSet();
+      if (fcmDelivered.contains(notificationId)) return;
+      fcmDelivered.add(notificationId);
+      await prefs.setStringList(
+        _fcmDeliveredPreference,
+        fcmDelivered.toList().reversed.take(200).toList(),
+      );
+      final delivered =
+          (prefs.getStringList(_notifiedPreference) ?? const <String>[])
+              .toSet();
+      delivered.add(notificationId);
+      await prefs.setStringList(
+        _notifiedPreference,
+        delivered.toList().reversed.take(200).toList(),
+      );
+      await prefs.setBool(_workerReadyPreference, true);
+    }
+
+    await showParentNotification(
+      title,
+      body,
+      id: _latestFcmNotificationId,
+      type: '${message.data['type'] ?? ''}',
+      richIcon: false,
+    );
+  } catch (e) {
+    debugPrint('Guardian background notification failed: $e');
+  }
 }
 
 // Initialise FCM, request permission, capture the token, and show foreground

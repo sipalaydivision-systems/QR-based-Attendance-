@@ -383,12 +383,18 @@ function resultTone(data) {
 }
 
 function titleForResult(data) {
+  const ds = displayStatusOf(data);
   if (data.offline && data.success && data.action === 'TIME_IN') return 'Saved locally';
   if (data.offline && data.success && data.action === 'TIME_OUT') return 'Time out saved locally';
   if (data.offline && !data.success) return 'Offline review';
   if (!data.success) return data.person ? 'Scan needs attention' : 'QR code not recognized';
-  if (data.status === 'half_day') return 'Half-day attendance recorded';
+  if (data.action === 'TIME_OUT' && ds === 'LUNCH OUT') return 'Lunch out recorded';
+  if (data.action === 'TIME_OUT' && ds === 'COMPLETED') return 'Attendance completed';
+  if (data.action === 'TIME_OUT' && ds === 'EARLY OUT') return 'Early dismissal recorded';
   if (data.action === 'TIME_IN' && data.status === 'late') return 'Late time in recorded';
+  if (data.action === 'TIME_IN' && ds === 'PM TIME IN') return 'PM time in recorded';
+  if (data.action === 'TIME_IN' && ds === 'PM LATE TIME IN') return 'PM late time in recorded';
+  if (data.status === 'half_day') return 'Half-day attendance recorded';
   if (data.action === 'TIME_IN') return 'Time in recorded';
   if (data.action === 'TIME_OUT') return 'Time out recorded';
   if (data.action === 'ALREADY_RECORDED') return 'Already recorded today';
@@ -461,6 +467,10 @@ function resolveLogBadge(scan) {
   const daily = String(scan && scan.attendanceStatus || '').toLowerCase().trim();
   const isTimeOut = String(scan && scan.eventAction || '').toUpperCase() === 'TIME_OUT';
 
+  if (isTimeOut && ['', 'TIME OUT', 'TIME_OUT', 'OUT'].includes(ds) && lunchOutWindowContains(scan && scan.scanTime)) {
+    return { label: 'Lunch Out', cls: 'lunch-out' };
+  }
+
   switch (ds) {
     case 'PRESENT':    return { label: 'Present',    cls: 'present' };
     case 'TIME IN':    return { label: 'Time In',    cls: 'present' };
@@ -485,6 +495,12 @@ function resolveLogBadge(scan) {
         : { label: 'Out', cls: 'out' };
     default: break;
   }
+
+  // Legacy local rows from older scanner builds may only have TIME_OUT +
+  // half_day and no displayStatus. If the scan is in the lunch window, the
+  // current event is still Lunch Out; the broad half-day status only means the
+  // student has not returned yet.
+  if (isLunchOutScan(scan)) return { label: 'Lunch Out', cls: 'lunch-out' };
 
   // A time-out can carry the day's status (for example, "late" because the
   // person arrived late that morning). The event action must win here: showing
@@ -515,6 +531,41 @@ function cleanCell(value) {
   const text = String(value || '').trim();
   if (!text || /^n\/a$/i.test(text)) return '-';
   return text;
+}
+
+function parseClockMinutes(value) {
+  const text = String(value || '').trim();
+  const match = text.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
+  if (!match) return null;
+  let hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const period = (match[3] || '').toUpperCase();
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+  if (period === 'PM' && hour < 12) hour += 12;
+  if (period === 'AM' && hour === 12) hour = 0;
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  return hour * 60 + minute;
+}
+
+function scanMinutesOfDay(value) {
+  const date = parseSqlDateTime(value);
+  if (date) return date.getHours() * 60 + date.getMinutes();
+  return parseClockMinutes(value);
+}
+
+function lunchOutWindowContains(scanTime) {
+  const minute = scanMinutesOfDay(scanTime);
+  if (minute == null) return false;
+  const lunchStart = parseClockMinutes(state.settings.lunchBreakStart || '11:00');
+  const pmStart = parseClockMinutes(state.settings.pmTimeInStart || '13:00');
+  if (lunchStart == null || pmStart == null) return false;
+  return minute >= lunchStart && minute < pmStart;
+}
+
+function isLunchOutScan(scan) {
+  const ds = String(scan && scan.displayStatus || '').toUpperCase().trim();
+  const isTimeOut = String(scan && scan.eventAction || '').toUpperCase() === 'TIME_OUT';
+  return ds === 'LUNCH OUT' || (isTimeOut && !ds && lunchOutWindowContains(scan && scan.scanTime));
 }
 
 function modalTimeForResult(data) {
@@ -659,7 +710,6 @@ function bannerHeadingFor(data, tone, fallbackTitle) {
   if (action === 'ALREADY_COMPLETED') return 'Already completed'.toUpperCase();
   if (action === 'ATTENDANCE_CLOSED') return 'Attendance closed'.toUpperCase();
   if (tone === 'error') return 'Scan needs attention'.toUpperCase();
-  if (data.status === 'half_day') return (data.late_half_day ? 'Half-day · Late' : 'Half-day attendance').toUpperCase();
   if (data.offline) return action === 'TIME_OUT' ? 'Time out saved offline'.toUpperCase() : 'Time in saved offline'.toUpperCase();
   if (action === 'TIME_IN') {
     if (ds === 'WELCOME BACK') return 'Welcome back!'.toUpperCase();
@@ -667,14 +717,17 @@ function bannerHeadingFor(data, tone, fallbackTitle) {
     if (ds === 'PM TIME IN') return 'PM time in recorded!'.toUpperCase();
     if (ds === 'PM LATE TIME IN') return 'PM late time in!'.toUpperCase();
     if (ds === 'LATE TIME IN' || (!ds && data.status === 'late')) return 'Late time in!'.toUpperCase();
+    if (data.status === 'half_day') return (data.late_half_day ? 'Half-day · Late' : 'Half-day attendance').toUpperCase();
     return 'Time in recorded!'.toUpperCase();
   }
   if (action === 'TIME_OUT') {
     if (ds === 'LUNCH OUT') return 'Lunch time out!'.toUpperCase();
     if (ds === 'EARLY OUT') return 'Early dismissal recorded!'.toUpperCase();
     if (ds === 'COMPLETED') return 'Completed!'.toUpperCase();
+    if (data.status === 'half_day') return (data.late_half_day ? 'Half-day · Late' : 'Half-day attendance').toUpperCase();
     return 'Time out recorded!'.toUpperCase();
   }
+  if (data.status === 'half_day') return (data.late_half_day ? 'Half-day · Late' : 'Half-day attendance').toUpperCase();
   if (action === 'PENDING_TIME_OUT') return 'Already timed in'.toUpperCase();
   if (action === 'CONFIRM_TIME_OUT') return 'Confirm time out'.toUpperCase();
   return 'Attendance recorded'.toUpperCase();
@@ -686,12 +739,12 @@ function bannerSubFor(data, tone, fallbackMessage) {
   if (tone === 'error') return fallbackMessage || 'Please try scanning again.';
   const action = String(data.action || '');
   const ds = displayStatusOf(data);
-  if (data.status === 'half_day') {
+  const halfDayText = () => {
     const offlineText = data.offline ? ' Saved locally and ready to sync.' : '';
     return data.remarks
       ? `Remarks: ${data.remarks}.${offlineText}`
       : `Partial-day attendance was detected.${offlineText}`;
-  }
+  };
   if (data.offline) return 'Saved on this computer — it will sync automatically when internet returns.';
   if (action === 'TIME_IN') {
     if (ds === 'WELCOME BACK') return 'Welcome back. Lunch return recorded.';
@@ -699,6 +752,7 @@ function bannerSubFor(data, tone, fallbackMessage) {
     if (ds === 'PM TIME IN') return 'PM session time in recorded.';
     if (ds === 'PM LATE TIME IN') return 'PM late time in recorded.';
     if (ds === 'LATE TIME IN' || (!ds && data.status === 'late')) return 'You have timed in, but you are marked late.';
+    if (data.status === 'half_day') return halfDayText();
     return 'You have successfully timed in.';
   }
   if (action === 'TIME_OUT') {
@@ -710,8 +764,10 @@ function bannerSubFor(data, tone, fallbackMessage) {
         : 'Attendance for today is complete. See you tomorrow!';
     }
     if (ds === 'EARLY OUT') return 'Early dismissal recorded. Scan again if you return before the session ends.';
+    if (data.status === 'half_day') return halfDayText();
     return 'You have successfully timed out for the day.';
   }
+  if (data.status === 'half_day') return halfDayText();
   if (action === 'ALREADY_RECORDED') return 'You are already marked present for today.';
   if (action === 'ALREADY_COMPLETED') return 'Attendance for today is already completed.';
   if (action === 'ATTENDANCE_CLOSED') return 'Attendance is already closed for today.';
@@ -725,6 +781,15 @@ function heroConfigFor(data) {
   const action = String(data.action || '');
   const ds = displayStatusOf(data);
   if (action === 'TIME_OUT') {
+    const pills = {
+      'COMPLETED': { pill: '&#10003; Completed', pillClass: 'out' },
+      'LUNCH OUT': { pill: 'Lunch Out', pillClass: 'pending' },
+      'EARLY OUT': { pill: 'Early Dismissal', pillClass: 'out' }
+    };
+    if (data.offline) return { label: 'Time Out', value: data.time_out || data.time || '—', variant: 'offline', pill: 'Saved Offline', pillClass: 'offline' };
+    if (pills[ds]) {
+      return { label: 'Time Out', value: data.time_out || data.time || '—', variant: 'out', ...pills[ds] };
+    }
     if (data.status === 'half_day') {
       return {
         label: data.late_half_day ? 'Half-Day (Late)' : 'Half-Day',
@@ -734,14 +799,7 @@ function heroConfigFor(data) {
         pillClass: data.late_half_day ? 'late' : 'out'
       };
     }
-    const pills = {
-      'COMPLETED': { pill: '&#10003; Completed', pillClass: 'out' },
-      'LUNCH OUT': { pill: 'Lunch Out', pillClass: 'pending' },
-      'EARLY OUT': { pill: 'Early Dismissal', pillClass: 'out' }
-    };
-    const pillConfig = pills[ds] || { pill: '&#10003; Complete', pillClass: 'out' };
-    if (data.offline) return { label: 'Time Out', value: data.time_out || data.time || '—', variant: 'offline', pill: 'Saved Offline', pillClass: 'offline' };
-    return { label: 'Time Out', value: data.time_out || data.time || '—', variant: 'out', ...pillConfig };
+    return { label: 'Time Out', value: data.time_out || data.time || '—', variant: 'out', pill: '&#10003; Complete', pillClass: 'out' };
   }
   if (action === 'PENDING_TIME_OUT') {
     return { label: 'Time In', value: data.time_in || '—', variant: 'late', pill: 'Pending Out', pillClass: 'pending' };
@@ -760,6 +818,23 @@ function heroConfigFor(data) {
   }
   // TIME_IN (and generic)
   const late = ds ? ds === 'LATE TIME IN' : data.status === 'late';
+  const inPills = {
+    'WELCOME BACK': { pill: '&#10003; Welcome Back', pillClass: 'in' },
+    'RETURNED': { pill: '&#10003; Returned', pillClass: 'in' },
+    'PM TIME IN': { pill: '&#10003; PM Time In', pillClass: 'in' },
+    'PM LATE TIME IN': { pill: 'PM Late Time In', pillClass: 'late' }
+  };
+  if (data.offline) {
+    return { label: 'Time In', value: data.time_in || data.time || '—', variant: 'offline', pill: 'Saved Offline', pillClass: 'offline' };
+  }
+  if (inPills[ds]) {
+    return {
+      label: 'Time In',
+      value: data.time_in || data.time || '—',
+      variant: ds === 'PM LATE TIME IN' ? 'late' : 'in',
+      ...inPills[ds]
+    };
+  }
   if (data.status === 'half_day') {
     // A half-day recorded on a Time In keeps the green Time-In colour; the pill
     // still flags the half-day / late nature.
@@ -771,15 +846,6 @@ function heroConfigFor(data) {
       pillClass: data.late_half_day ? 'late' : 'out'
     };
   }
-  if (data.offline) {
-    return { label: 'Time In', value: data.time_in || data.time || '—', variant: 'offline', pill: 'Saved Offline', pillClass: 'offline' };
-  }
-  const inPills = {
-    'WELCOME BACK': { pill: '&#10003; Welcome Back', pillClass: 'in' },
-    'RETURNED': { pill: '&#10003; Returned', pillClass: 'in' },
-    'PM TIME IN': { pill: '&#10003; PM Time In', pillClass: 'in' },
-    'PM LATE TIME IN': { pill: 'PM Late Time In', pillClass: 'late' }
-  };
   const inPill = inPills[ds] || { pill: late ? 'Late' : '&#10003; Present Today', pillClass: late ? 'late' : 'in' };
   return {
     label: 'Time In',

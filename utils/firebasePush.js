@@ -79,31 +79,48 @@ async function sendMulticast(tokens, payload) {
         const batch = uniqueTokens.slice(offset, offset + 500);
         const data = stringifyData(payload.data);
         const visuals = androidNotificationVisuals(payload.type || data.type);
-        const response = await messaging.sendEachForMulticast({
+        const isParentChannel = String(payload.channelId || '').trim() === 'edutrack_parent';
+        const smallIcon = payload.androidSmallIcon || data.android_small_icon || (isParentChannel ? 'ic_stat_edutrack' : undefined);
+        const smallColor = payload.androidSmallColor || data.android_small_color || (isParentChannel ? '#16A34A' : undefined);
+        const messageData = stringifyData({
+            ...data,
+            title: data.title || payload.title || '',
+            body: data.body || payload.body || '',
+            android_icon: payload.androidIcon || data.android_icon || visuals.icon,
+            android_color: payload.androidColor || data.android_color || visuals.color,
+            android_small_icon: smallIcon,
+            android_small_color: smallColor
+        });
+        const message = {
             tokens: batch,
-            notification: { title: payload.title, body: payload.body },
-            data: {
-                ...data,
-                android_icon: payload.androidIcon || data.android_icon || visuals.icon,
-                android_color: payload.androidColor || data.android_color || visuals.color
-            },
+            data: messageData,
             android: {
                 priority: 'high',
                 // If a phone is offline, keep only the newest Guardian update
                 // and expire it quickly instead of replaying notification history.
                 collapseKey: payload.collapseKey || 'edutrack_parent_latest',
-                ttl: Number(payload.ttlMs || 5 * 60 * 1000),
-                notification: {
-                    channelId: payload.channelId || 'edutrack_parent',
-                    tag: payload.tag || 'edutrack_parent_latest',
-                    icon: payload.androidIcon || visuals.icon,
-                    color: payload.androidColor || visuals.color,
-                    sound: 'default',
-                    defaultSound: true,
-                    priority: 'high'
-                }
+                ttl: Number(payload.ttlMs || 5 * 60 * 1000)
             }
-        });
+        };
+
+        // Parent/Guardian pushes use data-only delivery so the Flutter app can
+        // render one local notification with the Guardian identity icon and the
+        // event-specific large icon. Other app pushes keep Android's automatic
+        // notification rendering.
+        if (!payload.dataOnly) {
+            message.notification = { title: payload.title, body: payload.body };
+            message.android.notification = {
+                channelId: payload.channelId || 'edutrack_parent',
+                tag: payload.tag || 'edutrack_parent_latest',
+                sound: 'default',
+                defaultSound: true,
+                priority: 'high'
+            };
+            if (smallIcon) message.android.notification.icon = smallIcon;
+            if (smallColor) message.android.notification.color = smallColor;
+        }
+
+        const response = await messaging.sendEachForMulticast(message);
         successCount += response.successCount;
         failureCount += response.failureCount;
         response.responses.forEach((item, index) => {
@@ -126,6 +143,7 @@ async function sendPushToParent(parentId, notification) {
         collapseKey: 'edutrack_parent_latest',
         tag: 'edutrack_parent_latest',
         ttlMs: 5 * 60 * 1000,
+        dataOnly: true,
         data: {
             type: notification.type || 'announcement_general',
             title: notification.title,
@@ -160,6 +178,7 @@ async function sendPushToParents(parentIds, notification) {
         collapseKey: 'edutrack_parent_latest',
         tag: 'edutrack_parent_latest',
         ttlMs: 5 * 60 * 1000,
+        dataOnly: true,
         data: {
             type: notification.type || 'announcement_general',
             title: notification.title,
