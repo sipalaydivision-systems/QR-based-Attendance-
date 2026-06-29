@@ -1042,13 +1042,13 @@ router.post('/api/parent/profile', requireParentAuth, async (req, res) => {
 
 // Latest published parent-app version. Bump this (and the Flutter pubspec version)
 // whenever a new APK is released so the in-app updater offers the update.
-const PARENT_APP_LATEST = { version: '1.0.33', version_code: 35 };
+const PARENT_APP_LATEST = { version: '1.0.34', version_code: 36 };
 router.get('/api/parent/app-version', (req, res) => {
     return res.json({
         latest_version: PARENT_APP_LATEST.version,
         latest_version_code: PARENT_APP_LATEST.version_code,
         apk_url: `${req.protocol}://${req.get('host')}/download/parent-app`,
-        notes: 'Bold notification text, redesigned in-app announcement banner, accurate attendance alert timestamps, and updated student icons.'
+        notes: 'Updated Guardian installer page, default FCM notification icon/color, and per-type scan notification icons for closed-app alerts.'
     });
 });
 
