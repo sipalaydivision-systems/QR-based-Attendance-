@@ -1042,13 +1042,13 @@ router.post('/api/parent/profile', requireParentAuth, async (req, res) => {
 
 // Latest published parent-app version. Bump this (and the Flutter pubspec version)
 // whenever a new APK is released so the in-app updater offers the update.
-const PARENT_APP_LATEST = { version: '1.0.36', version_code: 38 };
+const PARENT_APP_LATEST = { version: '1.0.37', version_code: 39 };
 router.get('/api/parent/app-version', (req, res) => {
     return res.json({
         latest_version: PARENT_APP_LATEST.version,
         latest_version_code: PARENT_APP_LATEST.version_code,
         apk_url: `${req.protocol}://${req.get('host')}/download/parent-app`,
-        notes: 'Lunch-out scan labels stay event-specific, Guardian push uses the app identity icon, and closed-app alerts render through the app to avoid duplicate/wrong icons.'
+        notes: 'Guardian notifications now show the specific alert-type icon on the left, with the EduTrack Guardian logo on the right.'
     });
 });
 
