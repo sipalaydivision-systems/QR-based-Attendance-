@@ -1494,7 +1494,6 @@ router.get('/adviser-profile-data', async (req, res) => {
     if (!req.session.user || req.session.user.role !== 'adviser') return res.status(403).json({ error: 'Unauthorized' });
     const teacherId = req.session.user.teacher_id;
     try {
-        await db.query(`ALTER TABLE teachers ADD COLUMN IF NOT EXISTS profile_photo MEDIUMTEXT DEFAULT NULL`).catch(() => {});
         const [[t]] = await db.query(
             `SELECT t.id, t.firstname, t.lastname, t.middlename, t.email, t.contact, t.profile_photo,
                     sc.name as school_name, sc.logo as school_logo, gl.name as grade_name, sec.name as section_name
@@ -1520,9 +1519,14 @@ router.post('/adviser-update-profile', express.json(), async (req, res) => {
     const { fullname, email, contact } = req.body;
     if (!fullname || !fullname.trim()) return res.status(400).json({ error: 'Name is required.' });
     try {
+        // Split the single name field into first/last (last word = lastname) so we
+        // don't blank out the structured name fields the rest of the app relies on.
+        const nameParts = fullname.trim().split(/\s+/);
+        const lname = nameParts.length > 1 ? nameParts.pop() : '';
+        const fname = nameParts.join(' ') || fullname.trim();
         await db.query(
-            `UPDATE teachers SET firstname=?, lastname='', middlename='', email=?, contact=? WHERE id=?`,
-            [fullname.trim(), (email||'').trim(), (contact||'').trim(), teacherId]
+            `UPDATE teachers SET firstname=?, lastname=?, middlename='', email=?, contact=? WHERE id=?`,
+            [fname, lname, (email||'').trim(), (contact||'').trim(), teacherId]
         );
         req.session.user.fullname = fullname.trim();
         res.json({ success: true, fullname: fullname.trim() });
@@ -1538,7 +1542,6 @@ router.post('/adviser-upload-photo', upload.single('photo'), async (req, res) =>
     if (!allowed.includes(req.file.mimetype)) return res.status(400).json({ error: 'Only image files are allowed.' });
     const teacherId = req.session.user.teacher_id;
     try {
-        await db.query(`ALTER TABLE teachers ADD COLUMN IF NOT EXISTS profile_photo MEDIUMTEXT DEFAULT NULL`).catch(() => {});
         const dataUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
         await db.query(`UPDATE teachers SET profile_photo = ? WHERE id = ?`, [dataUrl, teacherId]);
         res.json({ success: true, photo: dataUrl });
@@ -1571,8 +1574,15 @@ router.post('/adviser-change-password', express.json(), async (req, res) => {
 
 // ---- Account self-service for users-table roles (super_admin, principal, superintendent, asst_superintendent) ----
 async function ensureUserProfileColumns() {
-    await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo MEDIUMTEXT DEFAULT NULL`).catch(() => {});
-    await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS contact VARCHAR(50) DEFAULT NULL`).catch(() => {});
+    // MySQL has no `ADD COLUMN IF NOT EXISTS` — probe INFORMATION_SCHEMA first so
+    // the column is actually created (a swallowed syntax error leaves it missing).
+    const [cols] = await db.query(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME IN ('profile_photo','contact')`
+    );
+    const names = cols.map((c) => c.COLUMN_NAME);
+    if (!names.includes('profile_photo')) await db.query('ALTER TABLE users ADD COLUMN profile_photo MEDIUMTEXT DEFAULT NULL');
+    if (!names.includes('contact')) await db.query('ALTER TABLE users ADD COLUMN contact VARCHAR(50) DEFAULT NULL');
 }
 
 router.get('/account-data', async (req, res) => {

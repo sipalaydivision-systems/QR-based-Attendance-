@@ -322,6 +322,18 @@ async function ensureRuntimeSchema() {
         console.log('Added teachers.category column for SHS teacher distinction.');
     }
 
+    // Adviser profile photo (base64 data URL, like users.profile_photo). MySQL
+    // does NOT support `ADD COLUMN IF NOT EXISTS`, so the column must be created
+    // here with a probe — otherwise the adviser profile load + photo upload 500.
+    const [teacherPhotoCol] = await db.query(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'teachers' AND COLUMN_NAME = 'profile_photo'`
+    );
+    if (teacherPhotoCol.length === 0) {
+        await db.query('ALTER TABLE teachers ADD COLUMN profile_photo MEDIUMTEXT NULL');
+        console.log('Added teachers.profile_photo column for adviser profile photos.');
+    }
+
     await db.query(`
         CREATE TABLE IF NOT EXISTS parents (
             id INT AUTO_INCREMENT PRIMARY KEY,
