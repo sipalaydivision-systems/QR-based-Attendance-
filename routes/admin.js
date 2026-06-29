@@ -778,6 +778,40 @@ router.post('/sf2-save-remarks', express.json(), async (req, res) => {
     const { month, remarks, summary, overrides } = req.body;
     if (!month || !/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: 'Invalid month' });
 
+    const submittedStudentIds = new Set();
+    if (remarks && typeof remarks === 'object') {
+        Object.keys(remarks).forEach(sid => {
+            const studentId = parseInt(sid, 10);
+            if (!isNaN(studentId) && studentId > 0) submittedStudentIds.add(studentId);
+        });
+    }
+    if (Array.isArray(overrides)) {
+        overrides.forEach(ov => {
+            const studentId = parseInt(ov && ov.student_id, 10);
+            if (!isNaN(studentId) && studentId > 0) submittedStudentIds.add(studentId);
+        });
+    }
+
+    try {
+        const teacher = await loadAdviserTeacher(teacherId);
+        if (!teacher || !teacher.section_id) return res.status(403).json({ error: 'Your adviser account is not linked to a section.' });
+        const ids = Array.from(submittedStudentIds);
+        if (ids.length) {
+            const [ownedRows] = await db.query(
+                `SELECT id FROM students WHERE section_id = ? AND status != 'deleted' AND id IN (?)`,
+                [teacher.section_id, ids]
+            );
+            const owned = new Set(ownedRows.map(row => Number(row.id)));
+            const outside = ids.filter(id => !owned.has(Number(id)));
+            if (outside.length) {
+                return res.status(403).json({ error: 'SF2 changes can only be saved for students in your advisory section.' });
+            }
+        }
+    } catch (err) {
+        console.error('SF2 scope validation error:', err);
+        return res.status(500).json({ error: 'Failed to validate SF2 scope.' });
+    }
+
     const remarkRows = [];
     if (remarks && typeof remarks === 'object') {
         Object.entries(remarks).forEach(([sid, text]) => {
@@ -812,6 +846,7 @@ router.post('/sf2-save-remarks', express.json(), async (req, res) => {
                 const sid = parseInt(ov.student_id, 10);
                 if (isNaN(sid) || sid <= 0) continue;
                 if (!validDate.test(ov.date)) continue;
+                if (String(ov.date).slice(0, 7) !== month) continue;
                 const code = VALID_CODES.includes(ov.code) ? ov.code : (ov.is_present ? 'present' : 'absent');
                 const isPresent = code === 'absent' ? 0 : 1;
                 await db.query(

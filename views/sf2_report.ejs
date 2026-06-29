@@ -228,9 +228,15 @@ var mAsOf = mEnroll - mStats.late, fAsOf = fEnroll - fStats.late, totalAsOf = to
 
 function fmt1(v) { return (Math.round(v * 10) / 10).toFixed(1); }
 function avgDaily(present) { return numDays > 0 ? fmt1(present / numDays) : '0.0'; }
-function pctEnrol(registered, asOf) { return asOf > 0 ? Math.round(registered / asOf * 100) + '%' : ''; }
+function pct100(numerator, denominator) {
+    numerator = Math.max(0, Number(numerator) || 0);
+    denominator = Math.max(0, Number(denominator) || 0);
+    if (denominator <= 0) return numerator > 0 ? '100%' : '';
+    return Math.max(0, Math.min(100, Math.round((numerator / denominator) * 100))) + '%';
+}
+function pctEnrol(registered, asOf) { return pct100(registered, asOf); }
 function pctAtt(present, registered) {
-    return (registered > 0 && numDays > 0) ? Math.round(present / numDays / registered * 100) + '%' : '';
+    return (registered > 0 && numDays > 0) ? pct100(present / numDays, registered) : '';
 }
 
 var adviserName = [teacher.firstname, teacher.middlename ? teacher.middlename.charAt(0) + '.' : '', teacher.lastname].filter(Boolean).join(' ');
