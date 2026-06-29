@@ -154,8 +154,12 @@ Future<bool> showParentNotification(String title, String body, {int? id, String 
     largeIcon = const DrawableResourceAndroidBitmap('@mipmap/ic_launcher');
   }
 
-  // Left side: always the EduTrack graduation cap (monochrome status-bar icon).
-  const smallIcon = 'ic_stat_edutrack';
+  // Left side: the full-color EduTrack Guardian launcher logo. Android renders
+  // this in the small icon position on devices that support adaptive icons
+  // (Android 10+ / Samsung One UI). Older devices fall back to the monochrome
+  // cap drawable below.
+  const smallIcon = '@mipmap/ic_launcher';
+  const fallbackSmallIcon = 'ic_stat_edutrack';
 
   try {
     await _notifications.show(
@@ -191,7 +195,7 @@ Future<bool> showParentNotification(String title, String body, {int? id, String 
             channelDescription: 'Attendance alerts for your child',
             importance: Importance.high,
             priority: Priority.high,
-            icon: smallIcon,
+            icon: fallbackSmallIcon,
             color: color,
             largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
             styleInformation: const DefaultStyleInformation(true, true),

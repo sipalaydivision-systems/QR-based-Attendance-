@@ -233,12 +233,22 @@ async function sendDailyReports(date) {
         if (!calendarCache.has(scopeKey)) calendarCache.set(scopeKey, await schoolDayInfo(date, schoolId));
         const calendar = calendarCache.get(scopeKey);
         let body;
+        let summaryStats = null;
         if (!calendar.isSchoolDay) {
             body = `No classes today (${calendar.reason}). Attendance reports resume on the next school day.`;
         } else {
             if (!summaryCache.has(scopeKey)) summaryCache.set(scopeKey, await attendanceSummary(date, schoolId));
             const s = summaryCache.get(scopeKey);
             body = `${s.rate}% attendance • Students: ${s.studentsAttended} attended, ${s.studentsAbsent} absent, ${s.studentsLate} late, ${s.studentsHalfDay} half-day • Teachers: ${s.teachersAttended} attended, ${s.teachersAbsent} absent`;
+            summaryStats = {
+                students_present: String(s.studentsAttended),
+                students_absent: String(s.studentsAbsent),
+                students_late: String(s.studentsLate),
+                students_half_day: String(s.studentsHalfDay),
+                teachers_present: String(s.teachersAttended),
+                teachers_absent: String(s.teachersAbsent),
+                attendance_rate: String(s.rate)
+            };
         }
         await sendOnce(recipient, deliveryKey, 'daily_summary', {
             title: 'SDO Sipalay AI Assistant · Daily Report',
@@ -247,7 +257,18 @@ async function sendDailyReports(date) {
             collapseKey: `edutrack_daily_${date}`,
             tag: 'edutrack_daily_summary',
             ttlMs: 6 * 60 * 60 * 1000,
-            data: { type: 'daily_summary', title: 'Daily Attendance Summary', body, date }
+            // Rich payload — the foreground handler builds the in-app design
+            // (robot icon + per-section stats). The basic notification field
+            // serves as the background fallback so the user still sees ONE
+            // alert when the app is killed.
+            data: {
+                type: 'daily_summary',
+                title: 'Daily Attendance Summary',
+                body,
+                date,
+                is_school_day: calendar.isSchoolDay ? '1' : '0',
+                ...(summaryStats || {})
+            }
         });
     }
 }

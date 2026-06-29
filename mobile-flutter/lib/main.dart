@@ -339,13 +339,27 @@ Future<void> _setupMainFcm(SharedPreferences prefs) async {
     });
     FirebaseMessaging.onMessage.listen((message) async {
       final n = message.notification;
+      final type = (message.data['type'] ?? '').toString();
       final title = n?.title ?? '${message.data['title'] ?? 'EduTrack'}';
       final body = n?.body ?? '${message.data['body'] ?? ''}';
-      if (title.isEmpty && body.isEmpty) return;
+      if (title.isEmpty && body.isEmpty && type.isEmpty) return;
       // FCM can occasionally redeliver a message. Persist its ID and use one
       // stable Android ID per report type so an update replaces the visible
       // notification instead of creating another copy.
       if (!await _rememberMainFcmMessage(prefs, message)) return;
+
+      // Daily-summary pushes carry the full breakdown so we can render the
+      // rich design (robot icon + per-section stats) instead of the basic
+      // FCM body. Falling back to the generic renderer when the payload is
+      // missing keeps older server versions working.
+      if (type == 'daily_summary') {
+        try {
+          await _showDailyReportNotification(message.data, prefs);
+          return;
+        } catch (e) {
+          debugPrint('Rich daily-summary render failed: $e');
+        }
+      }
       await notifications.show(
         _mainFcmNotificationId(message),
         '<b>$title</b>',
