@@ -9,6 +9,15 @@
         android:label="EduTrack Guardian"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_edutrack" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/edutrack_notification_green" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="edutrack_parent" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -42,6 +42,31 @@ function isDeadTokenError(code) {
         || code === 'messaging/invalid-registration-token';
 }
 
+const ANDROID_NOTIFICATION_VISUALS = {
+    attendance_time_in: { icon: 'ic_n_in', color: '#16A34A' },
+    attendance_late_time_in: { icon: 'ic_n_late', color: '#EA580C' },
+    attendance_pm_time_in: { icon: 'ic_n_pm', color: '#16A34A' },
+    attendance_pm_late_time_in: { icon: 'ic_n_pm_late', color: '#EA580C' },
+    attendance_lunch_out: { icon: 'ic_n_lunch', color: '#EA580C' },
+    attendance_returned: { icon: 'ic_n_returned', color: '#16A34A' },
+    attendance_early_out: { icon: 'ic_n_out', color: '#DC2626' },
+    attendance_completed: { icon: 'ic_n_done', color: '#16A34A' },
+    attendance_absent: { icon: 'ic_n_absent', color: '#DC2626' },
+    attendance_flagged: { icon: 'ic_n_flag', color: '#DC2626' },
+    announcement_emergency: { icon: 'ic_n_alert', color: '#DC2626' },
+    announcement_parent_meeting: { icon: 'ic_n_meeting', color: '#EA580C' },
+    announcement_class_meeting: { icon: 'ic_n_meeting', color: '#EA580C' },
+    announcement_holiday: { icon: 'ic_n_holiday', color: '#EA580C' },
+    announcement_general: { icon: 'ic_n_announce', color: '#2563EB' },
+    announcement_school_event: { icon: 'ic_n_event', color: '#2563EB' },
+    announcement_reminder: { icon: 'ic_n_reminder', color: '#2563EB' }
+};
+
+function androidNotificationVisuals(type) {
+    const key = String(type || '').trim().toLowerCase();
+    return ANDROID_NOTIFICATION_VISUALS[key] || { icon: 'ic_stat_edutrack', color: '#16A34A' };
+}
+
 async function sendMulticast(tokens, payload) {
     const messaging = firebaseMessaging();
     const uniqueTokens = [...new Set(tokens.map(token => String(token || '').trim()).filter(Boolean))];
@@ -52,10 +77,16 @@ async function sendMulticast(tokens, payload) {
     const invalidTokens = [];
     for (let offset = 0; offset < uniqueTokens.length; offset += 500) {
         const batch = uniqueTokens.slice(offset, offset + 500);
+        const data = stringifyData(payload.data);
+        const visuals = androidNotificationVisuals(payload.type || data.type);
         const response = await messaging.sendEachForMulticast({
             tokens: batch,
             notification: { title: payload.title, body: payload.body },
-            data: stringifyData(payload.data),
+            data: {
+                ...data,
+                android_icon: payload.androidIcon || data.android_icon || visuals.icon,
+                android_color: payload.androidColor || data.android_color || visuals.color
+            },
             android: {
                 priority: 'high',
                 // If a phone is offline, keep only the newest Guardian update
@@ -65,6 +96,8 @@ async function sendMulticast(tokens, payload) {
                 notification: {
                     channelId: payload.channelId || 'edutrack_parent',
                     tag: payload.tag || 'edutrack_parent_latest',
+                    icon: payload.androidIcon || visuals.icon,
+                    color: payload.androidColor || visuals.color,
                     sound: 'default',
                     defaultSound: true,
                     priority: 'high'
