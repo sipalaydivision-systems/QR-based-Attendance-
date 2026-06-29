@@ -137,23 +137,48 @@ Future<ByteArrayAndroidBitmap?> _renderTypeLargeIcon(String type) async {
   }
 }
 
-// The Android tray card should match the in-app "All notification types" cards:
-// left/small icon = the specific notification type, right/large icon = the
-// EduTrack Guardian logo/seal.
+// Android tray layout matches the in-app "All notification types" cards:
+// left/small icon  = EduTrack graduation cap (monochrome, always the same)
+// right/large icon = per-type colored circle with the specific scan icon
 Future<bool> showParentNotification(String title, String body, {int? id, String type = '', bool richIcon = true}) async {
   final nid = id ?? DateTime.now().millisecondsSinceEpoch.remainder(100000);
   final color = _androidNotificationColor(type);
-  final largeIcon = const DrawableResourceAndroidBitmap('@mipmap/ic_launcher');
-  final iconsToTry = <String>{
-    if (type.trim().isNotEmpty) _androidNotificationIcon(type),
-    'ic_stat_edutrack',
-  };
 
-  // Keep the parameter for older call sites; the tray design now always uses
-  // the Guardian logo as the large/right icon.
-  if (richIcon) {/* intentionally no-op */}
+  // Right side: per-type colored circle icon matching the in-app notification
+  // list. Falls back to the app launcher (school seal) if rendering fails.
+  AndroidBitmap<Object> largeIcon;
+  final rendered = await _renderTypeLargeIcon(type);
+  if (rendered != null) {
+    largeIcon = rendered;
+  } else {
+    largeIcon = const DrawableResourceAndroidBitmap('@mipmap/ic_launcher');
+  }
 
-  for (final icon in iconsToTry) {
+  // Left side: always the EduTrack graduation cap (monochrome status-bar icon).
+  const smallIcon = 'ic_stat_edutrack';
+
+  try {
+    await _notifications.show(
+      nid,
+      '<b>$title</b>',
+      '<b>$body</b>',
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'edutrack_parent',
+          'EduTrack Guardian',
+          channelDescription: 'Attendance alerts for your child',
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: smallIcon,
+          color: color,
+          largeIcon: largeIcon,
+          styleInformation: const DefaultStyleInformation(true, true),
+        ),
+      ),
+    );
+    return true;
+  } catch (error) {
+    debugPrint('Guardian notification failed: $error');
     try {
       await _notifications.show(
         nid,
@@ -166,16 +191,16 @@ Future<bool> showParentNotification(String title, String body, {int? id, String 
             channelDescription: 'Attendance alerts for your child',
             importance: Importance.high,
             priority: Priority.high,
-            icon: icon,
+            icon: smallIcon,
             color: color,
-            largeIcon: largeIcon,
+            largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
             styleInformation: const DefaultStyleInformation(true, true),
           ),
         ),
       );
       return true;
-    } catch (error) {
-      debugPrint('Guardian notification icon "$icon" failed: $error');
+    } catch (fallbackError) {
+      debugPrint('Guardian notification fallback failed: $fallbackError');
     }
   }
   return false;
