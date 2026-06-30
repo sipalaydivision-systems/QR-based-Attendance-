@@ -1501,7 +1501,19 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
         }
 
         if (!person) {
-            return res.json({ success: false, error: 'QR code not recognized.' });
+            // Log + return the scanned value so an admin can diagnose why no
+            // student or teacher row matched (regenerated QR, deleted record,
+            // wrong card, etc.). Without this, the kiosk just shows a generic
+            // toast with no actionable detail.
+            try {
+                console.warn(`[scan] QR not recognized — value=${JSON.stringify(qr_code)} candidates=${JSON.stringify(qrLookupCandidates.slice(0, 4))}`);
+            } catch (_) {}
+            return res.json({
+                success: false,
+                error: `QR code not in system: "${qr_code}". The card may have been regenerated, the student removed, or this is not an EduTrack QR.`,
+                scanned_value: qr_code,
+                qr_unknown: true
+            });
         }
 
         // Reject deleted persons
