@@ -27,8 +27,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const DESKTOP_SCANNER_LATEST = {
-    version: '1.0.15',
-    notes: 'Self-updating scanner — no need to manually reinstall when a new version ships.'
+    version: '1.0.16',
+    notes: 'Scanner QR recognition update with safer USB scan timing and more tolerant QR parsing.'
 };
 
 app.get('/mobile-config.json', (req, res) => {

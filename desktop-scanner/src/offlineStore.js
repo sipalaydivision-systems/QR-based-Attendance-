@@ -427,7 +427,7 @@ function replacePeopleCache(people, cachedAt = nowSql(), options = {}) {
 function getPersonByQrCode(qrCode) {
   const trimmed = String(qrCode || '').trim();
   if (!trimmed) return null;
-  const row = get('SELECT * FROM people_cache WHERE qr_code = ?', [trimmed]);
+  const row = get('SELECT * FROM people_cache WHERE qr_code = ? OR UPPER(TRIM(qr_code)) = UPPER(TRIM(?)) LIMIT 1', [trimmed, trimmed]);
   if (!row) return null;
   return mapPersonCacheRow(row);
 }
@@ -435,7 +435,7 @@ function getPersonByQrCode(qrCode) {
 function getPersonByCode(personCode) {
   const trimmed = String(personCode || '').trim();
   if (!trimmed) return null;
-  const row = get('SELECT * FROM people_cache WHERE person_code = ? LIMIT 1', [trimmed]);
+  const row = get('SELECT * FROM people_cache WHERE person_code = ? OR UPPER(TRIM(person_code)) = UPPER(TRIM(?)) LIMIT 1', [trimmed, trimmed]);
   if (!row) return null;
   return mapPersonCacheRow(row);
 }

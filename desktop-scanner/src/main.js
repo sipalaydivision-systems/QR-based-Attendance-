@@ -216,10 +216,20 @@ function secondsBetween(left, right) {
 function cleanScannedQrValue(value) {
   return String(value || '')
     .replace(/^\uFEFF/, '')
+    .replace(/[\u200B-\u200D\u2060]/g, '')
     .replace(/[\u0000-\u001F\u007F]/g, '')
+    .replace(/[‐‑‒–—−﹣－]/g, '-')
+    .replace(/\s*-\s*/g, '-')
     .trim()
     .replace(/^["']|["']$/g, '')
     .trim();
+}
+
+function looksLikeQrLookupValue(value) {
+  const cleaned = cleanScannedQrValue(value);
+  return /^(STU|TCH)-/i.test(cleaned)
+    || /^\d{5,20}$/.test(cleaned)
+    || /^(?=.{5,}$)(?=.*\d)[A-Z0-9][A-Z0-9._-]*$/i.test(cleaned);
 }
 
 function addQrCandidate(candidates, value) {
@@ -241,15 +251,37 @@ function getQrLookupCandidates(value) {
   const cleaned = cleanScannedQrValue(value);
   try {
     const parsed = new URL(cleaned);
-    ['qr_code', 'qr', 'code', 'q'].forEach((key) => addQrCandidate(candidates, parsed.searchParams.get(key)));
+    const qrParamKeys = ['qr_code', 'qr', 'code', 'q', 'lrn', 'student_lrn', 'student_code', 'employee_id', 'employee', 'emp_id', 'teacher_code', 'value', 'data'];
+    qrParamKeys.forEach((key) => addQrCandidate(candidates, parsed.searchParams.get(key)));
     const pathParts = parsed.pathname.split('/').filter(Boolean);
-    addQrCandidate(candidates, pathParts[pathParts.length - 1]);
+    pathParts.forEach((part) => {
+      const decoded = cleanScannedQrValue(decodeURIComponent(part));
+      if (looksLikeQrLookupValue(decoded)) addQrCandidate(candidates, decoded);
+    });
+    if (parsed.hash) {
+      addQrCandidate(candidates, parsed.hash.replace(/^#/, ''));
+      const hashQuery = parsed.hash.includes('?') ? parsed.hash.split('?').pop() : parsed.hash.replace(/^#/, '');
+      const hashParams = new URLSearchParams(hashQuery);
+      qrParamKeys.forEach((key) => addQrCandidate(candidates, hashParams.get(key)));
+    }
   } catch (_err) {
     // Plain QR payloads are expected; URLs are supported as a convenience.
   }
 
+  const embeddedPattern = /\b((?:STU|TCH)\s*[-:]\s*[A-Z0-9][A-Z0-9._-]{2,})\b/gi;
+  let embeddedMatch;
+  while ((embeddedMatch = embeddedPattern.exec(cleaned)) !== null) {
+    addQrCandidate(candidates, embeddedMatch[1].replace(':', '-'));
+  }
+
+  const labeledNumberPattern = /\b(?:LRN|EMPLOYEE|EMP|TEACHER|STUDENT)[\s#:.-]*(\d{5,20})\b/gi;
+  let numberMatch;
+  while ((numberMatch = labeledNumberPattern.exec(cleaned)) !== null) {
+    addQrCandidate(candidates, numberMatch[1]);
+  }
+
   Array.from(candidates).forEach((candidate) => {
-    if (!/^(STU|TCH)-/i.test(candidate)) {
+    if (!/^(STU|TCH)-/i.test(candidate) && looksLikeQrLookupValue(candidate)) {
       addQrCandidate(candidates, `STU-${candidate}`);
       addQrCandidate(candidates, `TCH-${candidate}`);
     }

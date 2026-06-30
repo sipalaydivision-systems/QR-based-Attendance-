@@ -4,6 +4,8 @@ const OFFLINE_NOTIFICATION = 'Offline Mode Enabled - Attendance records are bein
 const CONNECTION_RESTORED_NOTIFICATION = 'Connection Restored - Synchronizing attendance records.';
 const SYNC_COMPLETE_NOTIFICATION = 'Synchronization Completed Successfully.';
 const LOCAL_LOGO_URL = '../assets/edutrack-scanner.png';
+const USB_AUTO_SUBMIT_DELAY_MS = 700;
+const QR_PARAM_KEYS = ['qr_code', 'qr', 'code', 'q', 'lrn', 'student_lrn', 'student_code', 'employee_id', 'employee', 'emp_id', 'teacher_code', 'value', 'data'];
 
 const state = {
   settings: {},
@@ -1514,21 +1516,59 @@ function openSettings() {
 function normalizeScanInput(value) {
   const cleaned = String(value || '')
     .replace(/^\uFEFF/, '')
+    .replace(/[\u200B-\u200D\u2060]/g, '')
     .replace(/[\u0000-\u001F\u007F]/g, '')
+    .replace(/[‐‑‒–—−﹣－]/g, '-')
+    .replace(/\s*-\s*/g, '-')
     .trim()
     .replace(/^["']|["']$/g, '')
     .trim();
 
+  const candidates = [];
+  const addCandidate = (valueToAdd) => {
+    const candidate = String(valueToAdd || '')
+      .replace(/^\uFEFF/, '')
+      .replace(/[\u200B-\u200D\u2060]/g, '')
+      .replace(/[\u0000-\u001F\u007F]/g, '')
+      .replace(/[‐‑‒–—−﹣－]/g, '-')
+      .replace(/\s*-\s*/g, '-')
+      .trim()
+      .replace(/^["']|["']$/g, '')
+      .trim();
+    if (candidate && !candidates.includes(candidate)) candidates.push(candidate);
+  };
+  const looksLikeQrValue = (candidate) => /^(STU|TCH)-/i.test(candidate)
+    || /^\d{5,20}$/.test(candidate)
+    || /^(?=.{5,}$)(?=.*\d)[A-Z0-9][A-Z0-9._-]*$/i.test(candidate);
+
+  addCandidate(cleaned);
+
   try {
     const parsed = new URL(cleaned);
-    return parsed.searchParams.get('qr_code')
-      || parsed.searchParams.get('qr')
-      || parsed.searchParams.get('code')
-      || parsed.searchParams.get('q')
-      || decodeURIComponent(parsed.pathname.split('/').filter(Boolean).pop() || cleaned);
+    QR_PARAM_KEYS.forEach((key) => addCandidate(parsed.searchParams.get(key)));
+    parsed.pathname.split('/').filter(Boolean).forEach((part) => {
+      const decoded = decodeURIComponent(part);
+      if (looksLikeQrValue(decoded)) addCandidate(decoded);
+    });
+    if (parsed.hash) {
+      addCandidate(parsed.hash.replace(/^#/, ''));
+      const hashQuery = parsed.hash.includes('?') ? parsed.hash.split('?').pop() : parsed.hash.replace(/^#/, '');
+      const hashParams = new URLSearchParams(hashQuery);
+      QR_PARAM_KEYS.forEach((key) => addCandidate(hashParams.get(key)));
+    }
   } catch (_err) {
-    return cleaned;
+    // Plain QR payloads are expected; URLs are supported as a convenience.
   }
+
+  const embeddedPattern = /\b((?:STU|TCH)\s*[-:]\s*[A-Z0-9][A-Z0-9._-]{2,})\b/gi;
+  let embeddedMatch;
+  while ((embeddedMatch = embeddedPattern.exec(cleaned)) !== null) addCandidate(embeddedMatch[1].replace(':', '-'));
+
+  const labeledNumberPattern = /\b(?:LRN|EMPLOYEE|EMP|TEACHER|STUDENT)[\s#:.-]*(\d{5,20})\b/gi;
+  let numberMatch;
+  while ((numberMatch = labeledNumberPattern.exec(cleaned)) !== null) addCandidate(numberMatch[1]);
+
+  return candidates.find(looksLikeQrValue) || cleaned;
 }
 
 // ── Admin Authentication ──────────────────────────────────────────────────────
@@ -1702,7 +1742,7 @@ function scheduleUsbAutoSubmit() {
   clearUsbSubmitTimer();
   const code = normalizeScanInput($('usbInput')?.value || state.usbBuffer);
   if (code.length < 4) return;
-  state.usbSubmitTimer = setTimeout(submitUsbScanInput, 220);
+  state.usbSubmitTimer = setTimeout(submitUsbScanInput, USB_AUTO_SUBMIT_DELAY_MS);
 }
 
 let _usbActivityTimer = null;
