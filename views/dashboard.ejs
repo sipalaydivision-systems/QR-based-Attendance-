@@ -16,6 +16,16 @@
 .dash-chart-legend { display: flex; justify-content: center; gap: 18px; margin-top: 14px; flex-wrap: wrap; }
 .dash-legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--gray-600); font-weight: 500; }
 .dash-legend-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
+.scanner-status-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 132px; }
+.scanner-status-pill {
+    display: inline-flex; align-items: center; gap: 6px; width: fit-content;
+    padding: 5px 9px; border-radius: 999px; font-size: 0.72rem; font-weight: 800;
+    border: 1px solid transparent; white-space: nowrap;
+}
+.scanner-status-pill.active { color: #047857; background: #dcfce7; border-color: #bbf7d0; }
+.scanner-status-pill.idle { color: #b45309; background: #fef3c7; border-color: #fde68a; }
+.scanner-status-pill.offline { color: #b91c1c; background: #fee2e2; border-color: #fecaca; }
+.scanner-status-meta { color: var(--gray-500); font-size: 0.68rem; line-height: 1.25; }
 </style>
 
 <!-- Welcome Banner -->
@@ -77,6 +87,13 @@
         <div class="stat-info">
             <span class="stat-number" id="statStudents">—</span>
             <span class="stat-label">Active Students</span>
+        </div>
+    </div>
+    <div class="stat-card" style="border-left:3px solid #059669;">
+        <div class="stat-icon-wrap green"><i class="fa-solid fa-desktop"></i></div>
+        <div class="stat-info">
+            <span class="stat-number" id="statScanners">—</span>
+            <span class="stat-label">Active Scanners</span>
         </div>
     </div>
     <div class="stat-card stat-present">
@@ -187,12 +204,13 @@
                     <th>Half-Day</th>
                     <th>Absent</th>
                     <th>Student Rate</th>
+                    <th>Scanner</th>
                     <th>Teachers</th>
                     <th>Teacher Rate</th>
                 </tr>
             </thead>
             <tbody id="schoolBreakdownBody">
-                <tr><td colspan="9" class="text-center text-muted" style="padding:32px;">
+                <tr><td colspan="10" class="text-center text-muted" style="padding:32px;">
                     <i class="fa-solid fa-spinner fa-spin" style="margin-right:6px;"></i> Loading...
                 </td></tr>
             </tbody>
@@ -329,6 +347,14 @@
         return '<div class="progress-bar-wrap" style="min-width:80px;">' +
                '<div class="progress-bar-fill ' + color + '" style="width:' + Math.min(100, pct) + '%"></div></div>';
     }
+    function esc(v) {
+        return String(v == null ? '' : v)
+            .replace(/&/g,'&amp;')
+            .replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;')
+            .replace(/"/g,'&quot;')
+            .replace(/'/g,'&#39;');
+    }
     function normalizeLogo(logo) {
         var value = String(logo || '').trim();
         if (!value) return '';
@@ -344,6 +370,43 @@
             return '<div style="width:' + safeSize + 'px;height:' + safeSize + 'px;border-radius:9px;background:var(--primary-bg);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;flex-shrink:0;">' + initial + '</div>';
         }
         return '<img src="' + src + '" alt="" style="width:' + safeSize + 'px;height:' + safeSize + 'px;border-radius:9px;object-fit:cover;flex-shrink:0;border:1px solid var(--border);background:#fff;">';
+    }
+    function scannerLastSeenText(seconds, value) {
+        if (seconds == null && !value) return 'No scanner check-in yet';
+        var sec = Math.max(0, Number(seconds || 0));
+        if (sec < 60) return sec <= 5 ? 'just now' : sec + 's ago';
+        var min = Math.floor(sec / 60);
+        if (min < 60) return min + 'm ago';
+        var hr = Math.floor(min / 60);
+        if (hr < 24) return hr + 'h ago';
+        try {
+            return new Date(String(value).replace(' ', 'T')).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        } catch (_err) {
+            return String(value || 'unknown');
+        }
+    }
+    function scannerStatusCell(s) {
+        var total = Number(s.scanner_total || 0);
+        var active = Number(s.scanner_active || 0);
+        var idle = Number(s.scanner_idle || 0);
+        var status = active > 0 ? 'active' : idle > 0 ? 'idle' : 'offline';
+        var icon = status === 'active' ? 'fa-circle-check' : status === 'idle' ? 'fa-clock' : 'fa-circle-xmark';
+        var label = active > 0
+            ? (active + ' / ' + total + ' Active')
+            : total > 0
+                ? 'Offline'
+                : 'No Scanner';
+        var meta = total > 0
+            ? 'Last seen ' + scannerLastSeenText(s.scanner_last_seen_seconds, s.scanner_last_seen_at)
+            : 'Install or assign a desktop scanner';
+        if (Number(s.scanner_queued_count || 0) > 0) meta += ' · ' + Number(s.scanner_queued_count || 0) + ' queued';
+        if (s.scanner_sync_in_progress) meta += ' · syncing';
+        if (s.scanner_app_version) meta += ' · v' + esc(s.scanner_app_version);
+        if (s.scanner_device_name) meta += '<br>' + esc(s.scanner_device_name);
+        return '<div class="scanner-status-wrap">' +
+            '<span class="scanner-status-pill ' + status + '"><i class="fa-solid ' + icon + '"></i>' + esc(label) + '</span>' +
+            '<span class="scanner-status-meta">' + meta + '</span>' +
+            '</div>';
     }
 
     function nonSchoolDayMessage(data) {
@@ -375,6 +438,9 @@
             // KPI cards
             document.getElementById('statSchools').textContent  = data.total_schools;
             document.getElementById('statStudents').textContent = data.active_students;
+            var scannerSummary = data.scanner_status_summary || {};
+            var scannerEl = document.getElementById('statScanners');
+            if (scannerEl) scannerEl.textContent = (scannerSummary.active_scanners || 0) + ' / ' + (scannerSummary.total_scanners || 0);
             document.getElementById('statPresent').textContent  = data.students_present;
             var halfDayEl = document.getElementById('statHalfDay');
             if (halfDayEl) halfDayEl.textContent = data.students_half_day || 0;
@@ -400,7 +466,7 @@
             // School breakdown table
             var tbody = document.getElementById('schoolBreakdownBody');
             if (!data.schools || !data.schools.length) {
-                tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><i class="fa-solid fa-building-columns"></i><h4>No schools found</h4><p>No attendance data available.</p></div></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10"><div class="empty-state"><i class="fa-solid fa-building-columns"></i><h4>No schools found</h4><p>No attendance data available.</p></div></td></tr>';
             } else {
                 tbody.innerHTML = data.schools.map(function(s) {
                     var sRate = s.rate;
@@ -421,6 +487,7 @@
                             '<span style="font-weight:700;font-size:0.8125rem;color:' + rateColor(sRate) + ';min-width:38px;">' + sRate + '%</span>' +
                             '</div>' +
                         '</td>' +
+                        '<td>' + scannerStatusCell(s) + '</td>' +
                         '<td>' + s.teachers_present + '<span style="color:var(--gray-400);font-size:0.75rem;"> / ' + s.teachers_total + '</span></td>' +
                         '<td>' +
                             '<div style="display:flex;align-items:center;gap:8px;">' +

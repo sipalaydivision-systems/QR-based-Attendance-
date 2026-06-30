@@ -62,6 +62,108 @@ function normalizeOptionalSchoolId(value) {
     return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+const DESKTOP_SCANNER_ACTIVE_SECONDS = 75;
+const DESKTOP_SCANNER_RECENT_SECONDS = 5 * 60;
+
+function limitText(value, maxLength) {
+    return String(value || '').trim().slice(0, maxLength);
+}
+
+function normalizeScannerDateTime(value) {
+    const raw = String(value || '').trim();
+    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (!match) return null;
+    return `${match[1]}-${match[2]}-${match[3]} ${match[4].padStart(2, '0')}:${match[5]}:${match[6] || '00'}`;
+}
+
+function scannerPresenceState(ageSeconds) {
+    const age = Math.max(0, Number(ageSeconds || 0));
+    if (age <= DESKTOP_SCANNER_ACTIVE_SECONDS) return 'active';
+    if (age <= DESKTOP_SCANNER_RECENT_SECONDS) return 'idle';
+    return 'offline';
+}
+
+async function getDesktopScannerPresence(schoolId) {
+    const now = nowDateTime();
+    const params = [now];
+    let where = '';
+    if (schoolId) {
+        where = 'WHERE d.school_id = ?';
+        params.push(schoolId);
+    }
+
+    const [rows] = await db.query(`
+        SELECT
+            d.*,
+            sc.name AS school_name,
+            TIMESTAMPDIFF(SECOND, d.last_seen_at, ?) AS age_seconds
+        FROM desktop_scanner_devices d
+        LEFT JOIN schools sc ON d.school_id = sc.id
+        ${where}
+        ORDER BY d.school_id IS NULL, sc.name, d.last_seen_at DESC
+    `, params);
+
+    const devices = rows.map(row => {
+        const ageSeconds = Math.max(0, Number(row.age_seconds || 0));
+        const presence = scannerPresenceState(ageSeconds);
+        return {
+            scanner_id: row.scanner_id,
+            school_id: row.school_id,
+            school_name: row.school_name || null,
+            device_name: row.device_name || 'Desktop Scanner',
+            platform: row.platform || '',
+            app_version: row.app_version || '',
+            scanner_mode: row.scanner_mode || '',
+            queued_count: Number(row.queued_count || 0),
+            queued_today_count: Number(row.queued_today_count || 0),
+            sync_in_progress: !!row.sync_in_progress,
+            last_successful_sync_at: row.last_successful_sync_at || null,
+            directory_last_refreshed_at: row.directory_last_refreshed_at || null,
+            last_seen_at: row.last_seen_at,
+            age_seconds: ageSeconds,
+            presence,
+            is_active: presence === 'active'
+        };
+    });
+
+    const bySchool = new Map();
+    devices.forEach(device => {
+        if (!device.school_id) return;
+        const key = String(device.school_id);
+        if (!bySchool.has(key)) {
+            bySchool.set(key, {
+                total_scanners: 0,
+                active_scanners: 0,
+                idle_scanners: 0,
+                offline_scanners: 0,
+                queued_count: 0,
+                sync_in_progress: false,
+                latest: null
+            });
+        }
+        const entry = bySchool.get(key);
+        entry.total_scanners += 1;
+        entry.queued_count += device.queued_count;
+        entry.sync_in_progress = entry.sync_in_progress || device.sync_in_progress;
+        if (device.presence === 'active') entry.active_scanners += 1;
+        else if (device.presence === 'idle') entry.idle_scanners += 1;
+        else entry.offline_scanners += 1;
+        if (!entry.latest || device.age_seconds < entry.latest.age_seconds) entry.latest = device;
+    });
+
+    const summary = {
+        total_scanners: devices.length,
+        active_scanners: devices.filter(d => d.presence === 'active').length,
+        idle_scanners: devices.filter(d => d.presence === 'idle').length,
+        offline_scanners: devices.filter(d => d.presence === 'offline').length,
+        schools_with_active_scanner: [...bySchool.values()].filter(s => s.active_scanners > 0).length,
+        unassigned_scanners: devices.filter(d => !d.school_id).length,
+        active_window_seconds: DESKTOP_SCANNER_ACTIVE_SECONDS
+    };
+
+    return { devices, bySchool, summary };
+}
+
 function deriveTrackFromSection(sectionName) {
     const raw = String(sectionName || '').trim();
     const match = raw.match(/^(STEM|ABM|HUMSS|GAS|TVL(?:-[A-Z]+)?|Sports|Arts(?:\s+and\s+| & )Design)\s*-\s*(.+)$/i);
@@ -481,6 +583,79 @@ router.get('/scanner-desktop-config', async (req, res) => {
     } catch (err) {
         console.error('Scanner desktop config error:', err);
         return res.status(500).json({ success: false, error: 'Failed to load scanner desktop configuration.' });
+    }
+});
+
+router.post('/scanner-desktop-heartbeat', requireAuthOrScannerKiosk, async (req, res) => {
+    try {
+        const scannerId = limitText(req.body.scanner_id || req.body.device_id, 100);
+        if (!scannerId) {
+            return res.status(400).json({ success: false, error: 'Scanner ID is required.' });
+        }
+
+        const schoolId = normalizeOptionalSchoolId(req.body.school_id || req.body.scanner_school_id);
+        const appVersion = limitText(req.body.app_version, 50);
+        const deviceName = limitText(req.body.device_name, 150);
+        const platform = limitText(req.body.platform, 30);
+        const scannerMode = limitText(req.body.scanner_mode, 30);
+        const queuedCount = Math.max(0, Number.parseInt(req.body.queued_count, 10) || 0);
+        const queuedTodayCount = Math.max(0, Number.parseInt(req.body.queued_today_count, 10) || 0);
+        const syncInProgress = req.body.sync_in_progress === true || req.body.sync_in_progress === 'true' || req.body.sync_in_progress === '1';
+        const online = !(req.body.online === false || req.body.online === 'false' || req.body.online === '0');
+        const status = online ? 'online' : 'offline';
+        const lastSuccessfulSyncAt = normalizeScannerDateTime(req.body.last_successful_sync_at);
+        const directoryLastRefreshedAt = normalizeScannerDateTime(req.body.directory_last_refreshed_at);
+        const seenAt = nowDateTime();
+
+        await db.query(`
+            INSERT INTO desktop_scanner_devices (
+                scanner_id, school_id, device_name, platform, app_version,
+                scanner_mode, status, online, queued_count, queued_today_count,
+                sync_in_progress, last_successful_sync_at, directory_last_refreshed_at,
+                last_seen_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                school_id = VALUES(school_id),
+                device_name = VALUES(device_name),
+                platform = VALUES(platform),
+                app_version = VALUES(app_version),
+                scanner_mode = VALUES(scanner_mode),
+                status = VALUES(status),
+                online = VALUES(online),
+                queued_count = VALUES(queued_count),
+                queued_today_count = VALUES(queued_today_count),
+                sync_in_progress = VALUES(sync_in_progress),
+                last_successful_sync_at = COALESCE(VALUES(last_successful_sync_at), last_successful_sync_at),
+                directory_last_refreshed_at = COALESCE(VALUES(directory_last_refreshed_at), directory_last_refreshed_at),
+                last_seen_at = VALUES(last_seen_at),
+                updated_at = CURRENT_TIMESTAMP
+        `, [
+            scannerId,
+            schoolId,
+            deviceName || 'Desktop Scanner',
+            platform,
+            appVersion,
+            scannerMode,
+            status,
+            online ? 1 : 0,
+            queuedCount,
+            queuedTodayCount,
+            syncInProgress ? 1 : 0,
+            lastSuccessfulSyncAt,
+            directoryLastRefreshedAt,
+            seenAt
+        ]);
+
+        return res.json({
+            success: true,
+            scanner_id: scannerId,
+            school_id: schoolId,
+            last_seen_at: seenAt,
+            active_window_seconds: DESKTOP_SCANNER_ACTIVE_SECONDS
+        });
+    } catch (err) {
+        console.error('Scanner desktop heartbeat error:', err);
+        return res.status(500).json({ success: false, error: 'Failed to record desktop scanner heartbeat.' });
     }
 });
 
@@ -1729,6 +1904,7 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
             breakdownParams.push(schoolId);
         }
         const [schoolBreakdown] = await db.query(schoolBreakdownQuery, breakdownParams);
+        const scannerPresence = await getDesktopScannerPresence(schoolId);
 
         const breakdown = [];
         for (const s of schoolBreakdown) {
@@ -1739,6 +1915,8 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
             const teacherCounts = await getAttendanceStatusCounts('teacher', date, { schoolId: s.id });
             const fullDayStudents = studentCounts.full_day;
             const fullDayTeachers = teacherCounts.full_day;
+            const scannerInfo = scannerPresence.bySchool.get(String(s.id)) || null;
+            const latestScanner = scannerInfo?.latest || null;
             breakdown.push({
                 id: s.id,
                 name: s.name,
@@ -1758,7 +1936,22 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
                 teachers_half_day: teacherCounts.half_day,
                 teachers_full_day: fullDayTeachers,
                 teachers_absent: teacherAbsent,
-                teacher_rate: Math.max(teacherEligible, teacherCounts.timed_in || 0) > 0 ? Math.min(100, Math.round((fullDayTeachers / Math.max(teacherEligible, teacherCounts.timed_in || 0)) * 100)) : 0
+                teacher_rate: Math.max(teacherEligible, teacherCounts.timed_in || 0) > 0 ? Math.min(100, Math.round((fullDayTeachers / Math.max(teacherEligible, teacherCounts.timed_in || 0)) * 100)) : 0,
+                scanner_total: scannerInfo ? scannerInfo.total_scanners : 0,
+                scanner_active: scannerInfo ? scannerInfo.active_scanners : 0,
+                scanner_idle: scannerInfo ? scannerInfo.idle_scanners : 0,
+                scanner_offline: scannerInfo ? scannerInfo.offline_scanners : 0,
+                scanner_status: scannerInfo && scannerInfo.active_scanners > 0
+                    ? 'active'
+                    : scannerInfo && scannerInfo.idle_scanners > 0
+                        ? 'idle'
+                        : 'offline',
+                scanner_last_seen_at: latestScanner ? latestScanner.last_seen_at : null,
+                scanner_last_seen_seconds: latestScanner ? latestScanner.age_seconds : null,
+                scanner_app_version: latestScanner ? latestScanner.app_version : '',
+                scanner_device_name: latestScanner ? latestScanner.device_name : '',
+                scanner_queued_count: scannerInfo ? scannerInfo.queued_count : 0,
+                scanner_sync_in_progress: scannerInfo ? scannerInfo.sync_in_progress : false
             });
         }
 
@@ -1849,6 +2042,8 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
             is_school_day: isSchoolDay,
             non_school_day_reason: nonSchoolDayReason,
             non_school_day_type: nonSchoolDayType,
+            scanner_status_summary: scannerPresence.summary,
+            desktop_scanners: scannerPresence.devices,
             schools: breakdown
         };
 

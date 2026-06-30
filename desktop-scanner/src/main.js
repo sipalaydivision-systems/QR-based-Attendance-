@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const https = require('https');
 const http = require('http');
+const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const {
@@ -110,6 +111,7 @@ function defaultSettings() {
     autoStart: true,
     startFullscreen: false,
     minimizeToTray: true,
+    scannerId: '',
     kioskToken: '',
     brandName: 'EduTrack',
     divisionName: 'Schools Division of Sipalay City',
@@ -661,15 +663,24 @@ function nonSchoolDayScanMessage(schoolDay) {
 
 function loadSettings() {
   const merged = { ...defaultSettings(), ...readJson(settingsPath(), {}) };
+  let shouldPersist = false;
+  if (!merged.scannerId) {
+    merged.scannerId = createId();
+    shouldPersist = true;
+  }
   // Auto-migrate a retired serverUrl to the live server and persist it once,
   // so reinstalls and updates connect without any manual settings edit.
   const migratedUrl = normalizeServerUrl(merged.serverUrl);
   if (migratedUrl !== merged.serverUrl) {
     merged.serverUrl = migratedUrl;
+    shouldPersist = true;
+  }
+
+  if (shouldPersist) {
     try {
       writeJson(settingsPath(), merged);
     } catch (err) {
-      console.warn('Unable to persist serverUrl migration:', err.message);
+      console.warn('Unable to persist scanner settings migration:', err.message);
     }
   }
   return merged;
@@ -1093,6 +1104,50 @@ async function postScan(payload, timeoutMs = 6000) {
     const error = new Error(data.error || `Server error ${res.status}`);
     error.serverData = data;
     throw error;
+  }
+  return data;
+}
+
+async function sendScannerPresence(trigger = 'heartbeat') {
+  const settings = loadSettings();
+  if (!settings.kioskToken || !settings.scannerId) return null;
+  const serverUrl = normalizeServerUrl(settings.serverUrl);
+  const dashboard = getDashboard({ today: localDateString() });
+  const body = {
+    scanner_id: settings.scannerId,
+    school_id: String(settings.selectedSchoolId || '').trim() || null,
+    scanner_mode: settings.scannerMode || runtimeState.scannerMode || 'webcam',
+    app_version: app.getVersion(),
+    device_name: os.hostname() || 'Desktop Scanner',
+    platform: process.platform,
+    online: !!runtimeState.online,
+    queued_count: Number(dashboard.queuedCount || 0),
+    queued_today_count: Number(dashboard.queuedTodayCount || 0),
+    sync_in_progress: !!runtimeState.syncInProgress,
+    last_successful_sync_at: dashboard.lastSuccessfulSyncAt || runtimeState.lastSuccessfulSyncAt || null,
+    directory_last_refreshed_at: runtimeState.directoryLastRefreshedAt || getMeta('directoryRefreshedAt') || null,
+    trigger
+  };
+
+  const res = await fetchWithTimeout(`${serverUrl}/api/scanner-desktop-heartbeat`, {
+    method: 'POST',
+    cache: 'no-store',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Scanner-Kiosk-Token': settings.kioskToken
+    },
+    body: JSON.stringify(body)
+  }, 8000);
+
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (_err) {
+    throw new Error('The server returned an invalid scanner heartbeat response.');
+  }
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || 'Unable to record scanner heartbeat.');
   }
   return data;
 }
@@ -1805,6 +1860,12 @@ async function refreshConnectionState(options = {}) {
       await refreshScannerDirectory({ force: forceDirectory });
     } catch (directoryError) {
       console.warn('Scanner directory refresh skipped:', directoryError.message);
+    }
+
+    try {
+      await sendScannerPresence(trigger);
+    } catch (presenceError) {
+      console.warn('Scanner presence heartbeat skipped:', presenceError.message);
     }
 
     if (syncIfPossible && loadSettings().offlineSync && getDashboard({ today: localDateString() }).queuedCount > 0 && !runtimeState.syncInProgress) {

@@ -27,8 +27,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const DESKTOP_SCANNER_LATEST = {
-    version: '1.0.16',
-    notes: 'Scanner QR recognition update with safer USB scan timing and more tolerant QR parsing.'
+    version: '1.0.17',
+    notes: 'Adds desktop scanner active/offline monitoring per school in the admin dashboard.'
 };
 
 app.get('/mobile-config.json', (req, res) => {
@@ -461,6 +461,32 @@ async function ensureRuntimeSchema() {
             UNIQUE KEY uk_system_push_delivery (delivery_key),
             INDEX idx_system_push_user (user_id, sent_at),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB
+    `);
+
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS desktop_scanner_devices (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            scanner_id VARCHAR(100) NOT NULL,
+            school_id INT NULL,
+            device_name VARCHAR(150),
+            platform VARCHAR(30),
+            app_version VARCHAR(50),
+            scanner_mode VARCHAR(30),
+            status VARCHAR(30) DEFAULT 'online',
+            online TINYINT(1) DEFAULT 1,
+            queued_count INT DEFAULT 0,
+            queued_today_count INT DEFAULT 0,
+            sync_in_progress TINYINT(1) DEFAULT 0,
+            last_successful_sync_at DATETIME NULL,
+            directory_last_refreshed_at DATETIME NULL,
+            last_seen_at DATETIME NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_desktop_scanner_id (scanner_id),
+            INDEX idx_desktop_scanner_school_seen (school_id, last_seen_at),
+            INDEX idx_desktop_scanner_seen (last_seen_at),
+            FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE SET NULL
         ) ENGINE=InnoDB
     `);
 

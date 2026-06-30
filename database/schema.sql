@@ -88,6 +88,30 @@ CREATE TABLE IF NOT EXISTS system_push_deliveries (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS desktop_scanner_devices (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    scanner_id VARCHAR(100) NOT NULL,
+    school_id INT NULL,
+    device_name VARCHAR(150),
+    platform VARCHAR(30),
+    app_version VARCHAR(50),
+    scanner_mode VARCHAR(30),
+    status VARCHAR(30) DEFAULT 'online',
+    online TINYINT(1) DEFAULT 1,
+    queued_count INT DEFAULT 0,
+    queued_today_count INT DEFAULT 0,
+    sync_in_progress TINYINT(1) DEFAULT 0,
+    last_successful_sync_at DATETIME NULL,
+    directory_last_refreshed_at DATETIME NULL,
+    last_seen_at DATETIME NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_desktop_scanner_id (scanner_id),
+    INDEX idx_desktop_scanner_school_seen (school_id, last_seen_at),
+    INDEX idx_desktop_scanner_seen (last_seen_at),
+    FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
 -- -----------------------------------------------------------
 -- Parent / Guardian Accounts
 -- -----------------------------------------------------------
