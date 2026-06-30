@@ -196,7 +196,8 @@ function returnScanLabel(previousLabel, scanTime, scheduleInput = {}) {
     if (previous === ATTENDANCE_SCAN_LABELS.COMPLETED) return ATTENDANCE_SCAN_LABELS.ALREADY_COMPLETED;
     if (isAtOrAfter(scanTime, schedule.pmOutStart)) return ATTENDANCE_SCAN_LABELS.ATTENDANCE_CLOSED;
     if (previous === ATTENDANCE_SCAN_LABELS.LUNCH_OUT) {
-        if (isBefore(scanTime, schedule.pmInStart)) return ATTENDANCE_SCAN_LABELS.WELCOME_BACK;
+        // Any return from lunch counts as the PM time-in. Returns before the
+        // late threshold are on-time; returns at/after it are PM late.
         if (isBefore(scanTime, schedule.pmLateStart)) return ATTENDANCE_SCAN_LABELS.PM_TIME_IN;
         return ATTENDANCE_SCAN_LABELS.PM_LATE_TIME_IN;
     }

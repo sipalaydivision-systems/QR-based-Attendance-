@@ -374,7 +374,8 @@ function offlineReturnLabel(previousLabel, scanTime, schedule) {
   if (previous === SCAN_LABELS.COMPLETED) return SCAN_LABELS.ALREADY_COMPLETED;
   if (compareSqlDateTimes(scanTime, schedule.pmOutStart) >= 0) return SCAN_LABELS.ATTENDANCE_CLOSED;
   if (previous === SCAN_LABELS.LUNCH_OUT) {
-    if (compareSqlDateTimes(scanTime, schedule.pmInStart) < 0) return SCAN_LABELS.WELCOME_BACK;
+    // Any return from lunch is the PM time-in; only the late threshold splits
+    // on-time vs PM late.
     if (compareSqlDateTimes(scanTime, schedule.pmLateStart) < 0) return SCAN_LABELS.PM_TIME_IN;
     return SCAN_LABELS.PM_LATE_TIME_IN;
   }
