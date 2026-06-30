@@ -1,12 +1,19 @@
 {
   "name": "EduTrack Guardian App",
   "short_name": "EduTrack Guardian",
+  "description": "Secure guardian portal for real-time child attendance alerts.",
+  "id": "/parent/app",
   "start_url": "/parent/app",
   "scope": "/",
+  "lang": "en",
+  "dir": "ltr",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#06996b",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "background_color": "#064f3d",
+  "theme_color": "#064f3d",
   "orientation": "portrait",
+  "categories": ["education", "productivity"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/uploads/logos/system-logo.png",

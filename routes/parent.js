@@ -520,6 +520,9 @@ async function loadBranding() {
 router.get('/Download-app', async (req, res) => {
     const parentApkPath = path.join(__dirname, '..', 'public', 'downloads', 'edutrack-parent.apk');
     const branding = await loadBranding().catch(() => ({}));
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     return res.render('parent_download', {
         title: 'EduTrack Guardian App',
         parentApkAvailable: fs.existsSync(parentApkPath),

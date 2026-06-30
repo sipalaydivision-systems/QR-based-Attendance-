@@ -2,8 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#064f3d">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="EduTrack Guardian">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
     <title>EduTrack Guardian App</title>
     <link rel="manifest" href="/parent-manifest.webmanifest">
     <link rel="icon" type="image/png" href="/uploads/logos/system-logo.png">
@@ -27,13 +32,17 @@
         body {
             margin: 0;
             min-height: 100vh;
+            min-height: 100svh;
             font-family: Inter, "Segoe UI", Tahoma, sans-serif;
             color: #fff;
             background:
                 radial-gradient(circle at 8% 16%, rgba(69,255,180,.22), transparent 280px),
                 radial-gradient(circle at 94% 8%, rgba(255,126,36,.28), transparent 310px),
                 linear-gradient(135deg, #05261d 0%, #076548 50%, #06a36f 100%);
-            overflow-x: hidden;
+            overflow-x: clip;
+            padding-bottom: env(safe-area-inset-bottom, 0);
+            -webkit-text-size-adjust: 100%;
+            text-rendering: optimizeLegibility;
         }
         body::before,
         body::after {
@@ -53,11 +62,12 @@
         body::after {
             left: -12vw;
             right: -12vw;
-            bottom: -210px;
-            height: 360px;
+            bottom: -330px;
+            height: 340px;
             background: #f5fbf8;
             border-radius: 50% 50% 0 0;
             transform: rotate(2.4deg);
+            box-shadow: inset 0 18px 34px rgba(6, 114, 82, 0.08);
         }
         .wrap {
             position: relative;
@@ -71,6 +81,7 @@
             align-items: center;
             justify-content: space-between;
             gap: 18px;
+            padding-top: env(safe-area-inset-top, 0);
         }
         .brand {
             display: inline-flex;
@@ -108,7 +119,7 @@
             grid-template-columns: minmax(280px, .88fr) minmax(0, 1.12fr);
             gap: clamp(36px, 6vw, 86px);
             align-items: center;
-            padding: 18px 0 140px;
+            padding: 18px 0 max(96px, calc(64px + env(safe-area-inset-bottom, 0)));
         }
         .phone-shell {
             width: min(340px, 92vw);
@@ -312,8 +323,20 @@
         .store-button:hover { transform: translateY(-2px); box-shadow: 0 24px 48px rgba(6, 79, 61, .32); }
         .platform-mark { width: 28px; height: 28px; color: currentColor; display: inline-flex; }
         .platform-mark svg { width: 100%; height: 100%; fill: currentColor; display: block; }
+        .install-panel {
+            margin-top: 22px;
+            max-width: 650px;
+            padding: 16px;
+            border-radius: 26px;
+            border: 1px solid rgba(255,255,255,.18);
+            background:
+                linear-gradient(135deg, rgba(2, 48, 35, .78), rgba(8, 116, 80, .66));
+            box-shadow: 0 22px 50px rgba(0,0,0,.18), inset 0 0 0 1px rgba(255,255,255,.06);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+        }
         .status {
-            margin-top: 18px;
+            margin-top: 14px;
             max-width: 620px;
             color: <%= parentApkAvailable ? "#dbfff0" : "#ffe1e1" %>;
             font-size: 13px;
@@ -332,7 +355,7 @@
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
-            margin-top: 24px;
+            margin-top: 0;
         }
         .feature-pill {
             display: inline-flex;
@@ -347,18 +370,55 @@
             color: #e9fff7;
         }
         @media (max-width: 880px) {
+            body::after { display: none; }
             .brand-bar { min-height: 82px; }
             .top-link { display: none; }
-            .hero { grid-template-columns: 1fr; padding-bottom: 112px; }
+            .hero {
+                grid-template-columns: 1fr;
+                align-items: start;
+                gap: 32px;
+                padding: 12px 0 max(52px, calc(28px + env(safe-area-inset-bottom, 0)));
+            }
             .hero-copy { text-align: center; margin: 0 auto; }
             .download-row, .feature-row { justify-content: center; }
+            .install-panel { margin-left: auto; margin-right: auto; }
             .phone-shell { order: 2; }
         }
         @media (max-width: 520px) {
             .wrap { width: min(100% - 24px, 1120px); }
-            h1 { font-size: 38px; }
-            .store-button { width: 100%; }
-            .phone-screen { min-height: 590px; }
+            .brand-bar { min-height: 76px; }
+            .brand img { width: 42px; height: 42px; }
+            .brand strong { font-size: 16px; }
+            .brand span span { font-size: 11px; }
+            .eyebrow { margin-bottom: 18px; }
+            h1 { font-size: clamp(34px, 11vw, 40px); letter-spacing: -.045em; margin-bottom: 18px; }
+            .lead { font-size: 15px; line-height: 1.55; }
+            .download-row { margin-top: 24px; flex-direction: column; }
+            .store-button {
+                width: 100%;
+                min-height: 56px;
+                border-radius: 20px;
+                padding: 0 18px;
+                font-size: 14px;
+                text-align: center;
+            }
+            .install-panel {
+                border-radius: 22px;
+                padding: 14px;
+                text-align: left;
+            }
+            .feature-row { display: grid; grid-template-columns: 1fr; }
+            .feature-pill { justify-content: flex-start; width: 100%; }
+            .status, .version-note { font-size: 12px; text-align: left; }
+            .phone-shell { width: min(318px, 100%); border-radius: 38px; }
+            .phone-screen { min-height: 570px; border-radius: 30px; }
+            .greeting-card h3 { font-size: 22px; }
+            .analytics-card { grid-template-columns: 74px 1fr; }
+            .ring { width: 70px; height: 70px; }
+            .ring span { width: 50px; height: 50px; font-size: 14px; }
+        }
+        @media (display-mode: standalone) {
+            .top-link { display: none; }
         }
     </style>
 </head>
@@ -453,29 +513,42 @@
                     </a>
                 </div>
 
-                <div class="feature-row" aria-label="Guardian app features">
-                    <span class="feature-pill"><i class="fa-solid fa-bell"></i> Real-time push alerts</span>
-                    <span class="feature-pill"><i class="fa-solid fa-child"></i> Linked child records</span>
-                    <span class="feature-pill"><i class="fa-solid fa-phone"></i> Adviser contacts</span>
-                </div>
+                <div class="install-panel">
+                    <div class="feature-row" aria-label="Guardian app features">
+                        <span class="feature-pill"><i class="fa-solid fa-bell"></i> Real-time push alerts</span>
+                        <span class="feature-pill"><i class="fa-solid fa-child"></i> Linked child records</span>
+                        <span class="feature-pill"><i class="fa-solid fa-phone"></i> Adviser contacts</span>
+                    </div>
 
-                <div class="status">
-                    <% if (missing || !parentApkAvailable) { %>
-                        The Guardian APK is being prepared. You can open the Guardian Portal now and install the APK once available.
-                    <% } else { %>
-                        The Android Guardian installer is ready for secure, real-time attendance notifications.
+                    <div class="status">
+                        <% if (missing || !parentApkAvailable) { %>
+                            The Guardian APK is being prepared. You can open the Guardian Portal now and install the APK once available.
+                        <% } else { %>
+                            The Android Guardian installer is ready for secure, real-time attendance notifications.
+                        <% } %>
+                    </div>
+
+                    <% if (typeof latestVersion !== 'undefined' && latestVersion) { %>
+                    <p class="version-note">
+                        Latest version: <strong>v<%= latestVersion %></strong> (build <%= latestVersionCode %>).
+                        For a clean update, uninstall the old EduTrack Guardian app first, then install this download.
+                        After installing, open <strong>Profile</strong> — it should show v<%= latestVersion %>.
+                    </p>
                     <% } %>
                 </div>
-
-                <% if (typeof latestVersion !== 'undefined' && latestVersion) { %>
-                <p class="version-note">
-                    Latest version: <strong>v<%= latestVersion %></strong> (build <%= latestVersionCode %>).
-                    For a clean update, uninstall the old EduTrack Guardian app first, then install this download.
-                    After installing, open <strong>Profile</strong> — it should show v<%= latestVersion %>.
-                </p>
-                <% } %>
             </div>
         </section>
     </div>
+    <script>
+        (function () {
+            var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+            if (standalone) document.documentElement.classList.add('is-pwa');
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function () {
+                    navigator.serviceWorker.register('/sw.js').catch(function () {});
+                });
+            }
+        })();
+    </script>
 </body>
 </html>
