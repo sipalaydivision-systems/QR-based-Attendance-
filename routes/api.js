@@ -1866,8 +1866,9 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
         res.set('Expires', '0');
         const date = req.query.date || todayDate();
         const schoolId = applySchoolFilter(req);
+        const canSeeDesktopScanners = req.session?.user?.role === 'super_admin';
         const absenceCountingActive = await shouldCountComputedAbsences(date, schoolId);
-        const cacheKey = `${date}-${schoolId || 'all'}-${absenceCountingActive ? 'absence-closed' : 'attendance-open'}`;
+        const cacheKey = `${date}-${schoolId || 'all'}-${absenceCountingActive ? 'absence-closed' : 'attendance-open'}-${canSeeDesktopScanners ? 'scanner-visible' : 'scanner-hidden'}`;
 
         // Return cached if fresh (3 seconds)
         if (!req.query._ && dashboardCache.key === cacheKey && (Date.now() - dashboardCache.timestamp) < 3000) {
@@ -1920,7 +1921,7 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
             breakdownParams.push(schoolId);
         }
         const [schoolBreakdown] = await db.query(schoolBreakdownQuery, breakdownParams);
-        const scannerPresence = await getDesktopScannerPresence(schoolId);
+        const scannerPresence = canSeeDesktopScanners ? await getDesktopScannerPresence(schoolId) : null;
 
         const breakdown = [];
         for (const s of schoolBreakdown) {
@@ -1931,7 +1932,7 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
             const teacherCounts = await getAttendanceStatusCounts('teacher', date, { schoolId: s.id });
             const fullDayStudents = studentCounts.full_day;
             const fullDayTeachers = teacherCounts.full_day;
-            const scannerInfo = scannerPresence.bySchool.get(String(s.id)) || null;
+            const scannerInfo = scannerPresence ? (scannerPresence.bySchool.get(String(s.id)) || null) : null;
             const latestScanner = scannerInfo?.latest || null;
             breakdown.push({
                 id: s.id,
@@ -1953,6 +1954,7 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
                 teachers_full_day: fullDayTeachers,
                 teachers_absent: teacherAbsent,
                 teacher_rate: Math.max(teacherEligible, teacherCounts.timed_in || 0) > 0 ? Math.min(100, Math.round((fullDayTeachers / Math.max(teacherEligible, teacherCounts.timed_in || 0)) * 100)) : 0,
+                ...(canSeeDesktopScanners ? {
                 scanner_total: scannerInfo ? scannerInfo.total_scanners : 0,
                 scanner_active: scannerInfo ? scannerInfo.active_scanners : 0,
                 scanner_idle: scannerInfo ? scannerInfo.idle_scanners : 0,
@@ -1968,6 +1970,7 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
                 scanner_device_name: latestScanner ? latestScanner.device_name : '',
                 scanner_queued_count: scannerInfo ? scannerInfo.queued_count : 0,
                 scanner_sync_in_progress: scannerInfo ? scannerInfo.sync_in_progress : false
+                } : {})
             });
         }
 
@@ -2058,8 +2061,10 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
             is_school_day: isSchoolDay,
             non_school_day_reason: nonSchoolDayReason,
             non_school_day_type: nonSchoolDayType,
-            scanner_status_summary: scannerPresence.summary,
-            desktop_scanners: scannerPresence.devices,
+            ...(canSeeDesktopScanners ? {
+                scanner_status_summary: scannerPresence.summary,
+                desktop_scanners: scannerPresence.devices
+            } : {}),
             schools: breakdown
         };
 
