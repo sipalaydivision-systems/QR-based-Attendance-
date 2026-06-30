@@ -1553,8 +1553,24 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
                     if (!enrolledActive && hasAnyRecord) {
                         return res.json({
                             success: false,
-                            error: 'Student is not enrolled in the active school year.',
-                            not_enrolled: true
+                            error: 'Student is not enrolled in the active school year. Ask the adviser to enroll or transfer them first.',
+                            not_enrolled: true,
+                            // Including person makes the scanner show the actionable
+                            // "Scan needs attention" card with name/grade/school —
+                            // instead of the generic "QR code not recognized" toast
+                            // that loses the enrollment context.
+                            person: {
+                                id: person.id,
+                                name: person.name || `${person.firstname || ''} ${person.lastname || ''}`.trim(),
+                                firstname: person.firstname || null,
+                                lastname: person.lastname || null,
+                                middlename: person.middlename || null,
+                                lrn: person.lrn || null,
+                                person_type: 'student',
+                                grade_name: person.grade_name || null,
+                                section_name: person.section_name || null,
+                                school_name: person.school_name || null
+                            }
                         });
                     }
                 }

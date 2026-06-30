@@ -23,6 +23,11 @@ const LEGACY_LABELS = Object.freeze({
     'PM LATE': ATTENDANCE_SCAN_LABELS.PM_LATE_TIME_IN,
     OUT: ATTENDANCE_SCAN_LABELS.EARLY_OUT,
     COMPLETE: ATTENDANCE_SCAN_LABELS.COMPLETED,
+    // Legacy: returns from lunch were previously recorded as WELCOME BACK
+    // when they arrived before pmInStart. Treat those rows as PM Time In so
+    // historical attendance displays consistently after the policy change.
+    'WELCOME BACK': ATTENDANCE_SCAN_LABELS.PM_TIME_IN,
+    'WELCOME_BACK': ATTENDANCE_SCAN_LABELS.PM_TIME_IN,
     'PENDING TIME OUT': ATTENDANCE_SCAN_LABELS.PENDING_TIME_OUT,
     'ALREADY RECORDED': ATTENDANCE_SCAN_LABELS.ALREADY_RECORDED,
     'ALREADY_RECORDED': ATTENDANCE_SCAN_LABELS.ALREADY_RECORDED,

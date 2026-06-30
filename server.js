@@ -27,8 +27,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const DESKTOP_SCANNER_LATEST = {
-    version: '1.0.17',
-    notes: 'Adds desktop scanner active/offline monitoring per school in the admin dashboard.'
+    version: '1.0.18',
+    notes: 'Clearer "Not enrolled in this school year" scan result instead of generic "QR not recognized".'
 };
 
 app.get('/mobile-config.json', (req, res) => {
