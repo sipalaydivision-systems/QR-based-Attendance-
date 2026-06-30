@@ -839,6 +839,20 @@ function getQrLookupCandidates(value) {
         addQrCandidate(candidates, numberMatch[1]);
     }
 
+    // Symmetric to the prefixing below: if a candidate is "STU-<code>" or
+    // "TCH-<code>", also try the bare "<code>". ID cards encode "STU-<lrn>",
+    // but a student's stored qr_code may be a different value (e.g. a random
+    // "STU-<timestamp>-<rand>" assigned at import/enrollment when no LRN was
+    // present) while their lrn column still holds the bare number. Trying the
+    // bare code against lrn / employee_id recovers these otherwise-"not
+    // recognized" scans.
+    Array.from(candidates).forEach(candidate => {
+        const stripped = candidate.replace(/^(STU|TCH)-/i, '');
+        if (stripped && stripped !== candidate) {
+            addQrCandidate(candidates, stripped);
+        }
+    });
+
     Array.from(candidates).forEach(candidate => {
         if (!/^(STU|TCH)-/i.test(candidate) && looksLikeQrLookupValue(candidate)) {
             addQrCandidate(candidates, 'STU-' + candidate);
@@ -846,7 +860,7 @@ function getQrLookupCandidates(value) {
         }
     });
 
-    return Array.from(candidates).slice(0, 12);
+    return Array.from(candidates).slice(0, 16);
 }
 
 async function getAttendanceLateThreshold(personType, dateStr) {

@@ -1,0 +1,448 @@
+<%- include('partials/header') %>
+
+<style>
+.scanner-page-hero {
+    background: linear-gradient(135deg, #064e3b 0%, #059669 100%);
+    color: #fff;
+    border-radius: 18px;
+    padding: 22px;
+    margin-bottom: 18px;
+    box-shadow: 0 14px 35px rgba(5, 150, 105, 0.22);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.scanner-page-hero h2 { margin: 0 0 6px; font-size: 1.35rem; font-weight: 800; }
+.scanner-page-hero p { margin: 0; color: rgba(255,255,255,.82); max-width: 780px; line-height: 1.45; }
+.scanner-refresh-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid rgba(255,255,255,.3);
+    background: rgba(255,255,255,.14);
+    color: #fff;
+    padding: 9px 12px;
+    border-radius: 999px;
+    font-size: .78rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.scanner-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 18px;
+}
+.scanner-kpi {
+    background: #fff;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: var(--shadow, 0 2px 8px rgba(15,23,42,.06));
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.scanner-kpi-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+.scanner-kpi-icon.green { background: #dcfce7; color: #047857; }
+.scanner-kpi-icon.amber { background: #fef3c7; color: #b45309; }
+.scanner-kpi-icon.red { background: #fee2e2; color: #b91c1c; }
+.scanner-kpi-icon.blue { background: #dbeafe; color: #1d4ed8; }
+.scanner-kpi-value { display: block; font-size: 1.35rem; font-weight: 850; color: var(--gray-900, #111827); line-height: 1; }
+.scanner-kpi-label { display: block; margin-top: 4px; font-size: .72rem; font-weight: 700; color: var(--gray-500, #64748b); text-transform: uppercase; letter-spacing: .04em; }
+.scanner-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+.scanner-toolbar-left { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.scanner-filter {
+    border: 1px solid var(--border, #d8e1ee);
+    border-radius: 12px;
+    padding: 9px 12px;
+    background: #fff;
+    color: var(--gray-700, #334155);
+    font-weight: 600;
+    min-height: 40px;
+}
+.scanner-search {
+    width: min(320px, 100%);
+    border: 1px solid var(--border, #d8e1ee);
+    border-radius: 12px;
+    padding: 9px 12px;
+    background: #fff;
+    color: var(--gray-800, #1f2937);
+    min-height: 40px;
+}
+.scanner-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    width: fit-content;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: .73rem;
+    font-weight: 850;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+.scanner-status-pill.active { color: #047857; background: #dcfce7; border-color: #bbf7d0; }
+.scanner-status-pill.idle { color: #b45309; background: #fef3c7; border-color: #fde68a; }
+.scanner-status-pill.offline { color: #b91c1c; background: #fee2e2; border-color: #fecaca; }
+.scanner-status-pill.none { color: #475569; background: #f1f5f9; border-color: #e2e8f0; }
+.scanner-meta { color: var(--gray-500, #64748b); font-size: .75rem; line-height: 1.35; margin-top: 4px; }
+.scanner-school-cell { display: flex; align-items: center; gap: 10px; min-width: 220px; }
+.scanner-school-logo {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    object-fit: cover;
+    border: 1px solid var(--border, #e5e7eb);
+    background: #fff;
+}
+.scanner-school-fallback {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: #ecfdf5;
+    color: #059669;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.scanner-device-name { font-weight: 750; color: var(--gray-800, #1f2937); }
+.scanner-small-muted { color: var(--gray-500, #64748b); font-size: .75rem; }
+.scanner-empty {
+    text-align: center;
+    color: var(--gray-500, #64748b);
+    padding: 38px 18px;
+}
+.scanner-empty i { font-size: 2rem; color: #94a3b8; margin-bottom: 10px; }
+.scanner-empty h4 { margin: 0 0 6px; color: var(--gray-800, #1f2937); }
+.scanner-unassigned {
+    margin-top: 18px;
+}
+@media (max-width: 1000px) {
+    .scanner-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+    .scanner-page-hero { padding: 18px; border-radius: 14px; }
+    .scanner-page-hero h2 { font-size: 1.1rem; }
+    .scanner-kpi-grid { grid-template-columns: 1fr; }
+    .scanner-toolbar-left, .scanner-filter, .scanner-search { width: 100%; }
+}
+</style>
+
+<div class="scanner-page-hero">
+    <div>
+        <h2><i class="fa-solid fa-desktop"></i> Desktop Scanner Status</h2>
+        <p>Super Admin can monitor which school desktop scanners are active, idle, offline, syncing, or still holding queued scans.</p>
+    </div>
+    <div class="scanner-refresh-pill">
+        <i class="fa-solid fa-rotate"></i>
+        <span>Auto-refresh: 10s</span>
+    </div>
+</div>
+
+<div class="scanner-kpi-grid">
+    <div class="scanner-kpi">
+        <div class="scanner-kpi-icon green"><i class="fa-solid fa-circle-check"></i></div>
+        <div>
+            <span class="scanner-kpi-value" id="scannerActive">-</span>
+            <span class="scanner-kpi-label">Active scanners</span>
+        </div>
+    </div>
+    <div class="scanner-kpi">
+        <div class="scanner-kpi-icon blue"><i class="fa-solid fa-desktop"></i></div>
+        <div>
+            <span class="scanner-kpi-value" id="scannerTotal">-</span>
+            <span class="scanner-kpi-label">Total scanners</span>
+        </div>
+    </div>
+    <div class="scanner-kpi">
+        <div class="scanner-kpi-icon amber"><i class="fa-solid fa-school"></i></div>
+        <div>
+            <span class="scanner-kpi-value" id="scannerSchools">-</span>
+            <span class="scanner-kpi-label">Schools online</span>
+        </div>
+    </div>
+    <div class="scanner-kpi">
+        <div class="scanner-kpi-icon red"><i class="fa-solid fa-link-slash"></i></div>
+        <div>
+            <span class="scanner-kpi-value" id="scannerUnassigned">-</span>
+            <span class="scanner-kpi-label">Unassigned scanners</span>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3 style="margin:0;"><i class="fa-solid fa-building-columns"></i> School Scanner Monitor</h3>
+        <span class="scanner-small-muted" id="scannerUpdated">Loading...</span>
+    </div>
+    <div style="padding:16px 16px 0;">
+        <div class="scanner-toolbar">
+            <div class="scanner-toolbar-left">
+                <select class="scanner-filter" id="scannerStatusFilter">
+                    <option value="">All statuses</option>
+                    <option value="active">Active</option>
+                    <option value="idle">Idle</option>
+                    <option value="offline">Offline</option>
+                    <option value="none">No Scanner</option>
+                </select>
+                <input class="scanner-search" id="scannerSearch" type="search" placeholder="Search school or device...">
+            </div>
+            <a href="/admin/dashboard" class="btn btn-outline btn-sm">
+                <i class="fa-solid fa-chart-pie"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>School</th>
+                    <th>Status</th>
+                    <th>Active / Total</th>
+                    <th>Latest Device</th>
+                    <th>App</th>
+                    <th>Queue</th>
+                    <th>Last Seen</th>
+                </tr>
+            </thead>
+            <tbody id="scannerRows">
+                <tr>
+                    <td colspan="7" class="scanner-empty">
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        <h4>Loading scanner status...</h4>
+                        <p>Please wait while EduTrack checks the desktop scanner heartbeats.</p>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card scanner-unassigned" id="unassignedCard" style="display:none;">
+    <div class="card-header">
+        <h3 style="margin:0;"><i class="fa-solid fa-link-slash"></i> Unassigned Desktop Scanners</h3>
+        <span class="scanner-small-muted">These scanners checked in without a school assignment.</span>
+    </div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Device</th>
+                    <th>Status</th>
+                    <th>App</th>
+                    <th>Queue</th>
+                    <th>Last Seen</th>
+                </tr>
+            </thead>
+            <tbody id="unassignedRows"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+(function() {
+    var initialDate = '<%= todayDate %>';
+    var schools = [];
+    var scanners = [];
+    var refreshTimer = null;
+
+    function esc(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function number(value) {
+        return Number(value || 0);
+    }
+
+    function lastSeenText(seconds, value) {
+        if (seconds == null && !value) return 'No check-in yet';
+        var sec = Math.max(0, Number(seconds || 0));
+        if (sec < 60) return sec <= 5 ? 'just now' : sec + 's ago';
+        var min = Math.floor(sec / 60);
+        if (min < 60) return min + 'm ago';
+        var hr = Math.floor(min / 60);
+        if (hr < 24) return hr + 'h ago';
+        try {
+            return new Date(String(value).replace(' ', 'T')).toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+        } catch (_err) {
+            return String(value || 'unknown');
+        }
+    }
+
+    function statusInfo(s) {
+        var active = number(s.scanner_active);
+        var idle = number(s.scanner_idle);
+        var total = number(s.scanner_total);
+        if (active > 0) return { key: 'active', label: 'Active', icon: 'fa-circle-check' };
+        if (idle > 0) return { key: 'idle', label: 'Idle', icon: 'fa-clock' };
+        if (total > 0) return { key: 'offline', label: 'Offline', icon: 'fa-circle-xmark' };
+        return { key: 'none', label: 'No Scanner', icon: 'fa-minus-circle' };
+    }
+
+    function deviceStatusInfo(d) {
+        var key = d.presence || 'offline';
+        var labels = { active: 'Active', idle: 'Idle', offline: 'Offline' };
+        var icons = { active: 'fa-circle-check', idle: 'fa-clock', offline: 'fa-circle-xmark' };
+        return { key: key, label: labels[key] || 'Offline', icon: icons[key] || 'fa-circle-xmark' };
+    }
+
+    function statusPill(info) {
+        return '<span class="scanner-status-pill ' + esc(info.key) + '">' +
+            '<i class="fa-solid ' + esc(info.icon) + '"></i>' + esc(info.label) +
+        '</span>';
+    }
+
+    function schoolLogo(s) {
+        if (s.logo) {
+            return '<img class="scanner-school-logo" src="' + esc(s.logo) + '" alt="" onerror="this.outerHTML=&quot;<span class=\\\'scanner-school-fallback\\\'><i class=\\\'fa-solid fa-school\\\'></i></span>&quot;">';
+        }
+        return '<span class="scanner-school-fallback"><i class="fa-solid fa-school"></i></span>';
+    }
+
+    function syncText(value) {
+        return value ? '<div class="scanner-small-muted"><i class="fa-solid fa-rotate fa-spin"></i> syncing</div>' : '';
+    }
+
+    function renderSchools() {
+        var filter = document.getElementById('scannerStatusFilter').value;
+        var query = document.getElementById('scannerSearch').value.trim().toLowerCase();
+        var rows = schools.filter(function(s) {
+            var info = statusInfo(s);
+            if (filter && info.key !== filter) return false;
+            if (!query) return true;
+            var haystack = [
+                s.name,
+                s.scanner_device_name,
+                s.scanner_app_version,
+                s.scanner_status
+            ].join(' ').toLowerCase();
+            return haystack.indexOf(query) !== -1;
+        });
+
+        var tbody = document.getElementById('scannerRows');
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="scanner-empty">' +
+                '<i class="fa-solid fa-desktop"></i>' +
+                '<h4>No matching scanner records</h4>' +
+                '<p>If this school has a scanner, open the desktop scanner app so it can check in.</p>' +
+            '</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = rows.map(function(s) {
+            var info = statusInfo(s);
+            var latest = s.scanner_device_name || (number(s.scanner_total) ? 'Desktop scanner' : '-');
+            var app = s.scanner_app_version ? 'v' + s.scanner_app_version : '-';
+            var queue = number(s.scanner_queued_count);
+            return '<tr>' +
+                '<td>' +
+                    '<div class="scanner-school-cell">' +
+                        schoolLogo(s) +
+                        '<div><div class="scanner-device-name">' + esc(s.name || 'Unnamed School') + '</div>' +
+                        '<div class="scanner-small-muted">School ID: ' + esc(s.id || '-') + '</div></div>' +
+                    '</div>' +
+                '</td>' +
+                '<td>' + statusPill(info) + syncText(s.scanner_sync_in_progress) + '</td>' +
+                '<td><strong>' + number(s.scanner_active) + '</strong><span class="scanner-small-muted"> / ' + number(s.scanner_total) + '</span></td>' +
+                '<td><div class="scanner-device-name">' + esc(latest) + '</div><div class="scanner-small-muted">' + esc(s.scanner_status || info.label) + '</div></td>' +
+                '<td>' + esc(app) + '</td>' +
+                '<td>' + (queue > 0 ? '<span class="scanner-status-pill idle"><i class="fa-solid fa-list-check"></i>' + queue + ' queued</span>' : '<span class="scanner-small-muted">Clear</span>') + '</td>' +
+                '<td><div class="scanner-device-name">' + esc(lastSeenText(s.scanner_last_seen_seconds, s.scanner_last_seen_at)) + '</div><div class="scanner-small-muted">' + esc(s.scanner_last_seen_at || '') + '</div></td>' +
+            '</tr>';
+        }).join('');
+    }
+
+    function renderUnassigned() {
+        var unassigned = scanners.filter(function(d) { return !d.school_id; });
+        var card = document.getElementById('unassignedCard');
+        var tbody = document.getElementById('unassignedRows');
+        if (!unassigned.length) {
+            card.style.display = 'none';
+            tbody.innerHTML = '';
+            return;
+        }
+        card.style.display = 'block';
+        tbody.innerHTML = unassigned.map(function(d) {
+            var info = deviceStatusInfo(d);
+            var queue = number(d.queued_count);
+            return '<tr>' +
+                '<td><div class="scanner-device-name">' + esc(d.device_name || d.scanner_id || 'Desktop scanner') + '</div><div class="scanner-small-muted">' + esc(d.platform || '') + '</div></td>' +
+                '<td>' + statusPill(info) + syncText(d.sync_in_progress) + '</td>' +
+                '<td>' + esc(d.app_version ? 'v' + d.app_version : '-') + '</td>' +
+                '<td>' + (queue > 0 ? '<span class="scanner-status-pill idle"><i class="fa-solid fa-list-check"></i>' + queue + ' queued</span>' : '<span class="scanner-small-muted">Clear</span>') + '</td>' +
+                '<td><div class="scanner-device-name">' + esc(lastSeenText(d.age_seconds, d.last_seen_at)) + '</div><div class="scanner-small-muted">' + esc(d.last_seen_at || '') + '</div></td>' +
+            '</tr>';
+        }).join('');
+    }
+
+    function updateKpis(summary) {
+        summary = summary || {};
+        document.getElementById('scannerActive').textContent = number(summary.active_scanners);
+        document.getElementById('scannerTotal').textContent = number(summary.total_scanners);
+        document.getElementById('scannerSchools').textContent = number(summary.schools_with_active_scanner);
+        document.getElementById('scannerUnassigned').textContent = number(summary.unassigned_scanners);
+    }
+
+    async function load() {
+        try {
+            var params = new URLSearchParams({ date: initialDate, _: Date.now().toString() });
+            var response = await fetch('/api/dashboard-data?' + params.toString(), { cache: 'no-store' });
+            var data = await response.json();
+            if (!response.ok || data.error) throw new Error(data.error || 'Failed to load scanner status');
+            schools = data.schools || [];
+            scanners = data.desktop_scanners || [];
+            updateKpis(data.scanner_status_summary || {});
+            renderSchools();
+            renderUnassigned();
+            document.getElementById('scannerUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+        } catch (err) {
+            document.getElementById('scannerRows').innerHTML = '<tr><td colspan="7" class="scanner-empty">' +
+                '<i class="fa-solid fa-triangle-exclamation"></i>' +
+                '<h4>Unable to load scanner status</h4>' +
+                '<p>' + esc(err.message || 'Please try again.') + '</p>' +
+            '</td></tr>';
+            document.getElementById('scannerUpdated').textContent = 'Load failed';
+        }
+    }
+
+    document.getElementById('scannerStatusFilter').addEventListener('change', renderSchools);
+    document.getElementById('scannerSearch').addEventListener('input', renderSchools);
+    load();
+    refreshTimer = setInterval(load, 10000);
+    window.addEventListener('beforeunload', function() {
+        if (refreshTimer) clearInterval(refreshTimer);
+    });
+})();
+</script>
+
+<%- include('partials/footer') %>

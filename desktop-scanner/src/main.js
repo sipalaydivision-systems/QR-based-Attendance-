@@ -282,6 +282,17 @@ function getQrLookupCandidates(value) {
     addQrCandidate(candidates, numberMatch[1]);
   }
 
+  // Symmetric to the prefixing below: if a candidate is "STU-<code>" /
+  // "TCH-<code>", also try the bare "<code>" so it can match an lrn /
+  // employee_id when the stored qr_code differs from the printed "STU-<lrn>"
+  // card (e.g. random qr_code assigned at import/enrollment).
+  Array.from(candidates).forEach((candidate) => {
+    const stripped = candidate.replace(/^(STU|TCH)-/i, '');
+    if (stripped && stripped !== candidate) {
+      addQrCandidate(candidates, stripped);
+    }
+  });
+
   Array.from(candidates).forEach((candidate) => {
     if (!/^(STU|TCH)-/i.test(candidate) && looksLikeQrLookupValue(candidate)) {
       addQrCandidate(candidates, `STU-${candidate}`);
@@ -289,7 +300,7 @@ function getQrLookupCandidates(value) {
     }
   });
 
-  return Array.from(candidates).slice(0, 12);
+  return Array.from(candidates).slice(0, 16);
 }
 
 function formatTime12(value) {

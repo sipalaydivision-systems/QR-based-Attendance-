@@ -422,6 +422,14 @@ router.get('/dashboard', async (req, res) => {
     res.render('dashboard', { title: 'Dashboard', page: 'dashboard', schools });
 });
 
+router.get('/scanner-status', requireRole('super_admin'), async (req, res) => {
+    res.render('scanner_status', {
+        title: 'Desktop Scanner Status',
+        page: 'scanner_status',
+        todayDate: todayDate()
+    });
+});
+
 router.get('/principal-dashboard', async (req, res) => {
     const role = req.session.user.role;
     if (role !== 'principal') {

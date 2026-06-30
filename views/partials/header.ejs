@@ -49,6 +49,11 @@
             </li>
             <% if (user.role === 'super_admin') { %>
             <li>
+                <a href="/admin/scanner-status" class="<%= page === 'scanner_status' ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-desktop"></i> Scanner Status
+                </a>
+            </li>
+            <li>
                 <a href="/admin/schools" class="<%= page === 'schools' ? 'active' : '' %>">
                     <i class="nav-icon fa-solid fa-building-columns"></i> Schools
                 </a>

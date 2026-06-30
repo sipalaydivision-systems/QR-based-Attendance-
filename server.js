@@ -27,8 +27,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const DESKTOP_SCANNER_LATEST = {
-    version: '1.0.19',
-    notes: 'Unrecognized QR scans now show the scanned value so admins can spot regenerated cards or removed records.'
+    version: '1.0.20',
+    notes: 'Fixes "QR not recognized" for enrolled students whose stored QR differs from the printed STU-<LRN> card.'
 };
 
 app.get('/mobile-config.json', (req, res) => {
