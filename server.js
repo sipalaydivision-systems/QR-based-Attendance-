@@ -26,18 +26,56 @@ app.set('views', path.join(__dirname, 'views'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+const DESKTOP_SCANNER_LATEST = {
+    version: '1.0.15',
+    notes: 'Self-updating scanner — no need to manually reinstall when a new version ships.'
+};
+
 app.get('/mobile-config.json', (req, res) => {
     res.json({
         base_url: getPublicAppBaseUrl(req),
         fallback_urls: [],
         mobile_app_version: '2.1.32',
-        desktop_scanner_version: '1.0.12',
+        desktop_scanner_version: DESKTOP_SCANNER_LATEST.version,
         notification_capabilities: {
             closed_app_fcm: true,
             daily_report_7pm: true,
             two_day_absence_flags: true
         }
     });
+});
+
+// Dedicated endpoint the desktop scanner polls to discover new versions.
+// Returns the latest version, an installer URL, and a SHA hint when available.
+app.get('/api/desktop-scanner/version', (req, res) => {
+    const installerPath = path.join(__dirname, 'public', 'downloads', 'Edutrack-Scanner-Setup.exe');
+    let size = null;
+    let mtime = null;
+    try {
+        const stat = fs.statSync(installerPath);
+        size = stat.size;
+        mtime = stat.mtime.toISOString();
+    } catch (_) { /* installer not yet built */ }
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.json({
+        latest_version: DESKTOP_SCANNER_LATEST.version,
+        notes: DESKTOP_SCANNER_LATEST.notes,
+        installer_url: `${getPublicAppBaseUrl(req)}/download/desktop-installer`,
+        installer_size: size,
+        installer_mtime: mtime,
+        installer_available: size !== null
+    });
+});
+
+// Direct download for the desktop installer (used by the in-app auto-updater).
+// Mirrors the legacy /download/scanner-app behaviour but with a stable name.
+app.get('/download/desktop-installer', (req, res) => {
+    const installerPath = path.join(__dirname, 'public', 'downloads', 'Edutrack-Scanner-Setup.exe');
+    if (!fs.existsSync(installerPath)) {
+        return res.status(404).json({ error: 'Installer not yet available.' });
+    }
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    return res.download(installerPath, `Edutrack-Scanner-Setup-${DESKTOP_SCANNER_LATEST.version}.exe`);
 });
 
 // Static files

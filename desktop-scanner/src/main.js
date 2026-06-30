@@ -1,7 +1,10 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, shell, dialog } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, shell, dialog, Notification } = require('electron');
 const crypto = require('crypto');
 const fs = require('fs');
+const https = require('https');
+const http = require('http');
 const path = require('path');
+const { spawn } = require('child_process');
 const {
   MAX_SYNC_ATTEMPTS,
   initOfflineStore,
@@ -1900,7 +1903,186 @@ if (!hasSingleInstanceLock) {
     setInterval(() => {
       refreshConnectionState({ trigger: 'background', syncIfPossible: true }).catch(() => {});
     }, CONNECTION_CHECK_INTERVAL_MS);
+
+    // Self-update: first check 30s after launch (give the window time to
+    // settle), then every 6 hours.
+    setTimeout(() => { checkForDesktopUpdate({ trigger: 'startup' }); }, 30 * 1000);
+    setInterval(() => { checkForDesktopUpdate({ trigger: 'periodic' }); }, UPDATE_CHECK_INTERVAL_MS);
   });
+}
+
+// ---------------------------------------------------------------------------
+// Self-update (silent, no manual uninstall needed).
+//
+// Flow:
+//   1. On startup + every 6 hours, poll <serverUrl>/api/desktop-scanner/version
+//   2. If the server's version is newer than package.json's, download the
+//      installer to %TEMP%\Edutrack-Scanner-Update.exe (resumable, with a
+//      .tmp suffix while writing).
+//   3. Show a transient Windows notification: "Update downloaded — installs
+//      when you close the scanner."
+//   4. In before-quit, if a downloaded installer is staged, spawn it with
+//      NSIS's /S flag (silent) and detached, so it replaces the running app
+//      in place. The NSIS installer overwrites the existing install — no
+//      manual uninstall needed since it shares the appId + publisher.
+// ---------------------------------------------------------------------------
+const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const UPDATE_TMP_NAME = 'Edutrack-Scanner-Update.exe';
+let stagedUpdateInstaller = null; // absolute path to the EXE ready to install
+let updateNotificationShown = false;
+
+function compareSemver(a, b) {
+  const parse = (s) => String(s || '').split('.').map((x) => parseInt(x.replace(/[^0-9]/g, ''), 10) || 0);
+  const av = parse(a);
+  const bv = parse(b);
+  const len = Math.max(av.length, bv.length);
+  for (let i = 0; i < len; i++) {
+    const ai = av[i] || 0;
+    const bi = bv[i] || 0;
+    if (ai !== bi) return ai - bi;
+  }
+  return 0;
+}
+
+function httpGetJson(url, timeoutMs = 8000) {
+  return new Promise((resolve, reject) => {
+    const lib = url.startsWith('https:') ? https : http;
+    const req = lib.get(url, { timeout: timeoutMs, headers: { 'User-Agent': 'EduTrack-Scanner-Updater' } }, (res) => {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        return httpGetJson(res.headers.location, timeoutMs).then(resolve, reject);
+      }
+      if (res.statusCode !== 200) {
+        res.resume();
+        return reject(new Error(`HTTP ${res.statusCode}`));
+      }
+      let buf = '';
+      res.setEncoding('utf8');
+      res.on('data', (c) => { buf += c; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(buf)); } catch (e) { reject(e); }
+      });
+    });
+    req.on('timeout', () => req.destroy(new Error('timeout')));
+    req.on('error', reject);
+  });
+}
+
+function httpDownloadToFile(url, destPath, timeoutMs = 5 * 60 * 1000) {
+  return new Promise((resolve, reject) => {
+    const lib = url.startsWith('https:') ? https : http;
+    const tmpPath = `${destPath}.tmp`;
+    const file = fs.createWriteStream(tmpPath);
+    const req = lib.get(url, { timeout: timeoutMs, headers: { 'User-Agent': 'EduTrack-Scanner-Updater' } }, (res) => {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        file.close();
+        try { fs.unlinkSync(tmpPath); } catch (_) {}
+        return httpDownloadToFile(res.headers.location, destPath, timeoutMs).then(resolve, reject);
+      }
+      if (res.statusCode !== 200) {
+        file.close();
+        try { fs.unlinkSync(tmpPath); } catch (_) {}
+        return reject(new Error(`HTTP ${res.statusCode}`));
+      }
+      res.pipe(file);
+      file.on('finish', () => {
+        file.close(() => {
+          try {
+            if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+            fs.renameSync(tmpPath, destPath);
+            resolve(destPath);
+          } catch (renameErr) {
+            reject(renameErr);
+          }
+        });
+      });
+    });
+    req.on('timeout', () => req.destroy(new Error('timeout')));
+    req.on('error', (err) => {
+      file.close();
+      try { fs.unlinkSync(tmpPath); } catch (_) {}
+      reject(err);
+    });
+  });
+}
+
+async function checkForDesktopUpdate({ trigger = 'startup' } = {}) {
+  if (process.platform !== 'win32') return; // installer only ships on Windows
+  let serverUrl;
+  try {
+    serverUrl = normalizeServerUrl(loadSettings().serverUrl || DEFAULT_SERVER_URL);
+  } catch (_) {
+    serverUrl = DEFAULT_SERVER_URL;
+  }
+  const currentVersion = app.getVersion();
+  try {
+    const info = await httpGetJson(`${serverUrl}/api/desktop-scanner/version`);
+    const latest = String(info.latest_version || '').trim();
+    if (!latest || compareSemver(latest, currentVersion) <= 0) {
+      stagedUpdateInstaller = null;
+      return;
+    }
+    if (!info.installer_available || !info.installer_url) return;
+
+    const tmpDir = app.getPath('temp');
+    const installerPath = path.join(tmpDir, UPDATE_TMP_NAME);
+
+    // If a previous run already downloaded the same version, reuse it.
+    const versionMarkerPath = `${installerPath}.version`;
+    let alreadyHave = false;
+    try {
+      if (fs.existsSync(installerPath) && fs.existsSync(versionMarkerPath)) {
+        const recorded = fs.readFileSync(versionMarkerPath, 'utf8').trim();
+        alreadyHave = (recorded === latest);
+      }
+    } catch (_) {}
+
+    if (!alreadyHave) {
+      console.log(`[updater] downloading ${latest} from ${info.installer_url}`);
+      await httpDownloadToFile(info.installer_url, installerPath);
+      try { fs.writeFileSync(versionMarkerPath, latest); } catch (_) {}
+    }
+
+    stagedUpdateInstaller = installerPath;
+
+    if (!updateNotificationShown && Notification.isSupported()) {
+      updateNotificationShown = true;
+      try {
+        const n = new Notification({
+          title: 'EduTrack Scanner update ready',
+          body: `Version ${latest} will install automatically when you close the scanner.`,
+          icon: APP_ICON_PNG,
+          silent: false
+        });
+        n.show();
+      } catch (notifyErr) {
+        console.warn('[updater] notification failed:', notifyErr.message);
+      }
+    }
+    console.log(`[updater] staged v${latest} for install on quit (${trigger})`);
+  } catch (err) {
+    console.warn('[updater] check failed:', err.message);
+  }
+}
+
+function launchStagedInstaller() {
+  if (!stagedUpdateInstaller || process.platform !== 'win32') return false;
+  if (!fs.existsSync(stagedUpdateInstaller)) return false;
+  try {
+    // NSIS silent install. /S = silent; we omit /D so it reuses the existing
+    // install directory. The detached + ignored stdio keeps the installer
+    // alive after this process exits.
+    const child = spawn(stagedUpdateInstaller, ['/S'], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true
+    });
+    child.unref();
+    console.log('[updater] launched silent installer:', stagedUpdateInstaller);
+    return true;
+  } catch (err) {
+    console.warn('[updater] failed to launch installer:', err.message);
+    return false;
+  }
 }
 
 app.on('before-quit', () => {
@@ -1914,6 +2096,9 @@ app.on('before-quit', () => {
   // Record that this was a graceful shutdown so the next startup does not
   // mistake a deliberate quit for a power interruption.
   markCleanExit();
+  // If an update was downloaded during the session, run the silent installer
+  // now. It replaces the app in place — no manual uninstall needed.
+  launchStagedInstaller();
 });
 
 app.on('window-all-closed', () => {

@@ -3225,6 +3225,25 @@ class _ProfileTabState extends State<ProfileTab> {
       if ('${v['apk_url'] ?? ''}'.isNotEmpty) _apkUrl = '${v['apk_url']}';
       _notes = '${v['notes'] ?? ''}';
     });
+    // Fire a system notification when an update is detected, but only once
+    // per new version so the user is not spammed every time they open Profile.
+    if (_updateAvailable) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final lastNotified = prefs.getString('last_update_notify_version') ?? '';
+        if (lastNotified != _latest) {
+          await prefs.setString('last_update_notify_version', _latest);
+          await showParentNotification(
+            'EduTrack Guardian update available',
+            _notes.isNotEmpty
+                ? '$_notes Open Profile to install v$_latest.'
+                : 'Version $_latest is ready. Open Profile to install.',
+            id: 99001,
+            type: 'announcement_general',
+          );
+        }
+      } catch (_) {/* notification is best-effort */}
+    }
   }
 
   bool get _updateAvailable {
