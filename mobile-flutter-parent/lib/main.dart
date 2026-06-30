@@ -3529,34 +3529,89 @@ class _ProfileTabState extends State<ProfileTab> {
                     ],
                   ),
                 ),
-              ],
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                height: 46,
-                child: ElevatedButton.icon(
-                  onPressed: _otaBusy ? null : _installUpdate,
-                  icon: _otaBusy
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.download_rounded, size: 19),
-                  label: Text(_updateAvailable ? 'Install Update Now' : 'Install Latest Version'),
-                  style: ElevatedButton.styleFrom(backgroundColor: kGreen, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: ElevatedButton.icon(
+                    onPressed: _otaBusy ? null : _installUpdate,
+                    icon: _otaBusy
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.download_rounded, size: 19),
+                    label: const Text('Install Update Now'),
+                    style: ElevatedButton.styleFrom(backgroundColor: kGreen, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                  ),
                 ),
-              ),
-              if (_otaMsg.isNotEmpty) ...[
+                if (_otaMsg.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(_otaMsg, style: const TextStyle(fontSize: 12, color: kGreenDark, fontWeight: FontWeight.w600)),
+                ],
                 const SizedBox(height: 8),
-                Text(_otaMsg, style: const TextStyle(fontSize: 12, color: kGreenDark, fontWeight: FontWeight.w600)),
+                const Text(
+                  'Installs directly inside the app — no browser needed. When asked, allow “Install unknown apps” for EduTrack Guardian, then tap Install.',
+                  style: TextStyle(fontSize: 11, color: kMuted),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Package conflict fix: uninstall the old EduTrack Guardian app once, then install this signed update. After that, future updates will install normally.',
+                  style: TextStyle(fontSize: 11, color: Color(0xFF9A3412), fontWeight: FontWeight.w700),
+                ),
+              ] else if (_latest.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFECFDF5),
+                    border: Border.all(color: const Color(0xFFA7F3D0)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: const [
+                      Icon(Icons.verified_rounded, color: Color(0xFF047857), size: 22),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text("You're up to date",
+                                style: TextStyle(color: Color(0xFF064E3B), fontWeight: FontWeight.w900, fontSize: 14)),
+                            SizedBox(height: 2),
+                            Text("EduTrack Guardian is on the latest version. We'll alert you when a new update is published.",
+                                style: TextStyle(color: Color(0xFF065F46), fontSize: 12, height: 1.4)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 40,
+                  child: OutlinedButton.icon(
+                    onPressed: _otaBusy ? null : _loadVersions,
+                    icon: _otaBusy
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text('Check again'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: kGreenDark,
+                      side: const BorderSide(color: Color(0xFFA7F3D0)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ] else ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: const [
+                    SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: kGreen)),
+                    SizedBox(width: 8),
+                    Text('Checking for updates…', style: TextStyle(fontSize: 12, color: kMuted, fontWeight: FontWeight.w600)),
+                  ],
+                ),
               ],
-              const SizedBox(height: 8),
-              const Text(
-                'Installs directly inside the app — no browser needed. When asked, allow “Install unknown apps” for EduTrack Guardian, then tap Install.',
-                style: TextStyle(fontSize: 11, color: kMuted),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Package conflict fix: uninstall the old EduTrack Guardian app once, then install this signed update. After that, future updates will install normally.',
-                style: TextStyle(fontSize: 11, color: Color(0xFF9A3412), fontWeight: FontWeight.w700),
-              ),
             ],
           ),
         ),

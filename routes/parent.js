@@ -1045,13 +1045,13 @@ router.post('/api/parent/profile', requireParentAuth, async (req, res) => {
 
 // Latest published parent-app version. Bump this (and the Flutter pubspec version)
 // whenever a new APK is released so the in-app updater offers the update.
-const PARENT_APP_LATEST = { version: '1.0.41', version_code: 43 };
+const PARENT_APP_LATEST = { version: '1.0.42', version_code: 44 };
 router.get('/api/parent/app-version', (req, res) => {
     return res.json({
         latest_version: PARENT_APP_LATEST.version,
         latest_version_code: PARENT_APP_LATEST.version_code,
         apk_url: `${req.protocol}://${req.get('host')}/download/parent-app`,
-        notes: 'App icon now uses the official EduTrack Sipalay division logo (home screen + notification).'
+        notes: 'App Updates panel now shows an Up-to-date state when no update is available.'
     });
 });
 
