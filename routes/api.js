@@ -62,8 +62,8 @@ function normalizeOptionalSchoolId(value) {
     return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-const DESKTOP_SCANNER_ACTIVE_SECONDS = 75;
-const DESKTOP_SCANNER_RECENT_SECONDS = 5 * 60;
+const DESKTOP_SCANNER_ACTIVE_SECONDS = 3 * 60;
+const DESKTOP_SCANNER_RECENT_SECONDS = 10 * 60;
 
 function limitText(value, maxLength) {
     return String(value || '').trim().slice(0, maxLength);

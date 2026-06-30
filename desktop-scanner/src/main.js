@@ -41,7 +41,7 @@ const OFFLINE_MODE_MESSAGE = 'Offline Mode Enabled - Attendance records are bein
 const CONNECTION_RESTORED_MESSAGE = 'Connection Restored - Synchronizing attendance records.';
 const SYNC_COMPLETED_MESSAGE = 'Synchronization Completed Successfully.';
 const DIRECTORY_REFRESH_INTERVAL_MS = 60 * 1000;
-const CONNECTION_CHECK_INTERVAL_MS = 20000;
+const CONNECTION_CHECK_INTERVAL_MS = 15000;
 const ADMIN_SYNCED_SETTING_KEYS = new Set([
   'kioskToken',
   'brandName',
@@ -1915,6 +1915,10 @@ ipcMain.handle('settings:get', async () => {
 ipcMain.handle('settings:save', async (_event, nextSettings) => {
   const settings = saveSettings(nextSettings || {});
   broadcastScannerStatus();
+  refreshConnectionState({ trigger: 'settings-save', forceDirectory: true, syncIfPossible: true }).catch((err) => {
+    console.warn('Post-settings scanner presence update failed:', err.message);
+    broadcastScannerStatus();
+  });
   return settings;
 });
 
