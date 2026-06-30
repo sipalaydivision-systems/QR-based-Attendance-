@@ -277,8 +277,8 @@ async function getScannerDesktopDirectory(schoolId) {
         LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id
         LEFT JOIN sections sec ON s.section_id = sec.id
         LEFT JOIN teachers at ON sec.adviser_teacher_id = at.id
-        WHERE s.qr_code IS NOT NULL
-          AND s.qr_code <> ''
+        WHERE ((s.qr_code IS NOT NULL AND s.qr_code <> '')
+              OR (s.lrn IS NOT NULL AND s.lrn <> ''))
           AND s.status <> 'deleted'${enrollmentGate}`;
 
     let teacherQuery = `
@@ -303,8 +303,8 @@ async function getScannerDesktopDirectory(schoolId) {
         LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
         LEFT JOIN sections sec ON t.section_id = sec.id
         LEFT JOIN teachers at ON sec.adviser_teacher_id = at.id
-        WHERE t.qr_code IS NOT NULL
-          AND t.qr_code <> ''
+        WHERE ((t.qr_code IS NOT NULL AND t.qr_code <> '')
+              OR (t.employee_id IS NOT NULL AND t.employee_id <> ''))
           AND t.status <> 'deleted'`;
 
     if (schoolId) {
@@ -324,7 +324,7 @@ async function getScannerDesktopDirectory(schoolId) {
 
     return [...students, ...teachers].map((row) => ({
         personId: row.person_id,
-        qrCode: row.qr_code,
+        qrCode: row.qr_code || (row.person_code ? `${row.person_type === 'teacher' ? 'TCH' : 'STU'}-${row.person_code}` : ''),
         personType: row.person_type,
         category: row.category || null,
         personCode: row.person_code || '',
@@ -390,8 +390,8 @@ async function getScannerDesktopDirectoryVersion(schoolId) {
         LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id
         LEFT JOIN sections sec ON s.section_id = sec.id
         LEFT JOIN teachers at ON sec.adviser_teacher_id = at.id
-        WHERE s.qr_code IS NOT NULL
-          AND s.qr_code <> ''
+        WHERE ((s.qr_code IS NOT NULL AND s.qr_code <> '')
+              OR (s.lrn IS NOT NULL AND s.lrn <> ''))
           AND s.status <> 'deleted'`;
 
     let teacherQuery = `
@@ -431,8 +431,8 @@ async function getScannerDesktopDirectoryVersion(schoolId) {
         LEFT JOIN grade_levels gl ON t.grade_level_id = gl.id
         LEFT JOIN sections sec ON t.section_id = sec.id
         LEFT JOIN teachers at ON sec.adviser_teacher_id = at.id
-        WHERE t.qr_code IS NOT NULL
-          AND t.qr_code <> ''
+        WHERE ((t.qr_code IS NOT NULL AND t.qr_code <> '')
+              OR (t.employee_id IS NOT NULL AND t.employee_id <> ''))
           AND t.status <> 'deleted'`;
 
     if (schoolId) {
@@ -803,6 +803,27 @@ function addQrCandidate(candidates, value) {
     }
 }
 
+function collectQrCandidatesFromJson(candidates, value, depth = 0) {
+    if (depth > 4 || value == null) return;
+    if (typeof value === 'string' || typeof value === 'number') {
+        addQrCandidate(candidates, value);
+        return;
+    }
+    if (Array.isArray(value)) {
+        value.forEach(item => collectQrCandidatesFromJson(candidates, item, depth + 1));
+        return;
+    }
+    if (typeof value !== 'object') return;
+    Object.entries(value).forEach(([key, nestedValue]) => {
+        const keyName = String(key || '').toLowerCase();
+        if (/(qr|code|lrn|employee|emp|teacher|student|value|data|id)/i.test(keyName)) {
+            collectQrCandidatesFromJson(candidates, nestedValue, depth + 1);
+        } else if (typeof nestedValue === 'object' && nestedValue) {
+            collectQrCandidatesFromJson(candidates, nestedValue, depth + 1);
+        }
+    });
+}
+
 function getQrLookupCandidates(value) {
     const candidates = new Set();
     addQrCandidate(candidates, value);
@@ -827,16 +848,28 @@ function getQrLookupCandidates(value) {
         // Plain QR payloads are expected; URLs are supported as a convenience.
     }
 
+    try {
+        collectQrCandidatesFromJson(candidates, JSON.parse(cleaned));
+    } catch (_err) {
+        // Not JSON; keep scanning the plain text below.
+    }
+
     const embeddedPattern = /\b((?:STU|TCH)\s*[-:]\s*[A-Z0-9][A-Z0-9._-]{2,})\b/gi;
     let embeddedMatch;
     while ((embeddedMatch = embeddedPattern.exec(cleaned)) !== null) {
         addQrCandidate(candidates, embeddedMatch[1].replace(':', '-'));
     }
 
-    const labeledNumberPattern = /\b(?:LRN|EMPLOYEE|EMP|TEACHER|STUDENT)[\s#:.-]*(\d{5,20})\b/gi;
+    const labeledNumberPattern = /\b(?:LRN|LEARNER\s+REFERENCE\s+NUMBER|EMPLOYEE\s+ID|EMPLOYEE|EMP|TEACHER|STUDENT)(?:\s*(?:NO|NUMBER|ID)\.?)?[\s#:.-]*(\d{5,20})\b/gi;
     let numberMatch;
     while ((numberMatch = labeledNumberPattern.exec(cleaned)) !== null) {
         addQrCandidate(candidates, numberMatch[1]);
+    }
+
+    const looseLabeledNumberPattern = /\b(?:LRN|LEARNER\s+REFERENCE\s+NUMBER|EMPLOYEE\s+ID|EMPLOYEE|EMP|TEACHER|STUDENT)(?:\s*(?:NO|NUMBER|ID)\.?)?[\s#:.-]{0,8}([0-9][0-9\s-]{3,28}[0-9])\b/gi;
+    while ((numberMatch = looseLabeledNumberPattern.exec(cleaned)) !== null) {
+        const compact = String(numberMatch[1] || '').replace(/\D/g, '');
+        if (/^\d{5,20}$/.test(compact)) addQrCandidate(candidates, compact);
     }
 
     // Symmetric to the prefixing below: if a candidate is "STU-<code>" or
@@ -860,7 +893,7 @@ function getQrLookupCandidates(value) {
         }
     });
 
-    return Array.from(candidates).slice(0, 16);
+    return Array.from(candidates).slice(0, 32);
 }
 
 async function getAttendanceLateThreshold(personType, dateStr) {
