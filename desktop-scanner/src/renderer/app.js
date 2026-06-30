@@ -390,6 +390,7 @@ function titleForResult(data) {
   if (data.offline && data.success && data.action === 'TIME_OUT') return 'Time out saved locally';
   if (data.offline && !data.success) return 'Offline review';
   if (!data.success && data.not_enrolled) return 'Not enrolled in this school year';
+  if (!data.success && data.qr_unknown) return 'QR not in system';
   if (!data.success) return data.person ? 'Scan needs attention' : 'QR code not recognized';
   if (data.action === 'TIME_OUT' && ds === 'LUNCH OUT') return 'Lunch out recorded';
   if (data.action === 'TIME_OUT' && ds === 'COMPLETED') return 'Attendance completed';

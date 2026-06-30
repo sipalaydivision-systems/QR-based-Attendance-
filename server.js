@@ -27,8 +27,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const DESKTOP_SCANNER_LATEST = {
-    version: '1.0.18',
-    notes: 'Clearer "Not enrolled in this school year" scan result instead of generic "QR not recognized".'
+    version: '1.0.19',
+    notes: 'Unrecognized QR scans now show the scanned value so admins can spot regenerated cards or removed records.'
 };
 
 app.get('/mobile-config.json', (req, res) => {
