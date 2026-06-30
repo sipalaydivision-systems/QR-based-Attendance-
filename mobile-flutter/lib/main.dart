@@ -208,15 +208,129 @@ const dailySummaryChannel = AndroidNotificationChannel(
   importance: Importance.high,
 );
 
+bool _localNotificationsInitialized = false;
+
+Future<void> ensureLocalNotificationsInitialized({
+  bool handleResponses = false,
+}) async {
+  if (!_localNotificationsInitialized || handleResponses) {
+    await notifications.initialize(
+      const InitializationSettings(
+        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      ),
+      onDidReceiveNotificationResponse: handleResponses
+          ? (response) {
+              openNotificationDestination(
+                response.payload,
+                actionId: response.actionId,
+              );
+            }
+          : null,
+    );
+    _localNotificationsInitialized = true;
+  }
+  final androidPlugin = notifications
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin
+      >();
+  await androidPlugin?.createNotificationChannel(alertsChannel);
+  await androidPlugin?.createNotificationChannel(dailySummaryChannel);
+}
+
+Map<String, dynamic> absenceFlagRowFromFcmData(Map<String, dynamic> data) {
+  final rawJson = '${data['flag_json'] ?? ''}'.trim();
+  if (rawJson.isNotEmpty) {
+    try {
+      final parsed = jsonDecode(rawJson);
+      if (parsed is Map) return Map<String, dynamic>.from(parsed);
+    } on Exception {
+      // Fall back to individual fields below.
+    }
+  }
+  return {
+    'id': data['student_id'] ?? data['id'] ?? '',
+    'person_type': 'student',
+    'name': data['student_name'] ?? data['name'] ?? 'Student',
+    'lrn': data['lrn'] ?? '',
+    'school_id': data['school_id'] ?? '',
+    'school_name': data['school_name'] ?? '',
+    'school_contact': data['school_contact'] ?? '',
+    'grade_name': data['grade_name'] ?? '',
+    'section_name': data['section_name'] ?? '',
+    'adviser': data['adviser'] ?? '',
+    'adviser_contact': data['adviser_contact'] ?? '',
+    'adviser_email': data['adviser_email'] ?? '',
+    'absent_days': intValue(data['absent_days'] ?? 2),
+  };
+}
+
+Future<void> showFcmAbsenceFlagNotification(
+  Map<String, dynamic> data,
+) async {
+  final row = absenceFlagRowFromFcmData(data);
+  final body = '${data['body'] ?? ''}'.trim().isNotEmpty
+      ? '${data['body']}'
+      : absenceBody(row);
+  final notificationKey = [
+    'fcm-absence',
+    data['date'] ?? date(),
+    row['school_id'] ?? '',
+    row['id'] ?? row['lrn'] ?? row['name'] ?? '',
+  ].join('|');
+  final android = AndroidNotificationDetails(
+    alertsChannel.id,
+    alertsChannel.name,
+    channelDescription: alertsChannel.description,
+    importance: Importance.high,
+    priority: Priority.high,
+    category: AndroidNotificationCategory.status,
+    visibility: NotificationVisibility.public,
+    ticker: '2-Day Absence Alert',
+    icon: '@mipmap/ic_launcher',
+    actions: const [
+      AndroidNotificationAction('view', 'View', showsUserInterface: true),
+      AndroidNotificationAction(
+        'contact_adviser',
+        'Contact Adviser',
+        showsUserInterface: true,
+      ),
+    ],
+    styleInformation: BigTextStyleInformation(
+      body,
+      contentTitle: '<b>2-Day Absence Alert</b>',
+      htmlFormatContentTitle: true,
+    ),
+  );
+  await notifications.show(
+    stableNotificationId(notificationKey),
+    '2-Day Absence Alert',
+    body,
+    NotificationDetails(android: android),
+    payload: absenceNotificationPayload([row]),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Firebase Cloud Messaging — instant push even when the app is fully closed.
 // ---------------------------------------------------------------------------
 @pragma('vm:entry-point')
 Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
+  ui.DartPluginRegistrant.ensureInitialized();
+  WidgetsFlutterBinding.ensureInitialized();
+  tz_data.initializeTimeZones();
+  tz.setLocalLocation(tz.getLocation('Asia/Manila'));
   try {
     await Firebase.initializeApp();
   } catch (_) {
     /* already initialised */
+  }
+  await ensureLocalNotificationsInitialized();
+  final prefs = await SharedPreferences.getInstance();
+  final type = '${message.data['type'] ?? ''}'.trim();
+  if (type == 'daily_summary') {
+    await _showDailyReportNotification(message.data, prefs);
+  } else if (type == 'attendance_flagged') {
+    await showFcmAbsenceFlagNotification(message.data);
   }
 }
 
@@ -360,6 +474,14 @@ Future<void> _setupMainFcm(SharedPreferences prefs) async {
           debugPrint('Rich daily-summary render failed: $e');
         }
       }
+      if (type == 'attendance_flagged') {
+        try {
+          await showFcmAbsenceFlagNotification(message.data);
+          return;
+        } catch (e) {
+          debugPrint('Rich attendance-flag render failed: $e');
+        }
+      }
       await notifications.show(
         _mainFcmNotificationId(message),
         '<b>$title</b>',
@@ -393,23 +515,7 @@ Future<void> main() async {
   } catch (e) {
     debugPrint('Firebase init failed: $e');
   }
-  await notifications.initialize(
-    const InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-    ),
-    onDidReceiveNotificationResponse: (response) {
-      openNotificationDestination(
-        response.payload,
-        actionId: response.actionId,
-      );
-    },
-  );
-  final androidPlugin = notifications
-      .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin
-      >();
-  await androidPlugin?.createNotificationChannel(alertsChannel);
-  await androidPlugin?.createNotificationChannel(dailySummaryChannel);
+  await ensureLocalNotificationsInitialized(handleResponses: true);
   // Server-side FCM now owns scheduled delivery. Remove the repeating local
   // alarms and native WorkManager jobs left by older builds so they cannot
   // duplicate the Railway report or 2-day absence alert.
@@ -8476,9 +8582,7 @@ Future<bool> showLocalNotification(
   return true;
 }
 
-String absenceTitle(int count) => count == 1
-    ? '1 Student Flagged for Absence'
-    : '$count Students Flagged for Absence';
+String absenceTitle(int count) => '2-Day Absence Alert';
 
 String absenceBody(Map<String, dynamic> row, {int count = 1}) {
   final student = '${row['name'] ?? 'Student'}';

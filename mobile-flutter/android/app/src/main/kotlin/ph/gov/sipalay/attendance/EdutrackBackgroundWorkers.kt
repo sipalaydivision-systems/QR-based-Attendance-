@@ -107,7 +107,7 @@ class AbsenceFlagWorker(
     override fun doWork(): Result {
         // A WorkRequest queued by an older APK may start before asynchronous
         // cancellation completes. Make the worker itself inert so it can never
-        // post the second "1 student absent 2+ days" notification.
+        // post a second legacy 2-day absence notification.
         val context = applicationContext
         EdutrackBackgroundWorkers.cancel(context)
         BackgroundNotificationStore.clear(context)

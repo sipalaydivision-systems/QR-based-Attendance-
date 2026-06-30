@@ -163,6 +163,6 @@ public class AbsenceWorker extends Worker {
     }
 
     private String absenceTitle(int count) {
-        return count == 1 ? "1 student absent 2+ days" : count + " students absent 2+ days";
+        return "2-Day Absence Alert";
     }
 }

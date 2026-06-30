@@ -149,12 +149,17 @@ async function flaggedStudentsForSchool(date, schoolId) {
     if (dates.length < 2) return [];
     const oldest = dates[dates.length - 1];
     const [students] = await db.query(
-        `SELECT s.id, s.firstname, s.lastname, s.school_id,
-                sc.name AS school_name, gl.name AS grade_name, sec.name AS section_name
+        `SELECT s.id, s.firstname, s.lastname, s.lrn, s.school_id,
+                sc.name AS school_name, sc.contact AS school_contact,
+                gl.name AS grade_name, sec.name AS section_name,
+                COALESCE(NULLIF(sec.adviser, ''), TRIM(CONCAT_WS(' ', at.firstname, at.middlename, at.lastname))) AS adviser,
+                at.contact AS adviser_contact,
+                at.email AS adviser_email
          FROM students s
          LEFT JOIN schools sc ON sc.id = s.school_id
          LEFT JOIN grade_levels gl ON gl.id = s.grade_level_id
          LEFT JOIN sections sec ON sec.id = s.section_id
+         LEFT JOIN teachers at ON sec.adviser_teacher_id = at.id
          WHERE s.status = 'active'
            AND s.school_id = ?
            AND COALESCE(s.active_from, DATE(s.created_at)) < ?
@@ -257,10 +262,9 @@ async function sendDailyReports(date) {
             collapseKey: `edutrack_daily_${date}`,
             tag: 'edutrack_daily_summary',
             ttlMs: 6 * 60 * 60 * 1000,
-            // Rich payload — the foreground handler builds the in-app design
-            // (robot icon + per-section stats). The basic notification field
-            // serves as the background fallback so the user still sees ONE
-            // alert when the app is killed.
+            dataOnly: true,
+            // Data-only FCM lets the Flutter app render the same rich local
+            // notification in foreground and closed-app background states.
             data: {
                 type: 'daily_summary',
                 title: 'Daily Attendance Summary',
@@ -278,6 +282,37 @@ function flagHash(flags) {
         .update(flags.map(flag => `${flag.school_id}:${flag.id}`).sort().join('|'))
         .digest('hex')
         .slice(0, 12);
+}
+
+function flagDisplayName(flag) {
+    return flag.name || `${flag.firstname || ''} ${flag.lastname || ''}`.trim() || 'Student';
+}
+
+function flagNotificationBody(flag) {
+    const gradeSection = `${flag.grade_name || '-'} - ${flag.section_name || '-'}`;
+    const school = flag.school_name || '-';
+    const days = Number(flag.absent_days || 2);
+    return `${flagDisplayName(flag)}\n${gradeSection} | ${school}\n${days} Days Absent`;
+}
+
+function flagPayload(flag) {
+    return {
+        id: flag.id,
+        person_type: 'student',
+        name: flagDisplayName(flag),
+        firstname: flag.firstname || '',
+        lastname: flag.lastname || '',
+        lrn: flag.lrn || '',
+        school_id: flag.school_id || '',
+        school_name: flag.school_name || '',
+        school_contact: flag.school_contact || '',
+        grade_name: flag.grade_name || '',
+        section_name: flag.section_name || '',
+        adviser: flag.adviser || '',
+        adviser_contact: flag.adviser_contact || '',
+        adviser_email: flag.adviser_email || '',
+        absent_days: flag.absent_days || 2
+    };
 }
 
 async function sendAbsenceFlags(date, { ignoreCutoff = false } = {}) {
@@ -304,25 +339,40 @@ async function sendAbsenceFlags(date, { ignoreCutoff = false } = {}) {
         const schoolId = recipientScope(recipient);
         const flags = schoolId ? (flagsBySchool.get(Number(schoolId)) || []) : allFlags;
         if (!flags.length) continue;
-        const key = `absence-flags:${date}:${recipient.userId}:${flagHash(flags)}`;
-        const names = flags.slice(0, 3).map(flag => flag.name).join(', ');
-        const remainder = flags.length > 3 ? ` and ${flags.length - 3} more` : '';
-        const body = `${names}${remainder} ${flags.length === 1 ? 'has' : 'have'} been absent for 2 consecutive school days.`;
-        await sendOnce(recipient, key, 'attendance_flagged', {
-            title: flags.length === 1 ? '2-Day Absence Alert' : `${flags.length} Students Flagged`,
-            body,
-            channelId: 'edutrack_alerts',
-            collapseKey: `edutrack_flags_${date}`,
-            tag: 'edutrack_absence_flags',
-            ttlMs: 12 * 60 * 60 * 1000,
-            data: {
-                type: 'attendance_flagged',
+        for (const flag of flags) {
+            const flagData = flagPayload(flag);
+            const key = `absence-flag:${date}:${recipient.userId}:${flag.school_id || 'division'}:${flag.id}:${flag.absent_days || 2}:${flagHash([flag])}`;
+            const body = flagNotificationBody(flag);
+            await sendOnce(recipient, key, 'attendance_flagged', {
                 title: '2-Day Absence Alert',
                 body,
-                date,
-                flagged_count: flags.length
-            }
-        });
+                channelId: 'edutrack_alerts',
+                collapseKey: `edutrack_flag_${date}_${recipient.userId}_${flag.school_id || 'division'}_${flag.id}`,
+                tag: `edutrack_absence_flag_${date}_${flag.school_id || 'division'}_${flag.id}`,
+                ttlMs: 12 * 60 * 60 * 1000,
+                dataOnly: true,
+                data: {
+                    type: 'attendance_flagged',
+                    title: '2-Day Absence Alert',
+                    body,
+                    date,
+                    flagged_count: 1,
+                    flag_json: JSON.stringify(flagData),
+                    student_id: flagData.id,
+                    student_name: flagData.name,
+                    lrn: flagData.lrn,
+                    school_id: flagData.school_id,
+                    school_name: flagData.school_name,
+                    school_contact: flagData.school_contact,
+                    grade_name: flagData.grade_name,
+                    section_name: flagData.section_name,
+                    adviser: flagData.adviser,
+                    adviser_contact: flagData.adviser_contact,
+                    adviser_email: flagData.adviser_email,
+                    absent_days: flagData.absent_days
+                }
+            });
+        }
     }
 }
 
