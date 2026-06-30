@@ -60,14 +60,7 @@
             background: radial-gradient(circle, rgba(255,255,255,.22), rgba(255,255,255,0) 64%);
         }
         body::after {
-            left: -12vw;
-            right: -12vw;
-            bottom: -330px;
-            height: 340px;
-            background: #f5fbf8;
-            border-radius: 50% 50% 0 0;
-            transform: rotate(2.4deg);
-            box-shadow: inset 0 18px 34px rgba(6, 114, 82, 0.08);
+            display: none;
         }
         .wrap {
             position: relative;
@@ -76,7 +69,7 @@
             margin: 0 auto;
         }
         .brand-bar {
-            min-height: 94px;
+            min-height: 84px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -117,12 +110,12 @@
         .hero {
             display: grid;
             grid-template-columns: minmax(280px, .88fr) minmax(0, 1.12fr);
-            gap: clamp(36px, 6vw, 86px);
-            align-items: center;
-            padding: 18px 0 max(96px, calc(64px + env(safe-area-inset-bottom, 0)));
+            gap: clamp(32px, 5vw, 74px);
+            align-items: start;
+            padding: 8px 0 max(44px, calc(28px + env(safe-area-inset-bottom, 0)));
         }
         .phone-shell {
-            width: min(340px, 92vw);
+            width: min(318px, 92vw);
             margin: 0 auto;
             padding: 9px;
             border-radius: 42px;
@@ -143,7 +136,7 @@
             z-index: 4;
         }
         .phone-screen {
-            min-height: 620px;
+            min-height: 578px;
             border: 2px solid #17110c;
             border-radius: 33px;
             overflow: hidden;
@@ -178,7 +171,7 @@
             background: #ff4d4d;
             box-shadow: 0 0 0 7px rgba(255,77,77,.12);
         }
-        .phone-body { padding: 13px; display: grid; gap: 12px; }
+        .phone-body { padding: 12px; display: grid; gap: 10px; }
         .greeting-card,
         .analytics-card,
         .notification-card {
@@ -186,7 +179,7 @@
             background: #fff;
             border: 1px solid #dcebe4;
             box-shadow: 0 14px 30px rgba(16,35,28,.12);
-            padding: 15px;
+            padding: 13px;
         }
         .greeting-card small { color: #62756d; font-weight: 800; }
         .greeting-card h3 { margin: 5px 0 6px; font-size: 24px; line-height: 1; }
@@ -270,7 +263,7 @@
         }
         .phone-nav div { text-align: center; font-size: 8px; color: #62756d; font-weight: 800; }
         .phone-nav i { display: block; font-size: 15px; margin-bottom: 3px; color: #06996b; }
-        .hero-copy { max-width: 650px; }
+        .hero-copy { max-width: 650px; padding-top: 18px; }
         .eyebrow {
             display: inline-flex;
             align-items: center;
@@ -280,20 +273,20 @@
             background: var(--glass);
             border: 1px solid var(--line);
             font-weight: 900;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
             box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
         }
         h1 {
-            font-size: clamp(42px, 6vw, 72px);
+            font-size: clamp(42px, 5.4vw, 64px);
             line-height: .96;
             letter-spacing: -.055em;
-            margin: 0 0 23px;
+            margin: 0 0 18px;
         }
         .lead {
             display: grid;
-            gap: 10px;
-            font-size: 17px;
-            line-height: 1.65;
+            gap: 8px;
+            font-size: 16px;
+            line-height: 1.52;
             color: rgba(255,255,255,.9);
             margin: 0;
         }
@@ -301,7 +294,7 @@
             display: flex;
             flex-wrap: wrap;
             gap: 14px;
-            margin-top: 30px;
+            margin-top: 24px;
         }
         .store-button {
             min-height: 58px;
@@ -324,9 +317,9 @@
         .platform-mark { width: 28px; height: 28px; color: currentColor; display: inline-flex; }
         .platform-mark svg { width: 100%; height: 100%; fill: currentColor; display: block; }
         .install-panel {
-            margin-top: 22px;
-            max-width: 650px;
-            padding: 16px;
+            margin-top: 18px;
+            max-width: 620px;
+            padding: 14px;
             border-radius: 26px;
             border: 1px solid rgba(255,255,255,.18);
             background:
@@ -336,19 +329,19 @@
             -webkit-backdrop-filter: blur(18px);
         }
         .status {
-            margin-top: 14px;
+            margin-top: 12px;
             max-width: 620px;
             color: <%= parentApkAvailable ? "#dbfff0" : "#ffe1e1" %>;
             font-size: 13px;
-            line-height: 1.5;
+            line-height: 1.42;
             font-weight: 800;
             text-shadow: 0 1px 16px rgba(3, 88, 63, .42);
         }
         .version-note {
-            margin-top: 14px;
+            margin-top: 12px;
             color: #dffaf0;
             font-size: 13px;
-            line-height: 1.55;
+            line-height: 1.45;
             font-weight: 700;
         }
         .feature-row {
@@ -370,7 +363,6 @@
             color: #e9fff7;
         }
         @media (max-width: 880px) {
-            body::after { display: none; }
             .brand-bar { min-height: 82px; }
             .top-link { display: none; }
             .hero {
@@ -383,6 +375,37 @@
             .download-row, .feature-row { justify-content: center; }
             .install-panel { margin-left: auto; margin-right: auto; }
             .phone-shell { order: 2; }
+        }
+        @media (min-width: 881px) and (max-height: 820px) {
+            .brand-bar { min-height: 76px; }
+            .hero {
+                gap: clamp(28px, 4vw, 60px);
+                padding-top: 4px;
+                padding-bottom: max(28px, calc(18px + env(safe-area-inset-bottom, 0)));
+            }
+            .phone-shell { width: min(292px, 92vw); }
+            .phone-screen { min-height: 528px; }
+            .phone-header { padding: 36px 12px 11px; }
+            .phone-body { padding: 10px; gap: 8px; }
+            .greeting-card,
+            .analytics-card,
+            .notification-card { padding: 11px; border-radius: 19px; }
+            .greeting-card h3 { font-size: 21px; }
+            .student-row { margin-top: 10px; padding: 8px; }
+            .analytics-card { grid-template-columns: 70px 1fr; }
+            .ring { width: 68px; height: 68px; }
+            .ring span { width: 48px; height: 48px; font-size: 14px; }
+            .phone-nav { padding: 8px 10px; }
+            .hero-copy { padding-top: 10px; }
+            .eyebrow { margin-bottom: 16px; padding: 8px 12px; }
+            h1 { font-size: clamp(40px, 4.7vw, 58px); margin-bottom: 14px; }
+            .lead { font-size: 15px; line-height: 1.42; gap: 7px; }
+            .store-button { min-height: 54px; padding: 0 24px; }
+            .download-row { margin-top: 20px; }
+            .install-panel { margin-top: 14px; padding: 12px; border-radius: 22px; }
+            .feature-row { gap: 8px; }
+            .feature-pill { padding: 8px 10px; font-size: 11px; }
+            .status, .version-note { margin-top: 10px; font-size: 12px; line-height: 1.38; }
         }
         @media (max-width: 520px) {
             .wrap { width: min(100% - 24px, 1120px); }
