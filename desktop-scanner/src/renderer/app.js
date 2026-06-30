@@ -1004,9 +1004,9 @@ function renderLocalScans(scans = []) {
   const empty = $('localScanEmpty');
   const footerText = $('localLogFooterText');
 
-  // The packaged scanner stays compact; the browser preview can show its full gallery.
-  const previewLimit = window.__EDUTRACK_PREVIEW_FULL_LOG__ ? scans.length : 6;
-  const localScans = Array.isArray(scans) ? scans.slice(0, previewLimit) : [];
+  // Show the full day log. The table body owns the scrolling, so we do not
+  // cap this to 6 records anymore; that left a large blank area in the panel.
+  const localScans = Array.isArray(scans) ? scans.slice() : [];
   if (footerText) {
     footerText.textContent = `Showing ${localScans.length} record(s) for today - Last updated ${formatShortTime(new Date())}`;
   }

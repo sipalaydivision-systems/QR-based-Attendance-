@@ -27,8 +27,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const DESKTOP_SCANNER_LATEST = {
-    version: '1.0.22',
-    notes: 'Fixes QR recognition for LRN/employee cards, URL/JSON QR payloads, and records without a saved QR code.'
+    version: '1.0.23',
+    notes: 'Shows the full desktop scanner attendance log with compact rows and a clean scrollable panel.'
 };
 
 app.get('/mobile-config.json', (req, res) => {

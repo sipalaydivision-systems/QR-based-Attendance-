@@ -321,6 +321,9 @@
   }
 
   function _enableFullAttendanceLogPreview() {
+    var params = new URLSearchParams(window.location.search || '');
+    if (params.get('fullLogPage') !== '1') return;
+
     var style = document.createElement('style');
     style.textContent = [
       'html, body { height: auto !important; min-height: 100%; overflow: auto !important; }',
@@ -335,13 +338,15 @@
     document.head.appendChild(style);
   }
 
-  /* Visual notice */
-  var hint = document.createElement('div');
-  hint.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(10,60,42,.88);color:#fff;font:700 12px/1.4 Segoe UI,sans-serif;padding:8px 18px;border-radius:20px;z-index:9999;pointer-events:none;letter-spacing:.4px;';
-  hint.textContent = 'PREVIEW MODE - real desktop log statuses; modals cycle automatically';
   document.addEventListener('DOMContentLoaded', function () {
     _enableFullAttendanceLogPreview();
-    document.body.appendChild(hint);
+    var params = new URLSearchParams(window.location.search || '');
+    if (params.get('showPreviewHint') === '1') {
+      var hint = document.createElement('div');
+      hint.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(10,60,42,.88);color:#fff;font:700 12px/1.4 Segoe UI,sans-serif;padding:8px 18px;border-radius:20px;z-index:9999;pointer-events:none;letter-spacing:.4px;';
+      hint.textContent = 'PREVIEW MODE - real desktop log statuses; modals cycle automatically';
+      document.body.appendChild(hint);
+    }
   });
   window.addEventListener('load', _autoShowDemoFromUrl);
   window.addEventListener('load', _autoPlayAllStatuses);

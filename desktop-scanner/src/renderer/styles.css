@@ -275,7 +275,7 @@ svg {
   display: grid;
   grid-template-columns: minmax(460px, 1fr) minmax(720px, 40vw);
   gap: 16px;
-  padding: 22px 24px;
+  padding: 16px 20px;
 }
 
 .scanner-column,
@@ -654,8 +654,8 @@ body.settings-open .side-panel {
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 18px;
-  padding: 24px;
+  gap: 10px;
+  padding: 14px;
   position: relative;
   overflow: hidden;
 }
@@ -684,15 +684,15 @@ body.settings-open .side-panel {
 }
 
 .panel-icon {
-  width: 60px;
-  height: 60px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
   display: grid;
   place-items: center;
-  border-radius: 18px;
+  border-radius: 16px;
   background: linear-gradient(135deg, #e8f7f0, #d0f0e2);
   border: 1px solid #b8e8d0;
-  padding: 13px;
+  padding: 10px;
   color: var(--green-deep);
 }
 
@@ -705,15 +705,15 @@ body.settings-open .side-panel {
 .panel-label {
   display: block;
   color: var(--green-deep);
-  font-size: 11px;
+  font-size: 9px;
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 1.4px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .panel-head h2 {
-  font-size: 28px;
+  font-size: 23px;
   line-height: 1.1;
   font-weight: 900;
   margin: 0;
@@ -773,6 +773,23 @@ body.settings-open .side-panel {
   border: 1px solid #d3e9df;
   background: #fff;
   box-shadow: 0 12px 28px rgba(10, 60, 42, 0.06);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(10, 141, 103, 0.55) #eef8f3;
+}
+
+.local-table-wrap::-webkit-scrollbar {
+  width: 9px;
+}
+
+.local-table-wrap::-webkit-scrollbar-track {
+  background: #eef8f3;
+  border-radius: 999px;
+}
+
+.local-table-wrap::-webkit-scrollbar-thumb {
+  background: rgba(10, 141, 103, 0.45);
+  border: 2px solid #eef8f3;
+  border-radius: 999px;
 }
 
 .local-scan-table {
@@ -784,7 +801,7 @@ body.settings-open .side-panel {
 
 .local-scan-table th,
 .local-scan-table td {
-  padding: 11px 8px;
+  padding: 4px 6px;
   border-bottom: 1px solid #e1ebe6;
   text-align: left;
   vertical-align: middle;
@@ -800,8 +817,8 @@ body.settings-open .side-panel {
   background: linear-gradient(180deg, #eef9f4 0%, #e7f5ee 100%);
   letter-spacing: 0.4px;
   border-bottom: 2px solid #c8e6d8;
-  padding-top: 13px;
-  padding-bottom: 13px;
+  padding-top: 8px;
+  padding-bottom: 8px;
   /* overflow / text-overflow / white-space come from the shared th+td rule */
 }
 
@@ -838,8 +855,8 @@ body.settings-open .side-panel {
 
 .local-scan-table td {
   color: var(--ink);
-  font-size: 10.5px;
-  line-height: 1.35;
+  font-size: 9.5px;
+  line-height: 1.2;
   font-weight: 700;
   overflow-wrap: anywhere;
   word-break: normal;
@@ -889,21 +906,21 @@ body.settings-open .side-panel {
 .scan-person {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   min-width: 0;
 }
 
 .scan-avatar {
-  width: 30px;
-  height: 30px;
-  flex: 0 0 30px;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
   display: grid;
   place-items: center;
   border-radius: 50%;
   color: #0f5135;
-  font-size: 10.5px;
+  font-size: 8px;
   font-weight: 900;
-  border: 3px solid rgba(255, 255, 255, 0.8);
+  border: 2px solid rgba(255, 255, 255, 0.8);
   box-shadow: 0 5px 14px rgba(10, 60, 42, 0.12);
 }
 
@@ -923,17 +940,17 @@ body.settings-open .side-panel {
 
 .scan-person-text {
   display: grid;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
 }
 
 .person-role-badge {
   justify-self: start;
-  padding: 2px 7px;
+  padding: 1px 6px;
   border-radius: 999px;
   background: #e0f2fe;
   color: #0c4a6e;
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 900;
   line-height: 1.2;
   text-transform: uppercase;
@@ -943,10 +960,10 @@ body.settings-open .side-panel {
 /* Log status badges */
 .log-status-badge {
   display: inline-block;
-  margin-top: 5px;
-  padding: 3px 8px;
+  margin-top: 1px;
+  padding: 1px 6px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.3px;
   white-space: nowrap;
@@ -1010,18 +1027,19 @@ body.settings-open .side-panel {
 .time-badge {
   position: relative;
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-columns: 18px minmax(0, 1fr);
   grid-template-areas:
     "icon label"
     "icon value"
-    "status status";
+    "icon status";
   align-items: center;
-  column-gap: 6px;
+  column-gap: 5px;
+  row-gap: 0;
   width: 100%;
   min-width: 0;
-  min-height: 64px;
-  padding: 7px 7px;
-  border-radius: 12px;
+  min-height: 40px;
+  padding: 4px 5px;
+  border-radius: 10px;
   color: var(--green-deep);
   background: linear-gradient(135deg, #effaf6, #e3f4ed);
   border: 1px solid #caeadb;
@@ -1037,8 +1055,8 @@ body.settings-open .side-panel {
 
 .time-arrow {
   grid-area: icon;
-  width: 24px;
-  height: 24px;
+  width: 18px;
+  height: 18px;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -1049,8 +1067,8 @@ body.settings-open .side-panel {
 }
 
 .time-arrow svg {
-  width: 14px;
-  height: 14px;
+  width: 10px;
+  height: 10px;
 }
 
 .time-badge.time-out .time-arrow {
@@ -1060,7 +1078,7 @@ body.settings-open .side-panel {
 .time-badge b {
   grid-area: label;
   min-width: 0;
-  font-size: 9px;
+  font-size: 7.5px;
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.4px;
@@ -1069,23 +1087,23 @@ body.settings-open .side-panel {
 .time-badge small {
   grid-area: value;
   min-width: 0;
-  margin-top: 2px;
-  font-size: 12px;
+  margin-top: 0;
+  font-size: 10px;
   font-weight: 900;
 }
 
 .time-badge .log-status-badge {
   grid-area: status;
-  justify-self: center;
+  justify-self: start;
 }
 
 .local-log-footer {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 9px;
+  gap: 8px;
   color: #6b7b73;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
