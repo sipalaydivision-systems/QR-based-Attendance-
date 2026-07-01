@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <link rel="stylesheet" href="/css/style.css?v=topbar-school-natural-20260617b">
+    <link rel="stylesheet" href="/css/style.css?v=super-admin-ui-20260701">
     <script src="/js/status-labels.js"></script>
 </head>
 <body class="<%= (typeof user !== 'undefined' && user && user.role === 'super_admin') ? 'theme-clean' : '' %>">
@@ -661,19 +661,59 @@
                 <% } %>
                 <span class="topbar-school-name"><%= headerSchool.name %></span>
             </div>
-            <% } else if (!['dashboard','principal_dashboard','sds_dashboard','asds_dashboard','adviser_dashboard'].includes(page)) { %>
-            <h1><%= title %></h1>
             <% } else { %>
-            <div style="flex: 1;"></div>
+            <div class="topbar-title-block">
+                <h1><%= title %></h1>
+                <span>
+                    <% if (page === 'dashboard') { %>
+                    Overview of all schools and attendance in Sipalay City
+                    <% } else if (user.role === 'super_admin') { %>
+                    Manage <%= String(title || 'records').toLowerCase() %> across the EduTrack system
+                    <% } else { %>
+                    <%= user.role.replace(/_/g, ' ') %> workspace
+                    <% } %>
+                </span>
+            </div>
             <% } %>
-            <div class="topbar-user">
-                <div class="topbar-user-avatar"><%= user.fullname ? user.fullname.charAt(0).toUpperCase() : 'U' %></div>
-                <div class="topbar-user-details">
-                    <strong><%= user.fullname %></strong>
-                    <span><%= user.role.replace(/_/g, ' ') %></span>
+            <div class="topbar-actions">
+                <% if (user.role === 'super_admin') { %>
+                <div class="topbar-date-pill" title="Current date and time">
+                    <i class="fa-regular fa-calendar"></i>
+                    <span id="topbarDateLabel"></span>
+                </div>
+                <div class="topbar-date-pill compact" title="Current time">
+                    <i class="fa-regular fa-clock"></i>
+                    <span id="topbarTimeLabel"></span>
+                </div>
+                <a href="/admin/notifications" class="topbar-icon-btn <%= page === 'notifications' ? 'active' : '' %>" title="Notifications">
+                    <i class="fa-regular fa-bell"></i>
+                </a>
+                <% } %>
+                <div class="topbar-user" onclick="openAdviserProfileModal('profile')" title="View profile">
+                    <div class="topbar-user-avatar"><%= user.fullname ? user.fullname.charAt(0).toUpperCase() : 'U' %></div>
+                    <div class="topbar-user-details">
+                        <strong><%= user.fullname %></strong>
+                        <span><%= user.role.replace(/_/g, ' ') %></span>
+                    </div>
                 </div>
             </div>
         </header>
+        <% if (user.role === 'super_admin') { %>
+        <script>
+        (function () {
+            var dateEl = document.getElementById('topbarDateLabel');
+            var timeEl = document.getElementById('topbarTimeLabel');
+            if (!dateEl || !timeEl) return;
+            function tickTopbarClock() {
+                var now = new Date();
+                dateEl.textContent = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', weekday: 'long' });
+                timeEl.textContent = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+            }
+            tickTopbarClock();
+            setInterval(tickTopbarClock, 30000);
+        })();
+        </script>
+        <% } %>
         <% } %>
         <div class="page-content">
 

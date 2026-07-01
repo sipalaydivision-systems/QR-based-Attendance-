@@ -1,21 +1,42 @@
 <%- include('partials/header') %>
 
 <style>
-:root { --dash-gap: 24px; }
+:root { --dash-gap: 18px; }
 
 /* The white "floating" app-shell look (soft background, floating sidebar,
    transparent topbar, neat cards) is provided globally by the body.theme-clean
    theme in public/css/style.css — applied to every super_admin page. This
    block only carries dashboard-specific layout/rhythm on top of that. */
 
-/* ---- Section rhythm: consistent vertical spacing across the whole page ---- */
-#schoolMapCard { margin-top: 0; margin-bottom: var(--dash-gap); }
-.welcome-banner { margin-bottom: var(--dash-gap); }
-.dashboard-toolbar { margin-bottom: var(--dash-gap) !important; }
+/* ---- Dashboard v2 rhythm ---- */
+.dashboard-v2 { display: grid; gap: var(--dash-gap); }
+.dashboard-v2 > * { margin-bottom: 0 !important; }
+#schoolMapCard { margin-top: 0; margin-bottom: 0; }
+.welcome-banner { margin-bottom: 0; }
+.dashboard-toolbar { margin-bottom: 0 !important; }
 .dashboard-toolbar h2 { font-weight: 700; }
-#nonSchoolDayBanner.non-school-banner { margin-bottom: var(--dash-gap); }
-.stats-grid { margin-bottom: var(--dash-gap); }
-.dash-analytics-grid, .card + .card { margin-top: 0; margin-bottom: var(--dash-gap); }
+#nonSchoolDayBanner.non-school-banner { margin-bottom: 0; }
+.stats-grid { margin-bottom: 0; }
+.dash-analytics-grid, .card + .card { margin-top: 0; margin-bottom: 0; }
+
+.dashboard-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(155px, 1fr));
+    gap: 14px;
+}
+.dashboard-kpi-grid .stat-card {
+    min-height: 108px;
+    padding: 18px;
+    border-left: none !important;
+}
+.dashboard-kpi-grid .stat-subline {
+    color: var(--gray-400);
+    font-size: 0.72rem;
+    font-weight: 700;
+    margin-top: 1px;
+}
+@media (max-width: 1280px) { .dashboard-kpi-grid { grid-template-columns: repeat(3, minmax(0,1fr)); } }
+@media (max-width: 760px) { .dashboard-kpi-grid { grid-template-columns: 1fr; } }
 
 /* ---- Card header icon: filled circular badge, matches stat-card language ---- */
 .dash-card-icon {
@@ -36,12 +57,21 @@
 /* ---- Alert-style accent for the flagged-students card ---- */
 #flaggedCard.card { border-left: 3px solid var(--danger); }
 
+.dash-primary-grid {
+    display: grid; gap: 16px;
+    grid-template-columns: minmax(0, 1.55fr) minmax(320px, 0.72fr);
+    align-items: stretch;
+}
+.dash-side-stack { display: grid; gap: 16px; align-content: start; }
 .dash-analytics-grid {
     display: grid; gap: 16px;
-    grid-template-columns: minmax(300px, 1fr) minmax(0, 1.45fr);
+    grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.75fr);
 }
-@media (max-width: 900px) { .dash-analytics-grid { grid-template-columns: 1fr; } }
+@media (max-width: 1100px) {
+    .dash-primary-grid, .dash-analytics-grid { grid-template-columns: 1fr; }
+}
 .dash-chart-wrap { position: relative; height: 250px; }
+.dash-chart-wrap.compact { height: 218px; }
 .dash-donut-center {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
     text-align: center; pointer-events: none;
@@ -71,7 +101,60 @@
 .scanner-status-meta { color: var(--gray-500); font-size: 0.68rem; line-height: 1.25; }
 
 /* ---- Sipalay City school map ---- */
-#dashSchoolMap { height: 420px; }
+#dashSchoolMap { height: 420px; border-radius: 16px; overflow: hidden; }
+.dash-map-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 230px;
+    gap: 14px;
+}
+.dash-map-school-list {
+    border: 1px solid #edf2f7;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #fbfdff;
+    max-height: 420px;
+    overflow-y: auto;
+}
+.dash-map-school-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #edf2f7;
+    background: transparent;
+    text-align: left;
+}
+.dash-map-school-item:last-child { border-bottom: 0; }
+.dash-map-school-item strong {
+    display: block;
+    color: var(--gray-800);
+    font-size: 0.76rem;
+    line-height: 1.25;
+}
+.dash-map-school-item span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--gray-500);
+    font-size: 0.68rem;
+    font-weight: 700;
+}
+.dash-map-school-item span::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--gray-300);
+}
+.dash-map-school-item.online span { color: #047857; }
+.dash-map-school-item.online span::before { background: #16a34a; }
+.dash-map-school-item.offline span { color: #b91c1c; }
+.dash-map-school-item.offline span::before { background: #dc2626; }
+@media (max-width: 900px) {
+    .dash-map-layout { grid-template-columns: 1fr; }
+    .dash-map-school-list { max-height: 240px; }
+}
 .dash-map-pin {
     display: block; width: 16px; height: 16px; border-radius: 50%;
     border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.35);
@@ -81,15 +164,68 @@
 .dmp-head strong { font-size: 0.85rem; color: var(--gray-900); }
 .dmp-row { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--gray-600); margin-top: 3px; }
 .dmp-row .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+.dash-alert-list { display: grid; gap: 10px; }
+.dash-alert-item {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding: 10px;
+    border: 1px solid #fee2e2;
+    border-radius: 14px;
+    background: #fffafa;
+}
+.dash-alert-avatar {
+    width: 38px; height: 38px; border-radius: 999px;
+    display: grid; place-items: center;
+    background: #fee2e2; color: #b91c1c; font-weight: 900;
+}
+.dash-alert-main strong {
+    display: block; color: var(--gray-900); font-size: 0.82rem;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dash-alert-main span { display: block; color: var(--gray-500); font-size: 0.72rem; line-height: 1.25; }
+.dash-alert-days { color: #dc2626; font-size: 0.68rem; font-weight: 900; text-align: right; }
+.dash-empty-mini {
+    display: grid; place-items: center; min-height: 126px;
+    color: var(--gray-400); text-align: center; font-weight: 700; font-size: 0.82rem;
+}
+.dash-system-list { display: grid; gap: 11px; }
+.dash-system-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    padding: 11px 0; border-bottom: 1px solid #edf2f7;
+}
+.dash-system-row:last-child { border-bottom: 0; }
+.dash-system-row span {
+    display: inline-flex; align-items: center; gap: 9px;
+    color: var(--gray-600); font-size: 0.82rem; font-weight: 700;
+}
+.dash-system-row span i {
+    width: 30px; height: 30px; border-radius: 10px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: #f1f5f9; color: var(--primary);
+}
+.dash-system-row strong { color: var(--gray-900); }
 </style>
+
+<div class="dashboard-v2">
 
 <!-- Sipalay City School Map -->
 <div class="card" id="schoolMapCard">
     <div class="card-header">
-        <h3 style="margin:0;"><i class="fa-solid fa-map-location-dot dash-card-icon"></i> Sipalay City &mdash; School Locations</h3>
+        <div>
+            <h3 style="margin:0;"><i class="fa-solid fa-map-location-dot dash-card-icon"></i> School Locations &mdash; Sipalay City</h3>
+            <p style="margin:4px 0 0;color:var(--gray-500);font-size:0.78rem;">Live scanner status of all mapped schools</p>
+        </div>
         <span style="font-size:0.75rem;color:var(--gray-400);" id="mapUnmappedHint"></span>
     </div>
-    <div id="dashSchoolMap"></div>
+    <div class="dash-map-layout">
+        <div id="dashSchoolMap"></div>
+        <div class="dash-map-school-list" id="dashMapSchoolList">
+            <div class="dash-empty-mini">Loading school locations...</div>
+        </div>
+    </div>
 </div>
 
 <!-- Welcome Banner -->
@@ -138,7 +274,7 @@
 </div>
 
 <!-- KPI Stats -->
-<div class="stats-grid" id="statsGrid">
+<div class="stats-grid dashboard-kpi-grid" id="statsGrid">
     <div class="stat-card stat-schools">
         <div class="stat-icon-wrap indigo"><i class="fa-solid fa-building-columns"></i></div>
         <div class="stat-info">
@@ -251,6 +387,27 @@
     </div>
 </div>
 
+<div class="dash-analytics-grid">
+    <div class="card" id="flaggedPreviewCard">
+        <div class="card-header">
+            <h3 style="margin:0;color:var(--danger);"><i class="fa-solid fa-bell dash-card-icon danger"></i> Alerts (2-Day Absence)</h3>
+            <a href="#flaggedCard" style="font-size:0.75rem;font-weight:800;">View All</a>
+        </div>
+        <div class="dash-alert-list" id="flaggedPreviewBody">
+            <div class="dash-empty-mini">No 2-day absence alerts.</div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header"><h3 style="margin:0;"><i class="fa-solid fa-server dash-card-icon"></i> System Overview</h3></div>
+        <div class="dash-system-list">
+            <div class="dash-system-row"><span><i class="fa-solid fa-desktop"></i> Active Scanners</span><strong id="sysActiveScanners">â€”</strong></div>
+            <div class="dash-system-row"><span><i class="fa-solid fa-plug-circle-xmark"></i> Offline Scanners</span><strong id="sysOfflineScanners">â€”</strong></div>
+            <div class="dash-system-row"><span><i class="fa-solid fa-circle-half-stroke"></i> Half-Day Records</span><strong id="sysHalfDay">â€”</strong></div>
+            <div class="dash-system-row"><span><i class="fa-solid fa-heart-pulse"></i> System Status</span><strong style="color:var(--success);">Healthy</strong></div>
+        </div>
+    </div>
+</div>
+
 <!-- School Breakdown Table -->
 <div class="card">
     <div class="card-header">
@@ -307,6 +464,8 @@
             <tbody id="flaggedBody"></tbody>
         </table>
     </div>
+</div>
+
 </div>
 
 <div class="live-indicator"><div class="live-dot"></div> Live</div>
@@ -510,9 +669,15 @@
             var scannerSummary = data.scanner_status_summary || {};
             var scannerEl = document.getElementById('statScanners');
             if (scannerEl) scannerEl.textContent = (scannerSummary.active_scanners || 0) + ' / ' + (scannerSummary.total_scanners || 0);
+            var sysActive = document.getElementById('sysActiveScanners');
+            var sysOffline = document.getElementById('sysOfflineScanners');
+            if (sysActive) sysActive.textContent = scannerSummary.active_scanners || 0;
+            if (sysOffline) sysOffline.textContent = Math.max(0, Number(scannerSummary.total_scanners || 0) - Number(scannerSummary.active_scanners || 0));
             document.getElementById('statPresent').textContent  = data.students_present;
             var halfDayEl = document.getElementById('statHalfDay');
             if (halfDayEl) halfDayEl.textContent = data.students_half_day || 0;
+            var sysHalfDay = document.getElementById('sysHalfDay');
+            if (sysHalfDay) sysHalfDay.textContent = data.students_half_day || 0;
             document.getElementById('statAbsent').textContent   = data.students_absent;
             document.getElementById('statRate').textContent     = data.attendance_rate + '%';
             document.getElementById('saWbRate').textContent     = data.attendance_rate + '%';
@@ -592,8 +757,10 @@
             var res  = await fetch('/api/absence-flags?' + params);
             var data = await res.json();
             var tbody = document.getElementById('flaggedBody');
+            var previewBody = document.getElementById('flaggedPreviewBody');
             if (!data.length) {
                 tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No flagged students.</td></tr>';
+                if (previewBody) previewBody.innerHTML = '<div class="dash-empty-mini">No 2-day absence alerts.</div>';
                 return;
             }
             function esc(v){ return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
@@ -640,6 +807,20 @@
                     '<td>' + contactBtn(s) + '</td>' +
                 '</tr>';
             }).join('');
+            if (previewBody) {
+                previewBody.innerHTML = data.slice(0, 5).map(function(s) {
+                    var fullName = (s.firstname || '') + ' ' + (s.lastname || '');
+                    var initial = (s.firstname || s.lastname || 'S').charAt(0).toUpperCase();
+                    return '<div class="dash-alert-item">' +
+                        '<div class="dash-alert-avatar">' + esc(initial) + '</div>' +
+                        '<div class="dash-alert-main">' +
+                            '<strong>' + esc(fullName.trim() || 'Student') + '</strong>' +
+                            '<span>' + esc((s.grade_name || '-') + ' - ' + (s.section_name || '-') + ' | ' + (s.school_name || '-')) + '</span>' +
+                        '</div>' +
+                        '<div class="dash-alert-days">' + esc(s.absent_days || 2) + ' Days<br>Absent</div>' +
+                    '</div>';
+                }).join('');
+            }
         } catch (e) { console.error('Flagged error:', e); }
     }
 
@@ -723,6 +904,37 @@
             Object.keys(schoolMarkers).forEach(function(id) {
                 if (!seenIds[id]) { dashMap.removeLayer(schoolMarkers[id]); delete schoolMarkers[id]; }
             });
+            var list = document.getElementById('dashMapSchoolList');
+            if (list) {
+                var mappedSchools = schools.filter(function(s) { return s.latitude != null && s.longitude != null; });
+                if (!mappedSchools.length) {
+                    list.innerHTML = '<div class="dash-empty-mini">No mapped schools yet.</div>';
+                } else {
+                    list.innerHTML = mappedSchools.slice(0, 12).map(function(s) {
+                        var status = s.online ? 'online' : 'offline';
+                        var lastSeen = s.scanner_last_seen_at
+                            ? scannerLastSeenText(s.scanner_last_seen_seconds, s.scanner_last_seen_at)
+                            : 'No check-in';
+                        return '<button type="button" class="dash-map-school-item ' + status + '" data-school-id="' + esc(s.id) + '">' +
+                            logoBadge(s.logo, s.name, 32) +
+                            '<div style="display:block;min-width:0;">' +
+                                '<strong>' + esc(s.name) + '</strong>' +
+                                '<span>' + (s.online ? 'Active' : 'Offline') + ' · ' + esc(lastSeen) + '</span>' +
+                            '</div>' +
+                        '</button>';
+                    }).join('');
+                    Array.prototype.forEach.call(list.querySelectorAll('.dash-map-school-item'), function(btn) {
+                        btn.addEventListener('click', function() {
+                            var id = btn.getAttribute('data-school-id');
+                            var marker = schoolMarkers[id];
+                            if (marker) {
+                                dashMap.setView(marker.getLatLng(), Math.max(dashMap.getZoom(), 14), { animate: true });
+                                marker.openPopup();
+                            }
+                        });
+                    });
+                }
+            }
             var hint = document.getElementById('mapUnmappedHint');
             if (hint) hint.textContent = unmapped > 0 ? (unmapped + ' school(s) not yet mapped') : '';
         } catch (e) { console.error('School map error:', e); }
