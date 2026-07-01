@@ -136,6 +136,19 @@
                 <label>Address</label>
                 <input type="text" id="schoolAddress" placeholder="e.g. Brgy. Centro, Sipalay City">
             </div>
+            <div class="form-group">
+                <label>Map Location <span class="field-hint" style="display:inline;font-weight:400;">(optional)</span></label>
+                <div id="schoolMiniMap" style="height:200px;border-radius:var(--radius);border:1px solid var(--gray-300);margin-bottom:8px;"></div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <input type="number" id="schoolLat" step="0.00000001" min="-90" max="90" placeholder="Latitude, e.g. 9.75000000" oninput="onSchoolCoordInput()">
+                    </div>
+                    <div class="form-group">
+                        <input type="number" id="schoolLng" step="0.00000001" min="-180" max="180" placeholder="Longitude, e.g. 122.40000000" oninput="onSchoolCoordInput()">
+                    </div>
+                </div>
+                <small class="field-hint">Click the map to set this school's location, or type coordinates directly. Leave blank if unknown - the school just won't appear on the dashboard map yet.</small>
+            </div>
             <div class="form-row">
                 <div class="form-group">
                     <label>Contact</label>
@@ -379,7 +392,10 @@ function openSchoolModal() {
     document.getElementById('nameHint').textContent = '';
     document.getElementById('schoolLogo').value = '';
     document.getElementById('logoPreviewArea').style.display = 'none';
+    document.getElementById('schoolLat').value = '';
+    document.getElementById('schoolLng').value = '';
     document.getElementById('schoolModal').style.display = 'flex';
+    setTimeout(function() { initSchoolMiniMap(); setMiniMapMarker(null, null); }, 50);
 }
 
 function closeSchoolModal() { document.getElementById('schoolModal').style.display = 'none'; }
@@ -403,7 +419,24 @@ function editSchoolById(id) {
     } else {
         document.getElementById('logoPreviewArea').style.display = 'none';
     }
+    document.getElementById('schoolLat').value = s.latitude != null ? s.latitude : '';
+    document.getElementById('schoolLng').value = s.longitude != null ? s.longitude : '';
     document.getElementById('schoolModal').style.display = 'flex';
+    setTimeout(function() {
+        initSchoolMiniMap();
+        setMiniMapMarker(s.latitude, s.longitude);
+    }, 50);
+}
+
+// Keeps the mini-map marker in sync when coordinates are typed manually
+// instead of picked by clicking the map.
+function onSchoolCoordInput() {
+    var lat = document.getElementById('schoolLat').value;
+    var lng = document.getElementById('schoolLng').value;
+    if (lat !== '' && lng !== '' && !isNaN(lat) && !isNaN(lng)) {
+        setMiniMapMarker(Number(lat), Number(lng));
+        if (schoolMiniMapInstance) schoolMiniMapInstance.panTo([Number(lat), Number(lng)]);
+    }
 }
 
 async function saveSchool(e) {
@@ -414,7 +447,9 @@ async function saveSchool(e) {
         school_id_code: document.getElementById('schoolIdDisplay').value.trim(),
         address: document.getElementById('schoolAddress').value.trim(),
         contact: document.getElementById('schoolContact').value.trim(),
-        status: document.getElementById('schoolStatus').value
+        status: document.getElementById('schoolStatus').value,
+        latitude: document.getElementById('schoolLat').value.trim(),
+        longitude: document.getElementById('schoolLng').value.trim()
     };
     if (!body.name) { showToast('School name is required', 'error'); return; }
 
@@ -513,4 +548,43 @@ setInterval(function() { if (document.getElementById('schoolModal').style.displa
 </script>
 
 <div class="live-indicator"><div class="live-dot"></div> Live</div>
+
+<!-- Sipalay City coordinate picker for the school modal. Same bounds as the
+     super_admin dashboard's school map, so a school picked here always lands
+     inside the area the dashboard map can display. -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+var SIPALAY_CENTER = [9.75, 122.40];
+var SIPALAY_BOUNDS = [[9.60, 122.28], [9.90, 122.55]];
+var schoolMiniMapInstance = null, schoolMiniMarker = null;
+
+function initSchoolMiniMap() {
+    if (schoolMiniMapInstance) { setTimeout(function() { schoolMiniMapInstance.invalidateSize(); }, 50); return; }
+    if (typeof L === 'undefined') return;
+    schoolMiniMapInstance = L.map('schoolMiniMap', {
+        center: SIPALAY_CENTER, zoom: 12, minZoom: 11, maxZoom: 18,
+        maxBounds: SIPALAY_BOUNDS, maxBoundsViscosity: 1.0
+    });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19
+    }).addTo(schoolMiniMapInstance);
+    schoolMiniMapInstance.on('click', function(e) {
+        setMiniMapMarker(e.latlng.lat, e.latlng.lng);
+        document.getElementById('schoolLat').value = e.latlng.lat.toFixed(8);
+        document.getElementById('schoolLng').value = e.latlng.lng.toFixed(8);
+    });
+    setTimeout(function() { schoolMiniMapInstance.invalidateSize(); }, 50);
+}
+
+function setMiniMapMarker(lat, lng) {
+    if (!schoolMiniMapInstance) return;
+    if (schoolMiniMarker) { schoolMiniMapInstance.removeLayer(schoolMiniMarker); schoolMiniMarker = null; }
+    if (lat == null || lng == null || lat === '' || lng === '' || isNaN(lat) || isNaN(lng)) return;
+    schoolMiniMarker = L.marker([Number(lat), Number(lng)]).addTo(schoolMiniMapInstance);
+    schoolMiniMapInstance.setView([Number(lat), Number(lng)], 15);
+}
+</script>
+
 <%- include('partials/footer') %>

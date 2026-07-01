@@ -62,6 +62,15 @@ function normalizeOptionalSchoolId(value) {
     return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+// Coordinates are optional on a school — blank/invalid always coerces to
+// NULL rather than blocking the rest of the record from saving.
+function normalizeCoordinate(value, min, max) {
+    if (value === '' || value === null || value === undefined) return null;
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < min || n > max) return null;
+    return n;
+}
+
 const DESKTOP_SCANNER_ACTIVE_SECONDS = 3 * 60;
 const DESKTOP_SCANNER_RECENT_SECONDS = 10 * 60;
 
@@ -2826,16 +2835,18 @@ router.get('/schools', requireAuth, async (req, res) => {
 });
 
 router.post('/schools', requireAuth, async (req, res) => {
-    const { name, school_id_code, address, contact } = req.body;
+    const { name, school_id_code, address, contact, latitude, longitude } = req.body;
     if (!name) return res.status(400).json({ error: 'School name is required.' });
     try {
         // Auto-generate school_code from initials + sequence
         const initials = name.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 6);
         const [existing] = await db.query('SELECT COUNT(*) as cnt FROM schools WHERE school_code LIKE ?', [initials + '%']);
         const code = initials + '-' + String(existing[0].cnt + 1).padStart(3, '0');
+        const lat = normalizeCoordinate(latitude, -90, 90);
+        const lng = normalizeCoordinate(longitude, -180, 180);
         const [result] = await db.query(
-            'INSERT INTO schools (name, school_id_code, school_code, address, contact) VALUES (?, ?, ?, ?, ?)',
-            [name, school_id_code || null, code, address || null, contact || null]
+            'INSERT INTO schools (name, school_id_code, school_code, address, contact, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [name, school_id_code || null, code, address || null, contact || null, lat, lng]
         );
         return res.json({ success: true, id: result.insertId, school_code: code });
     } catch (err) {
@@ -2844,16 +2855,58 @@ router.post('/schools', requireAuth, async (req, res) => {
 });
 
 router.put('/schools/:id', requireAuth, async (req, res) => {
-    const { name, school_id_code, address, contact, status, logo } = req.body;
+    const { name, school_id_code, address, contact, status, logo, latitude, longitude } = req.body;
     try {
-        const [[existing]] = await db.query('SELECT logo FROM schools WHERE id = ?', [req.params.id]);
+        const [[existing]] = await db.query('SELECT logo, latitude, longitude FROM schools WHERE id = ?', [req.params.id]);
         if (!existing) return res.status(404).json({ error: 'School not found.' });
         const keepLogo = typeof logo === 'string' && logo.trim() ? logo.trim() : existing.logo;
-        await db.query('UPDATE schools SET name=?, school_id_code=?, address=?, contact=?, status=?, logo=? WHERE id=?',
-            [name, school_id_code || null, address || null, contact || null, status || 'active', keepLogo || null, req.params.id]);
+        const lat = latitude !== undefined ? normalizeCoordinate(latitude, -90, 90) : existing.latitude;
+        const lng = longitude !== undefined ? normalizeCoordinate(longitude, -180, 180) : existing.longitude;
+        await db.query('UPDATE schools SET name=?, school_id_code=?, address=?, contact=?, status=?, logo=?, latitude=?, longitude=? WHERE id=?',
+            [name, school_id_code || null, address || null, contact || null, status || 'active', keepLogo || null, lat, lng, req.params.id]);
         return res.json({ success: true });
     } catch (err) {
         return res.status(500).json({ error: 'Failed to update school.' });
+    }
+});
+
+// GET /api/school-map-data — lightweight feed for the Sipalay City map widget
+// on the super_admin dashboard. Reuses getDesktopScannerPresence() so scanner
+// online/offline logic is never duplicated. Date-independent (unlike
+// /dashboard-data), so the map doesn't need to recompute on every date change.
+router.get('/school-map-data', requireRole('super_admin'), async (req, res) => {
+    try {
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        const [schools] = await db.query(
+            `SELECT id, name, logo, address, latitude, longitude
+             FROM schools WHERE status = 'active' ORDER BY name`
+        );
+        const scannerPresence = await getDesktopScannerPresence(null);
+
+        const data = schools.map(s => {
+            const info = scannerPresence.bySchool.get(String(s.id)) || null;
+            const latest = info?.latest || null;
+            return {
+                id: s.id,
+                name: s.name,
+                logo: s.logo,
+                address: s.address,
+                latitude: s.latitude != null ? Number(s.latitude) : null,
+                longitude: s.longitude != null ? Number(s.longitude) : null,
+                // Map-only simplification: online = at least one scanner actively
+                // checking in right now. Idle/offline both render as "offline" on
+                // the map. The School Breakdown table keeps its separate 3-state pill.
+                online: !!(info && info.active_scanners > 0),
+                scanner_total: info ? info.total_scanners : 0,
+                scanner_last_seen_at: latest ? latest.last_seen_at : null,
+                scanner_last_seen_seconds: latest ? latest.age_seconds : null,
+                scanner_device_name: latest ? latest.device_name : ''
+            };
+        });
+        return res.json({ schools: data });
+    } catch (err) {
+        console.error('School map data error:', err);
+        return res.status(500).json({ error: 'Failed to fetch school map data.' });
     }
 });
 

@@ -1,8 +1,37 @@
 <%- include('partials/header') %>
 
 <style>
+:root { --dash-gap: 24px; }
+
+/* ---- Section rhythm: consistent vertical spacing across the whole page ---- */
+.welcome-banner { margin-bottom: var(--dash-gap); }
+.dashboard-toolbar { margin-bottom: var(--dash-gap) !important; }
+.dashboard-toolbar h2 { font-weight: 700; }
+#nonSchoolDayBanner.non-school-banner { margin-bottom: var(--dash-gap); }
+.stats-grid { margin-bottom: var(--dash-gap); }
+.dash-analytics-grid, #schoolMapCard, .card + .card { margin-top: 0; margin-bottom: var(--dash-gap); }
+
+/* ---- Card header icon: filled circular badge, matches stat-card language ---- */
+.dash-card-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+    background: var(--primary-bg); color: var(--primary) !important;
+    font-size: 0.8125rem;
+}
+.dash-card-icon.danger { background: #fee2e2; color: var(--danger) !important; }
+
+/* ---- Stat card border-left modifiers (scoped here; matches existing style.css naming) ---- */
+.stat-card.stat-scanners  { border-left: 3px solid #059669; }
+.stat-card.stat-halfday   { border-left: 3px solid #ea580c; }
+.stat-card.stat-flagged   { border-left: 3px solid #dc2626; }
+.stat-card.stat-inactive  { border-left: 3px solid var(--gray-400); }
+.stat-icon-wrap { width: 52px; height: 52px; }
+
+/* ---- Alert-style accent for the flagged-students card ---- */
+#flaggedCard.card { border-left: 3px solid var(--danger); }
+
 .dash-analytics-grid {
-    display: grid; gap: 16px; margin: 16px 0;
+    display: grid; gap: 16px;
     grid-template-columns: minmax(300px, 1fr) minmax(0, 1.45fr);
 }
 @media (max-width: 900px) { .dash-analytics-grid { grid-template-columns: 1fr; } }
@@ -23,9 +52,29 @@
     border: 1px solid transparent; white-space: nowrap;
 }
 .scanner-status-pill.active { color: #047857; background: #dcfce7; border-color: #bbf7d0; }
+.scanner-status-pill.active::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%; background: #16a34a;
+    animation: dashScannerPulse 1.6s ease-in-out infinite;
+}
+@keyframes dashScannerPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(22,163,74,0.45); }
+    50% { box-shadow: 0 0 0 4px rgba(22,163,74,0); }
+}
 .scanner-status-pill.idle { color: #b45309; background: #fef3c7; border-color: #fde68a; }
 .scanner-status-pill.offline { color: #b91c1c; background: #fee2e2; border-color: #fecaca; }
 .scanner-status-meta { color: var(--gray-500); font-size: 0.68rem; line-height: 1.25; }
+
+/* ---- Sipalay City school map ---- */
+#dashSchoolMap { height: 420px; }
+.dash-map-pin {
+    display: block; width: 16px; height: 16px; border-radius: 50%;
+    border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+}
+.dash-map-popup { font-family: inherit; min-width: 180px; }
+.dmp-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.dmp-head strong { font-size: 0.85rem; color: var(--gray-900); }
+.dmp-row { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--gray-600); margin-top: 3px; }
+.dmp-row .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 </style>
 
 <!-- Welcome Banner -->
@@ -89,7 +138,7 @@
             <span class="stat-label">Active Students</span>
         </div>
     </div>
-    <div class="stat-card" style="border-left:3px solid #059669;">
+    <div class="stat-card stat-scanners">
         <div class="stat-icon-wrap green"><i class="fa-solid fa-desktop"></i></div>
         <div class="stat-info">
             <span class="stat-number" id="statScanners">—</span>
@@ -103,7 +152,7 @@
             <span class="stat-label">Present Today</span>
         </div>
     </div>
-    <div class="stat-card" style="border-left:3px solid #ea580c;">
+    <div class="stat-card stat-halfday">
         <div class="stat-icon-wrap orange"><i class="fa-solid fa-circle-half-stroke"></i></div>
         <div class="stat-info">
             <span class="stat-number" id="statHalfDay">&mdash;</span>
@@ -131,14 +180,14 @@
             <span class="stat-label">Teachers Present</span>
         </div>
     </div>
-    <div class="stat-card" style="border-left:3px solid #ea580c;">
+    <div class="stat-card stat-halfday">
         <div class="stat-icon-wrap orange"><i class="fa-solid fa-right-from-bracket"></i></div>
         <div class="stat-info">
             <span class="stat-number" id="statTimedOut">—</span>
             <span class="stat-label">Teacher Time Outs</span>
         </div>
     </div>
-    <div class="stat-card" style="border-left:3px solid #dc2626;">
+    <div class="stat-card stat-flagged">
         <div class="stat-icon-wrap rose"><i class="fa-solid fa-triangle-exclamation"></i></div>
         <div class="stat-info">
             <span class="stat-number" id="statFlagged">—</span>
@@ -146,7 +195,7 @@
         </div>
     </div>
     <% if (typeof user !== 'undefined' && user && user.role === 'super_admin') { %>
-    <div class="stat-card" style="border-left:3px solid var(--gray-400);">
+    <div class="stat-card stat-inactive">
         <div class="stat-icon-wrap slate"><i class="fa-solid fa-user-slash"></i></div>
         <div class="stat-info">
             <span class="stat-number" id="statInactive">—</span>
@@ -159,7 +208,7 @@
 <!-- Analytics: donut + 7-day trend -->
 <div class="dash-analytics-grid">
     <div class="card">
-        <div class="card-header"><h3 style="margin:0;"><i class="fa-solid fa-chart-pie"></i> Today's Attendance Breakdown</h3></div>
+        <div class="card-header"><h3 style="margin:0;"><i class="fa-solid fa-chart-pie dash-card-icon"></i> Today's Attendance Breakdown</h3></div>
         <div style="padding:18px;">
             <div class="dash-chart-wrap">
                 <canvas id="donutChart"></canvas>
@@ -177,7 +226,7 @@
         </div>
     </div>
     <div class="card">
-        <div class="card-header"><h3 style="margin:0;"><i class="fa-solid fa-chart-column"></i> 7-Day Attendance Trend</h3></div>
+        <div class="card-header"><h3 style="margin:0;"><i class="fa-solid fa-chart-column dash-card-icon"></i> 7-Day Attendance Trend</h3></div>
         <div style="padding:18px;">
             <div class="dash-chart-wrap"><canvas id="trendChart"></canvas></div>
             <div class="dash-chart-legend">
@@ -187,10 +236,19 @@
     </div>
 </div>
 
+<!-- Sipalay City School Map -->
+<div class="card" id="schoolMapCard">
+    <div class="card-header">
+        <h3 style="margin:0;"><i class="fa-solid fa-map-location-dot dash-card-icon"></i> Sipalay City &mdash; School Locations</h3>
+        <span style="font-size:0.75rem;color:var(--gray-400);" id="mapUnmappedHint"></span>
+    </div>
+    <div id="dashSchoolMap"></div>
+</div>
+
 <!-- School Breakdown Table -->
 <div class="card">
     <div class="card-header">
-        <h3 style="margin:0;"><i class="fa-solid fa-table-list"></i> School Breakdown</h3>
+        <h3 style="margin:0;"><i class="fa-solid fa-table-list dash-card-icon"></i> School Breakdown</h3>
         <span style="font-size:0.75rem;color:var(--gray-400);" id="breakdownDate"></span>
     </div>
     <div class="table-responsive">
@@ -222,7 +280,7 @@
 <div class="card" id="flaggedCard" style="display:none;">
     <div class="card-header">
         <h3 style="margin:0;color:var(--danger);">
-            <i class="fa-solid fa-triangle-exclamation"></i> Students Absent 2+ Consecutive Days
+            <i class="fa-solid fa-triangle-exclamation dash-card-icon danger"></i> Students Absent 2+ Consecutive Days
         </h3>
         <span class="badge badge-inactive" id="flaggedCount"></span>
     </div>
@@ -247,12 +305,17 @@
 
 <div class="live-indicator"><div class="live-dot"></div> Live</div>
 
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 (function() {
     var refreshTimer = null;
     var donutChart = null, trendChart = null;
     var trendSig = '', donutSig = '';
+    var dashMap = null, schoolMarkers = {}, mapPollTimer = null;
+    var SIPALAY_CENTER = [9.75, 122.40];
+    var SIPALAY_BOUNDS = [[9.60, 122.28], [9.90, 122.55]];
 
     function pad(n) { return String(n).padStart(2, '0'); }
 
@@ -589,10 +652,82 @@
         refreshTimer = setInterval(load, 5000);
     });
 
+    // ---- Sipalay City school map ----
+    // Independent of the dashDate/dashSchool filters above — the map is a
+    // division-wide overview widget showing every school regardless of the
+    // selected date (scanner connectivity isn't date-scoped).
+    function scannerDotColor(online) { return online ? '#16a34a' : '#dc2626'; }
+
+    function schoolMarkerIcon(online) {
+        return L.divIcon({
+            className: 'dash-map-marker',
+            html: '<span class="dash-map-pin" style="background:' + scannerDotColor(online) + ';"></span>',
+            iconSize: [18, 18], iconAnchor: [9, 9]
+        });
+    }
+
+    function schoolPopupHtml(s) {
+        var lastSeen = s.scanner_last_seen_at
+            ? scannerLastSeenText(s.scanner_last_seen_seconds, s.scanner_last_seen_at)
+            : 'No scanner check-in yet';
+        return '<div class="dash-map-popup">' +
+            '<div class="dmp-head">' + logoBadge(s.logo, s.name, 36) + '<strong>' + esc(s.name) + '</strong></div>' +
+            '<div class="dmp-row"><span class="status-dot" style="background:' + scannerDotColor(s.online) + ';"></span> ' + (s.online ? 'Online' : 'Offline') + '</div>' +
+            '<div class="dmp-row">Last activity: ' + esc(lastSeen) + '</div>' +
+            (s.scanner_device_name ? '<div class="dmp-row">Device: ' + esc(s.scanner_device_name) + '</div>' : '') +
+            '</div>';
+    }
+
+    function ensureDashMap() {
+        if (dashMap || typeof L === 'undefined') return;
+        var el = document.getElementById('dashSchoolMap');
+        if (!el) return;
+        dashMap = L.map('dashSchoolMap', {
+            center: SIPALAY_CENTER, zoom: 12, minZoom: 11, maxZoom: 18,
+            maxBounds: SIPALAY_BOUNDS, maxBoundsViscosity: 1.0
+        });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19
+        }).addTo(dashMap);
+    }
+
+    async function loadSchoolMap() {
+        ensureDashMap();
+        if (!dashMap) return;
+        try {
+            var res = await fetch('/api/school-map-data');
+            if (!res.ok) return;
+            var data = await res.json();
+            var schools = data.schools || [];
+            var unmapped = 0;
+            var seenIds = {};
+            schools.forEach(function(s) {
+                if (s.latitude == null || s.longitude == null) { unmapped++; return; }
+                seenIds[s.id] = true;
+                if (schoolMarkers[s.id]) {
+                    schoolMarkers[s.id].setIcon(schoolMarkerIcon(s.online));
+                    schoolMarkers[s.id].setPopupContent(schoolPopupHtml(s));
+                } else {
+                    var marker = L.marker([s.latitude, s.longitude], { icon: schoolMarkerIcon(s.online) }).addTo(dashMap);
+                    marker.bindPopup(schoolPopupHtml(s));
+                    schoolMarkers[s.id] = marker;
+                }
+            });
+            Object.keys(schoolMarkers).forEach(function(id) {
+                if (!seenIds[id]) { dashMap.removeLayer(schoolMarkers[id]); delete schoolMarkers[id]; }
+            });
+            var hint = document.getElementById('mapUnmappedHint');
+            if (hint) hint.textContent = unmapped > 0 ? (unmapped + ' school(s) not yet mapped') : '';
+        } catch (e) { console.error('School map error:', e); }
+    }
+
     // Initial load + polling
     load();
     loadTrend();
     refreshTimer = setInterval(load, 5000);
+    loadSchoolMap();
+    mapPollTimer = setInterval(loadSchoolMap, 5000);
 })();
 </script>
 

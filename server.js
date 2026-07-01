@@ -413,6 +413,10 @@ async function ensureRuntimeSchema() {
         }
     }
 
+    // Schools map: optional GPS coordinates for the Sipalay City dashboard map.
+    await ensureRuntimeColumn('schools', 'latitude', 'DECIMAL(10,8) NULL AFTER logo');
+    await ensureRuntimeColumn('schools', 'longitude', 'DECIMAL(11,8) NULL AFTER latitude');
+
     await db.query(`
         CREATE TABLE IF NOT EXISTS holidays (
             id INT AUTO_INCREMENT PRIMARY KEY,

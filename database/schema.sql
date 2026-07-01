@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS schools (
     address VARCHAR(500),
     contact VARCHAR(100),
     logo MEDIUMTEXT,
+    latitude DECIMAL(10,8) NULL,
+    longitude DECIMAL(11,8) NULL,
     status ENUM('active','inactive') DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
