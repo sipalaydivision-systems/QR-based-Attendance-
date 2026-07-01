@@ -894,19 +894,42 @@ class _SplashGateState extends State<SplashGate>
     super.dispose();
   }
 
+  // Soft translucent orb for the splash background (matches the Guardian app).
+  Widget _splashOrb(double size) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      gradient: RadialGradient(
+        colors: [
+          Colors.white.withValues(alpha: .12),
+          Colors.white.withValues(alpha: 0),
+        ],
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: AnimatedBuilder(
         animation: controller,
-        builder: (context, child) => CustomPaint(
-          painter: LiveMeshPainter(
-            controller.value,
-            intensity: .42,
-            focusY: .36,
+        builder: (context, child) => Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF073B2B),
+                Color(0xFF0B7A55),
+                Color(0xFF12A16F),
+              ],
+            ),
           ),
           child: Stack(
             children: [
+              Positioned(top: -80, right: -70, child: _splashOrb(210)),
+              Positioned(bottom: -90, left: -60, child: _splashOrb(190)),
               SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.all(30),
@@ -916,8 +939,18 @@ class _SplashGateState extends State<SplashGate>
                       Stack(
                         alignment: Alignment.center,
                         children: [
-                          PulseRing(value: controller.value, size: 148),
-                          const AppLogo(size: 96),
+                          PulseRing(value: controller.value, size: 156),
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: .15),
+                              borderRadius: BorderRadius.circular(30),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: .24),
+                              ),
+                            ),
+                            child: const AppLogo(size: 88),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 30),
@@ -925,7 +958,7 @@ class _SplashGateState extends State<SplashGate>
                         AppConfig.appName,
                         style: TextStyle(
                           fontSize: 38,
-                          color: Color(0xFF12201B),
+                          color: Colors.white,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
@@ -934,7 +967,7 @@ class _SplashGateState extends State<SplashGate>
                         AppConfig.subtitle,
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: Color(0xFF4D5D56),
+                          color: Colors.white70,
                           fontSize: 16,
                         ),
                       ),
@@ -945,14 +978,16 @@ class _SplashGateState extends State<SplashGate>
                           vertical: 10,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: .88),
+                          color: Colors.white.withValues(alpha: .16),
                           borderRadius: BorderRadius.circular(99),
-                          border: Border.all(color: const Color(0xFFDCE7E1)),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: .26),
+                          ),
                         ),
                         child: const Text(
                           AppConfig.monitoringLabel,
                           style: TextStyle(
-                            color: Color(0xFF0F6E52),
+                            color: Colors.white,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
