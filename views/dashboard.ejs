@@ -908,7 +908,7 @@
             ? scannerLastSeenText(s.scanner_last_seen_seconds, s.scanner_last_seen_at)
             : 'No scanner check-in yet';
         var statusClass = s.online ? 'online' : 'offline';
-        var statusText = s.online ? 'Online' : 'Offline';
+        var statusText = s.online ? 'Online' : 'Offline Mode Scanner Enabled';
         return '<div class="dash-map-popup">' +
             '<div class="dmp-head">' + logoBadge(s.logo, s.name, 36) + '<strong>' + esc(s.name) + '</strong></div>' +
             '<div class="dmp-row ' + statusClass + '"><span class="status-dot" style="background:' + scannerDotColor(s.online) + ';"></span> ' + statusText + '</div>' +
