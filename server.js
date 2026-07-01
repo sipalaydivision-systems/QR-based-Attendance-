@@ -9,6 +9,7 @@ const { getScannerKioskToken } = require('./utils/scannerKiosk');
 const { todayDate, currentMonth, nowIso } = require('./utils/appTime');
 const { firebasePushStatus } = require('./utils/firebasePush');
 const { startSystemPushScheduler } = require('./utils/systemPushScheduler');
+const { trackSystemTraffic } = require('./utils/systemTrafficMetrics');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,6 +26,7 @@ app.set('views', path.join(__dirname, 'views'));
 // Body parsing
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use(trackSystemTraffic);
 
 const DESKTOP_SCANNER_LATEST = {
     version: '1.0.27',

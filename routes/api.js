@@ -7,6 +7,7 @@ const router = express.Router();
 const db = require('../config/database');
 const { requireAuth, requireRole, applySchoolFilter } = require('../middleware/auth');
 const { getScannerKioskToken, getScannerKioskTokenFromRequest, isValidScannerKioskToken } = require('../utils/scannerKiosk');
+const { getSystemTrafficMetrics } = require('../utils/systemTrafficMetrics');
 const schoolYears = require('../utils/schoolYear');
 const {
     todayDate,
@@ -2429,7 +2430,8 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
             non_school_day_type: nonSchoolDayType,
             ...(canSeeDesktopScanners ? {
                 scanner_status_summary: scannerPresence.summary,
-                desktop_scanners: scannerPresence.devices
+                desktop_scanners: scannerPresence.devices,
+                system_security: getSystemTrafficMetrics()
             } : {}),
             schools: breakdown
         };

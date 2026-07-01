@@ -431,12 +431,17 @@
         </div>
     </div>
     <div class="card">
-        <div class="card-header"><h3 style="margin:0;"><i class="fa-solid fa-server dash-card-icon"></i> System Overview</h3></div>
+        <div class="card-header">
+            <div>
+                <h3 style="margin:0;"><i class="fa-solid fa-shield-halved dash-card-icon"></i> System Security</h3>
+                <p style="margin:4px 0 0;color:var(--gray-500);font-size:0.75rem;">Real server traffic telemetry from the last hour</p>
+            </div>
+        </div>
         <div class="dash-system-list">
-            <div class="dash-system-row"><span><i class="fa-solid fa-desktop"></i> Active Scanners</span><strong id="sysActiveScanners">â€”</strong></div>
-            <div class="dash-system-row"><span><i class="fa-solid fa-plug-circle-xmark"></i> Offline Scanners</span><strong id="sysOfflineScanners">â€”</strong></div>
-            <div class="dash-system-row"><span><i class="fa-solid fa-circle-half-stroke"></i> Half-Day Records</span><strong id="sysHalfDay">â€”</strong></div>
-            <div class="dash-system-row"><span><i class="fa-solid fa-heart-pulse"></i> System Status</span><strong style="color:var(--success);">Healthy</strong></div>
+            <div class="dash-system-row"><span><i class="fa-solid fa-network-wired"></i> System Traffic</span><strong id="sysTrafficRequests">&mdash;</strong></div>
+            <div class="dash-system-row"><span><i class="fa-solid fa-burst"></i> DDoS Attempts</span><strong id="sysDdosAttempts">&mdash;</strong></div>
+            <div class="dash-system-row"><span><i class="fa-solid fa-user-shield"></i> Suspicious Requests</span><strong id="sysSuspiciousRequests">&mdash;</strong></div>
+            <div class="dash-system-row"><span><i class="fa-solid fa-heart-pulse"></i> Security Status</span><strong id="sysSecurityStatus" style="color:var(--success);">Healthy</strong></div>
         </div>
     </div>
 </div>
@@ -595,6 +600,10 @@
         return r >= 80 ? 'var(--success)' : r >= 50 ? 'var(--warning)' : 'var(--danger)';
     }
 
+    function formatCount(value) {
+        return Number(value || 0).toLocaleString('en-US');
+    }
+
     // Banner greeting
     (function() {
         var h = new Date().getHours();
@@ -703,15 +712,22 @@
             var scannerSummary = data.scanner_status_summary || {};
             var scannerEl = document.getElementById('statScanners');
             if (scannerEl) scannerEl.textContent = (scannerSummary.active_scanners || 0) + ' / ' + (scannerSummary.total_scanners || 0);
-            var sysActive = document.getElementById('sysActiveScanners');
-            var sysOffline = document.getElementById('sysOfflineScanners');
-            if (sysActive) sysActive.textContent = scannerSummary.active_scanners || 0;
-            if (sysOffline) sysOffline.textContent = Math.max(0, Number(scannerSummary.total_scanners || 0) - Number(scannerSummary.active_scanners || 0));
+            var security = data.system_security || {};
+            var sysTraffic = document.getElementById('sysTrafficRequests');
+            var sysDdos = document.getElementById('sysDdosAttempts');
+            var sysSuspicious = document.getElementById('sysSuspiciousRequests');
+            var sysSecurityStatus = document.getElementById('sysSecurityStatus');
+            if (sysTraffic) sysTraffic.textContent = formatCount(security.requests_last_hour) + ' req/h';
+            if (sysDdos) sysDdos.textContent = formatCount(security.ddos_attempts);
+            if (sysSuspicious) sysSuspicious.textContent = formatCount(security.suspicious_requests);
+            if (sysSecurityStatus) {
+                var status = security.security_status || 'Healthy';
+                sysSecurityStatus.textContent = status;
+                sysSecurityStatus.style.color = status === 'Healthy' ? 'var(--success)' : 'var(--warning)';
+            }
             document.getElementById('statPresent').textContent  = data.students_present;
             var halfDayEl = document.getElementById('statHalfDay');
             if (halfDayEl) halfDayEl.textContent = data.students_half_day || 0;
-            var sysHalfDay = document.getElementById('sysHalfDay');
-            if (sysHalfDay) sysHalfDay.textContent = data.students_half_day || 0;
             document.getElementById('statAbsent').textContent   = data.students_absent;
             document.getElementById('statRate').textContent     = data.attendance_rate + '%';
             document.getElementById('saWbRate').textContent     = data.attendance_rate + '%';
