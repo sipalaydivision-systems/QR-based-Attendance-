@@ -11,7 +11,7 @@
 /* ---- Dashboard v2 rhythm ---- */
 .dashboard-v2 { display: grid; gap: var(--dash-gap); }
 .dashboard-v2 > * { margin-bottom: 0 !important; }
-#schoolMapCard { margin-top: 0; margin-bottom: 0; }
+#schoolMapCard { margin-top: 0; margin-bottom: 0; overflow: hidden; }
 .welcome-banner { margin-bottom: 0; }
 .dashboard-toolbar { margin-bottom: 0 !important; }
 .dashboard-toolbar h2 { font-weight: 700; }
@@ -101,35 +101,58 @@
 .scanner-status-meta { color: var(--gray-500); font-size: 0.68rem; line-height: 1.25; }
 
 /* ---- Sipalay City school map ---- */
-#dashSchoolMap { height: 420px; border-radius: 16px; overflow: hidden; }
+#dashSchoolMap {
+    height: clamp(500px, 56vh, 640px);
+    min-height: 460px;
+    border: 1px solid #dbe7f3;
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+}
 .dash-map-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 230px;
-    gap: 14px;
+    grid-template-columns: minmax(0, 1fr) clamp(248px, 18vw, 294px);
+    gap: 16px;
+    align-items: stretch;
 }
 .dash-map-school-list {
-    border: 1px solid #edf2f7;
-    border-radius: 16px;
+    border: 1px solid #e6edf6;
+    border-radius: 18px;
     overflow: hidden;
-    background: #fbfdff;
-    max-height: 420px;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+    max-height: clamp(500px, 56vh, 640px);
     overflow-y: auto;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.9);
 }
 .dash-map-school-item {
+    appearance: none;
+    -webkit-appearance: none;
     width: 100%;
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border-bottom: 1px solid #edf2f7;
-    background: transparent;
+    gap: 11px;
+    min-height: 66px;
+    padding: 12px 13px;
+    border: 0;
+    border-bottom: 1px solid #eef3f8;
+    background: rgba(255,255,255,0.84);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
     text-align: left;
+    transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
 .dash-map-school-item:last-child { border-bottom: 0; }
+.dash-map-school-item:hover,
+.dash-map-school-item:focus-visible {
+    background: #f0fdf4;
+    box-shadow: inset 3px 0 0 #10b981;
+    outline: none;
+}
 .dash-map-school-item strong {
     display: block;
     color: var(--gray-800);
-    font-size: 0.76rem;
+    font-size: 0.78rem;
     line-height: 1.25;
 }
 .dash-map-school-item span {
@@ -153,7 +176,8 @@
 .dash-map-school-item.offline span::before { background: #dc2626; }
 @media (max-width: 900px) {
     .dash-map-layout { grid-template-columns: 1fr; }
-    .dash-map-school-list { max-height: 240px; }
+    #dashSchoolMap { height: 420px; min-height: 360px; }
+    .dash-map-school-list { max-height: 280px; }
 }
 .dash-map-pin {
     display: block; width: 16px; height: 16px; border-radius: 50%;
@@ -211,6 +235,20 @@
 
 <div class="dashboard-v2">
 
+<!-- Welcome Banner -->
+<div class="welcome-banner">
+    <div class="wb-left">
+        <h2 id="saGreeting">Good morning, <%= user.fullname %></h2>
+        <p><i class="fa-solid fa-gauge-high"></i> Division Overview &nbsp;&middot;&nbsp; <span id="saDateLabel"></span></p>
+    </div>
+    <div class="wb-right">
+        <div class="wb-stat">
+            <span class="wb-stat-val" id="saWbRate">&mdash;</span>
+            <span class="wb-stat-lbl">Today's Rate</span>
+        </div>
+    </div>
+</div>
+
 <!-- Sipalay City School Map -->
 <div class="card" id="schoolMapCard">
     <div class="card-header">
@@ -224,20 +262,6 @@
         <div id="dashSchoolMap"></div>
         <div class="dash-map-school-list" id="dashMapSchoolList">
             <div class="dash-empty-mini">Loading school locations...</div>
-        </div>
-    </div>
-</div>
-
-<!-- Welcome Banner -->
-<div class="welcome-banner">
-    <div class="wb-left">
-        <h2 id="saGreeting">Good morning, <%= user.fullname %></h2>
-        <p><i class="fa-solid fa-gauge-high"></i> Division Overview &nbsp;&middot;&nbsp; <span id="saDateLabel"></span></p>
-    </div>
-    <div class="wb-right">
-        <div class="wb-stat">
-            <span class="wb-stat-val" id="saWbRate">—</span>
-            <span class="wb-stat-lbl">Today's Rate</span>
         </div>
     </div>
 </div>
