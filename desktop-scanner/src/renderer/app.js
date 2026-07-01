@@ -1019,8 +1019,8 @@ function renderLocalScans(scans = []) {
   const empty = $('localScanEmpty');
   const footerText = $('localLogFooterText');
 
-  // Show the full day log. The table body owns the scrolling, so we do not
-  // cap this to 6 records anymore; that left a large blank area in the panel.
+  // Render whatever the store returns (up to DEFAULT_RECENT_SCAN_LIMIT, 25).
+  // The table body owns the scrolling, so a long list scrolls within the panel.
   const localScans = Array.isArray(scans) ? scans.slice() : [];
   if (footerText) {
     footerText.textContent = `Showing ${localScans.length} record(s) for today - Last updated ${formatShortTime(new Date())}`;
@@ -1324,9 +1324,9 @@ async function submitQrCode(qrCode, options = {}) {
   state.pendingTimeoutQr = trimmed;
   setStatusLine('Processing attendance scan...');
   updateScannerStatus('Processing scan', 'Preparing the attendance record for server or offline storage.', 'warning');
-  if (!options.confirmTimeOut) {
-    showScanProcessingFeedback();
-  }
+  // Note: the transient "Scan detected" modal was intentionally removed — a scan
+  // now goes straight to its result card without an interstitial pop-up. The
+  // status line above still reflects processing state for the operator.
 
   try {
     const result = (await api.submitScan({

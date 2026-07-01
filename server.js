@@ -27,8 +27,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const DESKTOP_SCANNER_LATEST = {
-    version: '1.0.25',
-    notes: 'Adds Super Admin remote commands for desktop scanners: open settings, refresh configuration, and sync queue.'
+    version: '1.0.26',
+    notes: 'Attendance Log redesigned for readability (larger text/rows), shows up to 25 today records, and the transient "Scan detected" pop-up was removed.'
 };
 
 app.get('/mobile-config.json', (req, res) => {

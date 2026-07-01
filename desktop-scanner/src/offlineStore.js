@@ -5,7 +5,7 @@ const initSqlJs = require('sql.js/dist/sql-asm.js');
 const MAX_SYNC_ATTEMPTS = 5;
 const DEFAULT_PENDING_LIMIT = 8;
 const DEFAULT_HISTORY_LIMIT = 8;
-const DEFAULT_RECENT_SCAN_LIMIT = 6;
+const DEFAULT_RECENT_SCAN_LIMIT = 25;
 
 let SQL = null;
 let db = null;
