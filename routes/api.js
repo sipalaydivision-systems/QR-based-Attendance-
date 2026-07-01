@@ -73,7 +73,8 @@ function normalizeCoordinate(value, min, max) {
 
 const DESKTOP_SCANNER_ACTIVE_SECONDS = 3 * 60;
 const DESKTOP_SCANNER_RECENT_SECONDS = 10 * 60;
-const DESKTOP_SCANNER_REMOTE_COMMANDS = new Set(['open_settings', 'refresh_config', 'sync_queue']);
+const DESKTOP_SCANNER_REMOTE_COMMANDS = new Set(['open_settings', 'refresh_config', 'sync_queue', 'start_preview']);
+const DESKTOP_SCANNER_PREVIEW_MAX_CHARS = 900000;
 
 function limitText(value, maxLength) {
     return String(value || '').trim().slice(0, maxLength);
@@ -91,6 +92,13 @@ function parsePayloadJson(value) {
     } catch (_err) {
         return null;
     }
+}
+
+function normalizePreviewImageData(value) {
+    const raw = String(value || '').trim();
+    const stripped = raw.replace(/^data:image\/jpe?g;base64,/i, '');
+    if (!stripped || stripped.length > DESKTOP_SCANNER_PREVIEW_MAX_CHARS) return '';
+    return /^[A-Za-z0-9+/=\r\n]+$/.test(stripped) ? stripped.replace(/\s+/g, '') : '';
 }
 
 function normalizeScannerDateTime(value) {
@@ -815,6 +823,85 @@ router.post('/scanner-desktop-command/:id/ack', requireAuthOrScannerKiosk, async
     } catch (err) {
         console.error('Scanner desktop command ack error:', err);
         return res.status(500).json({ success: false, error: 'Failed to acknowledge scanner command.' });
+    }
+});
+
+router.post('/scanner-desktop-preview', requireAuthOrScannerKiosk, async (req, res) => {
+    try {
+        const scannerId = limitText(req.body.scanner_id || req.body.device_id, 100);
+        const schoolId = normalizeOptionalSchoolId(req.body.school_id || req.body.scanner_school_id);
+        const imageData = normalizePreviewImageData(req.body.image_data);
+        const width = Math.max(0, Math.min(3000, Number.parseInt(req.body.width, 10) || 0));
+        const height = Math.max(0, Math.min(3000, Number.parseInt(req.body.height, 10) || 0));
+
+        if (!scannerId) {
+            return res.status(400).json({ success: false, error: 'Scanner ID is required.' });
+        }
+        if (!imageData) {
+            return res.status(400).json({ success: false, error: 'Invalid preview image.' });
+        }
+
+        await db.query(
+            `INSERT INTO desktop_scanner_previews
+             (scanner_id, school_id, image_data, mime_type, width, height, captured_at)
+             VALUES (?, ?, ?, 'image/jpeg', ?, ?, CURRENT_TIMESTAMP)
+             ON DUPLICATE KEY UPDATE
+                school_id = VALUES(school_id),
+                image_data = VALUES(image_data),
+                mime_type = VALUES(mime_type),
+                width = VALUES(width),
+                height = VALUES(height),
+                captured_at = VALUES(captured_at),
+                updated_at = CURRENT_TIMESTAMP`,
+            [scannerId, schoolId, imageData, width, height]
+        );
+
+        return res.json({ success: true, scanner_id: scannerId });
+    } catch (err) {
+        console.error('Scanner preview upload error:', err);
+        return res.status(500).json({ success: false, error: 'Failed to upload scanner preview.' });
+    }
+});
+
+router.get('/scanner-desktop-preview', requireRole('super_admin'), async (req, res) => {
+    try {
+        const scannerId = limitText(req.query.scanner_id || req.query.device_id, 100);
+        if (!scannerId) {
+            return res.status(400).json({ success: false, error: 'Scanner ID is required.' });
+        }
+
+        const [rows] = await db.query(
+            `SELECT p.scanner_id, p.school_id, p.image_data, p.mime_type, p.width, p.height, p.captured_at,
+                    TIMESTAMPDIFF(SECOND, p.captured_at, CURRENT_TIMESTAMP) AS age_seconds,
+                    d.device_name, sc.name AS school_name
+             FROM desktop_scanner_previews p
+             LEFT JOIN desktop_scanner_devices d ON d.scanner_id = p.scanner_id
+             LEFT JOIN schools sc ON sc.id = COALESCE(p.school_id, d.school_id)
+             WHERE p.scanner_id = ?
+             LIMIT 1`,
+            [scannerId]
+        );
+
+        const frame = rows[0] || null;
+        if (!frame) return res.json({ success: true, frame: null });
+
+        return res.json({
+            success: true,
+            frame: {
+                scanner_id: frame.scanner_id,
+                school_id: frame.school_id,
+                school_name: frame.school_name || '',
+                device_name: frame.device_name || 'Desktop Scanner',
+                image_data: `data:${frame.mime_type || 'image/jpeg'};base64,${frame.image_data}`,
+                width: frame.width || 0,
+                height: frame.height || 0,
+                captured_at: frame.captured_at,
+                age_seconds: Math.max(0, Number(frame.age_seconds || 0))
+            }
+        });
+    } catch (err) {
+        console.error('Scanner preview fetch error:', err);
+        return res.status(500).json({ success: false, error: 'Failed to fetch scanner preview.' });
     }
 });
 

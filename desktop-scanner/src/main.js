@@ -71,6 +71,9 @@ let tray = null;
 let isQuitting = false;
 let remoteCommandTimer = null;
 let remoteCommandBusy = false;
+let remotePreviewTimer = null;
+let remotePreviewBusy = false;
+let remotePreviewUntil = 0;
 
 const runtimeState = {
   online: false,
@@ -1223,6 +1226,73 @@ async function acknowledgeRemoteCommand(settings, commandId, status = 'acknowled
   }
 }
 
+async function uploadPreviewFrame(trigger = 'remote-preview') {
+  if (remotePreviewBusy) return;
+  const settings = loadSettings();
+  if (!settings.kioskToken || !settings.scannerId || !mainWindow || mainWindow.isDestroyed()) return;
+
+  remotePreviewBusy = true;
+  try {
+    const image = await mainWindow.webContents.capturePage();
+    const originalSize = image.getSize();
+    const maxWidth = 1180;
+    const scale = originalSize.width > maxWidth ? (maxWidth / originalSize.width) : 1;
+    const width = Math.max(1, Math.round(originalSize.width * scale));
+    const height = Math.max(1, Math.round(originalSize.height * scale));
+    const frame = scale < 1 ? image.resize({ width, height, quality: 'good' }) : image;
+    const frameSize = frame.getSize();
+    const jpeg = frame.toJPEG(48);
+    const serverUrl = normalizeServerUrl(settings.serverUrl);
+
+    const res = await fetchWithTimeout(`${serverUrl}/api/scanner-desktop-preview`, {
+      method: 'POST',
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Scanner-Kiosk-Token': settings.kioskToken
+      },
+      body: JSON.stringify({
+        scanner_id: settings.scannerId,
+        school_id: String(settings.selectedSchoolId || '').trim() || null,
+        image_data: jpeg.toString('base64'),
+        width: frameSize.width,
+        height: frameSize.height,
+        trigger
+      })
+    }, 10000);
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `Preview upload failed (${res.status})`);
+    }
+  } finally {
+    remotePreviewBusy = false;
+  }
+}
+
+function stopPreviewStream() {
+  if (remotePreviewTimer) clearInterval(remotePreviewTimer);
+  remotePreviewTimer = null;
+  remotePreviewUntil = 0;
+}
+
+function startPreviewStream(durationSeconds = 120) {
+  const safeDuration = Math.max(15, Math.min(300, Number(durationSeconds) || 120));
+  remotePreviewUntil = Date.now() + (safeDuration * 1000);
+  showWindow();
+  uploadPreviewFrame('remote-preview-start').catch((err) => console.warn('Preview frame upload failed:', err.message));
+
+  if (remotePreviewTimer) clearInterval(remotePreviewTimer);
+  remotePreviewTimer = setInterval(() => {
+    if (Date.now() > remotePreviewUntil) {
+      stopPreviewStream();
+      return;
+    }
+    uploadPreviewFrame('remote-preview').catch((err) => console.warn('Preview frame upload failed:', err.message));
+  }, 2000);
+  if (remotePreviewTimer.unref) remotePreviewTimer.unref();
+}
+
 async function executeRemoteCommand(command) {
   const action = String(command?.command || '').trim();
   if (!action) return;
@@ -1243,6 +1313,10 @@ async function executeRemoteCommand(command) {
   if (action === 'sync_queue') {
     await syncOfflineQueue({ trigger: 'remote-command' });
     return;
+  }
+
+  if (action === 'start_preview') {
+    startPreviewStream(command?.payload?.duration_seconds || 120);
   }
 }
 

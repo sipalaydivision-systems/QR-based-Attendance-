@@ -1,5 +1,22 @@
 <%- include('partials/header') %>
 
+<style>
+#schoolModal .modal {
+    width: min(94vw, 740px);
+    max-height: calc(100vh - 40px);
+}
+#schoolMiniMap {
+    height: 240px !important;
+    border-radius: 14px !important;
+    overflow: hidden;
+    position: relative;
+    z-index: 1;
+}
+#schoolMiniMap .leaflet-control-container {
+    z-index: 1;
+}
+</style>
+
 <div class="page-header">
     <div class="page-header-left">
         <h1><i class="fa-solid fa-school"></i> All Schools <span class="page-count" id="schoolCount">-</span></h1>
@@ -555,16 +572,21 @@ setInterval(function() { if (document.getElementById('schoolModal').style.displa
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
-var SIPALAY_CENTER = [9.75, 122.40];
-var SIPALAY_BOUNDS = [[9.60, 122.28], [9.90, 122.55]];
+var SIPALAY_CENTER = [9.735, 122.405];
+var SIPALAY_BOUNDS = [[9.45, 122.10], [10.08, 122.82]];
 var schoolMiniMapInstance = null, schoolMiniMarker = null;
 
 function initSchoolMiniMap() {
     if (schoolMiniMapInstance) { setTimeout(function() { schoolMiniMapInstance.invalidateSize(); }, 50); return; }
     if (typeof L === 'undefined') return;
     schoolMiniMapInstance = L.map('schoolMiniMap', {
-        center: SIPALAY_CENTER, zoom: 12, minZoom: 11, maxZoom: 18,
-        maxBounds: SIPALAY_BOUNDS, maxBoundsViscosity: 1.0
+        center: SIPALAY_CENTER,
+        zoom: 11,
+        minZoom: 10,
+        maxZoom: 18,
+        scrollWheelZoom: false,
+        maxBounds: SIPALAY_BOUNDS,
+        maxBoundsViscosity: 0.45
     });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -583,7 +605,8 @@ function setMiniMapMarker(lat, lng) {
     if (schoolMiniMarker) { schoolMiniMapInstance.removeLayer(schoolMiniMarker); schoolMiniMarker = null; }
     if (lat == null || lng == null || lat === '' || lng === '' || isNaN(lat) || isNaN(lng)) return;
     schoolMiniMarker = L.marker([Number(lat), Number(lng)]).addTo(schoolMiniMapInstance);
-    schoolMiniMapInstance.setView([Number(lat), Number(lng)], 15);
+    schoolMiniMapInstance.setView([Number(lat), Number(lng)], 13, { animate: true });
+    setTimeout(function() { schoolMiniMapInstance.invalidateSize(); }, 60);
 }
 </script>
 

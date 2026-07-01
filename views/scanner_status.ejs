@@ -299,6 +299,10 @@
     var schools = [];
     var scanners = [];
     var refreshTimer = null;
+    var previewTimer = null;
+    var previewScannerId = '';
+    var previewSchoolId = '';
+    var previewSchoolName = '';
 
     function esc(value) {
         return String(value == null ? '' : value)
@@ -372,6 +376,7 @@
         var schoolId = target && target.id ? String(target.id) : (target && target.school_id ? String(target.school_id) : '');
         if (!scannerId) return '<span class="scanner-small-muted">No remote scanner</span>';
         return '<div class="scanner-remote-actions">' +
+            '<button type="button" class="scanner-remote-btn" data-command="start_preview" data-scanner-id="' + esc(scannerId) + '" data-school-id="' + esc(schoolId) + '" data-school-name="' + esc(target.name || target.school_name || target.device_name || 'Desktop Scanner') + '"><i class="fa-solid fa-eye"></i> Live</button>' +
             '<button type="button" class="scanner-remote-btn" data-command="open_settings" data-scanner-id="' + esc(scannerId) + '" data-school-id="' + esc(schoolId) + '"><i class="fa-solid fa-sliders"></i> Settings</button>' +
             '<button type="button" class="scanner-remote-btn" data-command="refresh_config" data-scanner-id="' + esc(scannerId) + '" data-school-id="' + esc(schoolId) + '"><i class="fa-solid fa-rotate"></i> Refresh</button>' +
             '<button type="button" class="scanner-remote-btn" data-command="sync_queue" data-scanner-id="' + esc(scannerId) + '" data-school-id="' + esc(schoolId) + '"><i class="fa-solid fa-cloud-arrow-up"></i> Sync</button>' +
@@ -452,27 +457,36 @@
         }).join('');
     }
 
+    async function postRemoteCommand(command, scannerId, schoolId, payload) {
+        var response = await fetch('/api/scanner-desktop-command', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                scanner_id: scannerId,
+                school_id: schoolId || null,
+                command: command,
+                payload: payload || {}
+            })
+        });
+        var data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || 'Command failed.');
+        return data;
+    }
+
     async function sendRemoteCommand(button) {
         var command = button.getAttribute('data-command');
         var scannerId = button.getAttribute('data-scanner-id');
         var schoolId = button.getAttribute('data-school-id') || '';
         if (!command || !scannerId) return;
+        if (command === 'start_preview') {
+            openScannerPreview(scannerId, schoolId, button.getAttribute('data-school-name') || 'Desktop Scanner');
+        }
 
         var original = button.innerHTML;
         button.disabled = true;
         button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending';
         try {
-            var response = await fetch('/api/scanner-desktop-command', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    scanner_id: scannerId,
-                    school_id: schoolId || null,
-                    command: command
-                })
-            });
-            var data = await response.json();
-            if (!response.ok || !data.success) throw new Error(data.error || 'Command failed.');
+            await postRemoteCommand(command, scannerId, schoolId, command === 'start_preview' ? { duration_seconds: 120 } : {});
             button.innerHTML = '<i class="fa-solid fa-circle-check"></i> Sent';
             setTimeout(function() {
                 button.innerHTML = original;
@@ -486,6 +500,66 @@
                 button.disabled = false;
             }, 1800);
         }
+    }
+
+    function openScannerPreview(scannerId, schoolId, schoolName) {
+        previewScannerId = scannerId;
+        previewSchoolId = schoolId || '';
+        previewSchoolName = schoolName || 'Desktop Scanner';
+        document.getElementById('scannerPreviewTitle').textContent = previewSchoolName + ' Live Preview';
+        document.getElementById('scannerPreviewMeta').textContent = 'Scanner ID: ' + scannerId;
+        document.getElementById('scannerPreviewStatus').textContent = 'Starting app-only preview...';
+        document.getElementById('scannerPreviewImage').style.display = 'none';
+        document.getElementById('scannerPreviewEmpty').style.display = 'block';
+        document.getElementById('scannerPreviewOverlay').style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        fetchPreviewFrame();
+        if (previewTimer) clearInterval(previewTimer);
+        previewTimer = setInterval(fetchPreviewFrame, 2000);
+    }
+
+    window.closeScannerPreview = function closeScannerPreview() {
+        if (previewTimer) clearInterval(previewTimer);
+        previewTimer = null;
+        previewScannerId = '';
+        document.getElementById('scannerPreviewOverlay').style.display = 'none';
+        document.body.style.overflow = '';
+    };
+
+    async function fetchPreviewFrame() {
+        if (!previewScannerId) return;
+        try {
+            var response = await fetch('/api/scanner-desktop-preview?scanner_id=' + encodeURIComponent(previewScannerId) + '&_=' + Date.now(), { cache: 'no-store' });
+            var data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.error || 'Preview failed.');
+            var img = document.getElementById('scannerPreviewImage');
+            var empty = document.getElementById('scannerPreviewEmpty');
+            var status = document.getElementById('scannerPreviewStatus');
+            if (!data.frame) {
+                empty.style.display = 'block';
+                img.style.display = 'none';
+                status.textContent = 'Waiting for scanner to upload the first preview frame...';
+                return;
+            }
+            img.src = data.frame.image_data;
+            img.style.display = 'block';
+            empty.style.display = 'none';
+            var age = Number(data.frame.age_seconds || 0);
+            status.textContent = 'Live preview updated ' + (age <= 2 ? 'just now' : age + 's ago') + '.';
+        } catch (err) {
+            document.getElementById('scannerPreviewStatus').textContent = err.message || 'Unable to load preview frame.';
+        }
+    }
+
+    function sendPreviewCommand(command) {
+        if (!previewScannerId) return;
+        postRemoteCommand(command, previewScannerId, previewSchoolId, command === 'start_preview' ? { duration_seconds: 120 } : {})
+            .then(function() {
+                document.getElementById('scannerPreviewStatus').textContent = 'Command sent: ' + command.replace(/_/g, ' ') + '.';
+            })
+            .catch(function(err) {
+                alert(err.message || 'Unable to send command.');
+            });
     }
 
     function updateKpis(summary) {
@@ -525,10 +599,17 @@
         if (!button) return;
         sendRemoteCommand(button);
     });
+    document.getElementById('scannerPreviewOverlay').addEventListener('click', function(event) {
+        if (event.target === this) closeScannerPreview();
+    });
+    document.getElementById('previewSettingsBtn').addEventListener('click', function() { sendPreviewCommand('open_settings'); });
+    document.getElementById('previewRefreshBtn').addEventListener('click', function() { sendPreviewCommand('refresh_config'); });
+    document.getElementById('previewSyncBtn').addEventListener('click', function() { sendPreviewCommand('sync_queue'); });
     load();
     refreshTimer = setInterval(load, 10000);
     window.addEventListener('beforeunload', function() {
         if (refreshTimer) clearInterval(refreshTimer);
+        if (previewTimer) clearInterval(previewTimer);
     });
 })();
 </script>

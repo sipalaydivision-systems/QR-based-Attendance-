@@ -11,7 +11,7 @@
 /* ---- Dashboard v2 rhythm ---- */
 .dashboard-v2 { display: grid; gap: var(--dash-gap); }
 .dashboard-v2 > * { margin-bottom: 0 !important; }
-#schoolMapCard { margin-top: 0; margin-bottom: 0; overflow: hidden; }
+#schoolMapCard { margin-top: 0; margin-bottom: 0; overflow: visible; }
 .welcome-banner { margin-bottom: 0; }
 .dashboard-toolbar { margin-bottom: 0 !important; }
 .dashboard-toolbar h2 { font-weight: 700; }
@@ -514,7 +514,7 @@
     var dashMap = null, schoolMarkers = {}, mapPollTimer = null, mapRotationTimer = null;
     var mappedSchoolFeed = [], mapRotationIndex = -1, mapHovering = false, mapRotationStarted = false;
     var SIPALAY_CENTER = [9.735, 122.405];
-    var SIPALAY_BOUNDS = [[9.58, 122.25], [9.94, 122.58]];
+    var SIPALAY_BOUNDS = [[9.45, 122.10], [10.08, 122.82]];
 
     function pad(n) { return String(n).padStart(2, '0'); }
 
@@ -906,8 +906,12 @@
         var el = document.getElementById('dashSchoolMap');
         if (!el) return;
         dashMap = L.map('dashSchoolMap', {
-            center: SIPALAY_CENTER, zoom: 11, minZoom: 10, maxZoom: 18,
-            maxBounds: SIPALAY_BOUNDS, maxBoundsViscosity: 1.0
+            center: SIPALAY_CENTER,
+            zoom: 12,
+            minZoom: 10,
+            maxZoom: 18,
+            maxBounds: SIPALAY_BOUNDS,
+            maxBoundsViscosity: 0.55
         });
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -919,14 +923,20 @@
         options = options || {};
         var marker = schoolMarkers[id];
         if (!marker || !dashMap) return;
-        if (options.pan !== false) dashMap.panTo(marker.getLatLng(), { animate: true, duration: 0.45 });
+        if (options.pan === true && typeof dashMap.panInside === 'function') {
+            dashMap.panInside(marker.getLatLng(), {
+                paddingTopLeft: [72, 72],
+                paddingBottomRight: [330, 96],
+                animate: true
+            });
+        }
         marker.openPopup();
     }
 
     function rotateMapPopup() {
         if (!mappedSchoolFeed.length || mapHovering) return;
         mapRotationIndex = (mapRotationIndex + 1) % mappedSchoolFeed.length;
-        openSchoolPopupById(mappedSchoolFeed[mapRotationIndex].id, { pan: true });
+        openSchoolPopupById(mappedSchoolFeed[mapRotationIndex].id, { pan: false });
     }
 
     function startMapPopupRotation() {
@@ -959,7 +969,7 @@
                     marker.bindPopup(schoolPopupHtml(s), {
                         className: 'dash-map-status-popup',
                         closeButton: true,
-                        autoPan: true
+                        autoPan: false
                     });
                     marker.on('mouseover', function() {
                         mapHovering = true;

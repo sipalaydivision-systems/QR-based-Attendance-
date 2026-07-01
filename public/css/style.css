@@ -656,13 +656,14 @@ a:hover { color: var(--primary-dark); }
     position: fixed; inset: 0;
     background: rgba(15,23,42,0.5);
     display: flex; align-items: center; justify-content: center;
-    z-index: 200; backdrop-filter: blur(3px);
+    z-index: 3000; backdrop-filter: blur(3px);
     padding: 16px;
 }
 .modal, .modal-content {
     background: #fff; border-radius: var(--radius-xl);
     width: 100%; max-width: 660px;
     max-height: 90vh; overflow-y: auto;
+    overscroll-behavior: contain;
     box-shadow: var(--shadow-lg);
     animation: modalIn 0.2s ease;
 }
@@ -2431,6 +2432,7 @@ body.theme-clean .sidebar {
     box-shadow: 10px 0 34px rgba(30,41,59,0.07);
     scrollbar-width: thin;
     scrollbar-color: #cbd5e1 transparent;
+    z-index: 1200;
 }
 @media (min-width: 769px) {
     body.theme-clean .sidebar {
@@ -2524,6 +2526,7 @@ body.theme-clean .topbar {
     border-bottom: 1px solid rgba(226,232,240,0.82);
     box-shadow: 0 10px 34px rgba(15,23,42,0.055);
     gap: 16px;
+    z-index: 1100;
 }
 body.theme-clean .topbar-title-block {
     flex: 1;

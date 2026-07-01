@@ -1758,6 +1758,12 @@ function handleRemoteCommand(payload) {
   if (command === 'sync_queue') {
     showToast('Remote command: attendance queue sync requested.', 'success');
     setStatusLine('Attendance queue sync was requested by Super Admin.');
+    return;
+  }
+
+  if (command === 'start_preview') {
+    showToast('Remote command: live preview started.', 'success');
+    setStatusLine('Super Admin is viewing the scanner app preview.');
   }
 }
 

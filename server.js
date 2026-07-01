@@ -23,12 +23,12 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
 // Body parsing
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 const DESKTOP_SCANNER_LATEST = {
     version: '1.0.26',
-    notes: 'Attendance Log redesigned for readability (larger text/rows), shows up to 25 today records, and the transient "Scan detected" pop-up was removed.'
+    notes: 'Attendance Log redesigned for readability, plus Super Admin live preview modal for desktop scanners.'
 };
 
 app.get('/mobile-config.json', (req, res) => {
@@ -511,6 +511,21 @@ async function ensureRuntimeSchema() {
             error_message TEXT NULL,
             INDEX idx_desktop_scanner_commands_pending (scanner_id, status, expires_at),
             INDEX idx_desktop_scanner_commands_school (school_id, requested_at),
+            FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB
+    `);
+
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS desktop_scanner_previews (
+            scanner_id VARCHAR(100) PRIMARY KEY,
+            school_id INT NULL,
+            image_data MEDIUMTEXT NOT NULL,
+            mime_type VARCHAR(50) DEFAULT 'image/jpeg',
+            width INT DEFAULT 0,
+            height INT DEFAULT 0,
+            captured_at DATETIME NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_desktop_scanner_previews_school (school_id, captured_at),
             FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE SET NULL
         ) ENGINE=InnoDB
     `);

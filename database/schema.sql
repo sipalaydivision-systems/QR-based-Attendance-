@@ -133,6 +133,19 @@ CREATE TABLE IF NOT EXISTS desktop_scanner_commands (
     FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS desktop_scanner_previews (
+    scanner_id VARCHAR(100) PRIMARY KEY,
+    school_id INT NULL,
+    image_data MEDIUMTEXT NOT NULL,
+    mime_type VARCHAR(50) DEFAULT 'image/jpeg',
+    width INT DEFAULT 0,
+    height INT DEFAULT 0,
+    captured_at DATETIME NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_desktop_scanner_previews_school (school_id, captured_at),
+    FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
 -- -----------------------------------------------------------
 -- Parent / Guardian Accounts
 -- -----------------------------------------------------------
