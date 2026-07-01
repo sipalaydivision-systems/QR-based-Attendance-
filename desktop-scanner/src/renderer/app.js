@@ -661,6 +661,7 @@ const LOG_ARROW = {
 
 function resIconKey(data, tone) {
   if (tone === 'error') return 'error';
+  if (data?.processing) return 'pending';
   // Half-day: colour/icon follows the actual scan direction (green Time In,
   // orange Time Out) rather than always reading as a time-out.
   if (data?.status === 'half_day') return String(data?.action || '') === 'TIME_OUT' ? 'time-out' : 'time-in';
@@ -974,8 +975,11 @@ function showScanFeedback(title, message, tone = 'success', data = {}) {
   fill.style.animation = 'none';
   void fill.offsetHeight;
   const isStickyPreview = data?.preview_sticky === true;
+  const holdOpen = data?.hold_open === true;
   const duration = action === 'CONFIRM_TIME_OUT' || isStickyPreview ? 10 : 3;
-  fill.style.animation = `resCountdownShrink ${duration}s linear forwards`;
+  fill.style.animation = holdOpen
+    ? 'resCountdownShrink 1.1s ease-in-out infinite'
+    : `resCountdownShrink ${duration}s linear forwards`;
 
   /* ── Animate the card ── */
   card.style.animation = 'none';
@@ -989,9 +993,20 @@ function showScanFeedback(title, message, tone = 'success', data = {}) {
 
   if (state.scanModalTimer) clearTimeout(state.scanModalTimer);
   state.scanModalTimer = null;
-  if (action !== 'CONFIRM_TIME_OUT' && !isStickyPreview) {
+  if (action !== 'CONFIRM_TIME_OUT' && !isStickyPreview && !holdOpen) {
     state.scanModalTimer = setTimeout(closeScanModal, 3000);
   }
+}
+
+function showScanProcessingFeedback() {
+  showScanFeedback(
+    'Scan detected',
+    'Checking the QR code and preparing the attendance record...',
+    'warning',
+    { action: 'PROCESSING_SCAN', processing: true, hold_open: true }
+  );
+  $('modalConfirmActions').classList.add('hidden');
+  $('confirmBox').classList.add('hidden');
 }
 
 // Fingerprint of the last rendered scan list — prevents constant DOM thrashing
@@ -1309,6 +1324,9 @@ async function submitQrCode(qrCode, options = {}) {
   state.pendingTimeoutQr = trimmed;
   setStatusLine('Processing attendance scan...');
   updateScannerStatus('Processing scan', 'Preparing the attendance record for server or offline storage.', 'warning');
+  if (!options.confirmTimeOut) {
+    showScanProcessingFeedback();
+  }
 
   try {
     const result = (await api.submitScan({

@@ -27,8 +27,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const DESKTOP_SCANNER_LATEST = {
-    version: '1.0.23',
-    notes: 'Shows the full desktop scanner attendance log with compact rows and a clean scrollable panel.'
+    version: '1.0.24',
+    notes: 'Shows an instant scan-detected modal immediately while the final attendance result is being processed.'
 };
 
 app.get('/mobile-config.json', (req, res) => {
