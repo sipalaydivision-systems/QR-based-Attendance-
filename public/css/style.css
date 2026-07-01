@@ -2401,3 +2401,97 @@ body.edutrack-mobile-app .login-form .btn {
     background: #00885b !important;
     border-color: #00885b !important;
 }
+
+/* ============================================================
+   CLEAN THEME — white, plain, neat "floating" look.
+   Applied via body.theme-clean, which is set server-side in
+   partials/header.ejs ONLY for super_admin. Every selector is prefixed
+   with body.theme-clean, so no other role's pages are affected. Kept at
+   the very end of the file so same-specificity base rules are overridden
+   by cascade order.
+   ============================================================ */
+body.theme-clean {
+    background: linear-gradient(170deg, #eef0fb 0%, #e9ecf9 55%, #eaf0fa 100%);
+    background-attachment: fixed;
+}
+
+/* --- White floating sidebar --- */
+body.theme-clean .sidebar {
+    background: #ffffff;
+    border: 1px solid #eaecf5;
+    box-shadow: 0 18px 44px rgba(30,41,59,0.10);
+}
+@media (min-width: 769px) {
+    body.theme-clean .sidebar {
+        top: 18px; left: 18px; bottom: 18px;
+        border-radius: 24px;
+    }
+    body.theme-clean .content { margin-left: calc(var(--sidebar-width) + 36px); }
+}
+
+/* Brand */
+body.theme-clean .sidebar-brand { border-bottom-color: #eef1f8; }
+body.theme-clean .brand-title { color: var(--gray-900); }
+body.theme-clean .brand-subtitle { color: var(--gray-500); }
+body.theme-clean .brand-icon i { color: var(--primary); }
+body.theme-clean .sidebar-toggle { color: var(--gray-500); }
+
+/* Nav items — dark text on white, soft green active pill */
+body.theme-clean .nav-section-label { color: var(--gray-400); opacity: 1; }
+body.theme-clean .nav-links li a,
+body.theme-clean .nav-group-toggle { color: var(--gray-600); }
+body.theme-clean .nav-links li a:hover,
+body.theme-clean .nav-group-toggle:hover { background: var(--gray-100); color: var(--gray-900); }
+body.theme-clean .nav-links li a.active {
+    background: var(--primary-bg);
+    color: var(--primary);
+    font-weight: 600;
+}
+body.theme-clean .nav-links li a.active .nav-icon { color: var(--primary); }
+
+/* Footer */
+body.theme-clean .sidebar-footer { border-top-color: #eef1f8; }
+body.theme-clean .user-details strong { color: var(--gray-900); }
+body.theme-clean .user-details small { color: var(--gray-500); }
+body.theme-clean .sidebar-footer-links a { color: var(--gray-500); }
+body.theme-clean .sidebar-footer-links a:hover { color: var(--gray-900); }
+
+/* --- Transparent topbar that blends into the light canvas --- */
+body.theme-clean .topbar {
+    background: transparent;
+    border-bottom: none;
+    box-shadow: none;
+}
+body.theme-clean .topbar h1 { color: var(--gray-900); }
+body.theme-clean .topbar-user {
+    background: #fff;
+    border-color: #eaecf5;
+    box-shadow: 0 2px 8px rgba(30,41,59,0.05);
+}
+
+/* --- Neat, soft-shadowed white cards across every super_admin page --- */
+body.theme-clean .card,
+body.theme-clean .stat-card,
+body.theme-clean .summary-stat-card,
+body.theme-clean .settings-section,
+body.theme-clean .filter-bar,
+body.theme-clean .rpt-card,
+body.theme-clean .rpt-filters,
+body.theme-clean .div-card,
+body.theme-clean .div-sum-card,
+body.theme-clean .school-card-v2,
+body.theme-clean .browser-card,
+body.theme-clean .section-card,
+body.theme-clean .grade-card,
+body.theme-clean .school-detail-header,
+body.theme-clean .breadcrumb-nav {
+    border-radius: 18px;
+    border: 1px solid #eef1f8;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.03), 0 10px 26px rgba(79,70,229,0.06);
+}
+body.theme-clean .stat-card:hover,
+body.theme-clean .summary-stat-card:hover,
+body.theme-clean .school-card-v2:hover,
+body.theme-clean .browser-card:hover {
+    box-shadow: 0 2px 4px rgba(15,23,42,0.04), 0 16px 34px rgba(79,70,229,0.10);
+}

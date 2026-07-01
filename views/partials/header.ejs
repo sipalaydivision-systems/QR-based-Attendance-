@@ -17,7 +17,7 @@
     <link rel="stylesheet" href="/css/style.css?v=topbar-school-natural-20260617b">
     <script src="/js/status-labels.js"></script>
 </head>
-<body>
+<body class="<%= (typeof user !== 'undefined' && user && user.role === 'super_admin') ? 'theme-clean' : '' %>">
     <% if (typeof user !== 'undefined' && user) { %>
     <nav class="sidebar<%= (typeof user !== 'undefined' && user && (user.role === 'adviser' || user.role === 'principal')) ? ' sidebar-blue' : '' %>" id="sidebar">
         <!-- Brand -->
