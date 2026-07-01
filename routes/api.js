@@ -905,6 +905,66 @@ router.get('/scanner-desktop-preview', requireRole('super_admin'), async (req, r
     }
 });
 
+router.get('/scanner-desktop-status', requireRole('super_admin'), async (req, res) => {
+    try {
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
+
+        const schoolId = normalizeOptionalSchoolId(req.query.school_id);
+        const schoolParams = schoolId ? [schoolId] : [];
+        const scannerPresence = await getDesktopScannerPresence(schoolId);
+
+        const [schoolRows] = await db.query(
+            `SELECT id, name, logo
+             FROM schools
+             WHERE status = 'active'` + (schoolId ? ' AND id = ?' : '') + `
+             ORDER BY name`,
+            schoolParams
+        );
+
+        const schools = schoolRows.map(s => {
+            const scannerInfo = scannerPresence.bySchool.get(String(s.id)) || null;
+            const latestScanner = scannerInfo?.latest || null;
+            const scannerStatus = scannerInfo && scannerInfo.active_scanners > 0
+                ? 'active'
+                : scannerInfo && scannerInfo.idle_scanners > 0
+                    ? 'idle'
+                    : scannerInfo && scannerInfo.total_scanners > 0
+                        ? 'offline'
+                        : 'none';
+
+            return {
+                id: s.id,
+                name: s.name,
+                logo: s.logo,
+                scanner_total: scannerInfo ? scannerInfo.total_scanners : 0,
+                scanner_active: scannerInfo ? scannerInfo.active_scanners : 0,
+                scanner_idle: scannerInfo ? scannerInfo.idle_scanners : 0,
+                scanner_offline: scannerInfo ? scannerInfo.offline_scanners : 0,
+                scanner_status: scannerStatus,
+                scanner_last_seen_at: latestScanner ? latestScanner.last_seen_at : null,
+                scanner_last_seen_seconds: latestScanner ? latestScanner.age_seconds : null,
+                scanner_id: latestScanner ? latestScanner.scanner_id : '',
+                scanner_app_version: latestScanner ? latestScanner.app_version : '',
+                scanner_device_name: latestScanner ? latestScanner.device_name : '',
+                scanner_queued_count: scannerInfo ? scannerInfo.queued_count : 0,
+                scanner_sync_in_progress: scannerInfo ? scannerInfo.sync_in_progress : false
+            };
+        });
+
+        return res.json({
+            success: true,
+            scanner_status_summary: scannerPresence.summary,
+            desktop_scanners: scannerPresence.devices,
+            schools
+        });
+    } catch (err) {
+        console.error('Desktop scanner status error:', err);
+        return res.status(500).json({ success: false, error: 'Failed to load desktop scanner status.' });
+    }
+});
+
 router.get('/scanner-desktop-directory', requireAuthOrScannerKiosk, async (req, res) => {
     try {
         const schoolId = normalizeOptionalSchoolId(req.query.school_id);

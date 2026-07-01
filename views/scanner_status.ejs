@@ -571,11 +571,16 @@
     }
 
     async function load() {
+        var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var timeout = controller ? setTimeout(function() { controller.abort(); }, 12000) : null;
         try {
-            var params = new URLSearchParams({ date: initialDate, _: Date.now().toString() });
-            var response = await fetch('/api/dashboard-data?' + params.toString(), { cache: 'no-store' });
+            var params = new URLSearchParams({ _: Date.now().toString() });
+            var response = await fetch('/api/scanner-desktop-status?' + params.toString(), {
+                cache: 'no-store',
+                signal: controller ? controller.signal : undefined
+            });
             var data = await response.json();
-            if (!response.ok || data.error) throw new Error(data.error || 'Failed to load scanner status');
+            if (!response.ok || data.error || data.success === false) throw new Error(data.error || 'Failed to load scanner status');
             schools = data.schools || [];
             scanners = data.desktop_scanners || [];
             updateKpis(data.scanner_status_summary || {});
@@ -586,9 +591,11 @@
             document.getElementById('scannerRows').innerHTML = '<tr><td colspan="8" class="scanner-empty">' +
                 '<i class="fa-solid fa-triangle-exclamation"></i>' +
                 '<h4>Unable to load scanner status</h4>' +
-                '<p>' + esc(err.message || 'Please try again.') + '</p>' +
+                '<p>' + esc(err.name === 'AbortError' ? 'Scanner status request timed out. Please refresh after Railway finishes redeploying.' : (err.message || 'Please try again.')) + '</p>' +
             '</td></tr>';
             document.getElementById('scannerUpdated').textContent = 'Load failed';
+        } finally {
+            if (timeout) clearTimeout(timeout);
         }
     }
 
