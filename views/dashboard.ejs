@@ -184,10 +184,19 @@
     border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.35);
 }
 .dash-map-popup { font-family: inherit; min-width: 180px; }
-.dmp-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.dash-map-status-popup .leaflet-popup-content-wrapper {
+    border-radius: 14px;
+    box-shadow: 0 14px 34px rgba(15,23,42,0.24);
+}
+.dash-map-status-popup .leaflet-popup-content {
+    margin: 14px 16px;
+}
+.dmp-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .dmp-head strong { font-size: 0.85rem; color: var(--gray-900); }
 .dmp-row { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--gray-600); margin-top: 3px; }
 .dmp-row .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dmp-row.online { color: #047857; font-weight: 800; }
+.dmp-row.offline { color: #b91c1c; font-weight: 800; }
 
 .dash-alert-list { display: grid; gap: 10px; }
 .dash-alert-item {
@@ -502,9 +511,10 @@
     var refreshTimer = null;
     var donutChart = null, trendChart = null;
     var trendSig = '', donutSig = '';
-    var dashMap = null, schoolMarkers = {}, mapPollTimer = null;
-    var SIPALAY_CENTER = [9.75, 122.40];
-    var SIPALAY_BOUNDS = [[9.60, 122.28], [9.90, 122.55]];
+    var dashMap = null, schoolMarkers = {}, mapPollTimer = null, mapRotationTimer = null;
+    var mappedSchoolFeed = [], mapRotationIndex = -1, mapHovering = false, mapRotationStarted = false;
+    var SIPALAY_CENTER = [9.735, 122.405];
+    var SIPALAY_BOUNDS = [[9.58, 122.25], [9.94, 122.58]];
 
     function pad(n) { return String(n).padStart(2, '0'); }
 
@@ -881,9 +891,11 @@
         var lastSeen = s.scanner_last_seen_at
             ? scannerLastSeenText(s.scanner_last_seen_seconds, s.scanner_last_seen_at)
             : 'No scanner check-in yet';
+        var statusClass = s.online ? 'online' : 'offline';
+        var statusText = s.online ? 'Online' : 'Offline';
         return '<div class="dash-map-popup">' +
             '<div class="dmp-head">' + logoBadge(s.logo, s.name, 36) + '<strong>' + esc(s.name) + '</strong></div>' +
-            '<div class="dmp-row"><span class="status-dot" style="background:' + scannerDotColor(s.online) + ';"></span> ' + (s.online ? 'Online' : 'Offline') + '</div>' +
+            '<div class="dmp-row ' + statusClass + '"><span class="status-dot" style="background:' + scannerDotColor(s.online) + ';"></span> ' + statusText + '</div>' +
             '<div class="dmp-row">Last activity: ' + esc(lastSeen) + '</div>' +
             (s.scanner_device_name ? '<div class="dmp-row">Device: ' + esc(s.scanner_device_name) + '</div>' : '') +
             '</div>';
@@ -894,13 +906,36 @@
         var el = document.getElementById('dashSchoolMap');
         if (!el) return;
         dashMap = L.map('dashSchoolMap', {
-            center: SIPALAY_CENTER, zoom: 12, minZoom: 11, maxZoom: 18,
+            center: SIPALAY_CENTER, zoom: 11, minZoom: 10, maxZoom: 18,
             maxBounds: SIPALAY_BOUNDS, maxBoundsViscosity: 1.0
         });
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
             maxZoom: 19
         }).addTo(dashMap);
+    }
+
+    function openSchoolPopupById(id, options) {
+        options = options || {};
+        var marker = schoolMarkers[id];
+        if (!marker || !dashMap) return;
+        if (options.pan !== false) dashMap.panTo(marker.getLatLng(), { animate: true, duration: 0.45 });
+        marker.openPopup();
+    }
+
+    function rotateMapPopup() {
+        if (!mappedSchoolFeed.length || mapHovering) return;
+        mapRotationIndex = (mapRotationIndex + 1) % mappedSchoolFeed.length;
+        openSchoolPopupById(mappedSchoolFeed[mapRotationIndex].id, { pan: true });
+    }
+
+    function startMapPopupRotation() {
+        if (mapRotationTimer || !mappedSchoolFeed.length) return;
+        mapRotationTimer = setInterval(rotateMapPopup, 2000);
+        if (!mapRotationStarted) {
+            mapRotationStarted = true;
+            setTimeout(rotateMapPopup, 450);
+        }
     }
 
     async function loadSchoolMap() {
@@ -921,7 +956,18 @@
                     schoolMarkers[s.id].setPopupContent(schoolPopupHtml(s));
                 } else {
                     var marker = L.marker([s.latitude, s.longitude], { icon: schoolMarkerIcon(s.online) }).addTo(dashMap);
-                    marker.bindPopup(schoolPopupHtml(s));
+                    marker.bindPopup(schoolPopupHtml(s), {
+                        className: 'dash-map-status-popup',
+                        closeButton: true,
+                        autoPan: true
+                    });
+                    marker.on('mouseover', function() {
+                        mapHovering = true;
+                        openSchoolPopupById(s.id, { pan: false });
+                    });
+                    marker.on('mouseout', function() {
+                        setTimeout(function() { mapHovering = false; }, 1200);
+                    });
                     schoolMarkers[s.id] = marker;
                 }
             });
@@ -931,10 +977,12 @@
             var list = document.getElementById('dashMapSchoolList');
             if (list) {
                 var mappedSchools = schools.filter(function(s) { return s.latitude != null && s.longitude != null; });
+                mappedSchoolFeed = mappedSchools;
+                startMapPopupRotation();
                 if (!mappedSchools.length) {
                     list.innerHTML = '<div class="dash-empty-mini">No mapped schools yet.</div>';
                 } else {
-                    list.innerHTML = mappedSchools.slice(0, 12).map(function(s) {
+                    list.innerHTML = mappedSchools.map(function(s) {
                         var status = s.online ? 'online' : 'offline';
                         var lastSeen = s.scanner_last_seen_at
                             ? scannerLastSeenText(s.scanner_last_seen_seconds, s.scanner_last_seen_at)
@@ -948,13 +996,13 @@
                         '</button>';
                     }).join('');
                     Array.prototype.forEach.call(list.querySelectorAll('.dash-map-school-item'), function(btn) {
-                        btn.addEventListener('click', function() {
+                        btn.addEventListener('mouseenter', function() {
+                            mapHovering = true;
                             var id = btn.getAttribute('data-school-id');
-                            var marker = schoolMarkers[id];
-                            if (marker) {
-                                dashMap.setView(marker.getLatLng(), Math.max(dashMap.getZoom(), 14), { animate: true });
-                                marker.openPopup();
-                            }
+                            openSchoolPopupById(id, { pan: true });
+                        });
+                        btn.addEventListener('mouseleave', function() {
+                            setTimeout(function() { mapHovering = false; }, 1200);
                         });
                     });
                 }

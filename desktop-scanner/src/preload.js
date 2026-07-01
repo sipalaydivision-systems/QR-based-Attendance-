@@ -21,5 +21,10 @@ contextBridge.exposeInMainWorld('edutrack', {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('scanner:status', listener);
     return () => ipcRenderer.removeListener('scanner:status', listener);
+  },
+  onRemoteCommand: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('scanner:remote-command', listener);
+    return () => ipcRenderer.removeListener('scanner:remote-command', listener);
   }
 });

@@ -73,9 +73,24 @@ function normalizeCoordinate(value, min, max) {
 
 const DESKTOP_SCANNER_ACTIVE_SECONDS = 3 * 60;
 const DESKTOP_SCANNER_RECENT_SECONDS = 10 * 60;
+const DESKTOP_SCANNER_REMOTE_COMMANDS = new Set(['open_settings', 'refresh_config', 'sync_queue']);
 
 function limitText(value, maxLength) {
     return String(value || '').trim().slice(0, maxLength);
+}
+
+function normalizeScannerRemoteCommand(value) {
+    const command = String(value || '').trim().toLowerCase().replace(/[^a-z0-9_:-]/g, '');
+    return DESKTOP_SCANNER_REMOTE_COMMANDS.has(command) ? command : '';
+}
+
+function parsePayloadJson(value) {
+    if (!value) return null;
+    try {
+        return JSON.parse(value);
+    } catch (_err) {
+        return null;
+    }
 }
 
 function normalizeScannerDateTime(value) {
@@ -665,6 +680,141 @@ router.post('/scanner-desktop-heartbeat', requireAuthOrScannerKiosk, async (req,
     } catch (err) {
         console.error('Scanner desktop heartbeat error:', err);
         return res.status(500).json({ success: false, error: 'Failed to record desktop scanner heartbeat.' });
+    }
+});
+
+router.post('/scanner-desktop-command', requireRole('super_admin'), async (req, res) => {
+    try {
+        const command = normalizeScannerRemoteCommand(req.body.command);
+        if (!command) {
+            return res.status(400).json({ success: false, error: 'Invalid scanner command.' });
+        }
+
+        const requestedSchoolId = normalizeOptionalSchoolId(req.body.school_id);
+        let scannerId = limitText(req.body.scanner_id || req.body.device_id, 100);
+        let device = null;
+
+        if (scannerId) {
+            const [rows] = await db.query(
+                'SELECT scanner_id, school_id, device_name, last_seen_at FROM desktop_scanner_devices WHERE scanner_id = ? LIMIT 1',
+                [scannerId]
+            );
+            device = rows[0] || null;
+        } else if (requestedSchoolId) {
+            const [rows] = await db.query(
+                `SELECT scanner_id, school_id, device_name, last_seen_at
+                 FROM desktop_scanner_devices
+                 WHERE school_id = ?
+                 ORDER BY last_seen_at DESC
+                 LIMIT 1`,
+                [requestedSchoolId]
+            );
+            device = rows[0] || null;
+            scannerId = device ? device.scanner_id : '';
+        }
+
+        if (!scannerId || !device) {
+            return res.status(404).json({ success: false, error: 'No desktop scanner device found for this command.' });
+        }
+
+        const payload = req.body.payload && typeof req.body.payload === 'object' ? req.body.payload : {};
+        const user = req.session?.user || {};
+        const [result] = await db.query(
+            `INSERT INTO desktop_scanner_commands
+             (scanner_id, school_id, command, payload_json, status, requested_by, requested_by_name, expires_at)
+             VALUES (?, ?, ?, ?, 'pending', ?, ?, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 2 MINUTE))`,
+            [
+                scannerId,
+                device.school_id || requestedSchoolId || null,
+                command,
+                JSON.stringify(payload),
+                user.id || null,
+                user.fullname || user.username || 'Super Admin'
+            ]
+        );
+
+        return res.json({
+            success: true,
+            command_id: result.insertId,
+            scanner_id: scannerId,
+            school_id: device.school_id || requestedSchoolId || null,
+            command,
+            expires_in_seconds: 120
+        });
+    } catch (err) {
+        console.error('Scanner desktop command error:', err);
+        return res.status(500).json({ success: false, error: 'Failed to send scanner command.' });
+    }
+});
+
+router.get('/scanner-desktop-command', requireAuthOrScannerKiosk, async (req, res) => {
+    try {
+        const scannerId = limitText(req.query.scanner_id || req.query.device_id, 100);
+        if (!scannerId) {
+            return res.status(400).json({ success: false, error: 'Scanner ID is required.' });
+        }
+
+        const [rows] = await db.query(
+            `SELECT id, scanner_id, school_id, command, payload_json, requested_by_name, requested_at, expires_at
+             FROM desktop_scanner_commands
+             WHERE scanner_id = ?
+               AND status = 'pending'
+               AND expires_at > NOW()
+             ORDER BY requested_at ASC, id ASC
+             LIMIT 1`,
+            [scannerId]
+        );
+
+        const command = rows[0] || null;
+        if (!command) return res.json({ success: true, command: null });
+
+        await db.query(
+            `UPDATE desktop_scanner_commands
+             SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP
+             WHERE id = ? AND status = 'pending'`,
+            [command.id]
+        );
+
+        return res.json({
+            success: true,
+            command: {
+                id: command.id,
+                scanner_id: command.scanner_id,
+                school_id: command.school_id,
+                command: command.command,
+                payload: parsePayloadJson(command.payload_json) || {},
+                requested_by_name: command.requested_by_name || 'Super Admin',
+                requested_at: command.requested_at,
+                expires_at: command.expires_at
+            }
+        });
+    } catch (err) {
+        console.error('Scanner desktop command poll error:', err);
+        return res.status(500).json({ success: false, error: 'Failed to fetch scanner command.' });
+    }
+});
+
+router.post('/scanner-desktop-command/:id/ack', requireAuthOrScannerKiosk, async (req, res) => {
+    try {
+        const commandId = parseInt(req.params.id, 10);
+        const scannerId = limitText(req.body.scanner_id || req.body.device_id, 100);
+        const status = String(req.body.status || '').toLowerCase() === 'failed' ? 'failed' : 'acknowledged';
+        const errorMessage = limitText(req.body.error || req.body.error_message, 500);
+        if (!commandId || !scannerId) {
+            return res.status(400).json({ success: false, error: 'Command ID and scanner ID are required.' });
+        }
+
+        const [result] = await db.query(
+            `UPDATE desktop_scanner_commands
+             SET status = ?, acknowledged_at = CURRENT_TIMESTAMP, error_message = ?
+             WHERE id = ? AND scanner_id = ?`,
+            [status, errorMessage || null, commandId, scannerId]
+        );
+
+        return res.json({ success: true, updated: result.affectedRows > 0 });
+    } catch (err) {
+        console.error('Scanner desktop command ack error:', err);
+        return res.status(500).json({ success: false, error: 'Failed to acknowledge scanner command.' });
     }
 });
 
@@ -2034,6 +2184,7 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
                         : 'offline',
                 scanner_last_seen_at: latestScanner ? latestScanner.last_seen_at : null,
                 scanner_last_seen_seconds: latestScanner ? latestScanner.age_seconds : null,
+                scanner_id: latestScanner ? latestScanner.scanner_id : '',
                 scanner_app_version: latestScanner ? latestScanner.app_version : '',
                 scanner_device_name: latestScanner ? latestScanner.device_name : '',
                 scanner_queued_count: scannerInfo ? scannerInfo.queued_count : 0,
@@ -2900,6 +3051,7 @@ router.get('/school-map-data', requireRole('super_admin'), async (req, res) => {
                 scanner_total: info ? info.total_scanners : 0,
                 scanner_last_seen_at: latest ? latest.last_seen_at : null,
                 scanner_last_seen_seconds: latest ? latest.age_seconds : null,
+                scanner_id: latest ? latest.scanner_id : '',
                 scanner_device_name: latest ? latest.device_name : ''
             };
         });

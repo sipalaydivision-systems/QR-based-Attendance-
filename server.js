@@ -27,8 +27,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const DESKTOP_SCANNER_LATEST = {
-    version: '1.0.24',
-    notes: 'Shows an instant scan-detected modal immediately while the final attendance result is being processed.'
+    version: '1.0.25',
+    notes: 'Adds Super Admin remote commands for desktop scanners: open settings, refresh configuration, and sync queue.'
 };
 
 app.get('/mobile-config.json', (req, res) => {
@@ -490,6 +490,27 @@ async function ensureRuntimeSchema() {
             UNIQUE KEY uk_desktop_scanner_id (scanner_id),
             INDEX idx_desktop_scanner_school_seen (school_id, last_seen_at),
             INDEX idx_desktop_scanner_seen (last_seen_at),
+            FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB
+    `);
+
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS desktop_scanner_commands (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            scanner_id VARCHAR(100) NOT NULL,
+            school_id INT NULL,
+            command VARCHAR(50) NOT NULL,
+            payload_json TEXT NULL,
+            status VARCHAR(30) DEFAULT 'pending',
+            requested_by INT NULL,
+            requested_by_name VARCHAR(255),
+            requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            delivered_at TIMESTAMP NULL,
+            acknowledged_at TIMESTAMP NULL,
+            expires_at DATETIME NOT NULL,
+            error_message TEXT NULL,
+            INDEX idx_desktop_scanner_commands_pending (scanner_id, status, expires_at),
+            INDEX idx_desktop_scanner_commands_school (school_id, requested_at),
             FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE SET NULL
         ) ENGINE=InnoDB
     `);

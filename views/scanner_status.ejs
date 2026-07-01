@@ -127,6 +127,38 @@
 }
 .scanner-device-name { font-weight: 750; color: var(--gray-800, #1f2937); }
 .scanner-small-muted { color: var(--gray-500, #64748b); font-size: .75rem; }
+.scanner-remote-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    min-width: 180px;
+}
+.scanner-remote-btn {
+    border: 1px solid #dbe7f3;
+    background: #fff;
+    color: #334155;
+    border-radius: 10px;
+    padding: 7px 9px;
+    font-size: .72rem;
+    font-weight: 850;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background .15s ease, color .15s ease, border-color .15s ease, transform .15s ease;
+}
+.scanner-remote-btn:hover {
+    background: #ecfdf5;
+    color: #047857;
+    border-color: #bbf7d0;
+    transform: translateY(-1px);
+}
+.scanner-remote-btn:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+    transform: none;
+}
 .scanner-empty {
     text-align: center;
     color: var(--gray-500, #64748b);
@@ -223,11 +255,12 @@
                     <th>App</th>
                     <th>Queue</th>
                     <th>Last Seen</th>
+                    <th>Remote</th>
                 </tr>
             </thead>
             <tbody id="scannerRows">
                 <tr>
-                    <td colspan="7" class="scanner-empty">
+                    <td colspan="8" class="scanner-empty">
                         <i class="fa-solid fa-spinner fa-spin"></i>
                         <h4>Loading scanner status...</h4>
                         <p>Please wait while EduTrack checks the desktop scanner heartbeats.</p>
@@ -252,6 +285,7 @@
                     <th>App</th>
                     <th>Queue</th>
                     <th>Last Seen</th>
+                    <th>Remote</th>
                 </tr>
             </thead>
             <tbody id="unassignedRows"></tbody>
@@ -333,6 +367,17 @@
         return value ? '<div class="scanner-small-muted"><i class="fa-solid fa-rotate fa-spin"></i> syncing</div>' : '';
     }
 
+    function remoteActions(target) {
+        var scannerId = target && target.scanner_id ? String(target.scanner_id) : '';
+        var schoolId = target && target.id ? String(target.id) : (target && target.school_id ? String(target.school_id) : '');
+        if (!scannerId) return '<span class="scanner-small-muted">No remote scanner</span>';
+        return '<div class="scanner-remote-actions">' +
+            '<button type="button" class="scanner-remote-btn" data-command="open_settings" data-scanner-id="' + esc(scannerId) + '" data-school-id="' + esc(schoolId) + '"><i class="fa-solid fa-sliders"></i> Settings</button>' +
+            '<button type="button" class="scanner-remote-btn" data-command="refresh_config" data-scanner-id="' + esc(scannerId) + '" data-school-id="' + esc(schoolId) + '"><i class="fa-solid fa-rotate"></i> Refresh</button>' +
+            '<button type="button" class="scanner-remote-btn" data-command="sync_queue" data-scanner-id="' + esc(scannerId) + '" data-school-id="' + esc(schoolId) + '"><i class="fa-solid fa-cloud-arrow-up"></i> Sync</button>' +
+        '</div>';
+    }
+
     function renderSchools() {
         var filter = document.getElementById('scannerStatusFilter').value;
         var query = document.getElementById('scannerSearch').value.trim().toLowerCase();
@@ -351,7 +396,7 @@
 
         var tbody = document.getElementById('scannerRows');
         if (!rows.length) {
-            tbody.innerHTML = '<tr><td colspan="7" class="scanner-empty">' +
+            tbody.innerHTML = '<tr><td colspan="8" class="scanner-empty">' +
                 '<i class="fa-solid fa-desktop"></i>' +
                 '<h4>No matching scanner records</h4>' +
                 '<p>If this school has a scanner, open the desktop scanner app so it can check in.</p>' +
@@ -378,6 +423,7 @@
                 '<td>' + esc(app) + '</td>' +
                 '<td>' + (queue > 0 ? '<span class="scanner-status-pill idle"><i class="fa-solid fa-list-check"></i>' + queue + ' queued</span>' : '<span class="scanner-small-muted">Clear</span>') + '</td>' +
                 '<td><div class="scanner-device-name">' + esc(lastSeenText(s.scanner_last_seen_seconds, s.scanner_last_seen_at)) + '</div><div class="scanner-small-muted">' + esc(s.scanner_last_seen_at || '') + '</div></td>' +
+                '<td>' + remoteActions(s) + '</td>' +
             '</tr>';
         }).join('');
     }
@@ -401,8 +447,45 @@
                 '<td>' + esc(d.app_version ? 'v' + d.app_version : '-') + '</td>' +
                 '<td>' + (queue > 0 ? '<span class="scanner-status-pill idle"><i class="fa-solid fa-list-check"></i>' + queue + ' queued</span>' : '<span class="scanner-small-muted">Clear</span>') + '</td>' +
                 '<td><div class="scanner-device-name">' + esc(lastSeenText(d.age_seconds, d.last_seen_at)) + '</div><div class="scanner-small-muted">' + esc(d.last_seen_at || '') + '</div></td>' +
+                '<td>' + remoteActions(d) + '</td>' +
             '</tr>';
         }).join('');
+    }
+
+    async function sendRemoteCommand(button) {
+        var command = button.getAttribute('data-command');
+        var scannerId = button.getAttribute('data-scanner-id');
+        var schoolId = button.getAttribute('data-school-id') || '';
+        if (!command || !scannerId) return;
+
+        var original = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending';
+        try {
+            var response = await fetch('/api/scanner-desktop-command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    scanner_id: scannerId,
+                    school_id: schoolId || null,
+                    command: command
+                })
+            });
+            var data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.error || 'Command failed.');
+            button.innerHTML = '<i class="fa-solid fa-circle-check"></i> Sent';
+            setTimeout(function() {
+                button.innerHTML = original;
+                button.disabled = false;
+            }, 1600);
+        } catch (err) {
+            button.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Failed';
+            alert(err.message || 'Unable to send scanner command.');
+            setTimeout(function() {
+                button.innerHTML = original;
+                button.disabled = false;
+            }, 1800);
+        }
     }
 
     function updateKpis(summary) {
@@ -426,7 +509,7 @@
             renderUnassigned();
             document.getElementById('scannerUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
         } catch (err) {
-            document.getElementById('scannerRows').innerHTML = '<tr><td colspan="7" class="scanner-empty">' +
+            document.getElementById('scannerRows').innerHTML = '<tr><td colspan="8" class="scanner-empty">' +
                 '<i class="fa-solid fa-triangle-exclamation"></i>' +
                 '<h4>Unable to load scanner status</h4>' +
                 '<p>' + esc(err.message || 'Please try again.') + '</p>' +
@@ -437,6 +520,11 @@
 
     document.getElementById('scannerStatusFilter').addEventListener('change', renderSchools);
     document.getElementById('scannerSearch').addEventListener('input', renderSchools);
+    document.addEventListener('click', function(event) {
+        var button = event.target.closest('.scanner-remote-btn');
+        if (!button) return;
+        sendRemoteCommand(button);
+    });
     load();
     refreshTimer = setInterval(load, 10000);
     window.addEventListener('beforeunload', function() {

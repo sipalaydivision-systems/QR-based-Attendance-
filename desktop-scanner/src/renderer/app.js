@@ -1734,6 +1734,33 @@ async function syncQueue() {
   }
 }
 
+function handleRemoteCommand(payload) {
+  const command = String(payload?.command || '').trim();
+  const fromName = payload?.requested_by_name || 'Super Admin';
+
+  if (command === 'open_settings') {
+    state.adminAuthenticated = true;
+    state.adminInfo = { fullname: fromName, role: 'super_admin' };
+    state.adminAuthExpiry = Date.now() + (5 * 60 * 1000);
+    _openSettingsDrawer();
+    $('settingsNote').textContent = `Settings opened remotely by ${fromName}.`;
+    showToast('Remote command: settings opened.', 'success');
+    setStatusLine('Scanner settings were opened by Super Admin remote command.');
+    return;
+  }
+
+  if (command === 'refresh_config') {
+    showToast('Remote command: scanner configuration refreshed.', 'success');
+    setStatusLine('Scanner configuration refreshed by Super Admin remote command.');
+    return;
+  }
+
+  if (command === 'sync_queue') {
+    showToast('Remote command: attendance queue sync requested.', 'success');
+    setStatusLine('Attendance queue sync was requested by Super Admin.');
+  }
+}
+
 function isEditable(target) {
   if (!target) return false;
   const tag = String(target.tagName || '').toLowerCase();
@@ -1874,6 +1901,10 @@ function bindEvents() {
   api.onScannerStatus((payload) => {
     applyScannerStatusPayload(payload, { quietStatusLine: true });
   });
+
+  if (api.onRemoteCommand) {
+    api.onRemoteCommand(handleRemoteCommand);
+  }
 }
 
 async function init() {

@@ -42,6 +42,7 @@ const CONNECTION_RESTORED_MESSAGE = 'Connection Restored - Synchronizing attenda
 const SYNC_COMPLETED_MESSAGE = 'Synchronization Completed Successfully.';
 const DIRECTORY_REFRESH_INTERVAL_MS = 60 * 1000;
 const CONNECTION_CHECK_INTERVAL_MS = 15000;
+const REMOTE_COMMAND_POLL_INTERVAL_MS = 2000;
 const ADMIN_SYNCED_SETTING_KEYS = new Set([
   'kioskToken',
   'brandName',
@@ -68,6 +69,8 @@ const ADMIN_SYNCED_SETTING_KEYS = new Set([
 let mainWindow = null;
 let tray = null;
 let isQuitting = false;
+let remoteCommandTimer = null;
+let remoteCommandBusy = false;
 
 const runtimeState = {
   online: false,
@@ -1196,6 +1199,91 @@ async function sendScannerPresence(trigger = 'heartbeat') {
   return data;
 }
 
+async function acknowledgeRemoteCommand(settings, commandId, status = 'acknowledged', errorMessage = '') {
+  if (!settings?.kioskToken || !settings?.scannerId || !commandId) return null;
+  const serverUrl = normalizeServerUrl(settings.serverUrl);
+  try {
+    const res = await fetchWithTimeout(`${serverUrl}/api/scanner-desktop-command/${encodeURIComponent(commandId)}/ack`, {
+      method: 'POST',
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Scanner-Kiosk-Token': settings.kioskToken
+      },
+      body: JSON.stringify({
+        scanner_id: settings.scannerId,
+        status,
+        error_message: errorMessage
+      })
+    }, 8000);
+    return await res.json().catch(() => null);
+  } catch (err) {
+    console.warn('Remote command acknowledgement failed:', err.message);
+    return null;
+  }
+}
+
+async function executeRemoteCommand(command) {
+  const action = String(command?.command || '').trim();
+  if (!action) return;
+
+  if (action === 'open_settings') {
+    showWindow();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('scanner:remote-command', command);
+    }
+    return;
+  }
+
+  if (action === 'refresh_config') {
+    await refreshConnectionState({ trigger: 'remote-command', forceDirectory: true, syncIfPossible: false });
+    return;
+  }
+
+  if (action === 'sync_queue') {
+    await syncOfflineQueue({ trigger: 'remote-command' });
+    return;
+  }
+}
+
+async function pollRemoteCommand() {
+  if (remoteCommandBusy) return;
+  const settings = loadSettings();
+  if (!settings.kioskToken || !settings.scannerId) return;
+  remoteCommandBusy = true;
+  try {
+    const serverUrl = normalizeServerUrl(settings.serverUrl);
+    const url = `${serverUrl}/api/scanner-desktop-command?scanner_id=${encodeURIComponent(settings.scannerId)}`;
+    const res = await fetchWithTimeout(url, {
+      cache: 'no-store',
+      headers: { 'X-Scanner-Kiosk-Token': settings.kioskToken }
+    }, 8000);
+    const data = await res.json();
+    if (!res.ok || !data.success || !data.command) return;
+    try {
+      await executeRemoteCommand(data.command);
+      await acknowledgeRemoteCommand(settings, data.command.id, 'acknowledged');
+      try { await sendScannerPresence('remote-command'); } catch (_) {}
+    } catch (commandErr) {
+      await acknowledgeRemoteCommand(settings, data.command.id, 'failed', commandErr.message || 'Command failed.');
+    }
+  } catch (err) {
+    // Remote polling should never interrupt scanning.
+    console.warn('Remote command poll skipped:', err.message);
+  } finally {
+    remoteCommandBusy = false;
+  }
+}
+
+function startRemoteCommandPolling() {
+  if (remoteCommandTimer) clearInterval(remoteCommandTimer);
+  remoteCommandTimer = setInterval(() => {
+    pollRemoteCommand().catch(() => {});
+  }, REMOTE_COMMAND_POLL_INTERVAL_MS);
+  if (remoteCommandTimer.unref) remoteCommandTimer.unref();
+  setTimeout(() => { pollRemoteCommand().catch(() => {}); }, 1200);
+}
+
 function findExistingEvent(events, scanTime, action) {
   return events.find((item) => item.scanTime === scanTime && item.eventAction === action) || null;
 }
@@ -2030,6 +2118,7 @@ if (!hasSingleInstanceLock) {
     configureAutoStart(settings.autoStart);
     createWindow();
     createTray();
+    startRemoteCommandPolling();
 
     // Defer the first connection/directory sync briefly so the window paints
     // and stays responsive. Use version-checking (forceDirectory:false) so we

@@ -114,6 +114,25 @@ CREATE TABLE IF NOT EXISTS desktop_scanner_devices (
     FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS desktop_scanner_commands (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    scanner_id VARCHAR(100) NOT NULL,
+    school_id INT NULL,
+    command VARCHAR(50) NOT NULL,
+    payload_json TEXT NULL,
+    status VARCHAR(30) DEFAULT 'pending',
+    requested_by INT NULL,
+    requested_by_name VARCHAR(255),
+    requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    delivered_at TIMESTAMP NULL,
+    acknowledged_at TIMESTAMP NULL,
+    expires_at DATETIME NOT NULL,
+    error_message TEXT NULL,
+    INDEX idx_desktop_scanner_commands_pending (scanner_id, status, expires_at),
+    INDEX idx_desktop_scanner_commands_school (school_id, requested_at),
+    FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
 -- -----------------------------------------------------------
 -- Parent / Guardian Accounts
 -- -----------------------------------------------------------
