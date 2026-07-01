@@ -268,6 +268,11 @@ Future<void> showFcmAbsenceFlagNotification(
   Map<String, dynamic> data,
 ) async {
   final row = absenceFlagRowFromFcmData(data);
+  // Prefer the server-provided title/body (already carries the real day count),
+  // falling back to a locally derived version when absent.
+  final title = '${data['title'] ?? ''}'.trim().isNotEmpty
+      ? '${data['title']}'
+      : absenceTitleForRow(row);
   final body = '${data['body'] ?? ''}'.trim().isNotEmpty
       ? '${data['body']}'
       : absenceBody(row);
@@ -285,7 +290,7 @@ Future<void> showFcmAbsenceFlagNotification(
     priority: Priority.high,
     category: AndroidNotificationCategory.status,
     visibility: NotificationVisibility.public,
-    ticker: '2-Day Absence Alert',
+    ticker: title,
     icon: '@mipmap/ic_launcher',
     actions: const [
       AndroidNotificationAction('view', 'View', showsUserInterface: true),
@@ -297,13 +302,13 @@ Future<void> showFcmAbsenceFlagNotification(
     ],
     styleInformation: BigTextStyleInformation(
       body,
-      contentTitle: '<b>2-Day Absence Alert</b>',
+      contentTitle: '<b>$title</b>',
       htmlFormatContentTitle: true,
     ),
   );
   await notifications.show(
     stableNotificationId(notificationKey),
-    '2-Day Absence Alert',
+    title,
     body,
     NotificationDetails(android: android),
     payload: absenceNotificationPayload([row]),
@@ -6833,7 +6838,7 @@ class _AlertsPageState extends State<AlertsPage> {
               for (final item in widget.flags) {
                 final row = Map<String, dynamic>.from(item as Map);
                 await showLocalNotification(
-                  '2-Day Absence Alert',
+                  absenceTitleForRow(row),
                   absenceBody(row),
                   payload: absenceNotificationPayload([row]),
                   actions: const [
@@ -8478,7 +8483,7 @@ Future<void> notifyAbsenceFlags(List flags, SharedPreferences prefs) async {
     final key = absenceFlagNotificationKey(row, today);
     if (notified.contains(key)) continue;
     final sent = await showLocalNotification(
-      '2-Day Absence Alert',
+      absenceTitleForRow(row),
       absenceBody(row),
       id: stableNotificationId(key),
       payload: absenceNotificationPayload([row]),
@@ -8582,7 +8587,14 @@ Future<bool> showLocalNotification(
   return true;
 }
 
-String absenceTitle(int count) => '2-Day Absence Alert';
+String absenceTitle(int count) {
+  final days = count <= 0 ? 2 : count;
+  return '$days-Day Absence Alert';
+}
+
+// Title derived from an absence-flag row's actual day count.
+String absenceTitleForRow(Map<String, dynamic> row) =>
+    absenceTitle(absenceDayCount(row));
 
 String absenceBody(Map<String, dynamic> row, {int count = 1}) {
   final student = '${row['name'] ?? 'Student'}';

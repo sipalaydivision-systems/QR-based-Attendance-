@@ -144,12 +144,21 @@ async function attendanceSummary(date, schoolId) {
     };
 }
 
+// Flags every active student (regular AND SHS — no category filter) whose
+// current absence streak has reached ABSENCE_FLAG_THRESHOLD consecutive school
+// days, and reports the ACTUAL length of that streak (2, 3, 4, ...) rather than
+// a fixed number. Looks back over a window of recent school days so a streak
+// longer than the threshold is counted correctly.
+const ABSENCE_FLAG_THRESHOLD = 2;
+const ABSENCE_FLAG_LOOKBACK = 45;
+
 async function flaggedStudentsForSchool(date, schoolId) {
-    const dates = await recentSchoolDates(date, schoolId, 2);
-    if (dates.length < 2) return [];
-    const oldest = dates[dates.length - 1];
+    const dates = await recentSchoolDates(date, schoolId, ABSENCE_FLAG_LOOKBACK);
+    if (dates.length < ABSENCE_FLAG_THRESHOLD) return [];
+
     const [students] = await db.query(
         `SELECT s.id, s.firstname, s.lastname, s.lrn, s.school_id,
+                s.active_from, s.created_at,
                 sc.name AS school_name, sc.contact AS school_contact,
                 gl.name AS grade_name, sec.name AS section_name,
                 COALESCE(NULLIF(sec.adviser, ''), TRIM(CONCAT_WS(' ', at.firstname, at.middlename, at.lastname))) AS adviser,
@@ -160,25 +169,50 @@ async function flaggedStudentsForSchool(date, schoolId) {
          LEFT JOIN grade_levels gl ON gl.id = s.grade_level_id
          LEFT JOIN sections sec ON sec.id = s.section_id
          LEFT JOIN teachers at ON sec.adviser_teacher_id = at.id
-         WHERE s.status = 'active'
-           AND s.school_id = ?
-           AND COALESCE(s.active_from, DATE(s.created_at)) < ?
-           AND NOT EXISTS (
-               SELECT 1 FROM attendance a
-               WHERE a.person_type = 'student'
-                 AND a.person_id = s.id
-                 AND a.date IN (?)
-                 AND (a.time_in IS NOT NULL OR a.status IN ('present','late','half_day'))
-           )
+         WHERE s.status = 'active' AND s.school_id = ?
          ORDER BY s.lastname, s.firstname`,
-        [schoolId, oldest, dates]
+        [schoolId]
     );
-    return students.map(student => ({
-        ...student,
-        absent_days: 2,
-        checked_dates: dates,
-        name: `${student.firstname} ${student.lastname}`.trim()
-    }));
+    if (!students.length) return [];
+
+    // One attendance query for the whole look-back window.
+    const [rows] = await db.query(
+        `SELECT person_id, date, time_in, status
+         FROM attendance
+         WHERE person_type = 'student' AND school_id = ? AND date IN (?)`,
+        [schoolId, dates]
+    );
+    const attendedStatuses = new Set(['present', 'late', 'half_day']);
+    const toDateStr = value => (value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10));
+    const presentSet = new Set(
+        rows
+            .filter(r => r.time_in || attendedStatuses.has(String(r.status || '').toLowerCase()))
+            .map(r => `${r.person_id}-${toDateStr(r.date)}`)
+    );
+    const effectiveStart = student => {
+        const v = student.active_from || student.created_at;
+        return v ? toDateStr(v) : null;
+    };
+
+    const flagged = [];
+    for (const student of students) {
+        const start = effectiveStart(student);
+        let streak = 0;
+        for (const d of dates) { // dates[0] is the most recent school day
+            if (start && start > d) break;            // student didn't exist yet
+            if (presentSet.has(`${student.id}-${d}`)) break; // present -> streak ends
+            streak += 1;
+        }
+        if (streak >= ABSENCE_FLAG_THRESHOLD) {
+            flagged.push({
+                ...student,
+                absent_days: streak,
+                checked_dates: dates.slice(0, streak),
+                name: `${student.firstname} ${student.lastname}`.trim()
+            });
+        }
+    }
+    return flagged;
 }
 
 function recipientScope(recipient) {
@@ -288,11 +322,20 @@ function flagDisplayName(flag) {
     return flag.name || `${flag.firstname || ''} ${flag.lastname || ''}`.trim() || 'Student';
 }
 
+function flagAbsentDays(flag) {
+    return Math.max(ABSENCE_FLAG_THRESHOLD, Number(flag.absent_days) || ABSENCE_FLAG_THRESHOLD);
+}
+
+function flagTitle(flag) {
+    return `${flagAbsentDays(flag)}-Day Absence Alert`;
+}
+
 function flagNotificationBody(flag) {
     const gradeSection = `${flag.grade_name || '-'} - ${flag.section_name || '-'}`;
     const school = flag.school_name || '-';
-    const days = Number(flag.absent_days || 2);
-    return `${flagDisplayName(flag)}\n${gradeSection} | ${school}\n${days} Days Absent`;
+    const days = flagAbsentDays(flag);
+    const unit = days === 1 ? 'Day' : 'Days';
+    return `${flagDisplayName(flag)}\n${gradeSection} | ${school}\n${days} ${unit} Absent`;
 }
 
 function flagPayload(flag) {
@@ -341,10 +384,11 @@ async function sendAbsenceFlags(date, { ignoreCutoff = false } = {}) {
         if (!flags.length) continue;
         for (const flag of flags) {
             const flagData = flagPayload(flag);
+            const title = flagTitle(flag);
             const key = `absence-flag:${date}:${recipient.userId}:${flag.school_id || 'division'}:${flag.id}:${flag.absent_days || 2}:${flagHash([flag])}`;
             const body = flagNotificationBody(flag);
             await sendOnce(recipient, key, 'attendance_flagged', {
-                title: '2-Day Absence Alert',
+                title,
                 body,
                 channelId: 'edutrack_alerts',
                 collapseKey: `edutrack_flag_${date}_${recipient.userId}_${flag.school_id || 'division'}_${flag.id}`,
@@ -353,7 +397,7 @@ async function sendAbsenceFlags(date, { ignoreCutoff = false } = {}) {
                 dataOnly: true,
                 data: {
                     type: 'attendance_flagged',
-                    title: '2-Day Absence Alert',
+                    title,
                     body,
                     date,
                     flagged_count: 1,
