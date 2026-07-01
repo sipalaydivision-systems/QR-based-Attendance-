@@ -169,6 +169,81 @@
 .scanner-unassigned {
     margin-top: 18px;
 }
+.scanner-preview-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 3200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(15, 23, 42, 0.62);
+    backdrop-filter: blur(4px);
+}
+.scanner-preview-modal {
+    width: min(1180px, 96vw);
+    max-height: min(820px, 92vh);
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 30px 80px rgba(15, 23, 42, 0.34);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+.scanner-preview-head,
+.scanner-preview-foot {
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid #e5e7eb;
+}
+.scanner-preview-foot {
+    border-top: 1px solid #e5e7eb;
+    border-bottom: 0;
+    flex-wrap: wrap;
+}
+.scanner-preview-title { font-weight: 850; color: #111827; }
+.scanner-preview-meta { color: #64748b; font-size: .78rem; margin-top: 2px; }
+.scanner-preview-close {
+    width: 36px;
+    height: 36px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    border-radius: 10px;
+    cursor: pointer;
+}
+.scanner-preview-body {
+    position: relative;
+    min-height: 420px;
+    background: #0f172a;
+    display: grid;
+    place-items: center;
+    overflow: auto;
+}
+.scanner-preview-body img {
+    max-width: 100%;
+    height: auto;
+    display: none;
+}
+.scanner-preview-empty {
+    color: #cbd5e1;
+    text-align: center;
+    padding: 32px;
+}
+.scanner-preview-empty i { display: block; font-size: 2rem; margin-bottom: 10px; }
+.scanner-preview-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.scanner-preview-status {
+    color: #64748b;
+    font-size: .8rem;
+    font-weight: 700;
+}
 @media (max-width: 1000px) {
     .scanner-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -177,6 +252,8 @@
     .scanner-page-hero h2 { font-size: 1.1rem; }
     .scanner-kpi-grid { grid-template-columns: 1fr; }
     .scanner-toolbar-left, .scanner-filter, .scanner-search { width: 100%; }
+    .scanner-preview-overlay { padding: 10px; }
+    .scanner-preview-body { min-height: 280px; }
 }
 </style>
 
@@ -290,6 +367,35 @@
             </thead>
             <tbody id="unassignedRows"></tbody>
         </table>
+    </div>
+</div>
+
+<div class="scanner-preview-overlay" id="scannerPreviewOverlay" aria-hidden="true">
+    <div class="scanner-preview-modal" role="dialog" aria-modal="true" aria-labelledby="scannerPreviewTitle">
+        <div class="scanner-preview-head">
+            <div>
+                <div class="scanner-preview-title" id="scannerPreviewTitle">Desktop Scanner Live Preview</div>
+                <div class="scanner-preview-meta" id="scannerPreviewMeta">Scanner ID: -</div>
+            </div>
+            <button type="button" class="scanner-preview-close" onclick="closeScannerPreview()" aria-label="Close preview">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <div class="scanner-preview-body">
+            <img id="scannerPreviewImage" alt="Live scanner app preview">
+            <div class="scanner-preview-empty" id="scannerPreviewEmpty">
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                Waiting for the scanner app preview...
+            </div>
+        </div>
+        <div class="scanner-preview-foot">
+            <div class="scanner-preview-status" id="scannerPreviewStatus">Preview is idle.</div>
+            <div class="scanner-preview-actions">
+                <button type="button" class="scanner-remote-btn" id="previewSettingsBtn"><i class="fa-solid fa-sliders"></i> Open Settings</button>
+                <button type="button" class="scanner-remote-btn" id="previewRefreshBtn"><i class="fa-solid fa-rotate"></i> Refresh Config</button>
+                <button type="button" class="scanner-remote-btn" id="previewSyncBtn"><i class="fa-solid fa-cloud-arrow-up"></i> Sync Queue</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -606,12 +712,18 @@
         if (!button) return;
         sendRemoteCommand(button);
     });
-    document.getElementById('scannerPreviewOverlay').addEventListener('click', function(event) {
-        if (event.target === this) closeScannerPreview();
-    });
-    document.getElementById('previewSettingsBtn').addEventListener('click', function() { sendPreviewCommand('open_settings'); });
-    document.getElementById('previewRefreshBtn').addEventListener('click', function() { sendPreviewCommand('refresh_config'); });
-    document.getElementById('previewSyncBtn').addEventListener('click', function() { sendPreviewCommand('sync_queue'); });
+    var previewOverlay = document.getElementById('scannerPreviewOverlay');
+    if (previewOverlay) {
+        previewOverlay.addEventListener('click', function(event) {
+            if (event.target === this) closeScannerPreview();
+        });
+    }
+    var previewSettingsBtn = document.getElementById('previewSettingsBtn');
+    var previewRefreshBtn = document.getElementById('previewRefreshBtn');
+    var previewSyncBtn = document.getElementById('previewSyncBtn');
+    if (previewSettingsBtn) previewSettingsBtn.addEventListener('click', function() { sendPreviewCommand('open_settings'); });
+    if (previewRefreshBtn) previewRefreshBtn.addEventListener('click', function() { sendPreviewCommand('refresh_config'); });
+    if (previewSyncBtn) previewSyncBtn.addEventListener('click', function() { sendPreviewCommand('sync_queue'); });
     load();
     refreshTimer = setInterval(load, 10000);
     window.addEventListener('beforeunload', function() {
