@@ -1706,6 +1706,18 @@ class _HomeShellState extends State<HomeShell>
         ),
       );
     }
+    // Division superintendents (SDS / ASDS) get an Adviser Directory tab so they
+    // can search an adviser by name and Call / SMS / Email them directly.
+    if (widget.api.role == 'superintendent' ||
+        widget.api.role == 'asst_superintendent') {
+      pages.add(AdviserDirectoryPage(api: widget.api));
+      destinations.add(
+        const NavigationDestination(
+          icon: Icon(Icons.contacts_rounded),
+          label: 'Advisers',
+        ),
+      );
+    }
     final selectedTab = tab.clamp(0, pages.length - 1).toInt();
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7F6),
@@ -6759,6 +6771,278 @@ class _SchoolsPageState extends State<SchoolsPage> {
             ),
           if (students.isEmpty)
             const EmptyText('No students assigned to this section.'),
+        ],
+      ),
+    );
+  }
+}
+
+// Division-role adviser directory: search an adviser by name, then Call / SMS /
+// Email. Reuses GET /api/teachers?search= and the shared contactAdviserVia*
+// helpers. Shown as a bottom-nav tab for SDS/ASDS.
+class AdviserDirectoryPage extends StatefulWidget {
+  const AdviserDirectoryPage({super.key, required this.api});
+  final ApiService api;
+
+  @override
+  State<AdviserDirectoryPage> createState() => _AdviserDirectoryPageState();
+}
+
+class _AdviserDirectoryPageState extends State<AdviserDirectoryPage> {
+  final _searchCtrl = TextEditingController();
+  Timer? _debounce;
+  List<Map<String, dynamic>> _advisers = const [];
+  bool _loading = true;
+  String? _error;
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    _query = value;
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 320), _load);
+  }
+
+  Future<void> _load() async {
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+    try {
+      final q = _query.trim();
+      final path = q.isEmpty
+          ? '/api/teachers'
+          : '/api/teachers?search=${Uri.encodeQueryComponent(q)}';
+      final rows = await widget.api.list(path);
+      final advisers = rows
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .where((t) => '${t['section_name'] ?? ''}'.trim().isNotEmpty)
+          .toList();
+      if (!mounted) return;
+      setState(() {
+        _advisers = advisers;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = readableError(e, fallback: 'Failed to load advisers.');
+        _loading = false;
+      });
+    }
+  }
+
+  String _adviserName(Map<String, dynamic> t) {
+    final name = '${t['firstname'] ?? ''} ${t['lastname'] ?? ''}'
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    return name.isEmpty ? 'Adviser' : name;
+  }
+
+  Map<String, dynamic> _contactRow(Map<String, dynamic> t) => {
+    'adviser': _adviserName(t),
+    'adviser_contact': t['contact'],
+    'adviser_email': t['email'],
+    'school_name': t['school_name'],
+    'grade_name': t['grade_name'],
+    'section_name': t['section_name'],
+  };
+
+  void _openAdviser(Map<String, dynamic> t) {
+    final row = _contactRow(t);
+    final phone = adviserPhoneFromRow(row);
+    final email = adviserEmailFromRow(row);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00885B).withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(
+                    Icons.person_rounded,
+                    color: Color(0xFF00885B),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _adviserName(t),
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      Text(
+                        '${t['grade_name'] ?? '-'} - ${t['section_name'] ?? '-'}',
+                        style: const TextStyle(
+                          color: Color(0xFF667872),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            InfoPill('School', '${t['school_name'] ?? '-'}'),
+            const SizedBox(height: 8),
+            InfoPill('Contact', phone ?? 'Not available'),
+            const SizedBox(height: 8),
+            InfoPill('Email', email ?? 'Not available'),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: phone == null
+                        ? null
+                        : () {
+                            Navigator.pop(ctx);
+                            contactAdviserViaCall(context, row);
+                          },
+                    icon: const Icon(Icons.call_rounded, size: 18),
+                    label: const Text('Call'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: phone == null
+                        ? null
+                        : () {
+                            Navigator.pop(ctx);
+                            contactAdviserViaSms(context, row);
+                          },
+                    icon: const Icon(Icons.sms_rounded, size: 18),
+                    label: const Text('SMS'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: email == null
+                        ? null
+                        : () {
+                            Navigator.pop(ctx);
+                            contactAdviserViaEmail(context, row);
+                          },
+                    icon: const Icon(Icons.email_rounded, size: 18),
+                    label: const Text('Email'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const SectionTitle(
+            'Adviser Directory',
+            'Search an adviser, then Call, SMS, or Email.',
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _searchCtrl,
+            onChanged: _onSearchChanged,
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              hintText: 'Search adviser by name...',
+              prefixIcon: const Icon(Icons.search_rounded),
+              filled: true,
+              fillColor: Colors.white,
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 14,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: Color(0xFFDCE6E1)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(
+                  color: Color(0xFF00885B),
+                  width: 1.5,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(
+                child: CircularProgressIndicator(color: Color(0xFF00885B)),
+              ),
+            )
+          else if (_error != null)
+            PremiumCard(child: EmptyText(_error!))
+          else
+            PremiumCard(
+              title: 'Advisers',
+              subtitle: '${_advisers.length} result(s)',
+              child: Column(
+                children: [
+                  for (final t in _advisers)
+                    RecordTile(
+                      title: _adviserName(t),
+                      subtitle: '${t['school_name'] ?? '-'}',
+                      meta:
+                          '${t['grade_name'] ?? '-'} - ${t['section_name'] ?? '-'}',
+                      onTap: () => _openAdviser(t),
+                    ),
+                  if (_advisers.isEmpty)
+                    const EmptyText('No advisers found.'),
+                ],
+              ),
+            ),
         ],
       ),
     );
