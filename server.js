@@ -29,8 +29,8 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(trackSystemTraffic);
 
 const DESKTOP_SCANNER_LATEST = {
-    version: '1.0.27',
-    notes: 'Live preview now refreshes faster, Settings opens in near real time, and closing the modal stops preview streaming.'
+    version: '1.0.28',
+    notes: 'Live preview supports remote clicking, faster command pickup, and automatic preview stop on close.'
 };
 
 app.get('/mobile-config.json', (req, res) => {

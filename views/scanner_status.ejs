@@ -226,6 +226,7 @@
     max-width: 100%;
     height: auto;
     display: none;
+    cursor: crosshair;
 }
 .scanner-preview-empty {
     color: #cbd5e1;
@@ -393,7 +394,6 @@
             <div class="scanner-preview-actions">
                 <button type="button" class="scanner-remote-btn" id="previewSettingsBtn"><i class="fa-solid fa-sliders"></i> Open Settings</button>
                 <button type="button" class="scanner-remote-btn" id="previewRefreshBtn"><i class="fa-solid fa-rotate"></i> Refresh Config</button>
-                <button type="button" class="scanner-remote-btn" id="previewSyncBtn"><i class="fa-solid fa-cloud-arrow-up"></i> Sync Queue</button>
             </div>
         </div>
     </div>
@@ -409,6 +409,8 @@
     var previewScannerId = '';
     var previewSchoolId = '';
     var previewSchoolName = '';
+    var previewFrameWidth = 0;
+    var previewFrameHeight = 0;
 
     function esc(value) {
         return String(value == null ? '' : value)
@@ -485,7 +487,6 @@
             '<button type="button" class="scanner-remote-btn" data-command="start_preview" data-scanner-id="' + esc(scannerId) + '" data-school-id="' + esc(schoolId) + '" data-school-name="' + esc(target.name || target.school_name || target.device_name || 'Desktop Scanner') + '"><i class="fa-solid fa-eye"></i> Live</button>' +
             '<button type="button" class="scanner-remote-btn" data-command="open_settings" data-scanner-id="' + esc(scannerId) + '" data-school-id="' + esc(schoolId) + '"><i class="fa-solid fa-sliders"></i> Settings</button>' +
             '<button type="button" class="scanner-remote-btn" data-command="refresh_config" data-scanner-id="' + esc(scannerId) + '" data-school-id="' + esc(schoolId) + '"><i class="fa-solid fa-rotate"></i> Refresh</button>' +
-            '<button type="button" class="scanner-remote-btn" data-command="sync_queue" data-scanner-id="' + esc(scannerId) + '" data-school-id="' + esc(schoolId) + '"><i class="fa-solid fa-cloud-arrow-up"></i> Sync</button>' +
         '</div>';
     }
 
@@ -649,6 +650,8 @@
         previewTimer = null;
         previewScannerId = '';
         previewSchoolId = '';
+        previewFrameWidth = 0;
+        previewFrameHeight = 0;
         document.getElementById('scannerPreviewImage').removeAttribute('src');
         document.getElementById('scannerPreviewOverlay').style.display = 'none';
         document.getElementById('scannerPreviewOverlay').setAttribute('aria-hidden', 'true');
@@ -671,14 +674,41 @@
                 status.textContent = 'Waiting for scanner to upload the first preview frame...';
                 return;
             }
+            previewFrameWidth = Number(data.frame.width || 0);
+            previewFrameHeight = Number(data.frame.height || 0);
             img.src = data.frame.image_data;
             img.style.display = 'block';
             empty.style.display = 'none';
             var age = Number(data.frame.age_seconds || 0);
-            status.textContent = 'Live preview updated ' + (age <= 2 ? 'just now' : age + 's ago') + '.';
+            status.textContent = 'Live preview updated ' + (age <= 2 ? 'just now' : age + 's ago') + '. Click the preview to remote-control the scanner.';
         } catch (err) {
             document.getElementById('scannerPreviewStatus').textContent = err.message || 'Unable to load preview frame.';
         }
+    }
+
+    function sendPreviewClick(event) {
+        if (!previewScannerId) return;
+        var img = document.getElementById('scannerPreviewImage');
+        if (!img || img.style.display === 'none') return;
+        var rect = img.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        var width = previewFrameWidth || img.naturalWidth || rect.width;
+        var height = previewFrameHeight || img.naturalHeight || rect.height;
+        var x = Math.max(0, Math.min(width, ((event.clientX - rect.left) / rect.width) * width));
+        var y = Math.max(0, Math.min(height, ((event.clientY - rect.top) / rect.height) * height));
+        var status = document.getElementById('scannerPreviewStatus');
+        if (status) status.textContent = 'Remote click sent. Waiting for scanner screen update...';
+        postRemoteCommand('remote_click', previewScannerId, previewSchoolId, {
+            x: x,
+            y: y,
+            width: width,
+            height: height
+        }).then(function() {
+            setTimeout(fetchPreviewFrame, 350);
+            setTimeout(fetchPreviewFrame, 900);
+        }).catch(function(err) {
+            alert(err.message || 'Unable to send remote click.');
+        });
     }
 
     function sendPreviewCommand(command) {
@@ -751,10 +781,10 @@
     }
     var previewSettingsBtn = document.getElementById('previewSettingsBtn');
     var previewRefreshBtn = document.getElementById('previewRefreshBtn');
-    var previewSyncBtn = document.getElementById('previewSyncBtn');
-    if (previewSettingsBtn) previewSettingsBtn.addEventListener('click', function() { sendPreviewCommand('open_settings'); });
-    if (previewRefreshBtn) previewRefreshBtn.addEventListener('click', function() { sendPreviewCommand('refresh_config'); });
-    if (previewSyncBtn) previewSyncBtn.addEventListener('click', function() { sendPreviewCommand('sync_queue'); });
+    var previewImage = document.getElementById('scannerPreviewImage');
+    if (previewSettingsBtn) previewSettingsBtn.addEventListener('click', function(event) { event.stopPropagation(); sendPreviewCommand('open_settings'); });
+    if (previewRefreshBtn) previewRefreshBtn.addEventListener('click', function(event) { event.stopPropagation(); sendPreviewCommand('refresh_config'); });
+    if (previewImage) previewImage.addEventListener('click', sendPreviewClick);
     load();
     refreshTimer = setInterval(load, 10000);
     window.addEventListener('beforeunload', function() {

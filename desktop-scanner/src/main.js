@@ -1232,6 +1232,7 @@ async function uploadPreviewFrame(trigger = 'remote-preview') {
   if (!settings.kioskToken || !settings.scannerId || !mainWindow || mainWindow.isDestroyed()) return;
 
   remotePreviewBusy = true;
+  let commandToRun = null;
   try {
     const image = await mainWindow.webContents.capturePage();
     const originalSize = image.getSize();
@@ -1261,12 +1262,23 @@ async function uploadPreviewFrame(trigger = 'remote-preview') {
       })
     }, 10000);
 
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
       throw new Error(data.error || `Preview upload failed (${res.status})`);
     }
+    if (data && data.command) commandToRun = data.command;
   } finally {
     remotePreviewBusy = false;
+  }
+
+  if (commandToRun) {
+    try {
+      await executeRemoteCommand(commandToRun);
+      await acknowledgeRemoteCommand(settings, commandToRun.id, 'acknowledged');
+      try { await sendScannerPresence('remote-preview-command'); } catch (_) {}
+    } catch (commandErr) {
+      await acknowledgeRemoteCommand(settings, commandToRun.id, 'failed', commandErr.message || 'Command failed.');
+    }
   }
 }
 
@@ -1291,6 +1303,30 @@ function startPreviewStream(durationSeconds = 120) {
     uploadPreviewFrame('remote-preview').catch((err) => console.warn('Preview frame upload failed:', err.message));
   }, 1000);
   if (remotePreviewTimer.unref) remotePreviewTimer.unref();
+}
+
+function executeRemoteClick(payload = {}) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const [contentWidth, contentHeight] = mainWindow.getContentSize();
+  const sourceWidth = Math.max(1, Number(payload.width || contentWidth || 1));
+  const sourceHeight = Math.max(1, Number(payload.height || contentHeight || 1));
+  const xRatio = Math.max(0, Math.min(1, Number(payload.x || 0) / sourceWidth));
+  const yRatio = Math.max(0, Math.min(1, Number(payload.y || 0) / sourceHeight));
+  const x = Math.round(xRatio * contentWidth);
+  const y = Math.round(yRatio * contentHeight);
+
+  showWindow();
+  mainWindow.focus();
+  mainWindow.webContents.focus();
+  mainWindow.webContents.sendInputEvent({ type: 'mouseMove', x, y });
+  mainWindow.webContents.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
+  mainWindow.webContents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
+
+  setTimeout(() => {
+    if (remotePreviewTimer) {
+      uploadPreviewFrame('remote-click').catch((err) => console.warn('Preview frame upload failed:', err.message));
+    }
+  }, 300);
 }
 
 async function executeRemoteCommand(command) {
@@ -1330,6 +1366,11 @@ async function executeRemoteCommand(command) {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('scanner:remote-command', command);
     }
+    return;
+  }
+
+  if (action === 'remote_click') {
+    executeRemoteClick(command?.payload || {});
   }
 }
 

@@ -74,7 +74,7 @@ function normalizeCoordinate(value, min, max) {
 
 const DESKTOP_SCANNER_ACTIVE_SECONDS = 3 * 60;
 const DESKTOP_SCANNER_RECENT_SECONDS = 10 * 60;
-const DESKTOP_SCANNER_REMOTE_COMMANDS = new Set(['open_settings', 'refresh_config', 'sync_queue', 'start_preview', 'stop_preview']);
+const DESKTOP_SCANNER_REMOTE_COMMANDS = new Set(['open_settings', 'refresh_config', 'sync_queue', 'start_preview', 'stop_preview', 'remote_click']);
 const DESKTOP_SCANNER_PREVIEW_MAX_CHARS = 900000;
 
 function limitText(value, maxLength) {
@@ -84,6 +84,17 @@ function limitText(value, maxLength) {
 function normalizeScannerRemoteCommand(value) {
     const command = String(value || '').trim().toLowerCase().replace(/[^a-z0-9_:-]/g, '');
     return DESKTOP_SCANNER_REMOTE_COMMANDS.has(command) ? command : '';
+}
+
+function normalizeRemoteClickPayload(payload) {
+    const p = payload && typeof payload === 'object' ? payload : {};
+    const clamp = (value, max) => Math.max(0, Math.min(max, Number.parseFloat(value) || 0));
+    return {
+        x: clamp(p.x, 3000),
+        y: clamp(p.y, 3000),
+        width: Math.max(1, Math.min(3000, Number.parseFloat(p.width) || 1)),
+        height: Math.max(1, Math.min(3000, Number.parseFloat(p.height) || 1))
+    };
 }
 
 function parsePayloadJson(value) {
@@ -726,7 +737,9 @@ router.post('/scanner-desktop-command', requireRole('super_admin'), async (req, 
             return res.status(404).json({ success: false, error: 'No desktop scanner device found for this command.' });
         }
 
-        const payload = req.body.payload && typeof req.body.payload === 'object' ? req.body.payload : {};
+        const payload = command === 'remote_click'
+            ? normalizeRemoteClickPayload(req.body.payload)
+            : (req.body.payload && typeof req.body.payload === 'object' ? req.body.payload : {});
         const user = req.session?.user || {};
         const [result] = await db.query(
             `INSERT INTO desktop_scanner_commands
@@ -756,6 +769,40 @@ router.post('/scanner-desktop-command', requireRole('super_admin'), async (req, 
     }
 });
 
+async function pullPendingDesktopScannerCommand(scannerId) {
+    const [rows] = await db.query(
+        `SELECT id, scanner_id, school_id, command, payload_json, requested_by_name, requested_at, expires_at
+         FROM desktop_scanner_commands
+         WHERE scanner_id = ?
+           AND status = 'pending'
+           AND expires_at > NOW()
+         ORDER BY requested_at ASC, id ASC
+         LIMIT 1`,
+        [scannerId]
+    );
+
+    const command = rows[0] || null;
+    if (!command) return null;
+
+    await db.query(
+        `UPDATE desktop_scanner_commands
+         SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND status = 'pending'`,
+        [command.id]
+    );
+
+    return {
+        id: command.id,
+        scanner_id: command.scanner_id,
+        school_id: command.school_id,
+        command: command.command,
+        payload: parsePayloadJson(command.payload_json) || {},
+        requested_by_name: command.requested_by_name || 'Super Admin',
+        requested_at: command.requested_at,
+        expires_at: command.expires_at
+    };
+}
+
 router.get('/scanner-desktop-command', requireAuthOrScannerKiosk, async (req, res) => {
     try {
         const scannerId = limitText(req.query.scanner_id || req.query.device_id, 100);
@@ -763,40 +810,10 @@ router.get('/scanner-desktop-command', requireAuthOrScannerKiosk, async (req, re
             return res.status(400).json({ success: false, error: 'Scanner ID is required.' });
         }
 
-        const [rows] = await db.query(
-            `SELECT id, scanner_id, school_id, command, payload_json, requested_by_name, requested_at, expires_at
-             FROM desktop_scanner_commands
-             WHERE scanner_id = ?
-               AND status = 'pending'
-               AND expires_at > NOW()
-             ORDER BY requested_at ASC, id ASC
-             LIMIT 1`,
-            [scannerId]
-        );
-
-        const command = rows[0] || null;
+        const command = await pullPendingDesktopScannerCommand(scannerId);
         if (!command) return res.json({ success: true, command: null });
 
-        await db.query(
-            `UPDATE desktop_scanner_commands
-             SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP
-             WHERE id = ? AND status = 'pending'`,
-            [command.id]
-        );
-
-        return res.json({
-            success: true,
-            command: {
-                id: command.id,
-                scanner_id: command.scanner_id,
-                school_id: command.school_id,
-                command: command.command,
-                payload: parsePayloadJson(command.payload_json) || {},
-                requested_by_name: command.requested_by_name || 'Super Admin',
-                requested_at: command.requested_at,
-                expires_at: command.expires_at
-            }
-        });
+        return res.json({ success: true, command });
     } catch (err) {
         console.error('Scanner desktop command poll error:', err);
         return res.status(500).json({ success: false, error: 'Failed to fetch scanner command.' });
@@ -857,7 +874,8 @@ router.post('/scanner-desktop-preview', requireAuthOrScannerKiosk, async (req, r
             [scannerId, schoolId, imageData, width, height]
         );
 
-        return res.json({ success: true, scanner_id: scannerId });
+        const command = await pullPendingDesktopScannerCommand(scannerId);
+        return res.json({ success: true, scanner_id: scannerId, command });
     } catch (err) {
         console.error('Scanner preview upload error:', err);
         return res.status(500).json({ success: false, error: 'Failed to upload scanner preview.' });
