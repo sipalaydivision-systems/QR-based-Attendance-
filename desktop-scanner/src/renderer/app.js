@@ -1764,6 +1764,11 @@ function handleRemoteCommand(payload) {
   if (command === 'start_preview') {
     showToast('Remote command: live preview started.', 'success');
     setStatusLine('Super Admin is viewing the scanner app preview.');
+    return;
+  }
+
+  if (command === 'stop_preview') {
+    setStatusLine('Super Admin closed the scanner app preview.');
   }
 }
 

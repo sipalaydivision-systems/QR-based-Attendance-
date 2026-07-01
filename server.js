@@ -27,8 +27,8 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 const DESKTOP_SCANNER_LATEST = {
-    version: '1.0.26',
-    notes: 'Attendance Log redesigned for readability, plus Super Admin live preview modal for desktop scanners.'
+    version: '1.0.27',
+    notes: 'Live preview now refreshes faster, Settings opens in near real time, and closing the modal stops preview streaming.'
 };
 
 app.get('/mobile-config.json', (req, res) => {

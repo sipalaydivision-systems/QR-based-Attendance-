@@ -73,7 +73,7 @@ function normalizeCoordinate(value, min, max) {
 
 const DESKTOP_SCANNER_ACTIVE_SECONDS = 3 * 60;
 const DESKTOP_SCANNER_RECENT_SECONDS = 10 * 60;
-const DESKTOP_SCANNER_REMOTE_COMMANDS = new Set(['open_settings', 'refresh_config', 'sync_queue', 'start_preview']);
+const DESKTOP_SCANNER_REMOTE_COMMANDS = new Set(['open_settings', 'refresh_config', 'sync_queue', 'start_preview', 'stop_preview']);
 const DESKTOP_SCANNER_PREVIEW_MAX_CHARS = 900000;
 
 function limitText(value, maxLength) {

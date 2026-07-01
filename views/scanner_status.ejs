@@ -579,6 +579,23 @@
         return data;
     }
 
+    function sendStopPreview(scannerId, schoolId) {
+        if (!scannerId) return;
+        try {
+            fetch('/api/scanner-desktop-command', {
+                method: 'POST',
+                keepalive: true,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    scanner_id: scannerId,
+                    school_id: schoolId || null,
+                    command: 'stop_preview',
+                    payload: {}
+                })
+            }).catch(function() {});
+        } catch (_err) {}
+    }
+
     async function sendRemoteCommand(button) {
         var command = button.getAttribute('data-command');
         var scannerId = button.getAttribute('data-scanner-id');
@@ -592,7 +609,7 @@
         button.disabled = true;
         button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending';
         try {
-            await postRemoteCommand(command, scannerId, schoolId, command === 'start_preview' ? { duration_seconds: 120 } : {});
+            await postRemoteCommand(command, scannerId, schoolId, command === 'start_preview' ? { duration_seconds: 300 } : {});
             button.innerHTML = '<i class="fa-solid fa-circle-check"></i> Sent';
             setTimeout(function() {
                 button.innerHTML = original;
@@ -618,18 +635,25 @@
         document.getElementById('scannerPreviewImage').style.display = 'none';
         document.getElementById('scannerPreviewEmpty').style.display = 'block';
         document.getElementById('scannerPreviewOverlay').style.display = 'flex';
+        document.getElementById('scannerPreviewOverlay').setAttribute('aria-hidden', 'false');
         document.body.style.overflow = 'hidden';
         fetchPreviewFrame();
         if (previewTimer) clearInterval(previewTimer);
-        previewTimer = setInterval(fetchPreviewFrame, 2000);
+        previewTimer = setInterval(fetchPreviewFrame, 1000);
     }
 
     window.closeScannerPreview = function closeScannerPreview() {
+        var scannerId = previewScannerId;
+        var schoolId = previewSchoolId;
         if (previewTimer) clearInterval(previewTimer);
         previewTimer = null;
         previewScannerId = '';
+        previewSchoolId = '';
+        document.getElementById('scannerPreviewImage').removeAttribute('src');
         document.getElementById('scannerPreviewOverlay').style.display = 'none';
+        document.getElementById('scannerPreviewOverlay').setAttribute('aria-hidden', 'true');
         document.body.style.overflow = '';
+        sendStopPreview(scannerId, schoolId);
     };
 
     async function fetchPreviewFrame() {
@@ -659,9 +683,16 @@
 
     function sendPreviewCommand(command) {
         if (!previewScannerId) return;
-        postRemoteCommand(command, previewScannerId, previewSchoolId, command === 'start_preview' ? { duration_seconds: 120 } : {})
+        var status = document.getElementById('scannerPreviewStatus');
+        if (status) status.textContent = command === 'open_settings'
+            ? 'Opening scanner settings live...'
+            : 'Sending command: ' + command.replace(/_/g, ' ') + '.';
+        postRemoteCommand(command, previewScannerId, previewSchoolId, command === 'start_preview' ? { duration_seconds: 300 } : {})
             .then(function() {
                 document.getElementById('scannerPreviewStatus').textContent = 'Command sent: ' + command.replace(/_/g, ' ') + '.';
+                fetchPreviewFrame();
+                setTimeout(fetchPreviewFrame, 650);
+                setTimeout(fetchPreviewFrame, 1400);
             })
             .catch(function(err) {
                 alert(err.message || 'Unable to send command.');
@@ -729,6 +760,7 @@
     window.addEventListener('beforeunload', function() {
         if (refreshTimer) clearInterval(refreshTimer);
         if (previewTimer) clearInterval(previewTimer);
+        sendStopPreview(previewScannerId, previewSchoolId);
     });
 })();
 </script>

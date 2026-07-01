@@ -1289,7 +1289,7 @@ function startPreviewStream(durationSeconds = 120) {
       return;
     }
     uploadPreviewFrame('remote-preview').catch((err) => console.warn('Preview frame upload failed:', err.message));
-  }, 2000);
+  }, 1000);
   if (remotePreviewTimer.unref) remotePreviewTimer.unref();
 }
 
@@ -1301,6 +1301,11 @@ async function executeRemoteCommand(command) {
     showWindow();
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('scanner:remote-command', command);
+      setTimeout(() => {
+        if (remotePreviewTimer) {
+          uploadPreviewFrame('remote-settings-open').catch((err) => console.warn('Preview frame upload failed:', err.message));
+        }
+      }, 450);
     }
     return;
   }
@@ -1317,6 +1322,14 @@ async function executeRemoteCommand(command) {
 
   if (action === 'start_preview') {
     startPreviewStream(command?.payload?.duration_seconds || 120);
+    return;
+  }
+
+  if (action === 'stop_preview') {
+    stopPreviewStream();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('scanner:remote-command', command);
+    }
   }
 }
 
