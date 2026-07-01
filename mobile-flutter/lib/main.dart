@@ -6532,6 +6532,77 @@ class _SchoolsPageState extends State<SchoolsPage> {
     );
   }
 
+  // Tappable breadcrumb (Schools › School › Grade › Section) that replaces the
+  // plain Back button — clearer navigation across the drill-down.
+  Widget _crumb() {
+    final parts = <Widget>[];
+    void seg(String label, VoidCallback? onTap) {
+      parts.add(
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 12.5,
+                color: onTap == null
+                    ? const Color(0xFF0F211B)
+                    : const Color(0xFF00885B),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    void sep() => parts.add(
+      const Icon(
+        Icons.chevron_right_rounded,
+        size: 16,
+        color: Color(0xFF9AA7A2),
+      ),
+    );
+
+    seg(
+      'Schools',
+      () => setState(() {
+        school = null;
+        grade = null;
+        section = null;
+      }),
+    );
+    if (school != null) {
+      sep();
+      seg(
+        '${school!['name']}',
+        (grade == null && section == null)
+            ? null
+            : () => setState(() {
+                grade = null;
+                section = null;
+              }),
+      );
+    }
+    if (grade != null) {
+      sep();
+      seg(
+        '${grade!['name']}',
+        section == null ? null : () => setState(() => section = null),
+      );
+    }
+    if (section != null) {
+      sep();
+      seg('${section!['name']}', null);
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: parts),
+    );
+  }
+
   Widget schoolsList(List schools) => PremiumCard(
     title: 'School List',
     subtitle: '${schools.length} school(s)',
@@ -6574,14 +6645,7 @@ class _SchoolsPageState extends State<SchoolsPage> {
             ],
           ),
           const SizedBox(height: 10),
-          BackLine(
-            'Back',
-            () => setState(() {
-              school = null;
-              grade = null;
-              section = null;
-            }),
-          ),
+          _crumb(),
           for (final item in grades)
             RecordTile(
               title: '${(item as Map)['name'] ?? 'Grade'}',
@@ -6620,13 +6684,7 @@ class _SchoolsPageState extends State<SchoolsPage> {
             ],
           ),
           const SizedBox(height: 10),
-          BackLine(
-            'Back',
-            () => setState(() {
-              grade = null;
-              section = null;
-            }),
-          ),
+          _crumb(),
           for (final item in sections)
             RecordTile(
               title: '${(item as Map)['name'] ?? 'Section'}',
@@ -6667,59 +6725,28 @@ class _SchoolsPageState extends State<SchoolsPage> {
             ],
           ),
           const SizedBox(height: 8),
-          BackLine('Back', () => setState(() => section = null)),
+          _crumb(),
           InfoPill(
             'Adviser',
             adviserText(section!).replaceFirst('Adviser: ', ''),
           ),
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: () => contactAdviserViaCall(context, {
-                    'adviser': section!['adviser'],
-                    'adviser_contact': section!['adviser_contact'],
-                    'adviser_email': section!['adviser_email'],
-                    'school_name': school!['name'],
-                    'school_contact': school!['contact'],
-                    'grade_name': grade!['name'],
-                    'section_name': section!['name'],
-                  }),
-                  icon: const Icon(Icons.call_rounded, size: 16),
-                  label: const Text('Call Adviser'),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              const Icon(
+                Icons.groups_rounded,
+                size: 18,
+                color: Color(0xFF00885B),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '${students.length} student${students.length == 1 ? '' : 's'}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF0F211B),
                 ),
-                OutlinedButton.icon(
-                  onPressed: () => contactAdviserViaSms(context, {
-                    'adviser': section!['adviser'],
-                    'adviser_contact': section!['adviser_contact'],
-                    'adviser_email': section!['adviser_email'],
-                    'school_name': school!['name'],
-                    'school_contact': school!['contact'],
-                    'grade_name': grade!['name'],
-                    'section_name': section!['name'],
-                  }),
-                  icon: const Icon(Icons.sms_rounded, size: 16),
-                  label: const Text('Send SMS'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: () => contactAdviserViaEmail(context, {
-                    'adviser': section!['adviser'],
-                    'adviser_contact': section!['adviser_contact'],
-                    'adviser_email': section!['adviser_email'],
-                    'school_name': school!['name'],
-                    'school_contact': school!['contact'],
-                    'grade_name': grade!['name'],
-                    'section_name': section!['name'],
-                  }),
-                  icon: const Icon(Icons.email_rounded, size: 16),
-                  label: const Text('Send Email'),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           for (final student in students)
