@@ -2411,7 +2411,7 @@ body.edutrack-mobile-app .login-form .btn {
    by cascade order.
    ============================================================ */
 body.theme-clean {
-    --sidebar-width: 248px;
+    --sidebar-width: 260px;
     --bg-page: #eef2fb;
     --bg-card: #ffffff;
     --radius: 12px;
@@ -2423,20 +2423,23 @@ body.theme-clean {
     background-attachment: fixed;
 }
 
-/* --- White floating sidebar --- */
+/* --- Full-height white sidebar --- */
 body.theme-clean .sidebar {
     background: #ffffff;
-    border: 1px solid rgba(226, 232, 240, 0.92);
-    box-shadow: 0 26px 70px rgba(30,41,59,0.12);
+    border: 0;
+    border-right: 1px solid rgba(226, 232, 240, 0.95);
+    box-shadow: 10px 0 34px rgba(30,41,59,0.07);
     scrollbar-width: thin;
     scrollbar-color: #cbd5e1 transparent;
 }
 @media (min-width: 769px) {
     body.theme-clean .sidebar {
-        top: 14px; left: 14px; bottom: 14px;
-        border-radius: 24px;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        border-radius: 0;
     }
-    body.theme-clean .content { margin-left: calc(var(--sidebar-width) + 28px); }
+    body.theme-clean .content { margin-left: var(--sidebar-width); }
 }
 
 /* Brand */
@@ -2454,7 +2457,7 @@ body.theme-clean .brand-icon {
 body.theme-clean .brand-title { color: var(--gray-900); }
 body.theme-clean .brand-subtitle {
     color: var(--gray-500);
-    max-width: 142px;
+    max-width: 158px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
