@@ -18,7 +18,7 @@ import 'package:url_launcher/url_launcher.dart';
 class AppConfig {
   static const appName = 'EduTrack';
   static const subtitle = 'Schools Division of Sipalay City';
-  static const monitoringLabel = 'Attendance Monitoring App';
+  static const monitoringLabel = 'Initializing System Access';
   static const noInternetMessage =
       "Can't connect to server due to no internet connection.";
   static const logoAsset = 'assets/images/app_logo.png';
