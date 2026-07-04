@@ -237,13 +237,16 @@ function currentStudentState(attendance, timeline, resolved) {
     return 'Inside School';
 }
 
-function resolveAttendance(attendance, schedule, storedEvents) {
+function resolveAttendance(attendance, schedule, storedEvents, absenceFinal = true) {
     if (!attendance || !attendance.time_in) {
+        // A student with no time-in is only "Absent" once the day's attendance is
+        // final (after the cutoff / end of day). Before that they are simply
+        // "No Time In" — not absent — so parents aren't alarmed early in the day.
         return {
-            status: 'absent',
-            label: 'Absent',
+            status: absenceFinal ? 'absent' : 'no_time_in',
+            label: absenceFinal ? 'Absent' : 'No Time In',
             timeline: [],
-            current_status: 'Absent',
+            current_status: absenceFinal ? 'Absent' : 'No Time In',
             latest_scan_time: null
         };
     }
@@ -360,7 +363,7 @@ async function buildParentPayload(parent, date) {
     const childPayload = [];
     for (const child of children) {
         const attendance = attendanceByStudent.get(child.id) || null;
-        const resolved = resolveAttendance(attendance, schedule, attendance ? (eventsByAttendance.get(attendance.id) || []) : []);
+        const resolved = resolveAttendance(attendance, schedule, attendance ? (eventsByAttendance.get(attendance.id) || []) : [], isAbsenceFinal(date));
         const consecutiveAbsences = await countConsecutiveAbsences(child.id, child.school_id, date);
         childPayload.push({
             id: child.id,
@@ -1045,7 +1048,7 @@ router.post('/api/parent/profile', requireParentAuth, async (req, res) => {
 
 // Latest published parent-app version. Bump this (and the Flutter pubspec version)
 // whenever a new APK is released so the in-app updater offers the update.
-const PARENT_APP_LATEST = { version: '1.0.43', version_code: 45 };
+const PARENT_APP_LATEST = { version: '1.0.44', version_code: 46 };
 router.get('/api/parent/app-version', (req, res) => {
     return res.json({
         latest_version: PARENT_APP_LATEST.version,

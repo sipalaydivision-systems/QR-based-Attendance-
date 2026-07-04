@@ -2252,8 +2252,15 @@ class HomeTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final total = children.length;
-    final present = _count((c) => '${c['status_key']}' != 'absent' && '${c['today_status']}' != 'Absent');
-    final absent = total - present;
+    // "No Time In" (no scan yet, before the end-of-day cutoff) is neither present
+    // nor absent — a child is only counted absent once the day's status is final.
+    bool isAbsentChild(Map<String, dynamic> c) =>
+        '${c['status_key']}' == 'absent' || '${c['today_status']}' == 'Absent';
+    bool isPendingChild(Map<String, dynamic> c) =>
+        '${c['status_key']}' == 'no_time_in' || '${c['today_status']}' == 'No Time In';
+    final present =
+        _count((c) => !isAbsentChild(c) && !isPendingChild(c));
+    final absent = _count(isAbsentChild);
     final pct = total == 0 ? 0 : ((present / total) * 100).round();
 
     return ListView(
@@ -2353,8 +2360,8 @@ class HomeTab extends StatelessWidget {
   }
 
   Widget _childRow(Map<String, dynamic> child) {
-    final status = '${child['current_status'] ?? 'Absent'}';
-    final today = '${child['today_status'] ?? 'Absent'}';
+    final status = '${child['current_status'] ?? 'No Time In'}';
+    final today = '${child['today_status'] ?? 'No Time In'}';
     final flagged = ((child['consecutive_absences'] as num?)?.toInt() ?? 0) >= 2;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -3807,6 +3814,9 @@ class _SchoolArtPainter extends CustomPainter {
 
 Color statusColor(String s) {
   final v = s.toLowerCase();
+  if (v.contains('no time') || v.contains('pending')) {
+    return const Color(0xFF64748B); // slate — no scan yet, not absent
+  }
   if (v.contains('inside')) return kGreen;
   if (v.contains('lunch')) return const Color(0xFFD97706);
   if (v.contains('completed')) return const Color(0xFF2563EB);
