@@ -1329,6 +1329,89 @@ function executeRemoteClick(payload = {}) {
   }, 300);
 }
 
+function remoteKeyModifiers(payload = {}) {
+  const modifiers = [];
+  if (payload.altKey) modifiers.push('alt');
+  if (payload.ctrlKey) modifiers.push('control');
+  if (payload.metaKey) modifiers.push('meta');
+  if (payload.shiftKey) modifiers.push('shift');
+  return modifiers;
+}
+
+function normalizeRemoteKeyCode(payload = {}) {
+  const key = String(payload.key || '');
+  const text = String(payload.text || '');
+  const special = {
+    ArrowLeft: 'Left',
+    ArrowRight: 'Right',
+    ArrowUp: 'Up',
+    ArrowDown: 'Down',
+    Backspace: 'Backspace',
+    Delete: 'Delete',
+    Enter: 'Enter',
+    Tab: 'Tab',
+    Escape: 'Escape',
+    Home: 'Home',
+    End: 'End',
+    PageUp: 'PageUp',
+    PageDown: 'PageDown',
+    Insert: 'Insert',
+    ' ': 'Space',
+    Spacebar: 'Space'
+  };
+  if (special[key]) return special[key];
+  if (key.length === 1) return key;
+  if (text.length === 1) return text;
+  const code = String(payload.code || '');
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3).toLowerCase();
+  if (/^Digit[0-9]$/.test(code)) return code.slice(5);
+  if (/^Numpad[0-9]$/.test(code)) return code.slice(6);
+  return key || code || '';
+}
+
+function focusForRemoteInput() {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  showWindow();
+  mainWindow.focus();
+  mainWindow.webContents.focus();
+  return true;
+}
+
+function sendRemoteKeyStroke(payload = {}) {
+  if (!focusForRemoteInput()) return;
+  const keyCode = normalizeRemoteKeyCode(payload);
+  if (!keyCode) return;
+  const modifiers = remoteKeyModifiers(payload);
+  mainWindow.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers });
+  mainWindow.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers });
+}
+
+function sendRemoteText(text = '') {
+  if (!focusForRemoteInput()) return;
+  const normalizedText = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').slice(0, 1000);
+  Array.from(normalizedText).forEach((ch) => {
+    if (ch === '\n') {
+      mainWindow.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
+      mainWindow.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+      return;
+    }
+    if (ch === '\t') {
+      mainWindow.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Tab' });
+      mainWindow.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Tab' });
+      return;
+    }
+    mainWindow.webContents.sendInputEvent({ type: 'char', keyCode: ch });
+  });
+}
+
+function refreshPreviewAfterRemoteInput(trigger) {
+  setTimeout(() => {
+    if (remotePreviewTimer) {
+      uploadPreviewFrame(trigger).catch((err) => console.warn('Preview frame upload failed:', err.message));
+    }
+  }, 300);
+}
+
 async function executeRemoteCommand(command) {
   const action = String(command?.command || '').trim();
   if (!action) return;
@@ -1371,6 +1454,18 @@ async function executeRemoteCommand(command) {
 
   if (action === 'remote_click') {
     executeRemoteClick(command?.payload || {});
+    return;
+  }
+
+  if (action === 'remote_key') {
+    sendRemoteKeyStroke(command?.payload || {});
+    refreshPreviewAfterRemoteInput('remote-key');
+    return;
+  }
+
+  if (action === 'remote_text') {
+    sendRemoteText(command?.payload?.text || '');
+    refreshPreviewAfterRemoteInput('remote-text');
   }
 }
 

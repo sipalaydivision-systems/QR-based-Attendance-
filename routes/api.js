@@ -74,8 +74,9 @@ function normalizeCoordinate(value, min, max) {
 
 const DESKTOP_SCANNER_ACTIVE_SECONDS = 2 * 60;
 const DESKTOP_SCANNER_RECENT_SECONDS = 2 * 60;
-const DESKTOP_SCANNER_REMOTE_COMMANDS = new Set(['open_settings', 'refresh_config', 'sync_queue', 'start_preview', 'stop_preview', 'remote_click']);
+const DESKTOP_SCANNER_REMOTE_COMMANDS = new Set(['open_settings', 'refresh_config', 'sync_queue', 'start_preview', 'stop_preview', 'remote_click', 'remote_key', 'remote_text']);
 const DESKTOP_SCANNER_PREVIEW_MAX_CHARS = 900000;
+const DESKTOP_SCANNER_REMOTE_TEXT_MAX_CHARS = 1000;
 
 function limitText(value, maxLength) {
     return String(value || '').trim().slice(0, maxLength);
@@ -94,6 +95,27 @@ function normalizeRemoteClickPayload(payload) {
         y: clamp(p.y, 3000),
         width: Math.max(1, Math.min(3000, Number.parseFloat(p.width) || 1)),
         height: Math.max(1, Math.min(3000, Number.parseFloat(p.height) || 1))
+    };
+}
+
+function normalizeRemoteKeyPayload(payload) {
+    const p = payload && typeof payload === 'object' ? payload : {};
+    return {
+        key: limitText(p.key, 40),
+        code: limitText(p.code, 40),
+        text: String(p.text || '').slice(0, 4),
+        altKey: p.altKey === true || p.altKey === 'true' || p.altKey === '1',
+        ctrlKey: p.ctrlKey === true || p.ctrlKey === 'true' || p.ctrlKey === '1',
+        metaKey: p.metaKey === true || p.metaKey === 'true' || p.metaKey === '1',
+        shiftKey: p.shiftKey === true || p.shiftKey === 'true' || p.shiftKey === '1',
+        repeat: p.repeat === true || p.repeat === 'true' || p.repeat === '1'
+    };
+}
+
+function normalizeRemoteTextPayload(payload) {
+    const p = payload && typeof payload === 'object' ? payload : {};
+    return {
+        text: String(p.text || '').slice(0, DESKTOP_SCANNER_REMOTE_TEXT_MAX_CHARS)
     };
 }
 
@@ -737,9 +759,20 @@ router.post('/scanner-desktop-command', requireRole('super_admin'), async (req, 
             return res.status(404).json({ success: false, error: 'No desktop scanner device found for this command.' });
         }
 
-        const payload = command === 'remote_click'
-            ? normalizeRemoteClickPayload(req.body.payload)
-            : (req.body.payload && typeof req.body.payload === 'object' ? req.body.payload : {});
+        let payload = req.body.payload && typeof req.body.payload === 'object' ? req.body.payload : {};
+        if (command === 'remote_click') {
+            payload = normalizeRemoteClickPayload(req.body.payload);
+        } else if (command === 'remote_key') {
+            payload = normalizeRemoteKeyPayload(req.body.payload);
+            if (!payload.key && !payload.text) {
+                return res.status(400).json({ success: false, error: 'Remote key payload is empty.' });
+            }
+        } else if (command === 'remote_text') {
+            payload = normalizeRemoteTextPayload(req.body.payload);
+            if (!payload.text) {
+                return res.status(400).json({ success: false, error: 'Remote text payload is empty.' });
+            }
+        }
         const user = req.session?.user || {};
         const [result] = await db.query(
             `INSERT INTO desktop_scanner_commands

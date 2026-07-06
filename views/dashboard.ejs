@@ -904,14 +904,19 @@
     }
 
     function schoolPopupHtml(s) {
+        var hasScanner = Number(s.scanner_total || 0) > 0 || !!s.scanner_id || !!s.scanner_device_name || !!s.scanner_last_seen_at;
         var lastSeen = s.scanner_last_seen_at
             ? scannerLastSeenText(s.scanner_last_seen_seconds, s.scanner_last_seen_at)
             : 'No scanner check-in yet';
         var statusClass = s.online ? 'online' : 'offline';
-        var statusText = s.online ? 'Online' : 'Offline Mode Scanner Enabled';
+        var statusText = s.online ? 'Online' : 'Offline';
+        var offlineModeLine = (!s.online && hasScanner)
+            ? '<div class="dmp-row">Offline Mode Scanner Enabled</div>'
+            : '';
         return '<div class="dash-map-popup">' +
             '<div class="dmp-head">' + logoBadge(s.logo, s.name, 36) + '<strong>' + esc(s.name) + '</strong></div>' +
             '<div class="dmp-row ' + statusClass + '"><span class="status-dot" style="background:' + scannerDotColor(s.online) + ';"></span> ' + statusText + '</div>' +
+            offlineModeLine +
             '<div class="dmp-row">Last activity: ' + esc(lastSeen) + '</div>' +
             (s.scanner_device_name ? '<div class="dmp-row">Device: ' + esc(s.scanner_device_name) + '</div>' : '') +
             '</div>';

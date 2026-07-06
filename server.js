@@ -29,15 +29,15 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(trackSystemTraffic);
 
 const DESKTOP_SCANNER_LATEST = {
-    version: '1.0.28',
-    notes: 'Live preview supports remote clicking, faster command pickup, and automatic preview stop on close.'
+    version: '1.0.29',
+    notes: 'Live preview supports remote clicking, typing, paste input, faster command pickup, and automatic preview stop on close.'
 };
 
 app.get('/mobile-config.json', (req, res) => {
     res.json({
         base_url: getPublicAppBaseUrl(req),
         fallback_urls: [],
-        mobile_app_version: '2.1.36',
+        mobile_app_version: '2.1.41',
         desktop_scanner_version: DESKTOP_SCANNER_LATEST.version,
         notification_capabilities: {
             closed_app_fcm: true,

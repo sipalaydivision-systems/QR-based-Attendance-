@@ -245,6 +245,12 @@
     font-size: .8rem;
     font-weight: 700;
 }
+.scanner-preview-typing-hint {
+    color: #64748b;
+    font-size: .74rem;
+    font-weight: 650;
+    margin-top: 4px;
+}
 @media (max-width: 1000px) {
     .scanner-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -371,7 +377,7 @@
     </div>
 </div>
 
-<div class="scanner-preview-overlay" id="scannerPreviewOverlay" aria-hidden="true">
+<div class="scanner-preview-overlay" id="scannerPreviewOverlay" aria-hidden="true" tabindex="-1">
     <div class="scanner-preview-modal" role="dialog" aria-modal="true" aria-labelledby="scannerPreviewTitle">
         <div class="scanner-preview-head">
             <div>
@@ -382,7 +388,7 @@
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
-        <div class="scanner-preview-body">
+        <div class="scanner-preview-body" id="scannerPreviewBody" tabindex="-1">
             <img id="scannerPreviewImage" alt="Live scanner app preview">
             <div class="scanner-preview-empty" id="scannerPreviewEmpty">
                 <i class="fa-solid fa-spinner fa-spin"></i>
@@ -390,7 +396,10 @@
             </div>
         </div>
         <div class="scanner-preview-foot">
-            <div class="scanner-preview-status" id="scannerPreviewStatus">Preview is idle.</div>
+            <div>
+                <div class="scanner-preview-status" id="scannerPreviewStatus">Preview is idle.</div>
+                <div class="scanner-preview-typing-hint">Click the preview, then type or paste — keys will go to the scanner app only.</div>
+            </div>
             <div class="scanner-preview-actions">
                 <button type="button" class="scanner-remote-btn" id="previewSettingsBtn"><i class="fa-solid fa-sliders"></i> Open Settings</button>
                 <button type="button" class="scanner-remote-btn" id="previewRefreshBtn"><i class="fa-solid fa-rotate"></i> Refresh Config</button>
@@ -411,6 +420,9 @@
     var previewSchoolName = '';
     var previewFrameWidth = 0;
     var previewFrameHeight = 0;
+    var previewTextBuffer = '';
+    var previewTextTimer = null;
+    var previewCommandChain = Promise.resolve();
 
     function esc(value) {
         return String(value == null ? '' : value)
@@ -637,6 +649,7 @@
         document.getElementById('scannerPreviewEmpty').style.display = 'block';
         document.getElementById('scannerPreviewOverlay').style.display = 'flex';
         document.getElementById('scannerPreviewOverlay').setAttribute('aria-hidden', 'false');
+        document.getElementById('scannerPreviewOverlay').focus({ preventScroll: true });
         document.body.style.overflow = 'hidden';
         fetchPreviewFrame();
         if (previewTimer) clearInterval(previewTimer);
@@ -647,7 +660,11 @@
         var scannerId = previewScannerId;
         var schoolId = previewSchoolId;
         if (previewTimer) clearInterval(previewTimer);
+        if (previewTextTimer) clearTimeout(previewTextTimer);
         previewTimer = null;
+        previewTextTimer = null;
+        previewTextBuffer = '';
+        previewCommandChain = Promise.resolve();
         previewScannerId = '';
         previewSchoolId = '';
         previewFrameWidth = 0;
@@ -680,7 +697,7 @@
             img.style.display = 'block';
             empty.style.display = 'none';
             var age = Number(data.frame.age_seconds || 0);
-            status.textContent = 'Live preview updated ' + (age <= 2 ? 'just now' : age + 's ago') + '. Click the preview to remote-control the scanner.';
+            status.textContent = 'Live preview updated ' + (age <= 2 ? 'just now' : age + 's ago') + '. Click, type, or paste to remote-control the scanner.';
         } catch (err) {
             document.getElementById('scannerPreviewStatus').textContent = err.message || 'Unable to load preview frame.';
         }
@@ -688,6 +705,7 @@
 
     function sendPreviewClick(event) {
         if (!previewScannerId) return;
+        document.getElementById('scannerPreviewOverlay').focus({ preventScroll: true });
         var img = document.getElementById('scannerPreviewImage');
         if (!img || img.style.display === 'none') return;
         var rect = img.getBoundingClientRect();
@@ -708,6 +726,94 @@
             setTimeout(fetchPreviewFrame, 900);
         }).catch(function(err) {
             alert(err.message || 'Unable to send remote click.');
+        });
+    }
+
+    function isPreviewOpen() {
+        var overlay = document.getElementById('scannerPreviewOverlay');
+        return !!(previewScannerId && overlay && overlay.style.display === 'flex');
+    }
+
+    function flushPreviewTextBuffer() {
+        if (previewTextTimer) clearTimeout(previewTextTimer);
+        previewTextTimer = null;
+        if (!previewScannerId || !previewTextBuffer) return Promise.resolve();
+        var text = previewTextBuffer;
+        var scannerId = previewScannerId;
+        var schoolId = previewSchoolId;
+        previewTextBuffer = '';
+        var status = document.getElementById('scannerPreviewStatus');
+        if (status) status.textContent = 'Remote typing sent. Waiting for scanner screen update...';
+        previewCommandChain = previewCommandChain.catch(function() {}).then(function() {
+            return postRemoteCommand('remote_text', scannerId, schoolId, { text: text });
+        })
+            .then(function() {
+                setTimeout(fetchPreviewFrame, 350);
+                setTimeout(fetchPreviewFrame, 900);
+            })
+            .catch(function(err) {
+                alert(err.message || 'Unable to send remote typing.');
+            });
+        return previewCommandChain;
+    }
+
+    function queuePreviewText(text) {
+        if (!text) return;
+        previewTextBuffer += text;
+        if (previewTextTimer) clearTimeout(previewTextTimer);
+        previewTextTimer = setTimeout(flushPreviewTextBuffer, 130);
+    }
+
+    function sendPreviewKey(event) {
+        if (!isPreviewOpen()) return;
+        if (event.target && event.target.closest && event.target.closest('button, a, select')) return;
+
+        var key = event.key || '';
+        var printable = key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey;
+        var allowedSpecial = [
+            'Backspace', 'Delete', 'Enter', 'Tab', 'Escape',
+            'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+            'Home', 'End', 'PageUp', 'PageDown', 'Insert'
+        ];
+
+        if (printable) {
+            event.preventDefault();
+            queuePreviewText(key);
+            return;
+        }
+
+        if (!printable && allowedSpecial.indexOf(key) === -1 && !event.ctrlKey && !event.metaKey) return;
+        event.preventDefault();
+        var scannerId = previewScannerId;
+        var schoolId = previewSchoolId;
+        flushPreviewTextBuffer();
+        previewCommandChain = previewCommandChain.catch(function() {}).then(function() {
+            return postRemoteCommand('remote_key', scannerId, schoolId, {
+                key: key,
+                code: event.code || '',
+                text: printable ? key : '',
+                altKey: !!event.altKey,
+                ctrlKey: !!event.ctrlKey,
+                metaKey: !!event.metaKey,
+                shiftKey: !!event.shiftKey,
+                repeat: !!event.repeat
+            });
+        }).then(function() {
+            setTimeout(fetchPreviewFrame, 350);
+            setTimeout(fetchPreviewFrame, 900);
+        }).catch(function(err) {
+            alert(err.message || 'Unable to send remote key.');
+        });
+    }
+
+    function sendPreviewPaste(event) {
+        if (!isPreviewOpen()) return;
+        var text = event.clipboardData ? event.clipboardData.getData('text/plain') : '';
+        if (!text) return;
+        event.preventDefault();
+        flushPreviewTextBuffer().then(function() {
+            queuePreviewText(text);
+            flushPreviewTextBuffer();
         });
     }
 
@@ -785,6 +891,8 @@
     if (previewSettingsBtn) previewSettingsBtn.addEventListener('click', function(event) { event.stopPropagation(); sendPreviewCommand('open_settings'); });
     if (previewRefreshBtn) previewRefreshBtn.addEventListener('click', function(event) { event.stopPropagation(); sendPreviewCommand('refresh_config'); });
     if (previewImage) previewImage.addEventListener('click', sendPreviewClick);
+    document.addEventListener('keydown', sendPreviewKey);
+    document.addEventListener('paste', sendPreviewPaste);
     load();
     refreshTimer = setInterval(load, 10000);
     window.addEventListener('beforeunload', function() {

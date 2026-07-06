@@ -19,9 +19,11 @@ import 'package:package_info_plus/package_info_plus.dart';
 class AppConfig {
   static const appName = 'EduTrack';
   static const subtitle = 'Schools Division of Sipalay City';
-  static const monitoringLabel = 'Initializing System Access';
+  static const monitoringLabel = 'Secure Mobile Workspace';
   static const noInternetMessage =
-      "Can't connect to server due to no internet connection.";
+      "EduTrack can't reach the server right now. Check your internet connection, then try again.";
+  static const serverWarmupMessage =
+      'Railway may be waking the server. EduTrack will retry automatically.';
   static const logoAsset = 'assets/images/app_logo.png';
   static const baseUrl = 'https://sdo-sipalay-edutrack.up.railway.app';
 }
@@ -265,9 +267,7 @@ Map<String, dynamic> absenceFlagRowFromFcmData(Map<String, dynamic> data) {
   };
 }
 
-Future<void> showFcmAbsenceFlagNotification(
-  Map<String, dynamic> data,
-) async {
+Future<void> showFcmAbsenceFlagNotification(Map<String, dynamic> data) async {
   final row = absenceFlagRowFromFcmData(data);
   // Prefer the server-provided title/body (already carries the real day count),
   // falling back to a locally derived version when absent.
@@ -557,6 +557,61 @@ class EdutrackApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF138A64)),
         scaffoldBackgroundColor: const Color(0xFFF5F7F6),
         useMaterial3: true,
+        textTheme: Typography.material2021().black.apply(
+          bodyColor: const Color(0xFF10231C),
+          displayColor: const Color(0xFF10231C),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 14,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFFD9E5DF)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFFD9E5DF)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFF138A64), width: 1.7),
+          ),
+          labelStyle: const TextStyle(
+            color: Color(0xFF667872),
+            fontWeight: FontWeight.w700,
+          ),
+          hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
+            backgroundColor: const Color(0xFF138A64),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            textStyle: const TextStyle(
+              fontWeight: FontWeight.w900,
+              letterSpacing: -.1,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(46),
+            foregroundColor: const Color(0xFF0F6E52),
+            side: const BorderSide(color: Color(0xFFBEEAD7)),
+            textStyle: const TextStyle(fontWeight: FontWeight.w800),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+        ),
         navigationBarTheme: NavigationBarThemeData(
           backgroundColor: Colors.transparent,
           indicatorColor: const Color(0xFFEAF7F1),
@@ -615,25 +670,42 @@ class ApiService {
     );
   }
 
+  bool _isConnectivityError(Object error) {
+    final lower = '$error'.toLowerCase();
+    return error is SocketException ||
+        error is TimeoutException ||
+        lower.contains('socketexception') ||
+        lower.contains('clientexception') ||
+        lower.contains('timed out') ||
+        lower.contains('connection') ||
+        lower.contains('failed host lookup') ||
+        lower.contains('network is unreachable');
+  }
+
   Future<http.Response> _request(
-    Future<http.Response> Function() runner,
-  ) async {
-    try {
-      return await runner().timeout(const Duration(seconds: 18));
-    } on SocketException {
-      throw Exception(AppConfig.noInternetMessage);
-    } on TimeoutException {
-      throw Exception(AppConfig.noInternetMessage);
-    } on http.ClientException catch (e) {
-      final lower = e.message.toLowerCase();
-      if (lower.contains('socketexception') ||
-          lower.contains('timed out') ||
-          lower.contains('connection') ||
-          lower.contains('failed host lookup')) {
-        throw Exception(AppConfig.noInternetMessage);
+    Future<http.Response> Function() runner, {
+    int retries = 0,
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    Object? lastError;
+    for (var attempt = 0; attempt <= retries; attempt++) {
+      try {
+        return await runner().timeout(timeout);
+      } on SocketException catch (e) {
+        lastError = e;
+      } on TimeoutException catch (e) {
+        lastError = e;
+      } on http.ClientException catch (e) {
+        lastError = e;
       }
-      throw Exception('Unable to connect to server right now.');
+      if (attempt < retries) {
+        await Future.delayed(Duration(milliseconds: 650 + (attempt * 450)));
+      }
     }
+    if (lastError != null && _isConnectivityError(lastError)) {
+      throw Exception(AppConfig.noInternetMessage);
+    }
+    throw Exception('Unable to connect to EduTrack server right now.');
   }
 
   String _errorFromBody(String body, {required String fallback}) {
@@ -700,6 +772,7 @@ class ApiService {
         },
         body: {'username': username, 'password': password},
       ),
+      retries: 1,
     );
     final data = _decodeJsonMap(
       response,
@@ -741,6 +814,7 @@ class ApiService {
   Future<Map<String, dynamic>> map(String path) async {
     final response = await _request(
       () => http.get(liveUri(path), headers: authHeaders),
+      retries: 1,
     );
     if (response.statusCode == 401) throw AuthExpired();
     if (response.statusCode >= 400) {
@@ -760,6 +834,7 @@ class ApiService {
   Future<List<dynamic>> list(String path) async {
     final response = await _request(
       () => http.get(liveUri(path), headers: authHeaders),
+      retries: 1,
     );
     if (response.statusCode == 401) throw AuthExpired();
     if (response.statusCode >= 400) {
@@ -953,11 +1028,7 @@ class _SplashGateState extends State<SplashGate>
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF073B2B),
-                Color(0xFF0B7A55),
-                Color(0xFF12A16F),
-              ],
+              colors: [Color(0xFF073B2B), Color(0xFF0B7A55), Color(0xFF12A16F)],
             ),
           ),
           child: Stack(
@@ -975,15 +1046,29 @@ class _SplashGateState extends State<SplashGate>
                         children: [
                           PulseRing(value: controller.value, size: 156),
                           Container(
-                            padding: const EdgeInsets.all(12),
+                            padding: const EdgeInsets.all(15),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: .15),
-                              borderRadius: BorderRadius.circular(26),
+                              color: Colors.white.withValues(alpha: .18),
+                              borderRadius: BorderRadius.circular(30),
                               border: Border.all(
-                                color: Colors.white.withValues(alpha: .24),
+                                color: Colors.white.withValues(alpha: .28),
                               ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: .16),
+                                  blurRadius: 26,
+                                  offset: const Offset(0, 12),
+                                ),
+                              ],
                             ),
-                            child: const AppLogo(size: 84),
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              child: const AppLogo(size: 78),
+                            ),
                           ),
                         ],
                       ),
@@ -1011,51 +1096,103 @@ class _SplashGateState extends State<SplashGate>
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 18,
-                          vertical: 10,
+                          vertical: 11,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: .16),
+                          color: Colors.white.withValues(alpha: .18),
                           borderRadius: BorderRadius.circular(99),
                           border: Border.all(
                             color: Colors.white.withValues(alpha: .26),
                           ),
                         ),
-                        child: const Text(
-                          AppConfig.monitoringLabel,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                          ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.verified_user_rounded,
+                              color: Colors.white,
+                              size: 17,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              AppConfig.monitoringLabel,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: .1,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const Spacer(),
                       Container(
-                        padding: const EdgeInsets.all(14),
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: .94),
-                          borderRadius: BorderRadius.circular(22),
+                          borderRadius: BorderRadius.circular(24),
                           border: Border.all(color: const Color(0xFFDCE7E1)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: .12),
+                              blurRadius: 28,
+                              offset: const Offset(0, 14),
+                            ),
+                          ],
                         ),
                         child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
-                                const LiveDot(color: Color(0xFFE53935)),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  'CONNECTING TO SERVER',
-                                  style: TextStyle(
-                                    color: Color(0xFF33423C),
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 1.1,
+                                Container(
+                                  width: 38,
+                                  height: 38,
+                                  decoration: BoxDecoration(
+                                    color: const Color(
+                                      0xFFE9F8F0,
+                                    ).withValues(alpha: .95),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: const Icon(
+                                    Icons.cloud_sync_rounded,
+                                    color: Color(0xFF138A64),
+                                    size: 21,
                                   ),
                                 ),
-                                const Spacer(),
+                                const SizedBox(width: 12),
+                                const Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Preparing EduTrack',
+                                        style: TextStyle(
+                                          color: Color(0xFF10231C),
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 15.5,
+                                          letterSpacing: -.15,
+                                        ),
+                                      ),
+                                      SizedBox(height: 2),
+                                      Text(
+                                        'Syncing live attendance workspace',
+                                        style: TextStyle(
+                                          color: Color(0xFF667872),
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 11.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                                 Text(
                                   '${(progress * 100).round()}%',
                                   style: const TextStyle(
                                     color: Color(0xFF0F6E52),
                                     fontWeight: FontWeight.w900,
+                                    fontSize: 16,
                                   ),
                                 ),
                               ],
@@ -1069,6 +1206,25 @@ class _SplashGateState extends State<SplashGate>
                                 backgroundColor: const Color(0xFFE5EFEA),
                                 color: const Color(0xFF138A64),
                               ),
+                            ),
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: const [
+                                SplashStatusChip(
+                                  icon: Icons.lock_rounded,
+                                  label: 'Secure',
+                                ),
+                                SplashStatusChip(
+                                  icon: Icons.wifi_tethering_rounded,
+                                  label: 'Live sync',
+                                ),
+                                SplashStatusChip(
+                                  icon: Icons.notifications_active_rounded,
+                                  label: 'FCM ready',
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -1121,6 +1277,37 @@ class PulseRingPainter extends CustomPainter {
   @override
   bool shouldRepaint(PulseRingPainter oldDelegate) =>
       oldDelegate.pulse != pulse;
+}
+
+class SplashStatusChip extends StatelessWidget {
+  const SplashStatusChip({super.key, required this.icon, required this.label});
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF1F8F4),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: const Color(0xFFDCEBE4)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: const Color(0xFF138A64)),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFF33423C),
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class LiveDot extends StatefulWidget {
@@ -1652,6 +1839,7 @@ class _HomeShellState extends State<HomeShell>
   late final AnimationController backgroundController;
   Map<String, dynamic>? alertIntent;
   bool headerCompact = false;
+  bool dashboardRequestRunning = false;
 
   @override
   void initState() {
@@ -1665,9 +1853,10 @@ class _HomeShellState extends State<HomeShell>
       duration: const Duration(seconds: 9),
     )..repeat();
     load();
-    // Poll often so edited student and absence details show quickly.
+    // Keep the dashboard live without stacking requests when mobile data is
+    // slow or Railway is waking up.
     timer = Timer.periodic(
-      const Duration(seconds: 5),
+      const Duration(seconds: 10),
       (_) => load(silent: true),
     );
   }
@@ -1680,7 +1869,9 @@ class _HomeShellState extends State<HomeShell>
   }
 
   Future<void> load({bool silent = false}) async {
-    if (!silent) setState(() => loading = true);
+    if (dashboardRequestRunning) return;
+    dashboardRequestRunning = true;
+    if (!silent && mounted) setState(() => loading = true);
     try {
       final results = await Future.wait([
         widget.api.map(
@@ -1719,6 +1910,8 @@ class _HomeShellState extends State<HomeShell>
           );
         });
       }
+    } finally {
+      dashboardRequestRunning = false;
     }
   }
 
@@ -1823,11 +2016,7 @@ class _HomeShellState extends State<HomeShell>
         ),
         child: Column(
           children: [
-            Header(
-              api: widget.api,
-              compact: headerCompact,
-              onLogout: doLogout,
-            ),
+            Header(api: widget.api, compact: headerCompact, onLogout: doLogout),
             Expanded(
               child: NotificationListener<ScrollNotification>(
                 onNotification: (notification) {
@@ -2180,7 +2369,7 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
   @override
   Widget build(BuildContext context) {
     if (loading && dashboard.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppLoadingIndicator();
     }
     if (error != null && dashboard.isEmpty) {
       return Center(
@@ -3806,7 +3995,7 @@ class DashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (loading && dashboard.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppLoadingIndicator();
     }
     if (error != null && dashboard.isEmpty) {
       return Center(
@@ -4727,7 +4916,7 @@ class _WeeklyAbsenceAnalyticsState extends State<WeeklyAbsenceAnalytics> {
     if (loading && week.isEmpty) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 26),
-        child: Center(child: CircularProgressIndicator()),
+        child: AppLoadingIndicator(),
       );
     }
     if (error != null && week.isEmpty) {
@@ -5472,7 +5661,7 @@ class _DateAttendanceModalState extends State<DateAttendanceModal> {
           ),
           Expanded(
             child: loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const AppLoadingIndicator()
                 : error != null
                 ? const Center(
                     child: Text(
@@ -5911,7 +6100,7 @@ class _AbsentStudentsSheetState extends State<AbsentStudentsSheet> {
           ),
           Expanded(
             child: loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const AppLoadingIndicator()
                 : error != null
                 ? Center(
                     child: Text(
@@ -6652,7 +6841,7 @@ class _SchoolsPageState extends State<SchoolsPage> {
       );
     }
     if (structure == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppLoadingIndicator();
     }
     final schools = (structure!['schools'] as List?) ?? [];
     return RefreshIndicator(
@@ -6750,7 +6939,10 @@ class _SchoolsPageState extends State<SchoolsPage> {
     }
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: parts),
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: parts,
+      ),
     );
   }
 
@@ -7177,8 +7369,7 @@ class _AdviserDirectoryPageState extends State<AdviserDirectoryPage> {
                           '${t['grade_name'] ?? '-'} - ${t['section_name'] ?? '-'}',
                       onTap: () => _openAdviser(t),
                     ),
-                  if (_advisers.isEmpty)
-                    const EmptyText('No advisers found.'),
+                  if (_advisers.isEmpty) const EmptyText('No advisers found.'),
                 ],
               ),
             ),
@@ -7508,7 +7699,11 @@ class _ScannerOfflineCardState extends State<ScannerOfflineCard> {
           : allOnline
           ? Row(
               children: const [
-                Icon(Icons.verified_rounded, color: Color(0xFF138A64), size: 22),
+                Icon(
+                  Icons.verified_rounded,
+                  color: Color(0xFF138A64),
+                  size: 22,
+                ),
                 SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -7553,7 +7748,9 @@ class _ScannerOfflineCardState extends State<ScannerOfflineCard> {
                                   ),
                                 ),
                                 Text(
-                                  _lastSeenLabel(s['scanner_last_seen_seconds']),
+                                  _lastSeenLabel(
+                                    s['scanner_last_seen_seconds'],
+                                  ),
                                   style: const TextStyle(
                                     color: Color(0xFF991B1B),
                                     fontSize: 11.5,
@@ -7682,10 +7879,29 @@ class _ProfilePageState extends State<ProfilePage> {
             labelText: l,
             hintText: h,
             isDense: true,
-            border: const OutlineInputBorder(),
+            filled: true,
+            fillColor: const Color(0xFFF8FBFA),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFD9E5DF)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                color: Color(0xFF138A64),
+                width: 1.7,
+              ),
+            ),
           );
           return AlertDialog(
-            title: const Text('Edit Profile'),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(22),
+            ),
+            title: const Text(
+              'Edit Profile',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -7756,7 +7972,9 @@ class _ProfilePageState extends State<ProfilePage> {
               return;
             }
             if (nw.text.length < 6) {
-              setLocal(() => err = 'New password must be at least 6 characters.');
+              setLocal(
+                () => err = 'New password must be at least 6 characters.',
+              );
               return;
             }
             if (nw.text != cf.text) {
@@ -7798,7 +8016,20 @@ class _ProfilePageState extends State<ProfilePage> {
           InputDecoration dec(String l) => InputDecoration(
             labelText: l,
             isDense: true,
-            border: const OutlineInputBorder(),
+            filled: true,
+            fillColor: const Color(0xFFF8FBFA),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFD9E5DF)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                color: Color(0xFF138A64),
+                width: 1.7,
+              ),
+            ),
             suffixIcon: IconButton(
               icon: Icon(
                 obscure ? Icons.visibility_off : Icons.visibility,
@@ -7808,7 +8039,13 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           );
           return AlertDialog(
-            title: const Text('Change Password'),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(22),
+            ),
+            title: const Text(
+              'Change Password',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -7888,34 +8125,59 @@ class _ProfilePageState extends State<ProfilePage> {
       'Notifications are working on this device.',
     );
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Test notification sent.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Test notification sent.')));
     }
   }
 
-  Widget _infoTile(IconData icon, String label, String value) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 3),
+  Widget _infoTile(IconData icon, String label, String value) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(13),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF8FBFA),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: const Color(0xFFE2ECE7)),
+    ),
     child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 20, color: const Color(0xFF667872)),
-        const SizedBox(width: 12),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 13, color: Color(0xFF667872)),
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: const Color(0xFFEAF7F1),
+            borderRadius: BorderRadius.circular(13),
+          ),
+          child: Icon(icon, size: 19, color: const Color(0xFF138A64)),
         ),
-        const Spacer(),
-        Flexible(
-          child: Text(
-            value,
-            textAlign: TextAlign.right,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 13.5,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF0F211B),
-            ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label.toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 10.5,
+                  color: Color(0xFF667872),
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .45,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                value,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 14.5,
+                  height: 1.22,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF0F211B),
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -7927,39 +8189,63 @@ class _ProfilePageState extends State<ProfilePage> {
     String title,
     String subtitle,
     VoidCallback onTap,
-  ) => InkWell(
-    onTap: onTap,
-    borderRadius: BorderRadius.circular(12),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: const Color(0xFF138A64)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF0F211B),
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    color: Color(0xFF667872),
-                  ),
-                ),
-              ],
+  ) => Material(
+    color: const Color(0xFFF8FBFA),
+    borderRadius: BorderRadius.circular(16),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2ECE7)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEAF7F1),
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(icon, size: 19, color: const Color(0xFF138A64)),
             ),
-          ),
-          const Icon(Icons.chevron_right_rounded, color: Color(0xFF9CA3AF)),
-        ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF0F211B),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      height: 1.2,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF667872),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8)),
+          ],
+        ),
       ),
     ),
   );
@@ -7967,88 +8253,144 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   Widget build(BuildContext context) {
     final api = widget.api;
+    final role = _roleLabel(api.role);
+    final email = api.email.isEmpty ? 'No email saved' : api.email;
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 26),
       children: [
-        const SectionTitle('Profile', 'Your account and app settings.'),
+        const SectionTitle('Profile', 'Manage your EduTrack account.'),
         const SizedBox(height: 16),
-        // Identity card.
-        PremiumCard(
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF064E3B), Color(0xFF0FA36B)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(26),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F6E52).withValues(alpha: .22),
+                blurRadius: 26,
+                offset: const Offset(0, 14),
+              ),
+            ],
+          ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 76,
-                height: 76,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF138A64).withValues(alpha: .12),
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  _initials(api.fullname),
-                  style: const TextStyle(
-                    color: Color(0xFF0C5A3C),
-                    fontWeight: FontWeight.w900,
-                    fontSize: 26,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 72,
+                    height: 72,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .95),
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: Text(
+                      _initials(api.fullname),
+                      style: const TextStyle(
+                        color: Color(0xFF0C5A3C),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 24,
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Signed in as',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          api.fullname,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 21,
+                            height: 1.08,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            letterSpacing: -.35,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 11,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: .16),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: .22),
+                            ),
+                          ),
+                          child: Text(
+                            role,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              Text(
-                api.fullname,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFF0F211B),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF138A64).withValues(alpha: .10),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  _roleLabel(api.role),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF0C5A3C),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _editProfile,
+                  icon: const Icon(Icons.edit_rounded),
+                  label: const Text('Edit account profile'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF0C5A3C),
                   ),
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 12),
-        // Account card.
+        const SizedBox(height: 14),
         PremiumCard(
-          title: 'Account',
+          title: 'Account details',
+          subtitle: 'Information linked to your EduTrack login.',
           child: Column(
             children: [
-              _actionTile(
-                Icons.badge_outlined,
-                'Edit Profile',
-                'Update your name and email',
-                _editProfile,
-              ),
-              const Divider(height: 18),
               _infoTile(Icons.person_outline, 'Name', api.fullname),
-              const Divider(height: 18),
-              _infoTile(
-                Icons.alternate_email,
-                'Email',
-                api.email.isEmpty ? '—' : api.email,
-              ),
-              const Divider(height: 18),
-              _infoTile(
-                Icons.verified_user_outlined,
-                'Role',
-                _roleLabel(api.role),
-              ),
-              const Divider(height: 18),
+              const SizedBox(height: 10),
+              _infoTile(Icons.alternate_email, 'Email', email),
+              const SizedBox(height: 10),
+              _infoTile(Icons.verified_user_outlined, 'Role', role),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        PremiumCard(
+          title: 'Security',
+          subtitle: 'Keep your account protected.',
+          child: Column(
+            children: [
               _actionTile(
                 Icons.lock_outline,
                 'Change Password',
@@ -8059,7 +8401,6 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
         ),
         const SizedBox(height: 12),
-        // Notifications card.
         PremiumCard(
           title: 'Notifications',
           subtitle: 'Send a sample alert to confirm this phone receives them.',
@@ -8067,23 +8408,10 @@ class _ProfilePageState extends State<ProfilePage> {
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: _testNotification,
-              icon: const Icon(
-                Icons.notifications_active_rounded,
-                color: Color(0xFF138A64),
-              ),
-              label: const Text(
-                'Send test notification',
-                style: TextStyle(
-                  color: Color(0xFF138A64),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+              icon: const Icon(Icons.notifications_active_rounded),
+              label: const Text('Send test notification'),
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFFBBF7D0)),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                padding: const EdgeInsets.symmetric(vertical: 13),
               ),
             ),
           ),
@@ -8098,7 +8426,7 @@ class _ProfilePageState extends State<ProfilePage> {
               'Log Out',
               style: TextStyle(
                 color: Color(0xFFDC2626),
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w900,
               ),
             ),
             style: OutlinedButton.styleFrom(
@@ -8113,7 +8441,7 @@ class _ProfilePageState extends State<ProfilePage> {
         const SizedBox(height: 18),
         Center(
           child: Text(
-            '${AppConfig.appName} • v${_version.isEmpty ? '…' : _version}',
+            '${AppConfig.appName} - v${_version.isEmpty ? '...' : _version}',
             style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5),
           ),
         ),
@@ -8302,7 +8630,7 @@ class _SchoolLeaderboardPageState extends State<SchoolLeaderboardPage> {
       backgroundColor: const Color(0xFFF5F7F6),
       appBar: divisionToolBar('School Rankings'),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const AppLoadingIndicator()
           : _error != null
           ? Center(
               child: Padding(
@@ -8593,7 +8921,7 @@ class _AttendanceTrendsPageState extends State<AttendanceTrendsPage> {
       backgroundColor: const Color(0xFFF5F7F6),
       appBar: divisionToolBar('Attendance Trends'),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const AppLoadingIndicator()
           : _error != null
           ? Center(
               child: Padding(
@@ -8793,7 +9121,7 @@ class _StudentSearchPageState extends State<StudentSearchPage> {
             InfoPill(
               'Guardian',
               '${'${s['guardian_name'] ?? ''}'.isEmpty ? '—' : s['guardian_name']}'
-              '${'${s['guardian_contact'] ?? ''}'.isEmpty ? '' : ' • ${s['guardian_contact']}'}',
+                  '${'${s['guardian_contact'] ?? ''}'.isEmpty ? '' : ' • ${s['guardian_contact']}'}',
             ),
           ],
         ),
@@ -8838,7 +9166,7 @@ class _StudentSearchPageState extends State<StudentSearchPage> {
           ),
           Expanded(
             child: _searching
-                ? const Center(child: CircularProgressIndicator())
+                ? const AppLoadingIndicator()
                 : _error != null
                 ? Center(
                     child: Padding(
@@ -9344,7 +9672,7 @@ class _LiveListState extends State<LiveList> {
       );
     }
     if (rows == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppLoadingIndicator();
     }
     final data = rows!;
     return RefreshIndicator(
@@ -9452,7 +9780,7 @@ class _LiveMapState extends State<LiveMap> {
       );
     }
     if (data == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppLoadingIndicator();
     }
     return widget.builder(context, data!, () => load(silent: true));
   }
@@ -9496,7 +9824,7 @@ class FutureList extends StatelessWidget {
         );
       }
       if (!snapshot.hasData) {
-        return const Center(child: CircularProgressIndicator());
+        return const AppLoadingIndicator();
       }
       final rows = snapshot.data!;
       return ListView(
@@ -9518,6 +9846,76 @@ class FutureList extends StatelessWidget {
         ],
       );
     },
+  );
+}
+
+class AppLoadingIndicator extends StatelessWidget {
+  const AppLoadingIndicator({
+    super.key,
+    this.label = 'Syncing live EduTrack data...',
+  });
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Container(
+        width: double.infinity,
+        constraints: const BoxConstraints(maxWidth: 320),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .96),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFFDCEBE4)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF0F6E52).withValues(alpha: .10),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEAF7F1),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: const Icon(
+                Icons.cloud_sync_rounded,
+                color: Color(0xFF138A64),
+                size: 28,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF10231C),
+                fontSize: 14.5,
+                height: 1.24,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 12),
+            const SizedBox(
+              width: 34,
+              height: 34,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                color: Color(0xFF138A64),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
   );
 }
 
@@ -10119,7 +10517,8 @@ class DashboardSchoolArt extends StatelessWidget {
                 fit: BoxFit.contain,
                 alignment: Alignment.bottomRight,
                 gaplessPlayback: true,
-                errorBuilder: (_, __, ___) => const _DefaultSchoolArt(),
+                errorBuilder: (context, error, stackTrace) =>
+                    const _DefaultSchoolArt(),
               );
             } on FormatException {
               return const _DefaultSchoolArt();
@@ -10256,7 +10655,7 @@ class BrandLogoImage extends StatelessWidget {
               bytes,
               fit: fit,
               gaplessPlayback: true,
-              errorBuilder: (_, __, ___) =>
+              errorBuilder: (context, error, stackTrace) =>
                   Image.asset(AppConfig.logoAsset, fit: fit),
             );
           } on FormatException {
