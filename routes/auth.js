@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const router = express.Router();
 const db = require('../config/database');
-const { nowDateTime } = require('../utils/appTime');
+const { nowDateTime, todayDate } = require('../utils/appTime');
 
 // GET /login
 router.get('/login', (req, res) => {
@@ -203,6 +203,53 @@ router.post('/api/account/change-password', async (req, res) => {
     } catch (err) {
         console.error('Mobile change-password error:', err);
         return res.json({ success: false, error: 'A server error occurred. Please try again.' });
+    }
+});
+
+// GET /api/mobile/school-leaderboard?date=YYYY-MM-DD — per-school attendance
+// ranking for division oversight roles (staff-app School Rankings page).
+router.get('/api/mobile/school-leaderboard', async (req, res) => {
+    const user = req.session.user;
+    const OVERSIGHT_ROLES = ['super_admin', 'superintendent', 'asst_superintendent'];
+    if (!user) {
+        return res.status(401).json({ success: false, error: 'Your session has expired. Please sign in again.' });
+    }
+    if (!OVERSIGHT_ROLES.includes(user.role)) {
+        return res.status(403).json({ success: false, error: 'School rankings are limited to division oversight roles.' });
+    }
+    const rawDate = (req.query.date || '').trim();
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : todayDate();
+    try {
+        const [rows] = await db.query(
+            `SELECT sc.id, sc.name,
+                    COUNT(DISTINCT s.id) AS active_students,
+                    COUNT(DISTINCT CASE WHEN a.time_in IS NOT NULL THEN s.id END) AS present
+             FROM schools sc
+             LEFT JOIN students s ON s.school_id = sc.id AND s.status = 'active'
+             LEFT JOIN attendance a
+                    ON a.person_id = s.id AND a.person_type = 'student' AND a.date = ?
+             WHERE sc.status = 'active'
+             GROUP BY sc.id, sc.name`,
+            [date]
+        );
+        const schools = rows
+            .map(row => {
+                const active = Number(row.active_students) || 0;
+                const present = Number(row.present) || 0;
+                return {
+                    id: row.id,
+                    name: row.name,
+                    active_students: active,
+                    present,
+                    absent: Math.max(0, active - present),
+                    rate: active > 0 ? Math.min(100, Math.round((present / active) * 100)) : 0
+                };
+            })
+            .sort((a, b) => b.rate - a.rate || a.name.localeCompare(b.name));
+        return res.json({ success: true, date, schools });
+    } catch (err) {
+        console.error('School leaderboard error:', err);
+        return res.status(500).json({ success: false, error: 'Failed to load school rankings.' });
     }
 });
 

@@ -975,37 +975,39 @@ class _SplashGateState extends State<SplashGate>
                         children: [
                           PulseRing(value: controller.value, size: 156),
                           Container(
-                            padding: const EdgeInsets.all(10),
+                            padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               color: Colors.white.withValues(alpha: .15),
-                              borderRadius: BorderRadius.circular(30),
+                              borderRadius: BorderRadius.circular(26),
                               border: Border.all(
                                 color: Colors.white.withValues(alpha: .24),
                               ),
                             ),
-                            child: const AppLogo(size: 88),
+                            child: const AppLogo(size: 84),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 30),
+                      const SizedBox(height: 26),
                       const Text(
                         AppConfig.appName,
                         style: TextStyle(
-                          fontSize: 38,
+                          fontSize: 34,
                           color: Colors.white,
                           fontWeight: FontWeight.w900,
+                          letterSpacing: -.5,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       const Text(
                         AppConfig.subtitle,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.white70,
-                          fontSize: 16,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 42),
+                      const SizedBox(height: 32),
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 18,
@@ -1849,8 +1851,8 @@ class _HomeShellState extends State<HomeShell>
       ),
       bottomNavigationBar: ClipRRect(
         borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(26),
-          topRight: Radius.circular(26),
+          topLeft: Radius.circular(22),
+          topRight: Radius.circular(22),
         ),
         child: BackdropFilter(
           filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
@@ -1869,7 +1871,7 @@ class _HomeShellState extends State<HomeShell>
             child: SafeArea(
               top: false,
               child: NavigationBar(
-                height: 76,
+                height: 70,
                 labelBehavior: destinations.length > 6
                     ? NavigationDestinationLabelBehavior.onlyShowSelected
                     : NavigationDestinationLabelBehavior.alwaysShow,
@@ -3565,7 +3567,7 @@ class Header extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(26)),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(22)),
         boxShadow: [
           BoxShadow(
             color: Color(0x330C5A3C),
@@ -3575,7 +3577,7 @@ class Header extends StatelessWidget {
         ],
       ),
       child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(26)),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(22)),
         child: Stack(
           children: [
             Positioned.fill(
@@ -3923,7 +3925,7 @@ class DashboardPage extends StatelessWidget {
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(22),
               border: Border.all(color: const Color(0xFFDCE6E1)),
               boxShadow: [
                 BoxShadow(
@@ -4017,11 +4019,68 @@ class DashboardPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
+          // Division tools — oversight roles only (Admin / SDS / ASDS).
+          if (api.role == 'super_admin' ||
+              api.role == 'superintendent' ||
+              api.role == 'asst_superintendent') ...[
+            Row(
+              children: [
+                Expanded(
+                  child: DivisionToolCard(
+                    icon: Icons.emoji_events_rounded,
+                    label: 'Rankings',
+                    caption: 'Schools by rate',
+                    color: const Color(0xFFB45309),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => SchoolLeaderboardPage(api: api),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DivisionToolCard(
+                    icon: Icons.query_stats_rounded,
+                    label: 'Trends',
+                    caption: 'Weekly picture',
+                    color: const Color(0xFF2563EB),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AttendanceTrendsPage(
+                          api: api,
+                          activeStudents: active,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DivisionToolCard(
+                    icon: Icons.person_search_rounded,
+                    label: 'Find Student',
+                    caption: 'Division-wide',
+                    color: const Color(0xFF7C3AED),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => StudentSearchPage(api: api),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+          ],
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(22),
               border: Border.all(color: attendanceScoreSoftColor(rate)),
               boxShadow: [
                 BoxShadow(
@@ -6955,7 +7014,7 @@ class _AdviserDirectoryPageState extends State<AdviserDirectoryPage> {
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(22),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -8064,6 +8123,774 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Division tools (Admin / SDS / ASDS): School Rankings, Attendance Trends,
+// and division-wide Student Search — opened from the Home dashboard.
+// ---------------------------------------------------------------------------
+
+// Shared branded app bar for pushed division-tool pages.
+PreferredSizeWidget divisionToolBar(String title) => AppBar(
+  elevation: 0,
+  foregroundColor: Colors.white,
+  centerTitle: false,
+  title: Text(
+    title,
+    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17),
+  ),
+  flexibleSpace: Container(
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        colors: [Color(0xFF0C5A3C), Color(0xFF14855A)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+    ),
+  ),
+);
+
+// Compact tappable quick-action card on the dashboard.
+class DivisionToolCard extends StatelessWidget {
+  const DivisionToolCard({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.caption,
+    required this.color,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final String caption;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(18),
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFDCE6E1)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF111827).withValues(alpha: .05),
+            blurRadius: 12,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: .11),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF0F211B),
+            ),
+          ),
+          const SizedBox(height: 1),
+          Text(
+            caption,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF667872),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+// School Rankings — every active school ranked by today's attendance rate.
+class SchoolLeaderboardPage extends StatefulWidget {
+  const SchoolLeaderboardPage({super.key, required this.api});
+  final ApiService api;
+
+  @override
+  State<SchoolLeaderboardPage> createState() => _SchoolLeaderboardPageState();
+}
+
+class _SchoolLeaderboardPageState extends State<SchoolLeaderboardPage> {
+  bool _loading = true;
+  String? _error;
+  List<Map<String, dynamic>> _schools = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final data = await widget.api.map(
+        '/api/mobile/school-leaderboard?date=${date()}',
+      );
+      final rows = ((data['schools'] as List?) ?? [])
+          .map((s) => Map<String, dynamic>.from(s as Map))
+          .toList();
+      if (mounted) {
+        setState(() {
+          _schools = rows;
+          _loading = false;
+          _error = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = readableError(e, fallback: 'Failed to load rankings.');
+        });
+      }
+    }
+  }
+
+  Color _rateColor(int rate) {
+    if (rate >= 90) return const Color(0xFF138A64);
+    if (rate >= 75) return const Color(0xFFB45309);
+    return const Color(0xFFDC2626);
+  }
+
+  Widget _rankBadge(int rank) {
+    const medal = [Color(0xFFD97706), Color(0xFF64748B), Color(0xFFB45309)];
+    final color = rank <= 3 ? medal[rank - 1] : const Color(0xFF9CA3AF);
+    return Container(
+      width: 34,
+      height: 34,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: rank <= 3 ? .14 : .10),
+        shape: BoxShape.circle,
+      ),
+      child: rank <= 3
+          ? Icon(Icons.emoji_events_rounded, color: color, size: 18)
+          : Text(
+              '$rank',
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w900,
+                fontSize: 13,
+              ),
+            ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7F6),
+      appBar: divisionToolBar('School Rankings'),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Text(
+                  _error!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Color(0xFFB91C1C),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            )
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  PremiumCard(
+                    title: "Today's Attendance by School",
+                    subtitle:
+                        '${_schools.length} active schools, highest rate first',
+                    child: Column(
+                      children: [
+                        if (_schools.isEmpty)
+                          const EmptyText('No schools found.'),
+                        for (var i = 0; i < _schools.length; i++)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Row(
+                              children: [
+                                _rankBadge(i + 1),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${_schools[i]['name'] ?? 'School'}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 13.5,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(99),
+                                        child: LinearProgressIndicator(
+                                          value:
+                                              intValue(_schools[i]['rate']) /
+                                              100,
+                                          minHeight: 6,
+                                          backgroundColor: const Color(
+                                            0xFFEDF3F0,
+                                          ),
+                                          color: _rateColor(
+                                            intValue(_schools[i]['rate']),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        '${intValue(_schools[i]['present'])} of ${intValue(_schools[i]['active_students'])} students present',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF667872),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Text(
+                                  '${intValue(_schools[i]['rate'])}%',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w900,
+                                    color: _rateColor(
+                                      intValue(_schools[i]['rate']),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+}
+
+// Attendance Trends — this week's per-day picture + a 4-week division trend.
+class AttendanceTrendsPage extends StatefulWidget {
+  const AttendanceTrendsPage({
+    super.key,
+    required this.api,
+    required this.activeStudents,
+  });
+  final ApiService api;
+  final int activeStudents;
+
+  @override
+  State<AttendanceTrendsPage> createState() => _AttendanceTrendsPageState();
+}
+
+class _AttendanceTrendsPageState extends State<AttendanceTrendsPage> {
+  bool _loading = true;
+  String? _error;
+  List<Map<String, dynamic>> _week = [];
+  List<String> _labels = [];
+  List<int> _present = [];
+  List<int> _absent = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final results = await Future.wait([
+        widget.api.map('/api/weekly-absence?date=${date()}'),
+        widget.api.map('/api/division-weekly-trend?date=${date()}'),
+      ]);
+      final week = ((results[0]['week'] as List?) ?? [])
+          .map((d) => Map<String, dynamic>.from(d as Map))
+          .toList();
+      final labels = ((results[1]['labels'] as List?) ?? [])
+          .map((l) => '$l')
+          .toList();
+      final present = ((results[1]['present'] as List?) ?? [])
+          .map(intValue)
+          .toList();
+      final absent = ((results[1]['absent'] as List?) ?? [])
+          .map(intValue)
+          .toList();
+      if (mounted) {
+        setState(() {
+          _week = week;
+          _labels = labels;
+          _present = present;
+          _absent = absent;
+          _loading = false;
+          _error = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = readableError(e, fallback: 'Failed to load trends.');
+        });
+      }
+    }
+  }
+
+  static const _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+
+  Widget _dayRow(int index, Map<String, dynamic> day) {
+    final today = date();
+    final dayDate = '${day['date']}';
+    final isSchoolDay = day['is_school_day'] == true;
+    final upcoming = dayDate.compareTo(today) > 0;
+    final absent = intValue(day['students_absent']);
+    final active = widget.activeStudents;
+    final rate = (!isSchoolDay || upcoming || active <= 0)
+        ? null
+        : (((active - absent) / active) * 100).round().clamp(0, 100);
+    final color = rate == null
+        ? const Color(0xFF9CA3AF)
+        : rate >= 90
+        ? const Color(0xFF138A64)
+        : rate >= 75
+        ? const Color(0xFFB45309)
+        : const Color(0xFFDC2626);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 40,
+            child: Text(
+              index < _dayNames.length ? _dayNames[index] : dayDate,
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 12.5,
+                color: dayDate == today
+                    ? const Color(0xFF0C5A3C)
+                    : const Color(0xFF52605C),
+              ),
+            ),
+          ),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: LinearProgressIndicator(
+                value: (rate ?? 0) / 100,
+                minHeight: 8,
+                backgroundColor: const Color(0xFFEDF3F0),
+                color: color,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 88,
+            child: Text(
+              !isSchoolDay
+                  ? 'No classes'
+                  : upcoming
+                  ? 'Upcoming'
+                  : '$rate% • $absent abs',
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _weekRow(int index) {
+    final maxPresent = _present.fold<int>(1, (m, v) => v > m ? v : m);
+    final present = index < _present.length ? _present[index] : 0;
+    final absent = index < _absent.length ? _absent[index] : 0;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 52,
+            child: Text(
+              index < _labels.length ? _labels[index] : '',
+              style: const TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 12,
+                color: Color(0xFF52605C),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(99),
+                  child: LinearProgressIndicator(
+                    value: present / maxPresent,
+                    minHeight: 8,
+                    backgroundColor: const Color(0xFFEDF3F0),
+                    color: const Color(0xFF138A64),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '$present present • $absent absent',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF667872),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7F6),
+      appBar: divisionToolBar('Attendance Trends'),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Text(
+                  _error!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Color(0xFFB91C1C),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            )
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  PremiumCard(
+                    title: 'This Week',
+                    subtitle: 'Division attendance rate per school day',
+                    child: Column(
+                      children: [
+                        if (_week.isEmpty)
+                          const EmptyText('No data for this week yet.'),
+                        for (var i = 0; i < _week.length; i++)
+                          _dayRow(i, _week[i]),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  PremiumCard(
+                    title: 'Last 4 Weeks',
+                    subtitle: 'Weekly present totals across the division',
+                    child: Column(
+                      children: [
+                        if (_labels.isEmpty)
+                          const EmptyText('No weekly trend data yet.'),
+                        for (var i = 0; i < _labels.length; i++) _weekRow(i),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+}
+
+// Student Search — find any student in the division by name or LRN.
+class StudentSearchPage extends StatefulWidget {
+  const StudentSearchPage({super.key, required this.api});
+  final ApiService api;
+
+  @override
+  State<StudentSearchPage> createState() => _StudentSearchPageState();
+}
+
+class _StudentSearchPageState extends State<StudentSearchPage> {
+  final _query = TextEditingController();
+  Timer? _debounce;
+  bool _searching = false;
+  String? _error;
+  List<Map<String, dynamic>> _results = [];
+  Map<int, Map<String, dynamic>>? _attendanceByPerson;
+  static const _maxResults = 60;
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _query.dispose();
+    super.dispose();
+  }
+
+  void _onChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), () {
+      final q = value.trim();
+      if (q.length < 2) {
+        if (mounted) {
+          setState(() {
+            _results = [];
+            _error = null;
+            _searching = false;
+          });
+        }
+        return;
+      }
+      _search(q);
+    });
+  }
+
+  Future<void> _ensureAttendanceLoaded() async {
+    if (_attendanceByPerson != null) return;
+    try {
+      final rows = await widget.api.list('/api/attendance?date=${date()}');
+      final map = <int, Map<String, dynamic>>{};
+      for (final r in rows) {
+        final row = Map<String, dynamic>.from(r as Map);
+        if ('${row['person_type']}' != 'student') continue;
+        map[intValue(row['person_id'])] = row;
+      }
+      _attendanceByPerson = map;
+    } catch (_) {
+      // Status chips degrade gracefully to "No scan" when this fails.
+      _attendanceByPerson = {};
+    }
+  }
+
+  Future<void> _search(String q) async {
+    setState(() {
+      _searching = true;
+      _error = null;
+    });
+    try {
+      final results = await Future.wait([
+        widget.api.list(
+          '/api/students?status=active&search=${Uri.encodeQueryComponent(q)}',
+        ),
+        _ensureAttendanceLoaded(),
+      ]);
+      final rows = (results[0] as List)
+          .take(_maxResults)
+          .map((s) => Map<String, dynamic>.from(s as Map))
+          .toList();
+      if (mounted) {
+        setState(() {
+          _results = rows;
+          _searching = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _searching = false;
+          _error = readableError(e, fallback: 'Search failed.');
+        });
+      }
+    }
+  }
+
+  String _hm(dynamic time) {
+    final t = '$time';
+    return t.length >= 5 ? t.substring(0, 5) : t;
+  }
+
+  ({String label, Color color}) _statusOf(Map<String, dynamic> student) {
+    final row = _attendanceByPerson?[intValue(student['id'])];
+    if (row == null || '${row['time_in'] ?? ''}'.isEmpty) {
+      return (label: 'No scan yet', color: const Color(0xFF64748B));
+    }
+    final status = '${row['monitoring_status'] ?? ''}'.trim();
+    final label = status.isEmpty
+        ? 'In at ${_hm(row['time_in'])}'
+        : '$status • ${_hm(row['time_in'])}';
+    return (label: label, color: const Color(0xFF138A64));
+  }
+
+  void _openStudent(Map<String, dynamic> s) {
+    final status = _statusOf(s);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 26),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${s['firstname'] ?? ''} ${s['lastname'] ?? ''}'.trim(),
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'LRN: ${'${s['lrn'] ?? ''}'.isEmpty ? '—' : s['lrn']}',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF667872),
+              ),
+            ),
+            const SizedBox(height: 14),
+            InfoPill('School', '${s['school_name'] ?? '-'}'),
+            const SizedBox(height: 8),
+            InfoPill(
+              'Grade & Section',
+              '${s['grade_name'] ?? '-'} • ${s['section_name'] ?? '-'}',
+            ),
+            const SizedBox(height: 8),
+            InfoPill('Today', status.label),
+            const SizedBox(height: 8),
+            InfoPill(
+              'Guardian',
+              '${'${s['guardian_name'] ?? ''}'.isEmpty ? '—' : s['guardian_name']}'
+              '${'${s['guardian_contact'] ?? ''}'.isEmpty ? '' : ' • ${s['guardian_contact']}'}',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7F6),
+      appBar: divisionToolBar('Student Search'),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+            child: TextField(
+              controller: _query,
+              autofocus: true,
+              onChanged: _onChanged,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: 'Search student name or LRN…',
+                prefixIcon: const Icon(Icons.search_rounded),
+                filled: true,
+                fillColor: Colors.white,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 13,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(15),
+                  borderSide: const BorderSide(color: Color(0xFFDCE6E1)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(15),
+                  borderSide: const BorderSide(color: Color(0xFFDCE6E1)),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: _searching
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Text(
+                        _error!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Color(0xFFB91C1C),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  )
+                : _results.isEmpty
+                ? Center(
+                    child: Text(
+                      _query.text.trim().length < 2
+                          ? 'Type at least 2 letters to search\nacross every school in the division.'
+                          : 'No students matched your search.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Color(0xFF667872),
+                        fontWeight: FontWeight.w600,
+                        height: 1.5,
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _results.length,
+                    itemBuilder: (context, i) {
+                      final s = _results[i];
+                      final status = _statusOf(s);
+                      return RecordTile(
+                        title: '${s['firstname'] ?? ''} ${s['lastname'] ?? ''}'
+                            .trim(),
+                        subtitle:
+                            '${s['school_name'] ?? '-'} • ${s['grade_name'] ?? '-'} ${s['section_name'] ?? ''}',
+                        meta: status.label,
+                        color: status.color,
+                        onTap: () => _openStudent(s),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class FlagTile extends StatelessWidget {
   const FlagTile(this.row, {super.key});
   final Map<String, dynamic> row;
@@ -8711,7 +9538,7 @@ class PremiumCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ClipRRect(
-    borderRadius: BorderRadius.circular(28),
+    borderRadius: BorderRadius.circular(22),
     child: BackdropFilter(
       filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
       child: Container(
@@ -8719,7 +9546,7 @@ class PremiumCard extends StatelessWidget {
         padding: padding,
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: .96),
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(22),
           border: Border.all(
             color: border?.withValues(alpha: .65) ?? const Color(0xFFDCE6E1),
           ),
@@ -8743,7 +9570,7 @@ class PremiumCard extends StatelessWidget {
               Text(
                 title!,
                 style: const TextStyle(
-                  fontSize: 19,
+                  fontSize: 17,
                   fontWeight: FontWeight.w900,
                   letterSpacing: -.25,
                   color: Color(0xFF0F211B),
@@ -8755,6 +9582,7 @@ class PremiumCard extends StatelessWidget {
                 child: Text(
                   subtitle!,
                   style: const TextStyle(
+                    fontSize: 12.5,
                     color: Color(0xFF667872),
                     fontWeight: FontWeight.w600,
                   ),
@@ -8782,15 +9610,16 @@ class SectionTitle extends StatelessWidget {
         Text(
           title,
           style: const TextStyle(
-            fontSize: 24,
+            fontSize: 22,
             fontWeight: FontWeight.w900,
             letterSpacing: -.55,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 3),
         Text(
           subtitle,
           style: const TextStyle(
+            fontSize: 12.5,
             color: Color(0xFF667872),
             fontWeight: FontWeight.w600,
           ),
@@ -8907,7 +9736,7 @@ class RecordTile extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: const Color(0xFFF9FBFA),
-          borderRadius: BorderRadius.circular(19),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: const Color(0xFFE4ECE8)),
         ),
         child: Row(
@@ -8991,16 +9820,16 @@ class Metric extends StatelessWidget {
   @override
   Widget build(BuildContext context) => InkWell(
     onTap: onTap,
-    borderRadius: BorderRadius.circular(23),
+    borderRadius: BorderRadius.circular(18),
     child: ClipRRect(
-      borderRadius: BorderRadius.circular(23),
+      borderRadius: BorderRadius.circular(18),
       child: BackdropFilter(
         filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
         child: Container(
           padding: const EdgeInsets.all(13),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: .95),
-            borderRadius: BorderRadius.circular(23),
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(color: const Color(0xFFDCE6E1)),
             boxShadow: [
               BoxShadow(
