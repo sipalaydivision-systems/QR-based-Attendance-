@@ -14,6 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class AppConfig {
   static const appName = 'EduTrack';
@@ -592,6 +593,8 @@ class ApiService {
   String get cookie => prefs.getString('cookie') ?? '';
   String get fullname => prefs.getString('fullname') ?? 'Division User';
   String get role => prefs.getString('role') ?? 'division';
+  String get email => prefs.getString('email') ?? '';
+  String get username => prefs.getString('username') ?? '';
   bool get isSuperAdmin => role == 'super_admin';
   bool get isLoggedIn => cookie.isNotEmpty;
 
@@ -721,6 +724,8 @@ class ApiService {
     await prefs.setString('cookie', sessionCookie);
     await prefs.setString('fullname', '${user['fullname'] ?? username}');
     await prefs.setString('role', '${user['role'] ?? 'division'}');
+    await prefs.setString('email', '${user['email'] ?? ''}');
+    await prefs.setString('username', '${user['username'] ?? username}');
   }
 
   Future<void> logout() async {
@@ -728,6 +733,8 @@ class ApiService {
     await prefs.remove('cookie');
     await prefs.remove('fullname');
     await prefs.remove('role');
+    await prefs.remove('email');
+    await prefs.remove('username');
     await prefs.remove('last_absence_key');
   }
 
@@ -793,6 +800,33 @@ class ApiService {
       response,
       fallback: 'Server returned an invalid response format.',
     );
+  }
+
+  // Update the signed-in user's own name + email (staff-app Profile page).
+  Future<Map<String, dynamic>> updateAccountProfile(
+    String fullname,
+    String email,
+  ) async {
+    final res = await postJson('/api/account/update-profile', {
+      'fullname': fullname,
+      'email': email,
+    });
+    if (res['success'] == true) {
+      await prefs.setString('fullname', fullname);
+      await prefs.setString('email', email);
+    }
+    return res;
+  }
+
+  // Change the signed-in user's own password (staff-app Profile page).
+  Future<Map<String, dynamic>> changeAccountPassword(
+    String currentPassword,
+    String newPassword,
+  ) async {
+    return postJson('/api/account/change-password', {
+      'current_password': currentPassword,
+      'new_password': newPassword,
+    });
   }
 
   Future<Map<String, dynamic>> postJson(
@@ -1620,7 +1654,9 @@ class _HomeShellState extends State<HomeShell>
   @override
   void initState() {
     super.initState();
-    tab = widget.initialTab.clamp(0, widget.api.isSuperAdmin ? 5 : 4).toInt();
+    // Upper bound grows with the extra Profile tab (+ role-specific tab);
+    // build() re-clamps to the real page count for the current role.
+    tab = widget.initialTab.clamp(0, 6).toInt();
     alertIntent = widget.initialAlertIntent;
     backgroundController = AnimationController(
       vsync: this,
@@ -1686,6 +1722,16 @@ class _HomeShellState extends State<HomeShell>
 
   @override
   Widget build(BuildContext context) {
+    Future<void> doLogout() async {
+      final navigator = Navigator.of(context);
+      await widget.api.logout();
+      if (mounted) {
+        navigator.pushReplacement(
+          MaterialPageRoute(builder: (_) => LoginScreen(api: widget.api)),
+        );
+      }
+    }
+
     final pages = <Widget>[
       DashboardPage(
         api: widget.api,
@@ -1702,13 +1748,16 @@ class _HomeShellState extends State<HomeShell>
       SchoolsPage(api: widget.api),
       ReportsPage(api: widget.api),
       AlertsPage(
+        api: widget.api,
         flags: flags,
+        dashboard: dashboard,
         notificationIntent: alertIntent,
         onIntentConsumed: () => setState(() {
           alertIntent = null;
           pendingAlertIntent = null;
         }),
       ),
+      ProfilePage(api: widget.api, onLogout: doLogout),
     ];
     final destinations = <NavigationDestination>[
       const NavigationDestination(
@@ -1729,7 +1778,11 @@ class _HomeShellState extends State<HomeShell>
       ),
       const NavigationDestination(
         icon: Icon(Icons.notifications_active_rounded),
-        label: 'Alerts',
+        label: 'Notifications',
+      ),
+      const NavigationDestination(
+        icon: Icon(Icons.account_circle_rounded),
+        label: 'Profile',
       ),
     ];
     if (widget.api.isSuperAdmin) {
@@ -1771,17 +1824,7 @@ class _HomeShellState extends State<HomeShell>
             Header(
               api: widget.api,
               compact: headerCompact,
-              onLogout: () async {
-                final navigator = Navigator.of(context);
-                await widget.api.logout();
-                if (mounted) {
-                  navigator.pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => LoginScreen(api: widget.api),
-                    ),
-                  );
-                }
-              },
+              onLogout: doLogout,
             ),
             Expanded(
               child: NotificationListener<ScrollNotification>(
@@ -1827,7 +1870,9 @@ class _HomeShellState extends State<HomeShell>
               top: false,
               child: NavigationBar(
                 height: 76,
-                labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+                labelBehavior: destinations.length > 6
+                    ? NavigationDestinationLabelBehavior.onlyShowSelected
+                    : NavigationDestinationLabelBehavior.alwaysShow,
                 backgroundColor: Colors.transparent,
                 selectedIndex: selectedTab,
                 onDestinationSelected: (value) => setState(() => tab = value),
@@ -7087,11 +7132,15 @@ class _AdviserDirectoryPageState extends State<AdviserDirectoryPage> {
 class AlertsPage extends StatefulWidget {
   const AlertsPage({
     super.key,
+    required this.api,
     required this.flags,
+    this.dashboard = const {},
     this.notificationIntent,
     this.onIntentConsumed,
   });
+  final ApiService api;
   final List<dynamic> flags;
+  final Map<String, dynamic> dashboard;
   final Map<String, dynamic>? notificationIntent;
   final VoidCallback? onIntentConsumed;
 
@@ -7140,17 +7189,84 @@ class _AlertsPageState extends State<AlertsPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _consumeIntentIfNeeded();
     });
+    final d = widget.dashboard;
+    final present = intValue(d['students_present']);
+    final absent = intValue(d['students_absent']);
+    final active = intValue(d['active_students'] ?? d['total_students']);
+    final base = active > 0 ? active : (present + absent);
+    final rate = base > 0
+        ? ((present / base) * 100).round().clamp(0, 100)
+        : intValue(d['attendance_rate']);
+    final scannerOffline = intValue(d['scanner_offline']);
+    final isAdmin = widget.api.isSuperAdmin;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         const SectionTitle(
-          'Alerts',
-          '2-day absence alerts and notification checks.',
+          'Notifications',
+          "Division alerts and today's attendance at a glance.",
         ),
         const SizedBox(height: 16),
+        // Division-wide attendance summary (shown to SDS / ASDS / Admin).
         PremiumCard(
-          title: 'Notification Test',
-          subtitle: 'Verify the 2-day flagged student alert on this phone.',
+          title: 'Division Attendance Today',
+          subtitle: '$present of $base students present',
+          child: Row(
+            children: [
+              Expanded(
+                child: _summaryStat(
+                  Icons.check_circle_rounded,
+                  'Present',
+                  '$present',
+                  const Color(0xFF138A64),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _summaryStat(
+                  Icons.person_off_rounded,
+                  'Absent',
+                  '$absent',
+                  const Color(0xFFDC2626),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _summaryStat(
+                  Icons.donut_large_rounded,
+                  'Rate',
+                  '$rate%',
+                  const Color(0xFF2563EB),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Scanner-offline alerts — Admin only.
+        if (isAdmin) ...[
+          ScannerOfflineCard(api: widget.api, offlineCount: scannerOffline),
+          const SizedBox(height: 12),
+        ],
+        // Consecutive-absence flags (scoped per role by the backend).
+        PremiumCard(
+          title: 'Absence Alerts',
+          subtitle:
+              '${widget.flags.length} student(s) flagged for consecutive absences',
+          child: Column(
+            children: [
+              if (widget.flags.isEmpty)
+                const EmptyText('No flagged absentees right now.'),
+              for (final item in widget.flags)
+                FlagTile(Map<String, dynamic>.from(item as Map)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Notification delivery check.
+        PremiumCard(
+          title: 'Test Notifications',
+          subtitle: 'Send a sample alert to this phone to confirm delivery.',
           child: FilledButton.icon(
             onPressed: () async {
               final granted = await ensureNotificationPermission();
@@ -7177,7 +7293,7 @@ class _AlertsPageState extends State<AlertsPage> {
               if (widget.flags.isEmpty) {
                 await showLocalNotification(
                   'Edutrack alert test',
-                  'No live 2-day flagged students found.',
+                  'No live flagged students found.',
                 );
                 return;
               }
@@ -7203,22 +7319,746 @@ class _AlertsPageState extends State<AlertsPage> {
               }
             },
             icon: const Icon(Icons.notifications_active),
-            label: const Text('Send 2-day flagged alert'),
+            label: const Text('Send sample alert'),
           ),
         ),
-        const SizedBox(height: 12),
+      ],
+    );
+  }
+
+  Widget _summaryStat(IconData icon, String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .07),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: .16)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 22),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              color: color,
+              letterSpacing: -.5,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF667872),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Admin-only card: schools whose desktop scanner is currently offline, pulled
+// live from /api/scanner-desktop-status (super_admin scoped).
+class ScannerOfflineCard extends StatefulWidget {
+  const ScannerOfflineCard({
+    super.key,
+    required this.api,
+    required this.offlineCount,
+  });
+  final ApiService api;
+  final int offlineCount;
+
+  @override
+  State<ScannerOfflineCard> createState() => _ScannerOfflineCardState();
+}
+
+class _ScannerOfflineCardState extends State<ScannerOfflineCard> {
+  bool _loading = true;
+  List<Map<String, dynamic>> _offline = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final data = await widget.api.map('/api/scanner-desktop-status');
+      final schools = (data['schools'] as List?) ?? [];
+      final offline = <Map<String, dynamic>>[];
+      for (final s in schools) {
+        final row = Map<String, dynamic>.from(s as Map);
+        if ('${row['scanner_status']}' == 'offline') offline.add(row);
+      }
+      if (mounted) {
+        setState(() {
+          _offline = offline;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  String _lastSeenLabel(dynamic seconds) {
+    final s = intValue(seconds);
+    if (s <= 0) return 'No recent check-in';
+    if (s < 3600) return 'Last seen ${(s / 60).round()} min ago';
+    if (s < 86400) return 'Last seen ${(s / 3600).round()} hr ago';
+    return 'Last seen ${(s / 86400).round()} day(s) ago';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final count = _loading ? widget.offlineCount : _offline.length;
+    final allOnline = !_loading && _offline.isEmpty;
+    return PremiumCard(
+      title: 'Scanner Status',
+      subtitle: allOnline
+          ? 'All desktop scanners are reporting in.'
+          : '$count scanner${count == 1 ? '' : 's'} offline across the division',
+      border: allOnline ? const Color(0xFF86EFAC) : const Color(0xFFFCA5A5),
+      child: _loading
+          ? const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: 10),
+                  Text(
+                    'Checking scanners…',
+                    style: TextStyle(
+                      color: Color(0xFF667872),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : allOnline
+          ? Row(
+              children: const [
+                Icon(Icons.verified_rounded, color: Color(0xFF138A64), size: 22),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Every school scanner has checked in recently.',
+                    style: TextStyle(
+                      color: Color(0xFF3B4A45),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : Column(
+              children: [
+                for (final s in _offline)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFFECACA)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.wifi_off_rounded,
+                            color: Color(0xFFDC2626),
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${s['name'] ?? 'School'}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 13.5,
+                                  ),
+                                ),
+                                Text(
+                                  _lastSeenLabel(s['scanner_last_seen_seconds']),
+                                  style: const TextStyle(
+                                    color: Color(0xFF991B1B),
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
+// Guardian-styled account page for the staff app (all admin-side roles).
+// Avatar + role, edit name/email, change password, notification test, logout.
+class ProfilePage extends StatefulWidget {
+  const ProfilePage({super.key, required this.api, required this.onLogout});
+  final ApiService api;
+  final Future<void> Function() onLogout;
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  String _version = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) setState(() => _version = info.version);
+    } catch (_) {
+      /* version is best-effort */
+    }
+  }
+
+  String _roleLabel(String role) {
+    switch (role) {
+      case 'super_admin':
+        return 'System Administrator';
+      case 'superintendent':
+        return 'Schools Division Superintendent';
+      case 'asst_superintendent':
+        return 'Asst. Schools Division Superintendent';
+      case 'principal':
+        return 'School Principal';
+      case 'adviser':
+        return 'Class Adviser';
+      default:
+        return 'Division User';
+    }
+  }
+
+  String _initials(String name) {
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return 'U';
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+        .toUpperCase();
+  }
+
+  Future<void> _editProfile() async {
+    final name = TextEditingController(
+      text: widget.api.fullname == 'Division User' ? '' : widget.api.fullname,
+    );
+    final email = TextEditingController(text: widget.api.email);
+    bool busy = false;
+    String? err;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          Future<void> submit() async {
+            if (name.text.trim().isEmpty) {
+              setLocal(() => err = 'Please enter your name.');
+              return;
+            }
+            setLocal(() {
+              busy = true;
+              err = null;
+            });
+            try {
+              final res = await widget.api.updateAccountProfile(
+                name.text.trim(),
+                email.text.trim(),
+              );
+              if (res['success'] == true) {
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (mounted) {
+                  setState(() {});
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Profile updated.')),
+                  );
+                }
+              } else {
+                setLocal(() {
+                  busy = false;
+                  err = '${res['error'] ?? 'Update failed.'}';
+                });
+              }
+            } catch (e) {
+              setLocal(() {
+                busy = false;
+                err = readableError(e, fallback: 'Update failed.');
+              });
+            }
+          }
+
+          InputDecoration dec(String l, [String? h]) => InputDecoration(
+            labelText: l,
+            hintText: h,
+            isDense: true,
+            border: const OutlineInputBorder(),
+          );
+          return AlertDialog(
+            title: const Text('Edit Profile'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (err != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text(
+                        err!,
+                        style: const TextStyle(
+                          color: Color(0xFFDC2626),
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ),
+                  TextField(
+                    controller: name,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: dec('Full name'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: email,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: dec('Email (optional)'),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: busy ? null : () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: busy ? null : submit,
+                child: busy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Save'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    name.dispose();
+    email.dispose();
+  }
+
+  Future<void> _changePassword() async {
+    final cur = TextEditingController();
+    final nw = TextEditingController();
+    final cf = TextEditingController();
+    bool busy = false;
+    bool obscure = true;
+    String? err;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          Future<void> submit() async {
+            if (cur.text.isEmpty || nw.text.isEmpty || cf.text.isEmpty) {
+              setLocal(() => err = 'All fields are required.');
+              return;
+            }
+            if (nw.text.length < 6) {
+              setLocal(() => err = 'New password must be at least 6 characters.');
+              return;
+            }
+            if (nw.text != cf.text) {
+              setLocal(() => err = 'New passwords do not match.');
+              return;
+            }
+            setLocal(() {
+              busy = true;
+              err = null;
+            });
+            try {
+              final res = await widget.api.changeAccountPassword(
+                cur.text,
+                nw.text,
+              );
+              if (res['success'] == true) {
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Password changed successfully.'),
+                    ),
+                  );
+                }
+              } else {
+                setLocal(() {
+                  busy = false;
+                  err = '${res['error'] ?? 'Change failed.'}';
+                });
+              }
+            } catch (e) {
+              setLocal(() {
+                busy = false;
+                err = readableError(e, fallback: 'Change failed.');
+              });
+            }
+          }
+
+          InputDecoration dec(String l) => InputDecoration(
+            labelText: l,
+            isDense: true,
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: Icon(
+                obscure ? Icons.visibility_off : Icons.visibility,
+                size: 20,
+              ),
+              onPressed: () => setLocal(() => obscure = !obscure),
+            ),
+          );
+          return AlertDialog(
+            title: const Text('Change Password'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (err != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text(
+                        err!,
+                        style: const TextStyle(
+                          color: Color(0xFFDC2626),
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ),
+                  TextField(
+                    controller: cur,
+                    obscureText: obscure,
+                    decoration: dec('Current password'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: nw,
+                    obscureText: obscure,
+                    decoration: dec('New password'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: cf,
+                    obscureText: obscure,
+                    decoration: dec('Confirm new password'),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: busy ? null : () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: busy ? null : submit,
+                child: busy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Save'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    cur.dispose();
+    nw.dispose();
+    cf.dispose();
+  }
+
+  Future<void> _testNotification() async {
+    final granted = await ensureNotificationPermission();
+    if (!mounted) return;
+    if (!granted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Notifications are turned off. Enable them in your phone settings, then try again.',
+          ),
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+    await showLocalNotification(
+      'EduTrack test notification',
+      'Notifications are working on this device.',
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Test notification sent.')),
+      );
+    }
+  }
+
+  Widget _infoTile(IconData icon, String label, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 3),
+    child: Row(
+      children: [
+        Icon(icon, size: 20, color: const Color(0xFF667872)),
+        const SizedBox(width: 12),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 13, color: Color(0xFF667872)),
+        ),
+        const Spacer(),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF0F211B),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _actionTile(
+    IconData icon,
+    String title,
+    String subtitle,
+    VoidCallback onTap,
+  ) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(12),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: const Color(0xFF138A64)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F211B),
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    color: Color(0xFF667872),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: Color(0xFF9CA3AF)),
+        ],
+      ),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final api = widget.api;
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const SectionTitle('Profile', 'Your account and app settings.'),
+        const SizedBox(height: 16),
+        // Identity card.
         PremiumCard(
-          title: '2-Day Absence Alerts',
-          subtitle: '${widget.flags.length} active flag(s)',
           child: Column(
             children: [
-              if (widget.flags.isEmpty)
-                const EmptyText('No 2-day absentees detected.'),
-              for (final item in widget.flags)
-                FlagTile(Map<String, dynamic>.from(item as Map)),
+              Container(
+                width: 76,
+                height: 76,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF138A64).withValues(alpha: .12),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  _initials(api.fullname),
+                  style: const TextStyle(
+                    color: Color(0xFF0C5A3C),
+                    fontWeight: FontWeight.w900,
+                    fontSize: 26,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                api.fullname,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF0F211B),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF138A64).withValues(alpha: .10),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  _roleLabel(api.role),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0C5A3C),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
+        const SizedBox(height: 12),
+        // Account card.
+        PremiumCard(
+          title: 'Account',
+          child: Column(
+            children: [
+              _actionTile(
+                Icons.badge_outlined,
+                'Edit Profile',
+                'Update your name and email',
+                _editProfile,
+              ),
+              const Divider(height: 18),
+              _infoTile(Icons.person_outline, 'Name', api.fullname),
+              const Divider(height: 18),
+              _infoTile(
+                Icons.alternate_email,
+                'Email',
+                api.email.isEmpty ? '—' : api.email,
+              ),
+              const Divider(height: 18),
+              _infoTile(
+                Icons.verified_user_outlined,
+                'Role',
+                _roleLabel(api.role),
+              ),
+              const Divider(height: 18),
+              _actionTile(
+                Icons.lock_outline,
+                'Change Password',
+                'Update your account password',
+                _changePassword,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Notifications card.
+        PremiumCard(
+          title: 'Notifications',
+          subtitle: 'Send a sample alert to confirm this phone receives them.',
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _testNotification,
+              icon: const Icon(
+                Icons.notifications_active_rounded,
+                color: Color(0xFF138A64),
+              ),
+              label: const Text(
+                'Send test notification',
+                style: TextStyle(
+                  color: Color(0xFF138A64),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFFBBF7D0)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => widget.onLogout(),
+            icon: const Icon(Icons.logout_rounded, color: Color(0xFFDC2626)),
+            label: const Text(
+              'Log Out',
+              style: TextStyle(
+                color: Color(0xFFDC2626),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Color(0xFFFECACA)),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 18),
+        Center(
+          child: Text(
+            '${AppConfig.appName} • v${_version.isEmpty ? '…' : _version}',
+            style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5),
+          ),
+        ),
+        const SizedBox(height: 8),
       ],
     );
   }

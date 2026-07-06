@@ -146,6 +146,66 @@ router.post('/change-password', async (req, res) => {
     }
 });
 
+// ---------------------------------------------------------------------------
+// Mobile (EduTrack staff app) — JSON account self-service.
+// Session-cookie authenticated (same session as the web app). Used by the
+// staff-app Profile page so admin-side users can edit their own name/email and
+// change their password from the phone. Mounted at '/' before the /api router,
+// so these paths resolve here first. req.body is parsed globally (express.json).
+// ---------------------------------------------------------------------------
+
+// POST /api/account/update-profile — edit own name + email (JSON)
+router.post('/api/account/update-profile', async (req, res) => {
+    if (!req.session.user) {
+        return res.status(401).json({ success: false, error: 'Your session has expired. Please sign in again.' });
+    }
+    const fullname = (req.body.fullname || '').trim();
+    const email = (req.body.email || '').trim();
+    if (!fullname) {
+        return res.json({ success: false, error: 'Name is required.' });
+    }
+    try {
+        await db.query('UPDATE users SET fullname = ?, email = ? WHERE id = ?', [fullname, email || null, req.session.user.id]);
+        req.session.user.fullname = fullname;
+        req.session.user.email = email || null;
+        return res.json({ success: true, fullname, email });
+    } catch (err) {
+        console.error('Mobile update-profile error:', err);
+        return res.json({ success: false, error: 'A server error occurred. Please try again.' });
+    }
+});
+
+// POST /api/account/change-password — change own password (JSON)
+router.post('/api/account/change-password', async (req, res) => {
+    if (!req.session.user) {
+        return res.status(401).json({ success: false, error: 'Your session has expired. Please sign in again.' });
+    }
+    const current = (req.body.current_password || '').trim();
+    const next = (req.body.new_password || '').trim();
+    if (!current || !next) {
+        return res.json({ success: false, error: 'All password fields are required.' });
+    }
+    if (next.length < 6) {
+        return res.json({ success: false, error: 'New password must be at least 6 characters.' });
+    }
+    try {
+        const [rows] = await db.query('SELECT password FROM users WHERE id = ?', [req.session.user.id]);
+        if (rows.length === 0) {
+            return res.json({ success: false, error: 'User not found.' });
+        }
+        const match = await bcrypt.compare(current, rows[0].password);
+        if (!match) {
+            return res.json({ success: false, error: 'Current password is incorrect.' });
+        }
+        const hashed = await bcrypt.hash(next, 10);
+        await db.query('UPDATE users SET password = ? WHERE id = ?', [hashed, req.session.user.id]);
+        return res.json({ success: true });
+    } catch (err) {
+        console.error('Mobile change-password error:', err);
+        return res.json({ success: false, error: 'A server error occurred. Please try again.' });
+    }
+});
+
 // ---- Adviser email lookup (used by login page JS to decide whether to show password field) ----
 router.get('/adviser-check-email', async (req, res) => {
     const email = (req.query.email || '').trim().toLowerCase();
