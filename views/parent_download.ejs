@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#064f3d">
+    <meta name="theme-color" content="#0B7A55">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="EduTrack Guardian">
@@ -20,19 +20,21 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         :root {
-            --green: #16a34a;
-            --green-bright: #35d27f;
-            --green-deep: #064f3d;
-            --orange: #ff6b18;
-            --ink: #071711;
-            --muted: #d7fbed;
-            --line: rgba(255,255,255,0.18);
-            --glass: rgba(255,255,255,0.12);
-            --safe-top: env(safe-area-inset-top, 0);
-            --safe-bottom: env(safe-area-inset-bottom, 0);
-            --safe-left: env(safe-area-inset-left, 0);
-            --safe-right: env(safe-area-inset-right, 0);
-            --sticky-h: 88px;
+            --green: #0B7A55;
+            --green-dark: #073B2B;
+            --green-soft: #E7F5EF;
+            --green-line: #C6E5D8;
+            --bg: #F6F9F7;
+            --card: #FFFFFF;
+            --ink: #0F211B;
+            --muted: #5B6B64;
+            --line: #E3ECE7;
+            --danger: #B4231F;
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+            --safe-left: env(safe-area-inset-left, 0px);
+            --safe-right: env(safe-area-inset-right, 0px);
+            --sticky-h: 84px;
         }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         html { scroll-behavior: smooth; }
@@ -41,509 +43,431 @@
             min-height: 100vh;
             min-height: 100svh;
             font-family: Inter, "Segoe UI", Tahoma, sans-serif;
-            color: #fff;
-            background:
-                radial-gradient(circle at 12% 10%, rgba(69,255,180,.20), transparent 320px),
-                radial-gradient(circle at 92% 6%, rgba(255,126,36,.22), transparent 320px),
-                linear-gradient(160deg, #05261d 0%, #076548 55%, #06a36f 100%);
-            background-attachment: fixed;
+            background: var(--bg);
+            color: var(--ink);
             -webkit-text-size-adjust: 100%;
             text-rendering: optimizeLegibility;
             overflow-x: hidden;
-            /* Leave room for the sticky CTA on small screens */
-            padding-bottom: calc(var(--sticky-h) + var(--safe-bottom) + 12px);
+            padding-bottom: calc(var(--sticky-h) + var(--safe-bottom));
         }
         a { color: inherit; }
-
-        /* ---------- Layout ---------- */
         .wrap {
-            position: relative;
-            z-index: 2;
             width: 100%;
-            max-width: 1120px;
+            max-width: 560px;
             margin: 0 auto;
             padding-left: max(16px, var(--safe-left));
             padding-right: max(16px, var(--safe-right));
         }
 
-        /* ---------- Brand bar ---------- */
+        /* ---------- Green header band ---------- */
+        .hero-band {
+            background: linear-gradient(150deg, #073B2B 0%, #0B7A55 62%, #12A16F 100%);
+            color: #fff;
+            padding-top: calc(14px + var(--safe-top));
+            padding-bottom: 68px;
+            border-radius: 0 0 28px 28px;
+        }
         .brand-bar {
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 12px;
-            padding-top: calc(14px + var(--safe-top));
-            padding-bottom: 14px;
+            padding-bottom: 20px;
         }
-        .brand {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            color: #fff;
-            text-decoration: none;
-            min-width: 0;
-        }
+        .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; min-width: 0; }
         .brand img {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            object-fit: contain;
-            background: #fff;
-            padding: 2px;
-            box-shadow: 0 8px 20px rgba(0,0,0,.2);
+            width: 36px; height: 36px; border-radius: 50%;
+            object-fit: contain; background: #fff; padding: 2px;
             flex: 0 0 auto;
         }
-        .brand strong { display: block; font-size: 15px; line-height: 1.1; font-weight: 900; }
-        .brand-sub { display: block; margin-top: 2px; font-size: 11px; color: rgba(255,255,255,.78); }
+        .brand strong { display: block; font-size: 14px; line-height: 1.15; font-weight: 900; }
+        .brand-sub { display: block; margin-top: 1px; font-size: 10.5px; color: rgba(255,255,255,.75); }
         .top-link {
-            display: none; /* hidden on mobile; shown on desktop */
-            align-items: center;
-            gap: 8px;
-            color: #eafff7;
-            text-decoration: none;
-            font-weight: 800;
-            font-size: 13px;
-            padding: 10px 14px;
-            border-radius: 999px;
-            background: rgba(255,255,255,.1);
-            border: 1px solid rgba(255,255,255,.16);
+            flex: 0 0 auto;
+            display: inline-flex; align-items: center; gap: 7px;
+            color: #fff; text-decoration: none;
+            font-weight: 800; font-size: 12px;
+            padding: 9px 13px; border-radius: 999px;
+            background: rgba(255,255,255,.14);
+            border: 1px solid rgba(255,255,255,.22);
+            white-space: nowrap;
         }
-
-        /* ---------- Hero ---------- */
-        .hero {
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
-            padding: 8px 0 32px;
-        }
-        .hero-copy { width: 100%; }
-        .eyebrow {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 7px 12px;
-            border-radius: 999px;
-            background: var(--glass);
-            border: 1px solid var(--line);
-            font-weight: 800;
-            font-size: 12px;
-            letter-spacing: .02em;
-            margin-bottom: 16px;
+        .hero-title { max-width: 420px; }
+        .live-pill {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 6px 12px; border-radius: 999px;
+            background: rgba(255,255,255,.14);
+            border: 1px solid rgba(255,255,255,.24);
+            font-weight: 800; font-size: 11.5px; letter-spacing: .02em;
+            margin-bottom: 12px;
         }
         .live-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #ff4d4d;
-            box-shadow: 0 0 0 5px rgba(255,77,77,.18);
+            width: 7px; height: 7px; border-radius: 50%;
+            background: #FF6B6B; box-shadow: 0 0 0 4px rgba(255,107,107,.25);
             flex: 0 0 auto;
         }
         h1 {
-            font-size: clamp(30px, 8.5vw, 44px);
-            line-height: 1.05;
-            letter-spacing: -.03em;
-            margin: 0 0 14px;
+            margin: 0;
+            font-size: clamp(24px, 6.6vw, 32px);
+            line-height: 1.12;
+            letter-spacing: -.02em;
             font-weight: 900;
         }
-        .lead {
-            display: grid;
-            gap: 10px;
-            font-size: 15px;
+        .hero-sub {
+            margin: 10px 0 0;
+            font-size: 13.5px;
             line-height: 1.55;
-            color: rgba(255,255,255,.92);
-            margin: 0 0 22px;
+            color: rgba(255,255,255,.86);
         }
 
-        /* ---------- Download CTA (inline) ---------- */
-        .download-row {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            margin-top: 0;
+        /* ---------- Store listing card (overlaps the band) ---------- */
+        .store-card {
+            margin-top: -52px;
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 22px;
+            padding: 18px 16px;
+            box-shadow: 0 18px 40px rgba(7, 59, 43, .10);
         }
-        .store-button {
-            min-height: 56px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            padding: 0 22px;
-            border-radius: 16px;
-            background: #0c1512;
-            color: #fff;
-            text-decoration: none;
-            font-weight: 900;
-            font-size: 15px;
-            box-shadow: 0 14px 30px rgba(6, 79, 61, .22);
-            transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+        .listing { display: flex; align-items: center; gap: 14px; min-width: 0; }
+        .app-icon {
+            width: 68px; height: 68px; border-radius: 18px;
+            background: var(--green-soft);
+            border: 1px solid var(--green-line);
+            display: grid; place-items: center;
+            flex: 0 0 auto;
+            overflow: hidden;
+        }
+        .app-icon img { width: 54px; height: 54px; object-fit: contain; }
+        .listing-copy { min-width: 0; }
+        .listing-copy h2 { margin: 0; font-size: 17px; font-weight: 900; letter-spacing: -.01em; }
+        .listing-copy .dev { margin: 3px 0 0; font-size: 12px; color: var(--green); font-weight: 700; }
+        .listing-copy .note { margin: 2px 0 0; font-size: 11px; color: var(--muted); }
+        .meta-row {
+            display: flex; align-items: stretch;
+            margin: 16px 0 0;
+            border-top: 1px solid var(--line);
+            border-bottom: 1px solid var(--line);
+            padding: 10px 0;
+        }
+        .meta-cell {
+            flex: 1; text-align: center;
+            display: grid; gap: 2px;
+            border-right: 1px solid var(--line);
+            padding: 2px 6px;
+            min-width: 0;
+        }
+        .meta-cell:last-child { border-right: 0; }
+        .meta-cell strong { font-size: 13px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .meta-cell span { font-size: 10px; color: var(--muted); font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+
+        .btn {
+            min-height: 52px;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            padding: 0 20px; border-radius: 14px;
+            text-decoration: none; font-weight: 900; font-size: 15px;
             width: 100%;
+            transition: transform .12s ease, box-shadow .12s ease;
+        }
+        .btn:active { transform: translateY(1px); }
+        .btn-install {
+            background: var(--green); color: #fff;
+            box-shadow: 0 12px 26px rgba(11, 122, 85, .30);
+            margin-top: 16px;
+        }
+        .btn-install.disabled { pointer-events: none; background: #9DB3AA; box-shadow: none; }
+        .btn-portal {
+            margin-top: 10px;
+            background: var(--card); color: var(--green-dark);
+            border: 1.5px solid var(--green-line);
+        }
+        .btn i, .btn .mark { flex: 0 0 auto; }
+        .mark { width: 22px; height: 22px; display: inline-flex; }
+        .mark svg { width: 100%; height: 100%; fill: currentColor; display: block; }
+
+        .status {
+            margin: 12px 0 0;
+            font-size: 12px; line-height: 1.55; font-weight: 600;
+            color: <%= parentApkAvailable ? 'var(--muted)' : 'var(--danger)' %>;
             text-align: center;
         }
-        .store-button.secondary { background: #fff; color: var(--green-deep); }
-        .store-button.disabled { pointer-events: none; background: #80968e; color: #eef7f3; box-shadow: none; }
-        .store-button:active { transform: translateY(1px); }
-        .platform-mark { width: 24px; height: 24px; display: inline-flex; }
-        .platform-mark svg { width: 100%; height: 100%; fill: currentColor; display: block; }
 
-        /* ---------- Install panel ---------- */
-        .install-panel {
-            margin-top: 18px;
-            padding: 16px;
-            border-radius: 22px;
-            border: 1px solid rgba(255,255,255,.16);
-            background: linear-gradient(135deg, rgba(2, 48, 35, .78), rgba(8, 116, 80, .56));
-            box-shadow: 0 18px 40px rgba(0,0,0,.16);
-            backdrop-filter: blur(14px);
-            -webkit-backdrop-filter: blur(14px);
-        }
-        .feature-row {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 8px;
-            margin: 0 0 12px;
-            padding: 0;
-            list-style: none;
-        }
-        .feature-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 12px;
-            border-radius: 14px;
-            background: rgba(255,255,255,.09);
-            border: 1px solid rgba(255,255,255,.14);
-            font-size: 13px;
-            font-weight: 700;
-            color: #eafff7;
-        }
-        .feature-pill i { color: #9dffd2; width: 18px; text-align: center; }
-        .status {
-            color: <%= parentApkAvailable ? "#dbfff0" : "#ffe1e1" %>;
-            font-size: 13px;
-            line-height: 1.5;
-            font-weight: 600;
-            margin: 0;
-        }
-        .version-note {
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px dashed rgba(255,255,255,.18);
-            color: #dffaf0;
-            font-size: 12px;
-            line-height: 1.5;
-            font-weight: 600;
-        }
-        .version-note strong { font-weight: 900; color: #fff; }
-
-        /* ---------- Phone mockup (hidden on mobile, shown on desktop) ---------- */
-        .phone-shell { display: none; }
-
-        /* ---------- Sticky bottom CTA (mobile only) ---------- */
-        .sticky-cta {
-            position: fixed;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            padding: 10px max(16px, var(--safe-left)) calc(10px + var(--safe-bottom)) max(16px, var(--safe-right));
-            background: linear-gradient(180deg, rgba(5,32,24,0) 0%, rgba(5,32,24,.92) 32%, rgba(5,32,24,.98) 100%);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            z-index: 10;
-            border-top: 1px solid rgba(255,255,255,.08);
-        }
-        .sticky-cta .store-button { box-shadow: 0 10px 24px rgba(0,0,0,.32); }
-
-        /* ---------- PWA install hint ---------- */
+        /* ---------- PWA hint ---------- */
         .pwa-hint {
             display: none;
             margin-top: 12px;
             padding: 12px 14px;
             border-radius: 14px;
-            background: rgba(255,255,255,.1);
-            border: 1px dashed rgba(255,255,255,.22);
-            font-size: 12px;
-            line-height: 1.5;
-            color: #eafff7;
+            background: var(--green-soft);
+            border: 1px dashed var(--green-line);
+            font-size: 12px; line-height: 1.55; color: var(--green-dark);
         }
         .pwa-hint.show { display: block; }
         .pwa-hint button {
-            margin-top: 8px;
-            background: #fff;
-            color: var(--green-deep);
-            border: 0;
-            padding: 9px 14px;
-            border-radius: 10px;
-            font-weight: 900;
-            font-size: 12px;
-            cursor: pointer;
+            margin-top: 9px;
+            background: var(--green); color: #fff;
+            border: 0; padding: 10px 16px; border-radius: 10px;
+            font-weight: 900; font-size: 12px; cursor: pointer;
+            font-family: inherit;
         }
 
-        /* ============================================================
-           DESKTOP / TABLET ENHANCEMENTS
-           ============================================================ */
+        /* ---------- Sections ---------- */
+        .section { margin-top: 22px; }
+        .section h3 {
+            margin: 0 0 10px;
+            font-size: 15px; font-weight: 900; letter-spacing: -.01em;
+        }
+        .section .sub { margin: -6px 0 12px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+        .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .feature-card {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            padding: 13px 12px;
+            display: grid; gap: 8px;
+            align-content: start;
+        }
+        .feature-card .fi {
+            width: 36px; height: 36px; border-radius: 12px;
+            display: grid; place-items: center;
+            font-size: 15px;
+        }
+        .fi-green { background: var(--green-soft); color: var(--green); }
+        .fi-blue { background: #E8F0FE; color: #1D4ED8; }
+        .fi-amber { background: #FEF3E2; color: #B45309; }
+        .fi-rose { background: #FDECEC; color: #B4231F; }
+        .feature-card strong { font-size: 12.5px; font-weight: 800; line-height: 1.3; }
+        .feature-card span { font-size: 11px; color: var(--muted); line-height: 1.45; }
+
+        .steps { display: grid; gap: 8px; }
+        .step {
+            display: flex; gap: 12px; align-items: flex-start;
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 12px 13px;
+        }
+        .step-n {
+            width: 26px; height: 26px; border-radius: 50%;
+            background: var(--green); color: #fff;
+            display: grid; place-items: center;
+            font-size: 12px; font-weight: 900;
+            flex: 0 0 auto; margin-top: 1px;
+        }
+        .step strong { display: block; font-size: 12.5px; font-weight: 800; }
+        .step span { display: block; margin-top: 2px; font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+
+        .version-card {
+            background: var(--green-soft);
+            border: 1px solid var(--green-line);
+            border-radius: 14px;
+            padding: 12px 14px;
+            font-size: 12px; line-height: 1.6; color: var(--green-dark);
+        }
+        .version-card strong { font-weight: 900; }
+
+        footer {
+            margin: 26px 0 12px;
+            text-align: center;
+            font-size: 11px; color: var(--muted);
+            line-height: 1.6;
+        }
+
+        /* ---------- Sticky bottom CTA (mobile) ---------- */
+        .sticky-cta {
+            position: fixed;
+            left: 0; right: 0; bottom: 0;
+            padding: 10px max(16px, var(--safe-left)) calc(10px + var(--safe-bottom)) max(16px, var(--safe-right));
+            background: rgba(255,255,255,.92);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border-top: 1px solid var(--line);
+            z-index: 10;
+        }
+        .sticky-cta .btn-install { margin-top: 0; min-height: 50px; }
+
+        /* ---------- Wider screens ---------- */
         @media (min-width: 720px) {
-            body { padding-bottom: max(40px, var(--safe-bottom)); }
-            .top-link { display: inline-flex; }
+            body { padding-bottom: 40px; }
             .sticky-cta { display: none; }
-            .hero { padding: 24px 0 56px; gap: 36px; }
-            .download-row { flex-direction: row; flex-wrap: wrap; }
-            .store-button { width: auto; min-width: 240px; border-radius: 999px; }
-            .feature-row { grid-template-columns: 1fr 1fr; }
-            h1 { font-size: clamp(36px, 5.5vw, 52px); }
-            .lead { font-size: 16px; }
+            .wrap { max-width: 640px; }
+            .hero-band { border-radius: 0 0 36px 36px; padding-bottom: 84px; }
+            h1 { font-size: 36px; }
+            .store-card { padding: 24px 22px; margin-top: -60px; }
+            .feature-grid { grid-template-columns: repeat(4, 1fr); }
         }
 
-        @media (min-width: 1024px) {
-            .hero {
-                display: grid;
-                grid-template-columns: minmax(0, 1.05fr) minmax(280px, .9fr);
-                gap: clamp(36px, 5vw, 72px);
-                align-items: center;
-                padding: 32px 0 80px;
-            }
-            .hero-copy { padding-top: 8px; }
-            h1 { font-size: clamp(44px, 4.6vw, 60px); letter-spacing: -.04em; }
-            .feature-row { grid-template-columns: repeat(3, 1fr); }
-
-            /* Phone mockup */
-            .phone-shell {
-                display: block;
-                width: min(320px, 100%);
-                margin: 0 auto;
-                padding: 9px;
-                border-radius: 42px;
-                background: linear-gradient(145deg, var(--orange), #e85d0e 42%, #3b1708);
-                box-shadow: 0 38px 90px rgba(0,0,0,.32), inset 0 0 0 5px rgba(14,11,8,.88);
-                position: relative;
-            }
-            .phone-shell::before {
-                content: "";
-                position: absolute;
-                top: 16px; left: 50%;
-                width: 88px; height: 22px;
-                border-radius: 999px;
-                background: #0c1512;
-                transform: translateX(-50%);
-                z-index: 4;
-            }
-            .phone-screen {
-                min-height: 568px;
-                border: 2px solid #17110c;
-                border-radius: 33px;
-                overflow: hidden;
-                background: #f3faf7;
-                color: var(--ink);
-            }
-            .phone-header { padding: 42px 14px 13px; background: #fff; border-bottom: 1px solid #e1eee8; }
-            .phone-brand { display: flex; align-items: center; gap: 10px; }
-            .phone-brand img { width: 36px; height: 36px; border-radius: 50%; background: #fff; padding: 2px; }
-            .phone-title { font-size: 14px; font-weight: 900; }
-            .phone-subtitle { font-size: 10px; color: #667a72; margin-top: 1px; }
-            .phone-chip-row { display: flex; gap: 7px; margin-top: 12px; flex-wrap: wrap; }
-            .phone-chip {
-                display: inline-flex; align-items: center; gap: 5px;
-                padding: 5px 9px; border-radius: 999px;
-                font-size: 9px; font-weight: 900;
-                background: #ecfdf5; color: #047857;
-            }
-            .phone-body { padding: 12px; display: grid; gap: 10px; }
-            .greeting-card,
-            .analytics-card,
-            .notification-card {
-                border-radius: 20px;
-                background: #fff;
-                border: 1px solid #dcebe4;
-                box-shadow: 0 12px 26px rgba(16,35,28,.10);
-                padding: 13px;
-            }
-            .greeting-card small { color: #62756d; font-weight: 800; font-size: 10px; }
-            .greeting-card h3 { margin: 4px 0 6px; font-size: 22px; line-height: 1; }
-            .student-row {
-                display: grid; grid-template-columns: 40px 1fr auto;
-                align-items: center; gap: 10px; margin-top: 12px;
-                border: 1px solid #dcebe4; border-radius: 15px;
-                padding: 9px; background: #f8fcfa;
-            }
-            .avatar {
-                width: 40px; height: 40px; border-radius: 50%;
-                display: grid; place-items: center;
-                background: #dcfce7; color: #047857; font-weight: 900;
-            }
-            .student-row strong { display: block; font-size: 12px; }
-            .student-row span { display: block; font-size: 9px; color: #62756d; margin-top: 2px; }
-            .pill { border-radius: 999px; padding: 5px 8px; font-size: 9px; font-weight: 900; background: #dcfce7; color: #047857; }
-            .analytics-card { display: grid; grid-template-columns: 78px 1fr; gap: 12px; align-items: center; }
-            .ring {
-                width: 74px; height: 74px; border-radius: 50%;
-                display: grid; place-items: center;
-                background: conic-gradient(var(--green) 0 86%, #eaf3ef 86% 100%);
-            }
-            .ring span {
-                width: 52px; height: 52px; border-radius: 50%;
-                background: #fff; display: grid; place-items: center;
-                font-size: 15px; font-weight: 900; color: #064f3d;
-            }
-            .analytics-copy strong { display: block; font-size: 13px; }
-            .analytics-copy span { display: block; margin-top: 4px; font-size: 10px; color: #63756e; font-weight: 700; }
-            .notification-card { display: grid; grid-template-columns: 42px 1fr auto; gap: 10px; align-items: center; }
-            .notif-icon {
-                width: 42px; height: 42px; border-radius: 50%;
-                display: grid; place-items: center;
-                background: #fff3e9; color: #ff5b12; font-size: 18px;
-            }
-            .notification-card strong { display: block; font-size: 12px; }
-            .notification-card span { display: block; font-size: 9px; color: #63756e; margin-top: 2px; font-weight: 700; }
-            .notification-card small { color: #8a9b94; font-size: 9px; font-weight: 800; }
-            .phone-nav {
-                display: grid; grid-template-columns: repeat(5, 1fr);
-                gap: 3px; padding: 10px 11px;
-                background: #fff; border-top: 1px solid #e2ece7;
-            }
-            .phone-nav div { text-align: center; font-size: 8px; color: #62756d; font-weight: 800; }
-            .phone-nav i { display: block; font-size: 15px; margin-bottom: 3px; color: #06996b; }
+        /* Tiny phones: single-column features so nothing squeezes */
+        @media (max-width: 330px) {
+            .feature-grid { grid-template-columns: 1fr; }
+            .top-link span { display: none; }
         }
 
-        /* PWA standalone: no header link */
+        /* PWA standalone */
         @media (display-mode: standalone) {
-            .top-link { display: none; }
             body { padding-bottom: max(20px, var(--safe-bottom)); }
-            .sticky-cta { display: none; }
+            .sticky-cta, .top-link { display: none; }
         }
 
-        /* Reduce motion */
         @media (prefers-reduced-motion: reduce) {
             * { animation: none !important; transition: none !important; }
+            html { scroll-behavior: auto; }
         }
     </style>
 </head>
 <body>
     <% const platformSvg = '<svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M7.5 7.7 6 5.1a.75.75 0 0 1 1.3-.75L8.9 7a8.1 8.1 0 0 1 6.2 0l1.6-2.65a.75.75 0 1 1 1.3.75l-1.5 2.6A6.9 6.9 0 0 1 19 13v.6H5V13c0-2.2.95-4.1 2.5-5.3ZM8.4 11a.9.9 0 1 0 0-1.8.9.9 0 0 0 0 1.8Zm7.2 0a.9.9 0 1 0 0-1.8.9.9 0 0 0 0 1.8ZM5 15h14v4.1c0 .7-.55 1.25-1.25 1.25H6.25C5.55 20.35 5 19.8 5 19.1V15Z"/></svg>'; %>
+
+    <div class="hero-band">
+        <div class="wrap">
+            <header class="brand-bar">
+                <a class="brand" href="/Download-app">
+                    <img src="<%= branding.system_logo || '/uploads/logos/system-logo.png' %>" alt="EduTrack logo">
+                    <span>
+                        <strong><%= branding.system_name || 'EduTrack' %> Guardian</strong>
+                        <span class="brand-sub"><%= branding.division_name || 'Schools Division of Sipalay City' %></span>
+                    </span>
+                </a>
+                <a class="top-link" href="/mobile-app"><i class="fa-solid fa-table-cells-large"></i> <span>All apps</span></a>
+            </header>
+            <div class="hero-title">
+                <div class="live-pill"><span class="live-dot"></span> OFFICIAL GUARDIAN APP</div>
+                <h1>Know your child arrived — the moment they scan.</h1>
+                <p class="hero-sub">Real-time attendance alerts for parents and guardians, straight from your child's school scanner.</p>
+            </div>
+        </div>
+    </div>
+
     <div class="wrap">
-        <header class="brand-bar">
-            <a class="brand" href="/Download-app">
-                <img src="<%= branding.system_logo || '/uploads/logos/system-logo.png' %>" alt="EduTrack logo">
-                <span>
-                    <strong><%= branding.system_name || 'EduTrack' %> Guardian</strong>
-                    <span class="brand-sub"><%= branding.division_name || 'Schools Division of Sipalay City' %></span>
-                </span>
-            </a>
-            <a class="top-link" href="/mobile-app"><i class="fa-solid fa-table-cells-large"></i> View EduTrack apps</a>
-        </header>
-
-        <section class="hero">
-            <div class="hero-copy">
-                <div class="eyebrow"><span class="live-dot"></span> EduTrack Guardian App</div>
-                <h1>Real-time attendance alerts for your child</h1>
-                <div class="lead">
-                    <span>Get instant Guardian alerts for time in, late arrival, lunch out, PM time in, early out, completed attendance, absences, holidays, and announcements.</span>
-                    <span>Guardians only see children linked to their registered contact number — using the same secure EduTrack system.</span>
+        <!-- Store-style listing card -->
+        <section class="store-card" aria-label="EduTrack Guardian download">
+            <div class="listing">
+                <div class="app-icon">
+                    <img src="<%= branding.system_logo || '/uploads/logos/system-logo.png' %>" alt="">
                 </div>
-
-                <div class="download-row">
-                    <a class="store-button <%= parentApkAvailable ? '' : 'disabled' %>" href="/download/parent-app" download>
-                        <span class="platform-mark" aria-hidden="true"><%- platformSvg %></span>
-                        Download Guardian APK<% if (typeof latestVersion !== 'undefined' && latestVersion) { %> · v<%= latestVersion %><% } %>
-                    </a>
-                    <a class="store-button secondary" href="/parent/app">
-                        <i class="fa-solid fa-mobile-screen"></i>
-                        Open Guardian Portal
-                    </a>
-                </div>
-
-                <div id="pwa-hint" class="pwa-hint">
-                    <strong>Install as an app:</strong> add EduTrack Guardian to your home screen for instant, full-screen access.
-                    <br><button id="pwa-install-btn" type="button"><i class="fa-solid fa-download"></i> Add to Home Screen</button>
-                </div>
-
-                <div class="install-panel">
-                    <ul class="feature-row" aria-label="Guardian app features">
-                        <li class="feature-pill"><i class="fa-solid fa-bell"></i> Real-time push alerts</li>
-                        <li class="feature-pill"><i class="fa-solid fa-child"></i> Linked child records</li>
-                        <li class="feature-pill"><i class="fa-solid fa-phone"></i> Adviser contacts</li>
-                    </ul>
-
-                    <p class="status">
-                        <% if (missing || !parentApkAvailable) { %>
-                            The Guardian APK is being prepared. You can open the Guardian Portal now and install the APK once available.
-                        <% } else { %>
-                            The Android Guardian installer is ready for secure, real-time attendance notifications.
-                        <% } %>
-                    </p>
-
-                    <% if (typeof latestVersion !== 'undefined' && latestVersion) { %>
-                    <p class="version-note">
-                        Latest version: <strong>v<%= latestVersion %></strong> (build <%= latestVersionCode %>).
-                        For a clean update, uninstall the old EduTrack Guardian app first, then install this download.
-                        After installing, open <strong>Profile</strong> — it should show v<%= latestVersion %>.
-                    </p>
-                    <% } %>
+                <div class="listing-copy">
+                    <h2>EduTrack Guardian</h2>
+                    <p class="dev"><%= branding.division_name || 'Schools Division of Sipalay City' %></p>
+                    <p class="note">Attendance alerts for your linked children</p>
                 </div>
             </div>
 
-            <div class="phone-shell" aria-hidden="true">
-                <div class="phone-screen">
-                    <div class="phone-header">
-                        <div class="phone-brand">
-                            <img src="<%= branding.system_logo || '/uploads/logos/system-logo.png' %>" alt="">
-                            <div>
-                                <div class="phone-title">EduTrack Guardian</div>
-                                <div class="phone-subtitle">Real-time child attendance alerts</div>
-                            </div>
-                        </div>
-                        <div class="phone-chip-row">
-                            <span class="phone-chip"><i class="live-dot"></i> LIVE</span>
-                            <span class="phone-chip">Guardian secure</span>
-                        </div>
+            <div class="meta-row" aria-label="App details">
+                <div class="meta-cell">
+                    <strong><%= (typeof latestVersion !== 'undefined' && latestVersion) ? 'v' + latestVersion : '—' %></strong>
+                    <span>Version</span>
+                </div>
+                <div class="meta-cell">
+                    <strong>Android</strong>
+                    <span>Platform</span>
+                </div>
+                <div class="meta-cell">
+                    <strong>Free</strong>
+                    <span>Price</span>
+                </div>
+            </div>
+
+            <a class="btn btn-install <%= parentApkAvailable ? '' : 'disabled' %>" href="/download/parent-app" download>
+                <span class="mark" aria-hidden="true"><%- platformSvg %></span>
+                Install Guardian APK
+            </a>
+            <a class="btn btn-portal" href="/parent/app">
+                <i class="fa-solid fa-mobile-screen"></i>
+                Open Guardian Portal
+            </a>
+
+            <p class="status">
+                <% if (missing || !parentApkAvailable) { %>
+                    The Guardian APK is being prepared. Use the Guardian Portal now and install the APK once it's ready.
+                <% } else { %>
+                    Official installer • Guardians only see children linked to their registered contact number.
+                <% } %>
+            </p>
+
+            <div id="pwa-hint" class="pwa-hint">
+                <strong>Prefer no download?</strong> Add EduTrack Guardian to your home screen for instant, full-screen access.
+                <br><button id="pwa-install-btn" type="button"><i class="fa-solid fa-download"></i> Add to Home Screen</button>
+            </div>
+        </section>
+
+        <!-- Features -->
+        <section class="section" aria-label="Guardian app features">
+            <h3>What you get</h3>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="fi fi-green"><i class="fa-solid fa-bell"></i></div>
+                    <strong>Real-time alerts</strong>
+                    <span>Time in, late, lunch out, PM time in, early out & completed.</span>
+                </div>
+                <div class="feature-card">
+                    <div class="fi fi-blue"><i class="fa-solid fa-children"></i></div>
+                    <strong>Linked children</strong>
+                    <span>Every child under your registered contact number.</span>
+                </div>
+                <div class="feature-card">
+                    <div class="fi fi-amber"><i class="fa-solid fa-phone"></i></div>
+                    <strong>Adviser contact</strong>
+                    <span>Call, text, or email your child's adviser in one tap.</span>
+                </div>
+                <div class="feature-card">
+                    <div class="fi fi-rose"><i class="fa-solid fa-shield-halved"></i></div>
+                    <strong>Absence warnings</strong>
+                    <span>Get flagged early when absences become consecutive.</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Install steps -->
+        <section class="section" aria-label="How to install">
+            <h3>How to install</h3>
+            <p class="sub">Takes about a minute on any Android phone.</p>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-n">1</div>
+                    <div>
+                        <strong>Tap “Install Guardian APK”</strong>
+                        <span>The installer downloads straight to your phone.</span>
                     </div>
-
-                    <div class="phone-body">
-                        <div class="greeting-card">
-                            <small>Good afternoon</small>
-                            <h3>Guardian</h3>
-                            <small>Monitor your children live</small>
-                            <div class="student-row">
-                                <div class="avatar">JD</div>
-                                <div><strong>Juan Dela Cruz</strong><span>Grade 5 - Banana</span></div>
-                                <div class="pill">Inside</div>
-                            </div>
-                        </div>
-
-                        <div class="analytics-card">
-                            <div class="ring"><span>96%</span></div>
-                            <div class="analytics-copy">
-                                <strong>Attendance Overview</strong>
-                                <span>Instant updates from scan records</span>
-                                <span>Late, PM time in, completed, and absence alerts</span>
-                            </div>
-                        </div>
-
-                        <div class="notification-card">
-                            <div class="notif-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
-                            <div>
-                                <strong>Student Late</strong>
-                                <span>Your child arrived late at 8:05 AM.</span>
-                            </div>
-                            <small>now</small>
-                        </div>
-
-                        <div class="phone-nav">
-                            <div><i class="fa-solid fa-house"></i>Home</div>
-                            <div><i class="fa-solid fa-clipboard-check"></i>Attendance</div>
-                            <div><i class="fa-solid fa-bell"></i>Alerts</div>
-                            <div><i class="fa-solid fa-phone"></i>Adviser</div>
-                            <div><i class="fa-solid fa-user"></i>Profile</div>
-                        </div>
+                </div>
+                <div class="step">
+                    <div class="step-n">2</div>
+                    <div>
+                        <strong>Allow the install when asked</strong>
+                        <span>If prompted, allow “Install unknown apps” for your browser — this is Android's standard step for apps outside the Play Store.</span>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-n">3</div>
+                    <div>
+                        <strong>Open the app & sign in</strong>
+                        <span>Log in with the contact number registered at your child's school.</span>
                     </div>
                 </div>
             </div>
         </section>
+
+        <% if (typeof latestVersion !== 'undefined' && latestVersion) { %>
+        <section class="section" aria-label="Version information">
+            <div class="version-card">
+                Latest release: <strong>v<%= latestVersion %></strong> (build <%= latestVersionCode %>).
+                Updating from an old version? Uninstall the previous EduTrack Guardian app first, then install this download.
+                After installing, open <strong>Profile</strong> — it should show v<%= latestVersion %>.
+            </div>
+        </section>
+        <% } %>
+
+        <footer>
+            <%= branding.system_name || 'EduTrack' %> Guardian • <%= branding.division_name || 'Schools Division of Sipalay City' %><br>
+            Official school-issued app. No ads, no tracking — attendance only.
+        </footer>
     </div>
 
-    <!-- Sticky mobile CTA so the Download button is always reachable -->
-    <div class="sticky-cta" role="region" aria-label="Download Guardian APK">
-        <a class="store-button <%= parentApkAvailable ? '' : 'disabled' %>" href="/download/parent-app" download>
-            <span class="platform-mark" aria-hidden="true"><%- platformSvg %></span>
-            Download Guardian APK<% if (typeof latestVersion !== 'undefined' && latestVersion) { %> · v<%= latestVersion %><% } %>
+    <!-- Sticky mobile CTA so the install button is always reachable -->
+    <div class="sticky-cta" role="region" aria-label="Install Guardian APK">
+        <a class="btn btn-install <%= parentApkAvailable ? '' : 'disabled' %>" href="/download/parent-app" download>
+            <span class="mark" aria-hidden="true"><%- platformSvg %></span>
+            Install Guardian APK<% if (typeof latestVersion !== 'undefined' && latestVersion) { %> · v<%= latestVersion %><% } %>
         </a>
     </div>
 
@@ -560,8 +484,8 @@
                 });
             }
 
-            // beforeinstallprompt — show "Add to Home Screen" button when the
-            // browser says install is available (Chrome/Edge on Android).
+            // beforeinstallprompt — show "Add to Home Screen" when the browser
+            // says install is available (Chrome/Edge on Android).
             var deferredPrompt = null;
             var hint = document.getElementById('pwa-hint');
             var btn = document.getElementById('pwa-install-btn');
