@@ -43,8 +43,6 @@
 .ad-section-badge.school { background: #eef2ff; color: #4f46e5; }
 .ad-section-badge.grade  { background: #fef3c7; color: #92400e; }
 .ad-section-badge.section { background: #dcfce7; color: #16a34a; }
-.ad-section-badge.program { background: #f0f9ff; color: #0369a1; }
-.ad-section-badge.program.regular { background: #f0fdf4; color: #047857; }
 .ad-section-badge.track { background: #f5f3ff; color: #6d28d9; }
 
 
@@ -215,10 +213,6 @@
         </span>
         <span class="ad-section-badge grade"><i class="fa-solid fa-layer-group"></i> <%= teacher.grade_name || 'N/A' %></span>
         <span class="ad-section-badge section"><i class="fa-solid fa-users"></i> <%= teacher.section_name || 'N/A' %></span>
-        <span class="ad-section-badge program <%= teacher.is_shs ? '' : 'regular' %>">
-            <i class="fa-solid <%= teacher.is_shs ? 'fa-user-graduate' : 'fa-school' %>"></i>
-            <%= teacher.is_shs ? 'SHS Adviser' : 'Regular Adviser' %>
-        </span>
         <% if (teacher.is_shs && teacher.track) { %>
         <span class="ad-section-badge track"><i class="fa-solid fa-route"></i> <%= teacher.track %></span>
         <% } %>
