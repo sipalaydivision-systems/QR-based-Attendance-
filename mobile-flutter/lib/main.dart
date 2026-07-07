@@ -987,7 +987,7 @@ class _SplashGateState extends State<SplashGate>
             builder: (_) => api.isLoggedIn
                 ? HomeShell(
                     api: api,
-                    initialTab: pendingAlertIntent == null ? 0 : 4,
+                    initialTab: pendingAlertIntent == null ? 0 : 3,
                     initialAlertIntent: pendingAlertIntent,
                   )
                 : LoginScreen(api: api),
@@ -1003,19 +1003,10 @@ class _SplashGateState extends State<SplashGate>
     super.dispose();
   }
 
-  // Soft translucent orb for the splash background (matches the Guardian app).
-  Widget _splashOrb(double size) => Container(
+  Widget _splashOrb(double size, Color color) => Container(
     width: size,
     height: size,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      gradient: RadialGradient(
-        colors: [
-          Colors.white.withValues(alpha: .12),
-          Colors.white.withValues(alpha: 0),
-        ],
-      ),
-    ),
+    decoration: BoxDecoration(shape: BoxShape.circle, color: color),
   );
 
   @override
@@ -1033,39 +1024,50 @@ class _SplashGateState extends State<SplashGate>
           ),
           child: Stack(
             children: [
-              Positioned(top: -80, right: -70, child: _splashOrb(210)),
-              Positioned(bottom: -90, left: -60, child: _splashOrb(190)),
+              Positioned.fill(
+                child: CustomPaint(painter: _HeaderPatternPainter()),
+              ),
+              Positioned(
+                top: -80,
+                right: -70,
+                child: _splashOrb(210, Colors.white.withValues(alpha: .11)),
+              ),
+              Positioned(
+                bottom: -90,
+                left: -60,
+                child: _splashOrb(190, Colors.white.withValues(alpha: .08)),
+              ),
               SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.all(30),
+                  padding: const EdgeInsets.all(26),
                   child: Column(
                     children: [
                       const Spacer(),
                       Stack(
                         alignment: Alignment.center,
                         children: [
-                          PulseRing(value: controller.value, size: 156),
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: .15),
-                                borderRadius: BorderRadius.circular(26),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: .24),
-                                ),
+                          PulseRing(value: controller.value, size: 170),
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: .15),
+                              borderRadius: BorderRadius.circular(34),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: .24),
                               ),
-                              child: const AppLogo(size: 84),
                             ),
+                            child: const AppLogo(size: 96),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 26),
                       const Text(
                         AppConfig.appName,
                         style: TextStyle(
-                          fontSize: 34,
+                          fontSize: 40,
                           color: Colors.white,
                           fontWeight: FontWeight.w900,
-                          letterSpacing: -.5,
+                          letterSpacing: -.7,
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -1074,54 +1076,74 @@ class _SplashGateState extends State<SplashGate>
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.white70,
-                          fontSize: 14,
+                          fontSize: 15.5,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 24),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 10,
+                          horizontal: 16,
+                          vertical: 9,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: .16),
+                          color: Colors.white.withValues(alpha: .14),
                           borderRadius: BorderRadius.circular(99),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: .26),
+                            color: Colors.white.withValues(alpha: .22),
                           ),
                         ),
-                        child: const Text(
-                          AppConfig.monitoringLabel,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            LiveDot(color: Color(0xFFFF3B30), size: 9),
+                            SizedBox(width: 8),
+                            Text(
+                              'Initializing EduTrack Access',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 12.5,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const Spacer(),
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: .94),
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(color: const Color(0xFFDCE7E1)),
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: .18),
+                              blurRadius: 28,
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
                         ),
                         child: Column(
                           children: [
                             Row(
                               children: [
-                                const LiveDot(color: Color(0xFFE53935)),
+                                const Icon(
+                                  Icons.verified_user_rounded,
+                                  color: Color(0xFF138A64),
+                                  size: 20,
+                                ),
                                 const SizedBox(width: 8),
-                                const Text(
-                                  'CONNECTING TO SERVER',
-                                  style: TextStyle(
-                                    color: Color(0xFF33423C),
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 1.1,
+                                const Expanded(
+                                  child: Text(
+                                    'Loading Real-Time Records',
+                                    style: TextStyle(
+                                      color: Color(0xFF111827),
+                                      fontWeight: FontWeight.w900,
+                                    ),
                                   ),
                                 ),
-                                const Spacer(),
                                 Text(
                                   '${(progress * 100).round()}%',
                                   style: const TextStyle(
@@ -1136,7 +1158,7 @@ class _SplashGateState extends State<SplashGate>
                               borderRadius: BorderRadius.circular(99),
                               child: LinearProgressIndicator(
                                 value: progress,
-                                minHeight: 10,
+                                minHeight: 9,
                                 backgroundColor: const Color(0xFFE5EFEA),
                                 color: const Color(0xFF138A64),
                               ),
@@ -1184,7 +1206,9 @@ class PulseRingPainter extends CustomPainter {
       final paint = Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.6
-        ..color = Colors.white.withValues(alpha: (.22 - i * .045) * pulse);
+        ..color = const Color(
+          0xFF138A64,
+        ).withValues(alpha: (.22 - i * .045) * pulse);
       canvas.drawCircle(center, radius, paint);
     }
   }
@@ -1436,7 +1460,7 @@ class _LoginScreenState extends State<LoginScreen>
         MaterialPageRoute(
           builder: (_) => HomeShell(
             api: widget.api,
-            initialTab: pendingAlertIntent == null ? 0 : 4,
+            initialTab: pendingAlertIntent == null ? 0 : 3,
             initialAlertIntent: pendingAlertIntent,
           ),
         ),
@@ -1819,9 +1843,8 @@ class _HomeShellState extends State<HomeShell>
         loading: loading,
         error: error,
         onRefresh: load,
-        onOpenTab: (value) => setState(() => tab = value.clamp(0, 4).toInt()),
+        onOpenTab: (value) => setState(() => tab = value.clamp(0, 3).toInt()),
       ),
-      AttendancePage(api: widget.api),
       SchoolsPage(api: widget.api),
       ReportsPage(api: widget.api),
       AlertsPage(
@@ -1842,10 +1865,6 @@ class _HomeShellState extends State<HomeShell>
       const NavigationDestination(
         icon: Icon(Icons.dashboard_customize_rounded),
         label: 'Home',
-      ),
-      const NavigationDestination(
-        icon: Icon(Icons.fact_check_rounded),
-        label: 'Attendance',
       ),
       const NavigationDestination(
         icon: Icon(Icons.account_balance_rounded),
@@ -1916,7 +1935,7 @@ class _HomeShellState extends State<HomeShell>
               compact: headerCompact,
               onLogout: doLogout,
               alertCount: alertBadgeCount,
-              onAlerts: () => setState(() => tab = 4),
+              onAlerts: () => setState(() => tab = 3),
             ),
             Expanded(
               child: NotificationListener<ScrollNotification>(
@@ -1962,9 +1981,7 @@ class _HomeShellState extends State<HomeShell>
               top: false,
               child: NavigationBar(
                 height: 70,
-                labelBehavior: destinations.length > 6
-                    ? NavigationDestinationLabelBehavior.onlyShowSelected
-                    : NavigationDestinationLabelBehavior.alwaysShow,
+                labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
                 backgroundColor: Colors.transparent,
                 selectedIndex: selectedTab,
                 onDestinationSelected: (value) => setState(() => tab = value),
@@ -1994,8 +2011,7 @@ class AlertBadgeIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final safeCount = count.clamp(0, 99).toInt();
-    final color =
-        foreground ?? (selected ? const Color(0xFF0F6E52) : null);
+    final color = foreground ?? (selected ? const Color(0xFF0F6E52) : null);
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -3877,26 +3893,25 @@ class Header extends StatelessWidget {
     required IconData icon,
     required VoidCallback onTap,
     int badgeCount = 0,
-  }) =>
-      Material(
-        color: Colors.white.withValues(alpha: .14),
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: onTap,
-          child: SizedBox(
-            width: 44,
-            height: 44,
-            child: Center(
-              child: AlertBadgeIcon(
-                icon: icon,
-                count: badgeCount,
-                foreground: Colors.white,
-              ),
-            ),
+  }) => Material(
+    color: Colors.white.withValues(alpha: .14),
+    borderRadius: BorderRadius.circular(14),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: SizedBox(
+        width: 44,
+        height: 44,
+        child: Center(
+          child: AlertBadgeIcon(
+            icon: icon,
+            count: badgeCount,
+            foreground: Colors.white,
           ),
         ),
-      );
+      ),
+    ),
+  );
 
   Widget _chip(Widget child, {bool dense = false}) => Container(
     padding: EdgeInsets.symmetric(
@@ -10798,7 +10813,7 @@ Future<void> openNotificationDestination(
   navigator.pushAndRemoveUntil(
     MaterialPageRoute(
       builder: (_) => api.isLoggedIn
-          ? HomeShell(api: api, initialTab: 4, initialAlertIntent: intent)
+          ? HomeShell(api: api, initialTab: 3, initialAlertIntent: intent)
           : LoginScreen(api: api),
     ),
     (_) => false,
