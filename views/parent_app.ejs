@@ -171,6 +171,7 @@
         .badge.half { background: #ffedd5; color: #c2410c; }
         .badge.absent { background: #fee2e2; color: #b91c1c; }
         .badge.out { background: #e0f2fe; color: #0369a1; }
+        .badge.pending { background: #f1f5f9; color: #475569; }
         .tabs { display: none; }
         .tabs.active { display: block; }
         .timeline { display: grid; gap: 10px; }
@@ -393,8 +394,46 @@
     function initials(name) {
         return String(name || 'S').split(/\s+/).filter(Boolean).slice(0,2).map(function(part){ return part.charAt(0).toUpperCase(); }).join('') || 'S';
     }
+    function textValue(value) {
+        var text = String(value == null ? '' : value).trim();
+        return text.toLowerCase() === 'null' ? '' : text;
+    }
+    function isBlankValue(value) {
+        var text = textValue(value).toLowerCase();
+        return !text || text === '—' || text === '-' || text === 'n/a' || text === 'none' || text === '--:--';
+    }
+    function hasAttendanceScan(child) {
+        return !!(child && ((Array.isArray(child.timeline) && child.timeline.length) || !isBlankValue(child.latest_scan_time)));
+    }
+    function isAbsentChild(child) {
+        var key = textValue(child && child.status_key).toLowerCase();
+        var today = textValue(child && child.today_status).toLowerCase();
+        var current = textValue(child && child.current_status).toLowerCase();
+        return key === 'absent' || today === 'absent' || current === 'absent';
+    }
+    function isNoScanChild(child) {
+        if (isAbsentChild(child)) return false;
+        var key = textValue(child && child.status_key).toLowerCase();
+        var today = textValue(child && child.today_status).toLowerCase();
+        var current = textValue(child && child.current_status).toLowerCase();
+        var combined = key + ' ' + today + ' ' + current;
+        if (key === 'no_time_in' || key === 'not_scanned' || key === 'pending') return true;
+        if (combined.indexOf('no time') !== -1 || combined.indexOf('not scanned') !== -1 || combined.indexOf('waiting') !== -1) return true;
+        return !hasAttendanceScan(child);
+    }
+    function visibleStatus(child) {
+        if (isAbsentChild(child)) return 'Absent';
+        if (isNoScanChild(child)) return 'No Time In';
+        return textValue(child.current_status) || textValue(child.today_status) || 'Present';
+    }
+    function visibleToday(child) {
+        if (isAbsentChild(child)) return 'Absent';
+        if (isNoScanChild(child)) return 'No Time In';
+        return textValue(child.today_status) || visibleStatus(child);
+    }
     function statusClass(status, current) {
         var text = String(status || current || '').toLowerCase();
+        if (text.indexOf('no time') !== -1 || text.indexOf('not scanned') !== -1 || text.indexOf('waiting') !== -1 || text.indexOf('pending') !== -1) return 'pending';
         if (text.indexOf('absent') !== -1) return 'absent';
         if (text.indexOf('half') !== -1) return 'half';
         if (text.indexOf('late') !== -1) return 'late';
@@ -414,7 +453,11 @@
         if (name === 'attendance') renderTimeline();
     }
     function renderChildCard(child) {
-        var cls = statusClass(child.today_status, child.current_status);
+        var today = visibleToday(child);
+        var current = visibleStatus(child);
+        var cls = statusClass(today, current);
+        var currentCls = statusClass(current, today);
+        var latestScan = hasAttendanceScan(child) ? textValue(child.latest_scan_time) : '--:--';
         return '<div class="student-card">' +
             '<div class="avatar">' + esc(initials(child.name)) + '</div>' +
             '<div>' +
@@ -423,9 +466,9 @@
                 '<div class="meta">' + esc(child.grade_level) + ' - ' + esc(child.section) + '</div>' +
                 '<div class="meta">' + esc(child.school_name) + '</div>' +
                 '<div class="status-row">' +
-                    '<span class="badge ' + cls + '">' + esc(child.today_status || 'Absent') + '</span>' +
-                    '<span class="badge out">' + esc(child.current_status || 'Absent') + '</span>' +
-                    '<span class="badge"><i class="fa-regular fa-clock"></i> ' + esc(child.latest_scan_time || '--:--') + '</span>' +
+                    '<span class="badge ' + cls + '">' + esc(today) + '</span>' +
+                    '<span class="badge ' + currentCls + '">' + esc(current) + '</span>' +
+                    '<span class="badge pending"><i class="fa-regular fa-clock"></i> ' + esc(latestScan) + '</span>' +
                 '</div>' +
             '</div>' +
         '</div>';
@@ -433,7 +476,7 @@
     function renderHome() {
         var children = state.children || [];
         document.getElementById('childCount').textContent = children.length;
-        document.getElementById('insideCount').textContent = children.filter(function(c){ return c.current_status === 'Inside School'; }).length;
+        document.getElementById('insideCount').textContent = children.filter(function(c){ return hasAttendanceScan(c) && visibleStatus(c) === 'Inside School'; }).length;
         document.getElementById('alertCount').textContent = (state.notifications || []).filter(function(n){ return n.type === 'absent' || n.type === 'flagged'; }).length;
         document.getElementById('childrenList').innerHTML = children.length
             ? children.map(renderChildCard).join('')

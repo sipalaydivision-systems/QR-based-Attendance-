@@ -226,7 +226,7 @@ function buildAttendanceTimeline(row, schedule, storedEvents) {
 }
 
 function currentStudentState(attendance, timeline, resolved) {
-    if (!attendance || !attendance.time_in) return 'Absent';
+    if (!attendance || !attendance.time_in) return (resolved && resolved.label) || 'No Time In';
     const latest = timeline[timeline.length - 1];
     const latestLabel = normalizeEventLabel(latest && latest.label);
     const monitoring = normalizeEventLabel(attendance.monitoring_status);
@@ -1048,7 +1048,7 @@ router.post('/api/parent/profile', requireParentAuth, async (req, res) => {
 
 // Latest published parent-app version. Bump this (and the Flutter pubspec version)
 // whenever a new APK is released so the in-app updater offers the update.
-const PARENT_APP_LATEST = { version: '1.0.44', version_code: 46 };
+const PARENT_APP_LATEST = { version: '1.0.45', version_code: 47 };
 router.get('/api/parent/app-version', (req, res) => {
     return res.json({
         latest_version: PARENT_APP_LATEST.version,

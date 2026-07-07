@@ -1045,31 +1045,17 @@ class _SplashGateState extends State<SplashGate>
                         alignment: Alignment.center,
                         children: [
                           PulseRing(value: controller.value, size: 156),
-                          Container(
-                            padding: const EdgeInsets.all(15),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: .18),
-                              borderRadius: BorderRadius.circular(30),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: .28),
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: .16),
-                                  blurRadius: 26,
-                                  offset: const Offset(0, 12),
-                                ),
-                              ],
-                            ),
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
+                            Container(
+                              padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(24),
+                                color: Colors.white.withValues(alpha: .15),
+                                borderRadius: BorderRadius.circular(26),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: .24),
+                                ),
                               ),
-                              child: const AppLogo(size: 78),
+                              child: const AppLogo(size: 84),
                             ),
-                          ),
                         ],
                       ),
                       const SizedBox(height: 26),
@@ -1096,33 +1082,21 @@ class _SplashGateState extends State<SplashGate>
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 18,
-                          vertical: 11,
+                          vertical: 10,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: .18),
+                          color: Colors.white.withValues(alpha: .16),
                           borderRadius: BorderRadius.circular(99),
                           border: Border.all(
                             color: Colors.white.withValues(alpha: .26),
                           ),
                         ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.verified_user_rounded,
-                              color: Colors.white,
-                              size: 17,
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              AppConfig.monitoringLabel,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: .1,
-                              ),
-                            ),
-                          ],
+                        child: const Text(
+                          AppConfig.monitoringLabel,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
                       const Spacer(),
@@ -1130,69 +1104,29 @@ class _SplashGateState extends State<SplashGate>
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: .94),
-                          borderRadius: BorderRadius.circular(24),
+                          borderRadius: BorderRadius.circular(22),
                           border: Border.all(color: const Color(0xFFDCE7E1)),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: .12),
-                              blurRadius: 28,
-                              offset: const Offset(0, 14),
-                            ),
-                          ],
                         ),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
-                                Container(
-                                  width: 38,
-                                  height: 38,
-                                  decoration: BoxDecoration(
-                                    color: const Color(
-                                      0xFFE9F8F0,
-                                    ).withValues(alpha: .95),
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  child: const Icon(
-                                    Icons.cloud_sync_rounded,
-                                    color: Color(0xFF138A64),
-                                    size: 21,
+                                const LiveDot(color: Color(0xFFE53935)),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'CONNECTING TO SERVER',
+                                  style: TextStyle(
+                                    color: Color(0xFF33423C),
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1.1,
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-                                const Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Preparing EduTrack',
-                                        style: TextStyle(
-                                          color: Color(0xFF10231C),
-                                          fontWeight: FontWeight.w900,
-                                          fontSize: 15.5,
-                                          letterSpacing: -.15,
-                                        ),
-                                      ),
-                                      SizedBox(height: 2),
-                                      Text(
-                                        'Syncing live attendance workspace',
-                                        style: TextStyle(
-                                          color: Color(0xFF667872),
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 11.5,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                                const Spacer(),
                                 Text(
                                   '${(progress * 100).round()}%',
                                   style: const TextStyle(
                                     color: Color(0xFF0F6E52),
                                     fontWeight: FontWeight.w900,
-                                    fontSize: 16,
                                   ),
                                 ),
                               ],
@@ -1206,25 +1140,6 @@ class _SplashGateState extends State<SplashGate>
                                 backgroundColor: const Color(0xFFE5EFEA),
                                 color: const Color(0xFF138A64),
                               ),
-                            ),
-                            const SizedBox(height: 12),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: const [
-                                SplashStatusChip(
-                                  icon: Icons.lock_rounded,
-                                  label: 'Secure',
-                                ),
-                                SplashStatusChip(
-                                  icon: Icons.wifi_tethering_rounded,
-                                  label: 'Live sync',
-                                ),
-                                SplashStatusChip(
-                                  icon: Icons.notifications_active_rounded,
-                                  label: 'FCM ready',
-                                ),
-                              ],
                             ),
                           ],
                         ),
@@ -1277,37 +1192,6 @@ class PulseRingPainter extends CustomPainter {
   @override
   bool shouldRepaint(PulseRingPainter oldDelegate) =>
       oldDelegate.pulse != pulse;
-}
-
-class SplashStatusChip extends StatelessWidget {
-  const SplashStatusChip({super.key, required this.icon, required this.label});
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-    decoration: BoxDecoration(
-      color: const Color(0xFFF1F8F4),
-      borderRadius: BorderRadius.circular(999),
-      border: Border.all(color: const Color(0xFFDCEBE4)),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: const Color(0xFF138A64)),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: const TextStyle(
-            color: Color(0xFF33423C),
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ],
-    ),
-  );
 }
 
 class LiveDot extends StatefulWidget {
@@ -1936,8 +1820,6 @@ class _HomeShellState extends State<HomeShell>
         error: error,
         onRefresh: load,
         onOpenTab: (value) => setState(() => tab = value.clamp(0, 4).toInt()),
-        onTestReport: () =>
-            testEveningReportNotification(dashboard, widget.api.prefs),
       ),
       AttendancePage(api: widget.api),
       SchoolsPage(api: widget.api),
@@ -1952,8 +1834,10 @@ class _HomeShellState extends State<HomeShell>
           pendingAlertIntent = null;
         }),
       ),
-      ProfilePage(api: widget.api, onLogout: doLogout),
     ];
+    final alertBadgeCount =
+        flags.length +
+        (widget.api.isSuperAdmin ? intValue(dashboard['scanner_offline']) : 0);
     final destinations = <NavigationDestination>[
       const NavigationDestination(
         icon: Icon(Icons.dashboard_customize_rounded),
@@ -1971,13 +1855,17 @@ class _HomeShellState extends State<HomeShell>
         icon: Icon(Icons.insert_chart_rounded),
         label: 'Report',
       ),
-      const NavigationDestination(
-        icon: Icon(Icons.notifications_active_rounded),
-        label: 'Notifications',
-      ),
-      const NavigationDestination(
-        icon: Icon(Icons.account_circle_rounded),
-        label: 'Profile',
+      NavigationDestination(
+        icon: AlertBadgeIcon(
+          icon: Icons.notifications_active_rounded,
+          count: alertBadgeCount,
+        ),
+        selectedIcon: AlertBadgeIcon(
+          icon: Icons.notifications_active,
+          count: alertBadgeCount,
+          selected: true,
+        ),
+        label: 'Alerts',
       ),
     ];
     if (widget.api.isSuperAdmin) {
@@ -2001,6 +1889,13 @@ class _HomeShellState extends State<HomeShell>
         ),
       );
     }
+    pages.add(ProfilePage(api: widget.api, onLogout: doLogout));
+    destinations.add(
+      const NavigationDestination(
+        icon: Icon(Icons.account_circle_rounded),
+        label: 'Profile',
+      ),
+    );
     final selectedTab = tab.clamp(0, pages.length - 1).toInt();
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7F6),
@@ -2016,7 +1911,13 @@ class _HomeShellState extends State<HomeShell>
         ),
         child: Column(
           children: [
-            Header(api: widget.api, compact: headerCompact, onLogout: doLogout),
+            Header(
+              api: widget.api,
+              compact: headerCompact,
+              onLogout: doLogout,
+              alertCount: alertBadgeCount,
+              onAlerts: () => setState(() => tab = 4),
+            ),
             Expanded(
               child: NotificationListener<ScrollNotification>(
                 onNotification: (notification) {
@@ -2073,6 +1974,57 @@ class _HomeShellState extends State<HomeShell>
           ),
         ),
       ),
+    );
+  }
+}
+
+class AlertBadgeIcon extends StatelessWidget {
+  const AlertBadgeIcon({
+    super.key,
+    required this.icon,
+    required this.count,
+    this.selected = false,
+    this.foreground,
+  });
+  final IconData icon;
+  final int count;
+  final bool selected;
+  final Color? foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    final safeCount = count.clamp(0, 99).toInt();
+    final color =
+        foreground ?? (selected ? const Color(0xFF0F6E52) : null);
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(icon, color: color),
+        if (safeCount > 0)
+          Positioned(
+            right: -8,
+            top: -7,
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFDC2626),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: Colors.white, width: 1.5),
+              ),
+              child: Text(
+                safeCount > 98 ? '99+' : '$safeCount',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  height: 1,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -3735,10 +3687,14 @@ class Header extends StatelessWidget {
     required this.api,
     required this.onLogout,
     this.compact = false,
+    this.alertCount = 0,
+    this.onAlerts,
   });
   final ApiService api;
   final VoidCallback onLogout;
   final bool compact;
+  final int alertCount;
+  final VoidCallback? onAlerts;
 
   @override
   Widget build(BuildContext context) {
@@ -3832,6 +3788,14 @@ class Header extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 10),
+                      if (onAlerts != null) ...[
+                        _headerAction(
+                          icon: Icons.notifications_active_rounded,
+                          onTap: onAlerts!,
+                          badgeCount: alertCount,
+                        ),
+                        const SizedBox(width: 8),
+                      ],
                       _headerAction(
                         icon: Icons.logout_rounded,
                         onTap: onLogout,
@@ -3909,7 +3873,11 @@ class Header extends StatelessWidget {
     child: const ClipOval(child: BrandLogoImage()),
   );
 
-  Widget _headerAction({required IconData icon, required VoidCallback onTap}) =>
+  Widget _headerAction({
+    required IconData icon,
+    required VoidCallback onTap,
+    int badgeCount = 0,
+  }) =>
       Material(
         color: Colors.white.withValues(alpha: .14),
         borderRadius: BorderRadius.circular(14),
@@ -3919,7 +3887,13 @@ class Header extends StatelessWidget {
           child: SizedBox(
             width: 44,
             height: 44,
-            child: Icon(icon, size: 20, color: Colors.white),
+            child: Center(
+              child: AlertBadgeIcon(
+                icon: icon,
+                count: badgeCount,
+                foreground: Colors.white,
+              ),
+            ),
           ),
         ),
       );
@@ -3981,7 +3955,6 @@ class DashboardPage extends StatelessWidget {
     required this.error,
     required this.onRefresh,
     required this.onOpenTab,
-    this.onTestReport,
   });
   final ApiService api;
   final Map<String, dynamic> dashboard;
@@ -3990,7 +3963,6 @@ class DashboardPage extends StatelessWidget {
   final String? error;
   final Future<void> Function({bool silent}) onRefresh;
   final ValueChanged<int> onOpenTab;
-  final VoidCallback? onTestReport;
 
   @override
   Widget build(BuildContext context) {
@@ -4433,33 +4405,6 @@ class DashboardPage extends StatelessWidget {
                 if (sortedSchools.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   SchoolLeaderboard(schools: sortedSchools),
-                ],
-                if (onTestReport != null) ...[
-                  const SizedBox(height: 24),
-                  Center(
-                    child: OutlinedButton.icon(
-                      onPressed: onTestReport,
-                      icon: const Icon(
-                        Icons.notifications_active_outlined,
-                        size: 15,
-                      ),
-                      label: const Text('Test 7PM Notification'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF6B7280),
-                        side: const BorderSide(color: Color(0xFFD1D5DB)),
-                        textStyle: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 8,
-                        ),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                    ),
-                  ),
                 ],
               ],
             ),
@@ -7512,66 +7457,6 @@ class _AlertsPageState extends State<AlertsPage> {
             ],
           ),
         ),
-        const SizedBox(height: 12),
-        // Notification delivery check.
-        PremiumCard(
-          title: 'Test Notifications',
-          subtitle: 'Send a sample alert to this phone to confirm delivery.',
-          child: FilledButton.icon(
-            onPressed: () async {
-              final granted = await ensureNotificationPermission();
-              if (!granted) {
-                if (context.mounted) {
-                  showDialog(
-                    context: context,
-                    builder: (_) => AlertDialog(
-                      title: const Text('Notifications are blocked'),
-                      content: const Text(
-                        'Please allow Edutrack notifications in your phone settings, then press the test button again.',
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('Close'),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-                return;
-              }
-              if (widget.flags.isEmpty) {
-                await showLocalNotification(
-                  'Edutrack alert test',
-                  'No live flagged students found.',
-                );
-                return;
-              }
-              for (final item in widget.flags) {
-                final row = Map<String, dynamic>.from(item as Map);
-                await showLocalNotification(
-                  absenceTitleForRow(row),
-                  absenceBody(row),
-                  payload: absenceNotificationPayload([row]),
-                  actions: const [
-                    AndroidNotificationAction(
-                      'view',
-                      'View',
-                      showsUserInterface: true,
-                    ),
-                    AndroidNotificationAction(
-                      'contact_adviser',
-                      'Contact Adviser',
-                      showsUserInterface: true,
-                    ),
-                  ],
-                );
-              }
-            },
-            icon: const Icon(Icons.notifications_active),
-            label: const Text('Send sample alert'),
-          ),
-        ),
       ],
     );
   }
@@ -8106,31 +7991,6 @@ class _ProfilePageState extends State<ProfilePage> {
     cf.dispose();
   }
 
-  Future<void> _testNotification() async {
-    final granted = await ensureNotificationPermission();
-    if (!mounted) return;
-    if (!granted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Notifications are turned off. Enable them in your phone settings, then try again.',
-          ),
-          duration: Duration(seconds: 4),
-        ),
-      );
-      return;
-    }
-    await showLocalNotification(
-      'EduTrack test notification',
-      'Notifications are working on this device.',
-    );
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Test notification sent.')));
-    }
-  }
-
   Widget _infoTile(IconData icon, String label, String value) => Container(
     width: double.infinity,
     padding: const EdgeInsets.all(13),
@@ -8398,22 +8258,6 @@ class _ProfilePageState extends State<ProfilePage> {
                 _changePassword,
               ),
             ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        PremiumCard(
-          title: 'Notifications',
-          subtitle: 'Send a sample alert to confirm this phone receives them.',
-          child: SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _testNotification,
-              icon: const Icon(Icons.notifications_active_rounded),
-              label: const Text('Send test notification'),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 13),
-              ),
-            ),
           ),
         ),
         const SizedBox(height: 16),
@@ -11077,16 +10921,14 @@ Future<AndroidBitmap<Object>?> _aiReportLargeIcon(
   }
 }
 
-// Builds and shows the daily attendance report notification. Shared by the
-// live 7 PM trigger and the in-app test button so the layout stays identical.
+// Builds and shows the daily attendance report notification for the live 7 PM
+// trigger.
 Future<void> _showDailyReportNotification(
   Map<String, dynamic> data,
-  SharedPreferences prefs, {
-  bool isTest = false,
-}) async {
+  SharedPreferences prefs,
+) async {
   final now = DateTime.now();
   final largeIcon = await _aiReportLargeIcon(prefs);
-  final suffix = isTest ? ' · TEST' : '';
   final dateLine = _readableReportDate(now);
   final isWeekend =
       now.weekday == DateTime.saturday || now.weekday == DateTime.sunday;
@@ -11095,7 +10937,7 @@ Future<void> _showDailyReportNotification(
     final dayName = now.weekday == DateTime.saturday ? 'Saturday' : 'Sunday';
     await notifications.show(
       _kDailySummaryId,
-      '$_kDailyReportTitle$suffix',
+      _kDailyReportTitle,
       'No classes today ($dayName) — attendance reports resume Monday.',
       NotificationDetails(
         android: AndroidNotificationDetails(
@@ -11142,7 +10984,7 @@ Future<void> _showDailyReportNotification(
 
   await notifications.show(
     _kDailySummaryId,
-    '$_kDailyReportTitle$suffix',
+    _kDailyReportTitle,
     collapsed,
     NotificationDetails(
       android: AndroidNotificationDetails(
@@ -11217,18 +11059,6 @@ Future<void> checkAndShowEveningReport(
   // Cancel the static fallback — we'll show a richer notification instead.
   await notifications.cancel(_kDailySummaryFallbackId);
   await _showDailyReportNotification(dashboardData, prefs);
-}
-
-// Bypasses the 7 PM time check and the daily dedup key so you can fire the
-// notification immediately for testing without waiting until actual 7 PM.
-Future<void> testEveningReportNotification(
-  Map<String, dynamic> dashboardData,
-  SharedPreferences prefs,
-) async {
-  final granted = await ensureNotificationPermission();
-  if (!granted) return;
-  await notifications.cancel(_kDailySummaryFallbackId);
-  await _showDailyReportNotification(dashboardData, prefs, isTest: true);
 }
 
 String absenceFlagNotificationKey(Map<String, dynamic> row, String day) {

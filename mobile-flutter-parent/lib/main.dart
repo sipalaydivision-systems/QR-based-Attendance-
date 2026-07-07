@@ -16,7 +16,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:workmanager/workmanager.dart';
 
-final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
+final FlutterLocalNotificationsPlugin _notifications =
+    FlutterLocalNotificationsPlugin();
 const AndroidNotificationChannel _channel = AndroidNotificationChannel(
   'edutrack_parent',
   'EduTrack Guardian',
@@ -29,8 +30,13 @@ const AndroidNotificationChannel _channel = AndroidNotificationChannel(
 // throw and no notification appears at all).
 Future<void> _initNotifications({bool requestPermission = true}) async {
   const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-  await _notifications.initialize(const InitializationSettings(android: android));
-  final impl = _notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+  await _notifications.initialize(
+    const InitializationSettings(android: android),
+  );
+  final impl = _notifications
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin
+      >();
   await impl?.createNotificationChannel(_channel);
   if (requestPermission) await impl?.requestNotificationsPermission();
 }
@@ -38,7 +44,10 @@ Future<void> _initNotifications({bool requestPermission = true}) async {
 // Ensure POST_NOTIFICATIONS is granted (Android 13+). Safe to call repeatedly.
 Future<bool> ensureParentNotificationPermission() async {
   try {
-    final impl = _notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    final impl = _notifications
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     if (impl == null) return true;
     final enabled = await impl.areNotificationsEnabled() ?? false;
     if (enabled) return true;
@@ -94,13 +103,21 @@ String _androidNotificationIcon(String type) {
 // Accent color that tints the small icon + app name per type.
 Color _androidNotificationColor(String type) {
   final t = type.toLowerCase();
-  if (t.contains('emergency') || t.contains('absent') || t.contains('flagged') || t.contains('early')) {
+  if (t.contains('emergency') ||
+      t.contains('absent') ||
+      t.contains('flagged') ||
+      t.contains('early')) {
     return const Color(0xFFDC2626);
   }
-  if (t.contains('late') || t.contains('holiday') || t.contains('meeting') || t.contains('lunch')) {
+  if (t.contains('late') ||
+      t.contains('holiday') ||
+      t.contains('meeting') ||
+      t.contains('lunch')) {
     return const Color(0xFFEA580C);
   }
-  if (t.contains('completed') || t.contains('returned') || t.contains('time_in')) {
+  if (t.contains('completed') ||
+      t.contains('returned') ||
+      t.contains('time_in')) {
     return kGreen;
   }
   return const Color(0xFF2563EB);
@@ -118,16 +135,31 @@ Future<ByteArrayAndroidBitmap?> _renderTypeLargeIcon(String type) async {
     const size = 128.0;
     final recorder = ui.PictureRecorder();
     final canvas = ui.Canvas(recorder);
-    canvas.drawCircle(const ui.Offset(size / 2, size / 2), size / 2, ui.Paint()..color = color);
+    canvas.drawCircle(
+      const ui.Offset(size / 2, size / 2),
+      size / 2,
+      ui.Paint()..color = color,
+    );
     final painter = TextPainter(
       text: TextSpan(
         text: String.fromCharCode(icon.codePoint),
-        style: TextStyle(color: Colors.white, fontSize: 74, fontFamily: icon.fontFamily, package: icon.fontPackage),
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 74,
+          fontFamily: icon.fontFamily,
+          package: icon.fontPackage,
+        ),
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    painter.paint(canvas, ui.Offset((size - painter.width) / 2, (size - painter.height) / 2));
-    final image = await recorder.endRecording().toImage(size.toInt(), size.toInt());
+    painter.paint(
+      canvas,
+      ui.Offset((size - painter.width) / 2, (size - painter.height) / 2),
+    );
+    final image = await recorder.endRecording().toImage(
+      size.toInt(),
+      size.toInt(),
+    );
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
     image.dispose();
     if (bytes == null) return null;
@@ -140,7 +172,13 @@ Future<ByteArrayAndroidBitmap?> _renderTypeLargeIcon(String type) async {
 // Android tray layout matches the in-app "All notification types" cards:
 // left/small icon  = EduTrack graduation cap (monochrome, always the same)
 // right/large icon = per-type colored circle with the specific scan icon
-Future<bool> showParentNotification(String title, String body, {int? id, String type = '', bool richIcon = true}) async {
+Future<bool> showParentNotification(
+  String title,
+  String body, {
+  int? id,
+  String type = '',
+  bool richIcon = true,
+}) async {
   final nid = id ?? DateTime.now().millisecondsSinceEpoch.remainder(100000);
   final color = _androidNotificationColor(type);
 
@@ -197,7 +235,9 @@ Future<bool> showParentNotification(String title, String body, {int? id, String 
             priority: Priority.high,
             icon: fallbackSmallIcon,
             color: color,
-            largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+            largeIcon: const DrawableResourceAndroidBitmap(
+              '@mipmap/ic_launcher',
+            ),
             styleInformation: const DefaultStyleInformation(true, true),
           ),
         ),
@@ -222,16 +262,23 @@ String gFcmToken = '';
 Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
   try {
     WidgetsFlutterBinding.ensureInitialized();
-  } catch (_) {/* already initialised */}
+  } catch (_) {
+    /* already initialised */
+  }
   try {
     ui.DartPluginRegistrant.ensureInitialized();
-  } catch (_) {/* plugin registrant is best-effort */}
+  } catch (_) {
+    /* plugin registrant is best-effort */
+  }
   try {
     await Firebase.initializeApp();
-  } catch (_) {/* already initialised */}
+  } catch (_) {
+    /* already initialised */
+  }
   try {
     await _initNotifications(requestPermission: false);
-    final title = '${message.data['title'] ?? message.notification?.title ?? 'EduTrack Guardian'}';
+    final title =
+        '${message.data['title'] ?? message.notification?.title ?? 'EduTrack Guardian'}';
     final body = '${message.data['body'] ?? message.notification?.body ?? ''}';
     if (body.trim().isEmpty) return;
 
@@ -278,7 +325,11 @@ Future<void> _setupFirebaseMessaging(ParentApi api) async {
   try {
     final messaging = FirebaseMessaging.instance;
     await messaging.requestPermission(alert: true, badge: true, sound: true);
-    await messaging.setForegroundNotificationPresentationOptions(alert: true, badge: true, sound: true);
+    await messaging.setForegroundNotificationPresentationOptions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
     // One-time migration: invalidate the token that may still have historical
     // FCM messages queued against it, then register a clean token with the server.
     if (api.prefs.getBool(_fcmQueueResetPreference) != true) {
@@ -301,12 +352,14 @@ Future<void> _setupFirebaseMessaging(ParentApi api) async {
     // Foreground messages don't auto-display — show them ourselves.
     FirebaseMessaging.onMessage.listen((message) async {
       final n = message.notification;
-      final title = n?.title ?? '${message.data['title'] ?? 'EduTrack Guardian'}';
+      final title =
+          n?.title ?? '${message.data['title'] ?? 'EduTrack Guardian'}';
       final body = n?.body ?? '${message.data['body'] ?? ''}';
       // Mark the inbox row as delivered before displaying it. This prevents the
       // dashboard refresh from treating the same FCM event as a new local alert.
       final notificationId =
-          '${message.data['notification_id'] ?? message.messageId ?? ''}'.trim();
+          '${message.data['notification_id'] ?? message.messageId ?? ''}'
+              .trim();
       if (notificationId.isNotEmpty) {
         final fcmDelivered =
             (api.prefs.getStringList(_fcmDeliveredPreference) ??
@@ -344,7 +397,8 @@ Future<void> _setupFirebaseMessaging(ParentApi api) async {
 
 const String _guardianBackgroundTask = 'guardianNotificationSync';
 const String _guardianPeriodicWork = 'edutrack-guardian-notifications-periodic';
-const String _guardianImmediateWork = 'edutrack-guardian-notifications-immediate';
+const String _guardianImmediateWork =
+    'edutrack-guardian-notifications-immediate';
 const String _notifiedPreference = 'parent_notified_notifications';
 const String _fcmDeliveredPreference = 'parent_fcm_delivered_notifications';
 const String _fcmQueueResetPreference = 'parent_fcm_queue_reset_v1';
@@ -355,7 +409,9 @@ String _notificationKey(Map<String, dynamic> note) =>
     '${note['notification_id'] ?? note['key'] ?? note['created_at'] ?? note['title']}';
 
 bool _isUnreadNotification(Map<String, dynamic> note) =>
-    note['is_read'] != true && note['is_read'] != 1 && '${note['is_read']}' != '1';
+    note['is_read'] != true &&
+    note['is_read'] != 1 &&
+    '${note['is_read']}' != '1';
 
 int _systemNotificationId(Map<String, dynamic> note) {
   final value = int.tryParse('${note['notification_id'] ?? ''}');
@@ -374,7 +430,10 @@ Future<bool> _syncGuardianNotificationsInBackground() async {
     final response = await http
         .post(
           Uri.parse('$kBaseUrl/api/parent/device-notifications'),
-          headers: const {'Accept': 'application/json', 'Content-Type': 'application/json'},
+          headers: const {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
           body: jsonEncode({'device_token': deviceToken}),
         )
         .timeout(const Duration(seconds: 25));
@@ -387,25 +446,34 @@ Future<bool> _syncGuardianNotificationsInBackground() async {
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
         .toList();
-    final notified = (prefs.getStringList(_notifiedPreference) ?? const <String>[]).toSet();
+    final notified =
+        (prefs.getStringList(_notifiedPreference) ?? const <String>[]).toSet();
 
     // The first background run establishes a baseline so an existing inbox does
     // not produce a burst of old alerts immediately after an update or login.
     if (prefs.getBool(_workerReadyPreference) != true) {
       notified.addAll(notes.map(_notificationKey));
-      await prefs.setStringList(_notifiedPreference, notified.take(200).toList());
+      await prefs.setStringList(
+        _notifiedPreference,
+        notified.take(200).toList(),
+      );
       await prefs.setBool(_workerReadyPreference, true);
       return true;
     }
 
-    final fresh = notes
-        .where((note) => _isUnreadNotification(note) && !notified.contains(_notificationKey(note)))
-        .toList()
-      ..sort((a, b) {
-        final left = int.tryParse('${a['notification_id'] ?? 0}') ?? 0;
-        final right = int.tryParse('${b['notification_id'] ?? 0}') ?? 0;
-        return left.compareTo(right);
-      });
+    final fresh =
+        notes
+            .where(
+              (note) =>
+                  _isUnreadNotification(note) &&
+                  !notified.contains(_notificationKey(note)),
+            )
+            .toList()
+          ..sort((a, b) {
+            final left = int.tryParse('${a['notification_id'] ?? 0}') ?? 0;
+            final right = int.tryParse('${b['notification_id'] ?? 0}') ?? 0;
+            return left.compareTo(right);
+          });
     if (fresh.isNotEmpty) await _initNotifications(requestPermission: false);
     for (final note in fresh.take(8)) {
       await showParentNotification(
@@ -417,8 +485,14 @@ Future<bool> _syncGuardianNotificationsInBackground() async {
       );
       notified.add(_notificationKey(note));
     }
-    await prefs.setStringList(_notifiedPreference, notified.toList().reversed.take(200).toList());
-    await prefs.setString('parent_notification_worker_last_run', DateTime.now().toIso8601String());
+    await prefs.setStringList(
+      _notifiedPreference,
+      notified.toList().reversed.take(200).toList(),
+    );
+    await prefs.setString(
+      'parent_notification_worker_last_run',
+      DateTime.now().toIso8601String(),
+    );
     return true;
   } catch (_) {
     return false;
@@ -449,44 +523,137 @@ Future<void> cancelGuardianBackgroundSync() async {
   try {
     await Workmanager().cancelByUniqueName(_guardianPeriodicWork);
     await Workmanager().cancelByUniqueName(_guardianImmediateWork);
-  } catch (_) {/* best effort */}
+  } catch (_) {
+    /* best effort */
+  }
 }
 
 // Representative sample of every Guardian notification type — used by the
 // "Preview notifications" action so guardians can see each design and alert.
 List<Map<String, dynamic>> sampleParentNotifications() {
   final now = DateTime.now();
-  String at(int minutesAgo) => now.subtract(Duration(minutes: minutesAgo)).toIso8601String();
+  String at(int minutesAgo) =>
+      now.subtract(Duration(minutes: minutesAgo)).toIso8601String();
   const student = 'Juan Dela Cruz';
   const school = 'Sipalay City NHS';
-  Map<String, dynamic> n(String type, String title, String message, int minutesAgo) => {
-        'notification_id': -(1000 + minutesAgo),
-        'type': type,
-        'title': title,
-        'message': message,
-        'student_name': type.startsWith('attendance_') ? student : '',
-        'school_name': school,
-        'created_at': at(minutesAgo).replaceFirst('T', ' '),
-        'is_read': false,
-      };
+  Map<String, dynamic> n(
+    String type,
+    String title,
+    String message,
+    int minutesAgo,
+  ) => {
+    'notification_id': -(1000 + minutesAgo),
+    'type': type,
+    'title': title,
+    'message': message,
+    'student_name': type.startsWith('attendance_') ? student : '',
+    'school_name': school,
+    'created_at': at(minutesAgo).replaceFirst('T', ' '),
+    'is_read': false,
+  };
   return [
-    n('attendance_time_in', 'Student Time In', 'Your child $student has timed in at 7:28 AM.', 1),
-    n('attendance_late_time_in', 'Student Late', 'Your child $student arrived late at 8:05 AM.', 3),
-    n('attendance_pm_time_in', 'PM Time In', 'Your child $student has entered for the PM session at 1:02 PM.', 8),
-    n('attendance_pm_late_time_in', 'PM Late Time In', 'Your child $student arrived late for the PM session at 1:20 PM.', 12),
-    n('attendance_lunch_out', 'Lunch Out', 'Your child $student went out for lunch at 11:31 AM.', 20),
-    n('attendance_returned', 'Student Returned', 'Your child $student returned to school at 12:55 PM.', 25),
-    n('attendance_early_out', 'Early Dismissal Alert', 'Your child $student left school early at 10:14 AM. Please contact the adviser if needed.', 40),
-    n('attendance_completed', 'Attendance Completed', 'Your child $student completed attendance at 4:02 PM.', 60),
-    n('attendance_absent', 'Student Absent', 'Your child $student has no attendance record today.', 90),
-    n('attendance_flagged', '2-Day Absence Flag', 'Your child $student has been absent for 2 consecutive school days.', 120),
-    n('announcement_general', 'School Announcement', 'Classes will follow the regular schedule this week.', 180),
-    n('announcement_parent_meeting', 'Parent Meeting', 'A parent meeting is scheduled this Friday at 9:00 AM.', 240),
-    n('announcement_class_meeting', 'Class Meeting', 'Section meeting for Grade 7 parents on Wednesday afternoon.', 300),
-    n('announcement_holiday', 'Holiday / No Classes', 'No classes on Monday in observance of a local holiday.', 360),
-    n('announcement_school_event', 'School Event', 'Foundation Day celebration this Saturday. All are welcome.', 420),
-    n('announcement_emergency', 'Emergency Notice', 'Classes are suspended this afternoon due to severe weather.', 480),
-    n('announcement_reminder', 'Reminder', 'Please remind your child to bring their ID and QR code daily.', 540),
+    n(
+      'attendance_time_in',
+      'Student Time In',
+      'Your child $student has timed in at 7:28 AM.',
+      1,
+    ),
+    n(
+      'attendance_late_time_in',
+      'Student Late',
+      'Your child $student arrived late at 8:05 AM.',
+      3,
+    ),
+    n(
+      'attendance_pm_time_in',
+      'PM Time In',
+      'Your child $student has entered for the PM session at 1:02 PM.',
+      8,
+    ),
+    n(
+      'attendance_pm_late_time_in',
+      'PM Late Time In',
+      'Your child $student arrived late for the PM session at 1:20 PM.',
+      12,
+    ),
+    n(
+      'attendance_lunch_out',
+      'Lunch Out',
+      'Your child $student went out for lunch at 11:31 AM.',
+      20,
+    ),
+    n(
+      'attendance_returned',
+      'Student Returned',
+      'Your child $student returned to school at 12:55 PM.',
+      25,
+    ),
+    n(
+      'attendance_early_out',
+      'Early Dismissal Alert',
+      'Your child $student left school early at 10:14 AM. Please contact the adviser if needed.',
+      40,
+    ),
+    n(
+      'attendance_completed',
+      'Attendance Completed',
+      'Your child $student completed attendance at 4:02 PM.',
+      60,
+    ),
+    n(
+      'attendance_absent',
+      'Student Absent',
+      'Your child $student has no attendance record today.',
+      90,
+    ),
+    n(
+      'attendance_flagged',
+      '2-Day Absence Flag',
+      'Your child $student has been absent for 2 consecutive school days.',
+      120,
+    ),
+    n(
+      'announcement_general',
+      'School Announcement',
+      'Classes will follow the regular schedule this week.',
+      180,
+    ),
+    n(
+      'announcement_parent_meeting',
+      'Parent Meeting',
+      'A parent meeting is scheduled this Friday at 9:00 AM.',
+      240,
+    ),
+    n(
+      'announcement_class_meeting',
+      'Class Meeting',
+      'Section meeting for Grade 7 parents on Wednesday afternoon.',
+      300,
+    ),
+    n(
+      'announcement_holiday',
+      'Holiday / No Classes',
+      'No classes on Monday in observance of a local holiday.',
+      360,
+    ),
+    n(
+      'announcement_school_event',
+      'School Event',
+      'Foundation Day celebration this Saturday. All are welcome.',
+      420,
+    ),
+    n(
+      'announcement_emergency',
+      'Emergency Notice',
+      'Classes are suspended this afternoon due to severe weather.',
+      480,
+    ),
+    n(
+      'announcement_reminder',
+      'Reminder',
+      'Please remind your child to bring their ID and QR code daily.',
+      540,
+    ),
   ];
 }
 
@@ -503,14 +670,43 @@ const Color kSeal = Color(0xFF0F6E52);
 const Color kInk = Color(0xFF111827);
 const Color kMuted = Color(0xFF6B7280);
 
-const List<String> _weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const List<String> _weekdays = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+];
 const List<String> _wdShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const List<String> _months = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 const List<String> _moShort = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
 String greeting() {
@@ -551,20 +747,33 @@ String gSchoolLogo = '';
 String gSchoolArt = '';
 
 // Render a logo value that may be a data URL, an absolute URL, or a server path.
-Widget brandLogoImage(String value, {BoxFit fit = BoxFit.contain, Widget Function()? fallback}) {
+Widget brandLogoImage(
+  String value, {
+  BoxFit fit = BoxFit.contain,
+  Widget Function()? fallback,
+}) {
   final v = value.trim();
-  Widget fb() => fallback != null ? fallback() : Image.asset('assets/images/app_logo.png', fit: fit);
+  Widget fb() => fallback != null
+      ? fallback()
+      : Image.asset('assets/images/app_logo.png', fit: fit);
   if (v.isEmpty) return fb();
   if (v.startsWith('data:')) {
     try {
       final i = v.indexOf(',');
       final bytes = base64Decode(i != -1 ? v.substring(i + 1) : v);
-      return Image.memory(bytes, fit: fit, gaplessPlayback: true, errorBuilder: (_, __, ___) => fb());
+      return Image.memory(
+        bytes,
+        fit: fit,
+        gaplessPlayback: true,
+        errorBuilder: (_, __, ___) => fb(),
+      );
     } catch (_) {
       return fb();
     }
   }
-  final url = v.startsWith('http') ? v : (v.startsWith('/') ? '$kBaseUrl$v' : '$kBaseUrl/$v');
+  final url = v.startsWith('http')
+      ? v
+      : (v.startsWith('/') ? '$kBaseUrl$v' : '$kBaseUrl/$v');
   // Show the bundled logo instantly while the network logo loads (no blank box).
   return Image.network(
     url,
@@ -583,9 +792,16 @@ Widget instantBrandLogo({BoxFit fit = BoxFit.contain}) {
     try {
       final i = v.indexOf(',');
       final bytes = base64Decode(i != -1 ? v.substring(i + 1) : v);
-      return Image.memory(bytes, fit: fit, gaplessPlayback: true,
-          errorBuilder: (_, __, ___) => Image.asset('assets/images/app_logo.png', fit: fit));
-    } catch (_) {/* fall through to the bundled asset */}
+      return Image.memory(
+        bytes,
+        fit: fit,
+        gaplessPlayback: true,
+        errorBuilder: (_, __, ___) =>
+            Image.asset('assets/images/app_logo.png', fit: fit),
+      );
+    } catch (_) {
+      /* fall through to the bundled asset */
+    }
   }
   return Image.asset('assets/images/app_logo.png', fit: fit);
 }
@@ -601,7 +817,9 @@ Future<void> main() async {
   try {
     await _initNotifications();
     await _initializeGuardianBackgroundSync();
-  } catch (_) {/* notifications are best-effort */}
+  } catch (_) {
+    /* notifications are best-effort */
+  }
   final prefs = await SharedPreferences.getInstance();
   gSchoolLogo = prefs.getString('parent_school_logo') ?? '';
   gSchoolArt = prefs.getString('parent_school_art') ?? '';
@@ -629,10 +847,10 @@ class ParentApi {
   String get deviceToken => prefs.getString('parent_device_token') ?? '';
 
   Map<String, String> get _headers => {
-        'Accept': 'application/json',
-        'Cache-Control': 'no-cache',
-        if (cookie.isNotEmpty) 'Cookie': cookie,
-      };
+    'Accept': 'application/json',
+    'Cache-Control': 'no-cache',
+    if (cookie.isNotEmpty) 'Cookie': cookie,
+  };
 
   void _captureCookie(http.Response res) {
     final raw = res.headers['set-cookie'];
@@ -656,9 +874,11 @@ class ParentApi {
   Future<Map<String, dynamic>> login(String identifier, String password) async {
     try {
       final res = await http
-          .post(Uri.parse('$kBaseUrl/api/parent/login'),
-              headers: const {'Accept': 'application/json'},
-              body: {'identifier': identifier, 'password': password})
+          .post(
+            Uri.parse('$kBaseUrl/api/parent/login'),
+            headers: const {'Accept': 'application/json'},
+            body: {'identifier': identifier, 'password': password},
+          )
           .timeout(const Duration(seconds: 20));
       _captureCookie(res);
       final data = _decode(res.body);
@@ -675,8 +895,11 @@ class ParentApi {
   Future<Map<String, dynamic>> register(Map<String, String> body) async {
     try {
       final res = await http
-          .post(Uri.parse('$kBaseUrl/api/parent/register'),
-              headers: const {'Accept': 'application/json'}, body: body)
+          .post(
+            Uri.parse('$kBaseUrl/api/parent/register'),
+            headers: const {'Accept': 'application/json'},
+            body: body,
+          )
           .timeout(const Duration(seconds: 20));
       _captureCookie(res);
       final data = _decode(res.body);
@@ -684,7 +907,10 @@ class ParentApi {
         await _saveParent(data['parent'] as Map<String, dynamic>?);
         return {'success': true};
       }
-      return {'success': false, 'error': data['error'] ?? 'Registration failed.'};
+      return {
+        'success': false,
+        'error': data['error'] ?? 'Registration failed.',
+      };
     } catch (e) {
       return {'success': false, 'error': _netError(e)};
     }
@@ -702,7 +928,10 @@ class ParentApi {
     final existing = prefs.getString('parent_device_token');
     if (existing != null && existing.isNotEmpty) return existing;
     final random = math.Random.secure();
-    final salt = List<int>.generate(12, (_) => random.nextInt(256)).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    final salt = List<int>.generate(
+      12,
+      (_) => random.nextInt(256),
+    ).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
     final token = 'parent-${DateTime.now().microsecondsSinceEpoch}-$salt';
     await prefs.setString('parent_device_token', token);
     return token;
@@ -721,12 +950,18 @@ class ParentApi {
       final info = await PackageInfo.fromPlatform();
       final token = await ensureDeviceToken();
       final response = await http
-          .post(Uri.parse('$kBaseUrl/api/parent/device-token'), headers: _headers, body: {
-            'device_token': token,
-            'push_token': gFcmToken,
-            'platform': Platform.isAndroid ? 'android' : Platform.operatingSystem,
-            'app_version': info.version,
-          })
+          .post(
+            Uri.parse('$kBaseUrl/api/parent/device-token'),
+            headers: _headers,
+            body: {
+              'device_token': token,
+              'push_token': gFcmToken,
+              'platform': Platform.isAndroid
+                  ? 'android'
+                  : Platform.operatingSystem,
+              'app_version': info.version,
+            },
+          )
           .timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) _lastDeviceRegistration = now;
     } catch (_) {
@@ -738,7 +973,9 @@ class ParentApi {
 
   Future<int> markNotificationsRead([List<int>? ids]) async {
     try {
-      final payload = ids == null ? <String, dynamic>{} : {'notification_ids': ids};
+      final payload = ids == null
+          ? <String, dynamic>{}
+          : {'notification_ids': ids};
       final res = await http
           .post(
             Uri.parse('$kBaseUrl/api/parent/notifications/read'),
@@ -776,7 +1013,9 @@ class ParentApi {
         gSchoolLogo = logo;
         await prefs.setString('parent_school_logo', logo);
       }
-    } catch (_) {/* best-effort branding refresh */}
+    } catch (_) {
+      /* best-effort branding refresh */
+    }
   }
 
   Future<Map<String, dynamic>> appVersion() async {
@@ -790,33 +1029,64 @@ class ParentApi {
     }
   }
 
-  Future<Map<String, dynamic>> changePassword(String current, String next, String confirm) async {
+  Future<Map<String, dynamic>> changePassword(
+    String current,
+    String next,
+    String confirm,
+  ) async {
     try {
       final res = await http
-          .post(Uri.parse('$kBaseUrl/api/parent/change-password'),
-              headers: _headers, body: {'current_password': current, 'new_password': next, 'confirm_password': confirm})
+          .post(
+            Uri.parse('$kBaseUrl/api/parent/change-password'),
+            headers: _headers,
+            body: {
+              'current_password': current,
+              'new_password': next,
+              'confirm_password': confirm,
+            },
+          )
           .timeout(const Duration(seconds: 20));
       final data = _decode(res.body);
-      if (res.statusCode == 200 && data['success'] == true) return {'success': true};
-      return {'success': false, 'error': data['error'] ?? 'Could not change password.'};
+      if (res.statusCode == 200 && data['success'] == true)
+        return {'success': true};
+      return {
+        'success': false,
+        'error': data['error'] ?? 'Could not change password.',
+      };
     } catch (e) {
       return {'success': false, 'error': _netError(e)};
     }
   }
 
-  Future<Map<String, dynamic>> updateProfile(String name, String contact, String username) async {
+  Future<Map<String, dynamic>> updateProfile(
+    String name,
+    String contact,
+    String username,
+  ) async {
     try {
       final res = await http
-          .post(Uri.parse('$kBaseUrl/api/parent/profile'),
-              headers: _headers,
-              body: {'guardian_name': name, 'contact_number': contact, 'username': username})
+          .post(
+            Uri.parse('$kBaseUrl/api/parent/profile'),
+            headers: _headers,
+            body: {
+              'guardian_name': name,
+              'contact_number': contact,
+              'username': username,
+            },
+          )
           .timeout(const Duration(seconds: 20));
       final data = _decode(res.body);
       if (res.statusCode == 200 && data['success'] == true) {
         await _saveParent(data['parent'] as Map<String, dynamic>?);
-        return {'success': true, 'linked_students': data['linked_students'] ?? 0};
+        return {
+          'success': true,
+          'linked_students': data['linked_students'] ?? 0,
+        };
       }
-      return {'success': false, 'error': data['error'] ?? 'Could not update your profile.'};
+      return {
+        'success': false,
+        'error': data['error'] ?? 'Could not update your profile.',
+      };
     } catch (e) {
       return {'success': false, 'error': _netError(e)};
     }
@@ -825,11 +1095,15 @@ class ParentApi {
   Future<void> logout() async {
     try {
       await http
-          .post(Uri.parse('$kBaseUrl/api/parent/logout'), headers: _headers, body: {
-            'device_token': deviceToken,
-          })
+          .post(
+            Uri.parse('$kBaseUrl/api/parent/logout'),
+            headers: _headers,
+            body: {'device_token': deviceToken},
+          )
           .timeout(const Duration(seconds: 10));
-    } catch (_) {/* ignore */}
+    } catch (_) {
+      /* ignore */
+    }
     await cancelGuardianBackgroundSync();
     await prefs.remove('cookie');
     await prefs.remove('parent_name');
@@ -883,14 +1157,18 @@ class SplashGate extends StatefulWidget {
   State<SplashGate> createState() => _SplashGateState();
 }
 
-class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateMixin {
+class _SplashGateState extends State<SplashGate>
+    with SingleTickerProviderStateMixin {
   late final AnimationController controller;
   double progress = 0;
 
   @override
   void initState() {
     super.initState();
-    controller = AnimationController(vsync: this, duration: const Duration(seconds: 4))..repeat(reverse: true);
+    controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat(reverse: true);
     // Refresh the admin-uploaded logo before navigating (best-effort, non-blocking).
     widget.api.refreshPublicBranding().then((_) {
       if (mounted) setState(() {});
@@ -904,7 +1182,9 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => widget.api.isLoggedIn ? HomeShell(api: widget.api) : LoginScreen(api: widget.api),
+            builder: (_) => widget.api.isLoggedIn
+                ? HomeShell(api: widget.api)
+                : LoginScreen(api: widget.api),
           ),
         );
       }
@@ -932,9 +1212,19 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
           ),
           child: Stack(
             children: [
-              Positioned.fill(child: CustomPaint(painter: _HeaderPatternPainter())),
-              Positioned(top: -80, right: -70, child: _splashOrb(210, Colors.white.withValues(alpha: .11))),
-              Positioned(bottom: -90, left: -60, child: _splashOrb(190, Colors.white.withValues(alpha: .08))),
+              Positioned.fill(
+                child: CustomPaint(painter: _HeaderPatternPainter()),
+              ),
+              Positioned(
+                top: -80,
+                right: -70,
+                child: _splashOrb(210, Colors.white.withValues(alpha: .11)),
+              ),
+              Positioned(
+                bottom: -90,
+                left: -60,
+                child: _splashOrb(190, Colors.white.withValues(alpha: .08)),
+              ),
               SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.all(26),
@@ -950,30 +1240,62 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
                             decoration: BoxDecoration(
                               color: Colors.white.withValues(alpha: .15),
                               borderRadius: BorderRadius.circular(34),
-                              border: Border.all(color: Colors.white.withValues(alpha: .24)),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: .24),
+                              ),
                             ),
                             child: const AppLogo(size: 96),
                           ),
                         ],
                       ),
                       const SizedBox(height: 26),
-                      const Text(kAppName, style: TextStyle(fontSize: 40, color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: -.7)),
+                      const Text(
+                        kAppName,
+                        style: TextStyle(
+                          fontSize: 40,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -.7,
+                        ),
+                      ),
                       const SizedBox(height: 6),
-                      const Text(kSubtitle, textAlign: TextAlign.center, style: TextStyle(color: Colors.white70, fontSize: 15.5, fontWeight: FontWeight.w600)),
+                      const Text(
+                        kSubtitle,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       const SizedBox(height: 24),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 9,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: .14),
                           borderRadius: BorderRadius.circular(99),
-                          border: Border.all(color: Colors.white.withValues(alpha: .22)),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: .22),
+                          ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: const [
                             LiveDot(color: Color(0xFFFF3B30), size: 9),
                             SizedBox(width: 8),
-                            Text('Initializing Guardian Access', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12.5)),
+                            Text(
+                              'Initializing Guardian Access',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 12.5,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -983,16 +1305,40 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(24),
-                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .18), blurRadius: 28, offset: const Offset(0, 12))],
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: .18),
+                              blurRadius: 28,
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
                         ),
                         child: Column(
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.verified_user_rounded, color: kGreen, size: 20),
+                                const Icon(
+                                  Icons.verified_user_rounded,
+                                  color: kGreen,
+                                  size: 20,
+                                ),
                                 const SizedBox(width: 8),
-                                const Expanded(child: Text('Loading Real-Time Records', style: TextStyle(color: kInk, fontWeight: FontWeight.w900))),
-                                Text('${(progress * 100).round()}%', style: const TextStyle(color: kGreenDark, fontWeight: FontWeight.w900)),
+                                const Expanded(
+                                  child: Text(
+                                    'Loading Real-Time Records',
+                                    style: TextStyle(
+                                      color: kInk,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  '${(progress * 100).round()}%',
+                                  style: const TextStyle(
+                                    color: kGreenDark,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
                               ],
                             ),
                             const SizedBox(height: 12),
@@ -1020,10 +1366,10 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
   }
 
   Widget _splashOrb(double size, Color color) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-      );
+    width: size,
+    height: size,
+    decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+  );
 }
 
 class AppLogo extends StatelessWidget {
@@ -1031,17 +1377,23 @@ class AppLogo extends StatelessWidget {
   final double size;
   @override
   Widget build(BuildContext context) => Container(
-        width: size,
-        height: size,
-        padding: EdgeInsets.all(size * .12),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: .82),
-          borderRadius: BorderRadius.circular(size * .28),
-          border: Border.all(color: const Color(0xFFDCEBE4)),
-          boxShadow: [BoxShadow(color: kSeal.withValues(alpha: .10), blurRadius: size * .18, offset: Offset(0, size * .06))],
+    width: size,
+    height: size,
+    padding: EdgeInsets.all(size * .12),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: .82),
+      borderRadius: BorderRadius.circular(size * .28),
+      border: Border.all(color: const Color(0xFFDCEBE4)),
+      boxShadow: [
+        BoxShadow(
+          color: kSeal.withValues(alpha: .10),
+          blurRadius: size * .18,
+          offset: Offset(0, size * .06),
         ),
-        child: instantBrandLogo(),
-      );
+      ],
+    ),
+    child: instantBrandLogo(),
+  );
 }
 
 class PulseRing extends StatelessWidget {
@@ -1051,7 +1403,11 @@ class PulseRing extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pulse = .6 + (math.sin(value * math.pi * 2) + 1) / 2;
-    return SizedBox(width: size, height: size, child: CustomPaint(painter: PulseRingPainter(pulse)));
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(painter: PulseRingPainter(pulse)),
+    );
   }
 }
 
@@ -1066,13 +1422,16 @@ class PulseRingPainter extends CustomPainter {
       final paint = Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.6
-        ..color = const Color(0xFF138A64).withValues(alpha: (.22 - i * .045) * pulse);
+        ..color = const Color(
+          0xFF138A64,
+        ).withValues(alpha: (.22 - i * .045) * pulse);
       canvas.drawCircle(center, radius, paint);
     }
   }
 
   @override
-  bool shouldRepaint(PulseRingPainter oldDelegate) => oldDelegate.pulse != pulse;
+  bool shouldRepaint(PulseRingPainter oldDelegate) =>
+      oldDelegate.pulse != pulse;
 }
 
 class LiveDot extends StatefulWidget {
@@ -1088,7 +1447,10 @@ class _LiveDotState extends State<LiveDot> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat(reverse: true);
+    controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
   }
 
   @override
@@ -1115,7 +1477,10 @@ class _LiveDotState extends State<LiveDot> with SingleTickerProviderStateMixin {
                 child: Container(
                   width: hostSize,
                   height: hostSize,
-                  decoration: BoxDecoration(shape: BoxShape.circle, color: widget.color.withValues(alpha: .12)),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: widget.color.withValues(alpha: .12),
+                  ),
                 ),
               ),
               Container(
@@ -1124,7 +1489,12 @@ class _LiveDotState extends State<LiveDot> with SingleTickerProviderStateMixin {
                 decoration: BoxDecoration(
                   color: widget.color,
                   shape: BoxShape.circle,
-                  boxShadow: [BoxShadow(color: widget.color.withValues(alpha: .55), blurRadius: 10)],
+                  boxShadow: [
+                    BoxShadow(
+                      color: widget.color.withValues(alpha: .55),
+                      blurRadius: 10,
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1154,15 +1524,33 @@ class LiveMeshPainter extends CustomPainter {
     }
 
     final t = value * math.pi * 2;
-    blob(Colors.white, Offset(size.width * (.08 + .025 * math.sin(t)), size.height * .17), size.width * .36);
-    blob(const Color(0xFFF3FBF7), Offset(size.width * (.88 + .025 * math.cos(t)), size.height * .34), size.width * .40);
-    blob(const Color(0xFFD4F2E5), Offset(size.width * (.48 + .02 * math.sin(t * 1.2)), size.height * .90), size.width * .34);
-    blob(const Color(0xFFE8F8F1), Offset(size.width * (.66 + .02 * math.cos(t * 1.6)), size.height * .08), size.width * .28);
+    blob(
+      Colors.white,
+      Offset(size.width * (.08 + .025 * math.sin(t)), size.height * .17),
+      size.width * .36,
+    );
+    blob(
+      const Color(0xFFF3FBF7),
+      Offset(size.width * (.88 + .025 * math.cos(t)), size.height * .34),
+      size.width * .40,
+    );
+    blob(
+      const Color(0xFFD4F2E5),
+      Offset(size.width * (.48 + .02 * math.sin(t * 1.2)), size.height * .90),
+      size.width * .34,
+    );
+    blob(
+      const Color(0xFFE8F8F1),
+      Offset(size.width * (.66 + .02 * math.cos(t * 1.6)), size.height * .08),
+      size.width * .28,
+    );
 
     final ringPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2
-      ..color = const Color(0xFF138A64).withValues(alpha: .045 + intensity * .04);
+      ..color = const Color(
+        0xFF138A64,
+      ).withValues(alpha: .045 + intensity * .04);
     final radarCenter = Offset(size.width * .50, size.height * (focusY ?? .30));
     for (var i = 0; i < 5; i++) {
       final radius = size.width * (.12 + i * .055) + math.sin(t) * 2;
@@ -1172,7 +1560,9 @@ class LiveMeshPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(LiveMeshPainter oldDelegate) =>
-      oldDelegate.value != value || oldDelegate.intensity != intensity || oldDelegate.focusY != focusY;
+      oldDelegate.value != value ||
+      oldDelegate.intensity != intensity ||
+      oldDelegate.focusY != focusY;
 }
 
 // ---------------------------------------------------------------------------
@@ -1203,7 +1593,10 @@ class _LoginScreenState extends State<LoginScreen> {
     final id = _id.text.trim();
     final pw = _pw.text;
     if (id.isEmpty || pw.isEmpty) {
-      setState(() => _error = 'Please enter your mobile number or username and password.');
+      setState(
+        () => _error =
+            'Please enter your mobile number or username and password.',
+      );
       return;
     }
     setState(() {
@@ -1218,7 +1611,9 @@ class _LoginScreenState extends State<LoginScreen> {
         await widget.api.registerDeviceToken();
         await scheduleGuardianBackgroundSync();
       } catch (_) {}
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => HomeShell(api: widget.api)));
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => HomeShell(api: widget.api)),
+      );
     } else {
       setState(() {
         _busy = false;
@@ -1246,7 +1641,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 subtitle: 'Guardian Portal',
                 children: [
                   if (_error != null) AuthAlert(message: _error!),
-                  AuthField(controller: _id, label: 'Mobile Number or Username', hint: 'e.g. 09171234567', icon: Icons.person_outline),
+                  AuthField(
+                    controller: _id,
+                    label: 'Mobile Number or Username',
+                    hint: 'e.g. 09171234567',
+                    icon: Icons.person_outline,
+                  ),
                   const SizedBox(height: 14),
                   AuthField(
                     controller: _pw,
@@ -1257,21 +1657,40 @@ class _LoginScreenState extends State<LoginScreen> {
                     onToggleObscure: () => setState(() => _obscure = !_obscure),
                   ),
                   const SizedBox(height: 18),
-                  AuthButton(label: 'Sign In', busy: _busy, onPressed: _busy ? null : _submit),
+                  AuthButton(
+                    label: 'Sign In',
+                    busy: _busy,
+                    onPressed: _busy ? null : _submit,
+                  ),
                   const SizedBox(height: 12),
                   TextButton(
                     onPressed: _busy
                         ? null
-                        : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => RegisterScreen(api: widget.api))),
+                        : () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => RegisterScreen(api: widget.api),
+                            ),
+                          ),
                     child: const Text.rich(
                       TextSpan(
                         text: "Don't have an account?  ",
                         style: TextStyle(color: kMuted, fontSize: 13),
-                        children: [TextSpan(text: 'Register', style: TextStyle(color: kGreen, fontWeight: FontWeight.w800))],
+                        children: [
+                          TextSpan(
+                            text: 'Register',
+                            style: TextStyle(
+                              color: kGreen,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                  const Text('For registered guardians only', style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5)),
+                  const Text(
+                    'For registered guardians only',
+                    style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5),
+                  ),
                 ],
               ),
             ),
@@ -1328,7 +1747,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
         await widget.api.registerDeviceToken();
         await scheduleGuardianBackgroundSync();
       } catch (_) {}
-      Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => HomeShell(api: widget.api)), (r) => false);
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => HomeShell(api: widget.api)),
+        (r) => false,
+      );
     } else {
       setState(() {
         _busy = false;
@@ -1356,19 +1778,65 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 subtitle: 'Create Parent Account',
                 children: [
                   if (_error != null) AuthAlert(message: _error!),
-                  AuthField(controller: _name, label: 'Parent / Guardian Name', hint: 'Full name', icon: Icons.badge_outlined),
+                  AuthField(
+                    controller: _name,
+                    label: 'Parent / Guardian Name',
+                    hint: 'Full name',
+                    icon: Icons.badge_outlined,
+                  ),
                   const SizedBox(height: 12),
-                  AuthField(controller: _contact, label: 'Registered Contact Number', hint: 'e.g. 09171234567', icon: Icons.phone_outlined, keyboardType: TextInputType.phone),
+                  AuthField(
+                    controller: _contact,
+                    label: 'Registered Contact Number',
+                    hint: 'e.g. 09171234567',
+                    icon: Icons.phone_outlined,
+                    keyboardType: TextInputType.phone,
+                  ),
                   const SizedBox(height: 12),
-                  AuthField(controller: _username, label: 'Username (optional)', hint: 'Choose a username', icon: Icons.alternate_email),
+                  AuthField(
+                    controller: _username,
+                    label: 'Username (optional)',
+                    hint: 'Choose a username',
+                    icon: Icons.alternate_email,
+                  ),
                   const SizedBox(height: 12),
-                  AuthField(controller: _pw, label: 'Password', hint: 'At least 6 characters', icon: Icons.lock_outline, obscure: _obscure, onToggleObscure: () => setState(() => _obscure = !_obscure)),
+                  AuthField(
+                    controller: _pw,
+                    label: 'Password',
+                    hint: 'At least 6 characters',
+                    icon: Icons.lock_outline,
+                    obscure: _obscure,
+                    onToggleObscure: () => setState(() => _obscure = !_obscure),
+                  ),
                   const SizedBox(height: 12),
-                  AuthField(controller: _confirm, label: 'Confirm Password', hint: 'Re-enter password', icon: Icons.lock_outline, obscure: _obscure),
+                  AuthField(
+                    controller: _confirm,
+                    label: 'Confirm Password',
+                    hint: 'Re-enter password',
+                    icon: Icons.lock_outline,
+                    obscure: _obscure,
+                  ),
                   const SizedBox(height: 18),
-                  AuthButton(label: 'Create Account', busy: _busy, onPressed: _busy ? null : _submit),
-                  TextButton(onPressed: _busy ? null : () => Navigator.of(context).pop(), child: const Text('Back to Sign In', style: TextStyle(color: kGreen, fontWeight: FontWeight.w700))),
-                  const Text('Use the contact number registered with your child’s school.', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5)),
+                  AuthButton(
+                    label: 'Create Account',
+                    busy: _busy,
+                    onPressed: _busy ? null : _submit,
+                  ),
+                  TextButton(
+                    onPressed: _busy ? null : () => Navigator.of(context).pop(),
+                    child: const Text(
+                      'Back to Sign In',
+                      style: TextStyle(
+                        color: kGreen,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const Text(
+                    'Use the contact number registered with your child’s school.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5),
+                  ),
                 ],
               ),
             ),
@@ -1392,16 +1860,36 @@ class AuthCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 40, offset: const Offset(0, 8))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 40,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           const AppLogo(size: 76),
           const SizedBox(height: 14),
-          const Text(kAppName, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: kInk)),
+          const Text(
+            kAppName,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: kInk,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(subtitle, style: const TextStyle(fontSize: 13, color: kMuted, fontWeight: FontWeight.w600)),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              fontSize: 13,
+              color: kMuted,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: 22),
           ...children,
         ],
@@ -1418,18 +1906,38 @@ class AuthAlert extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-      decoration: BoxDecoration(color: const Color(0xFFFEF2F2), border: Border.all(color: const Color(0xFFFECACA)), borderRadius: BorderRadius.circular(10)),
-      child: Row(children: [
-        const Icon(Icons.error_outline, color: Color(0xFFDC2626), size: 18),
-        const SizedBox(width: 8),
-        Expanded(child: Text(message, style: const TextStyle(color: Color(0xFFDC2626), fontSize: 12.5))),
-      ]),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        border: Border.all(color: const Color(0xFFFECACA)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: Color(0xFFDC2626), size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(color: Color(0xFFDC2626), fontSize: 12.5),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
 class AuthField extends StatelessWidget {
-  const AuthField({super.key, required this.controller, required this.label, required this.icon, this.hint, this.obscure = false, this.keyboardType, this.onToggleObscure});
+  const AuthField({
+    super.key,
+    required this.controller,
+    required this.label,
+    required this.icon,
+    this.hint,
+    this.obscure = false,
+    this.keyboardType,
+    this.onToggleObscure,
+  });
   final TextEditingController controller;
   final String label;
   final IconData icon;
@@ -1442,7 +1950,15 @@ class AuthField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label.toUpperCase(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: kMuted, letterSpacing: 0.4)),
+        Text(
+          label.toUpperCase(),
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: kMuted,
+            letterSpacing: 0.4,
+          ),
+        ),
         const SizedBox(height: 6),
         TextField(
           controller: controller,
@@ -1455,13 +1971,32 @@ class AuthField extends StatelessWidget {
             prefixIcon: Icon(icon, size: 19, color: kMuted),
             suffixIcon: onToggleObscure == null
                 ? null
-                : IconButton(onPressed: onToggleObscure, icon: Icon(obscure ? Icons.visibility_off : Icons.visibility, size: 19, color: kMuted)),
+                : IconButton(
+                    onPressed: onToggleObscure,
+                    icon: Icon(
+                      obscure ? Icons.visibility_off : Icons.visibility,
+                      size: 19,
+                      color: kMuted,
+                    ),
+                  ),
             isDense: true,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 14,
+            ),
             filled: true,
             fillColor: Colors.white,
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFD1D5DB), width: 1.5)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: kGreen, width: 1.6)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(
+                color: Color(0xFFD1D5DB),
+                width: 1.5,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: kGreen, width: 1.6),
+            ),
           ),
         ),
       ],
@@ -1470,7 +2005,12 @@ class AuthField extends StatelessWidget {
 }
 
 class AuthButton extends StatelessWidget {
-  const AuthButton({super.key, required this.label, required this.busy, required this.onPressed});
+  const AuthButton({
+    super.key,
+    required this.label,
+    required this.busy,
+    required this.onPressed,
+  });
   final String label;
   final bool busy;
   final VoidCallback? onPressed;
@@ -1483,14 +2023,40 @@ class AuthButton extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: const LinearGradient(colors: [kGreen, kGreenDark]),
           borderRadius: BorderRadius.circular(10),
-          boxShadow: [BoxShadow(color: kGreen.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))],
+          boxShadow: [
+            BoxShadow(
+              color: kGreen.withValues(alpha: 0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: ElevatedButton(
           onPressed: onPressed,
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
           child: busy
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                  ),
+                ),
         ),
       ),
     );
@@ -1532,7 +2098,10 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     widget.api.registerDeviceToken();
     _load();
     _loadBranding();
-    _timer = Timer.periodic(const Duration(seconds: 15), (_) => _load(silent: true));
+    _timer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _load(silent: true),
+    );
   }
 
   Future<void> _loadBranding() async {
@@ -1571,10 +2140,12 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   }
 
   List<dynamic> get _children => (_data['children'] as List?) ?? const [];
-  List<dynamic> get _notifications => (_data['notifications'] as List?) ?? const [];
+  List<dynamic> get _notifications =>
+      (_data['notifications'] as List?) ?? const [];
   Map<String, dynamic>? get _selectedChild {
     if (_children.isEmpty) return null;
-    return _children[_child.clamp(0, _children.length - 1)] as Map<String, dynamic>;
+    return _children[_child.clamp(0, _children.length - 1)]
+        as Map<String, dynamic>;
   }
 
   Future<void> _load({bool silent = false}) async {
@@ -1582,7 +2153,10 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     try {
       final data = await widget.api.dashboard();
       if (!mounted) return;
-      final unread = ((data['unread_count'] as num?) ?? _countUnread(data['notifications'] as List?)).toInt();
+      final unread =
+          ((data['unread_count'] as num?) ??
+                  _countUnread(data['notifications'] as List?))
+              .toInt();
       setState(() {
         _data = data;
         _unreadCount = unread;
@@ -1612,18 +2186,25 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   }
 
   int _countUnread(List? notes) => (notes ?? const []).where((n) {
-        final item = n as Map<String, dynamic>;
-        return item['is_read'] != true && item['is_read'] != 1;
-      }).length;
+    final item = n as Map<String, dynamic>;
+    return item['is_read'] != true && item['is_read'] != 1;
+  }).length;
 
-  String _noteId(Map<String, dynamic> note) => '${note['notification_id'] ?? note['key'] ?? note['created_at'] ?? note['title']}';
+  String _noteId(Map<String, dynamic> note) =>
+      '${note['notification_id'] ?? note['key'] ?? note['created_at'] ?? note['title']}';
 
-  Future<void> _processNotificationUpdates(Map<String, dynamic> data, {required bool showPopups}) async {
+  Future<void> _processNotificationUpdates(
+    Map<String, dynamic> data, {
+    required bool showPopups,
+  }) async {
     final notes = ((data['notifications'] as List?) ?? const [])
         .whereType<Map>()
         .map((n) => Map<String, dynamic>.from(n))
         .toList();
-    final notified = (widget.api.prefs.getStringList(_notifiedPreference) ?? const <String>[]).toSet();
+    final notified =
+        (widget.api.prefs.getStringList(_notifiedPreference) ??
+                const <String>[])
+            .toSet();
     final fresh = notes.where((note) {
       final unread = note['is_read'] != true && note['is_read'] != 1;
       return unread && !notified.contains(_noteId(note));
@@ -1636,14 +2217,20 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     for (final note in notes.take(120)) {
       notified.add(_noteId(note));
     }
-    await widget.api.prefs.setStringList(_notifiedPreference, notified.take(200).toList());
+    await widget.api.prefs.setStringList(
+      _notifiedPreference,
+      notified.take(200).toList(),
+    );
     await widget.api.prefs.setBool(_workerReadyPreference, true);
   }
 
   bool _isAnnouncement(Map<String, dynamic> note) {
     final type = '${note['type'] ?? ''}'.toLowerCase();
     final category = '${note['category'] ?? ''}'.toLowerCase();
-    return type.startsWith('announcement_') || category == 'announcements' || category == 'meetings' || category == 'holidays';
+    return type.startsWith('announcement_') ||
+        category == 'announcements' ||
+        category == 'meetings' ||
+        category == 'holidays';
   }
 
   Future<void> _showNotificationPopup(Map<String, dynamic> note) async {
@@ -1694,7 +2281,10 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   Future<void> _logout() async {
     await widget.api.logout();
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => LoginScreen(api: widget.api)), (r) => false);
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => LoginScreen(api: widget.api)),
+      (r) => false,
+    );
   }
 
   @override
@@ -1713,13 +2303,19 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
               ),
               Expanded(
                 child: _loading
-                    ? const Center(child: CircularProgressIndicator(color: kGreen))
+                    ? const Center(
+                        child: CircularProgressIndicator(color: kGreen),
+                      )
                     : NotificationListener<ScrollNotification>(
                         onNotification: (notification) {
                           _onScroll(notification);
                           return false;
                         },
-                        child: RefreshIndicator(color: kGreen, onRefresh: _load, child: _buildTab()),
+                        child: RefreshIndicator(
+                          color: kGreen,
+                          onRefresh: _load,
+                          child: _buildTab(),
+                        ),
                       ),
               ),
             ],
@@ -1745,7 +2341,9 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       ),
       bottomNavigationBar: NavigationBarTheme(
         data: NavigationBarThemeData(
-          labelTextStyle: WidgetStateProperty.all(const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+          labelTextStyle: WidgetStateProperty.all(
+            const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+          ),
         ),
         child: NavigationBar(
           selectedIndex: _tab,
@@ -1757,15 +2355,38 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           backgroundColor: Colors.white,
           indicatorColor: const Color(0xFFDCFCE7),
           destinations: [
-            const NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home, color: kGreen), label: 'Home'),
-            const NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment, color: kGreen), label: 'Attendance'),
+            const NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home, color: kGreen),
+              label: 'Home',
+            ),
+            const NavigationDestination(
+              icon: Icon(Icons.assignment_outlined),
+              selectedIcon: Icon(Icons.assignment, color: kGreen),
+              label: 'Attendance',
+            ),
             NavigationDestination(
-              icon: BadgeIcon(icon: Icons.notifications_outlined, count: _unreadCount),
-              selectedIcon: BadgeIcon(icon: Icons.notifications, count: _unreadCount, selected: true),
+              icon: BadgeIcon(
+                icon: Icons.notifications_outlined,
+                count: _unreadCount,
+              ),
+              selectedIcon: BadgeIcon(
+                icon: Icons.notifications,
+                count: _unreadCount,
+                selected: true,
+              ),
               label: 'Alerts',
             ),
-            const NavigationDestination(icon: Icon(Icons.phone_outlined), selectedIcon: Icon(Icons.phone, color: kGreen), label: 'Adviser'),
-            const NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person, color: kGreen), label: 'Profile'),
+            const NavigationDestination(
+              icon: Icon(Icons.phone_outlined),
+              selectedIcon: Icon(Icons.phone, color: kGreen),
+              label: 'Adviser',
+            ),
+            const NavigationDestination(
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person, color: kGreen),
+              label: 'Profile',
+            ),
           ],
         ),
       ),
@@ -1777,10 +2398,21 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Log out?'),
-        content: const Text('You will need to sign in again to view your child’s attendance.'),
+        content: const Text(
+          'You will need to sign in again to view your child’s attendance.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Log out', style: TextStyle(color: Color(0xFFDC2626)))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Log out',
+              style: TextStyle(color: Color(0xFFDC2626)),
+            ),
+          ),
         ],
       ),
     );
@@ -1789,13 +2421,18 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   Widget _buildTab() {
     if (_children.isEmpty) {
-      return ListView(children: [
-        Padding(
-          padding: const EdgeInsets.all(40),
-          child: _emptyState(_error != null ? Icons.wifi_off : Icons.person_rounded,
-              _error ?? 'No linked students found for your contact number. Please contact the school adviser.'),
-        ),
-      ]);
+      return ListView(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(40),
+            child: _emptyState(
+              _error != null ? Icons.wifi_off : Icons.person_rounded,
+              _error ??
+                  'No linked students found for your contact number. Please contact the school adviser.',
+            ),
+          ),
+        ],
+      );
     }
     switch (_tab) {
       case 1:
@@ -1810,9 +2447,20 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       case 3:
         return AdviserTab(child: _selectedChild!, picker: _childPicker());
       case 4:
-        return ProfileTab(api: widget.api, childCount: _children.length, onLogout: _confirmLogout);
+        return ProfileTab(
+          api: widget.api,
+          childCount: _children.length,
+          onLogout: _confirmLogout,
+        );
       default:
-        return HomeTab(parentName: widget.api.parentName, children: _children, selected: _child, picker: _childPicker(), schoolArt: _schoolArt, schoolLogo: _schoolLogo);
+        return HomeTab(
+          parentName: widget.api.parentName,
+          children: _children,
+          selected: _child,
+          picker: _childPicker(),
+          schoolArt: _schoolArt,
+          schoolLogo: _schoolLogo,
+        );
     }
   }
 
@@ -1832,10 +2480,18 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             selected: selected,
             onSelected: (_) => setState(() => _child = i),
             label: Text('${c['name']}'.split(',').first),
-            labelStyle: TextStyle(color: selected ? Colors.white : kInk, fontWeight: FontWeight.w700, fontSize: 12.5),
+            labelStyle: TextStyle(
+              color: selected ? Colors.white : kInk,
+              fontWeight: FontWeight.w700,
+              fontSize: 12.5,
+            ),
             selectedColor: kGreen,
             backgroundColor: Colors.white,
-            shape: StadiumBorder(side: BorderSide(color: selected ? kGreen : const Color(0xFFE5E7EB))),
+            shape: StadiumBorder(
+              side: BorderSide(
+                color: selected ? kGreen : const Color(0xFFE5E7EB),
+              ),
+            ),
           );
         },
       ),
@@ -1843,17 +2499,26 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   }
 
   Widget _emptyState(IconData icon, String text) => Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 46, color: const Color(0xFFCBD5E1)),
-          const SizedBox(height: 12),
-          Text(text, textAlign: TextAlign.center, style: const TextStyle(color: kMuted, fontSize: 13.5)),
-        ],
-      );
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      Icon(icon, size: 46, color: const Color(0xFFCBD5E1)),
+      const SizedBox(height: 12),
+      Text(
+        text,
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: kMuted, fontSize: 13.5),
+      ),
+    ],
+  );
 }
 
 class BadgeIcon extends StatelessWidget {
-  const BadgeIcon({super.key, required this.icon, required this.count, this.selected = false});
+  const BadgeIcon({
+    super.key,
+    required this.icon,
+    required this.count,
+    this.selected = false,
+  });
   final IconData icon;
   final int count;
   final bool selected;
@@ -1877,7 +2542,15 @@ class BadgeIcon extends StatelessWidget {
                 borderRadius: BorderRadius.circular(99),
                 border: Border.all(color: Colors.white, width: 1.4),
               ),
-              child: Text(label, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)),
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
             ),
           ),
       ],
@@ -1887,7 +2560,12 @@ class BadgeIcon extends StatelessWidget {
 
 // In-app announcement banner — clean card design with pill type badge.
 class ParentNotificationBanner extends StatelessWidget {
-  const ParentNotificationBanner({super.key, required this.note, required this.onTap, required this.onClose});
+  const ParentNotificationBanner({
+    super.key,
+    required this.note,
+    required this.onTap,
+    required this.onClose,
+  });
   final Map<String, dynamic> note;
   final VoidCallback onTap;
   final VoidCallback onClose;
@@ -1925,7 +2603,10 @@ class ParentNotificationBanner extends StatelessWidget {
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: color.withValues(alpha: .1),
                             borderRadius: BorderRadius.circular(20),
@@ -1937,20 +2618,40 @@ class ParentNotificationBanner extends StatelessWidget {
                               const SizedBox(width: 4),
                               Text(
                                 label.toUpperCase(),
-                                style: TextStyle(color: color, fontSize: 9.5, fontWeight: FontWeight.w900, letterSpacing: .5),
+                                style: TextStyle(
+                                  color: color,
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: .5,
+                                ),
                               ),
                             ],
                           ),
                         ),
                         const Spacer(),
-                        Text(time, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: kMuted)),
+                        Text(
+                          time,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: kMuted,
+                          ),
+                        ),
                         const SizedBox(width: 4),
                         GestureDetector(
                           onTap: onClose,
                           child: Container(
-                            width: 26, height: 26,
-                            decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(13)),
-                            child: const Icon(Icons.close_rounded, size: 15, color: kMuted),
+                            width: 26,
+                            height: 26,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(13),
+                            ),
+                            child: const Icon(
+                              Icons.close_rounded,
+                              size: 15,
+                              color: kMuted,
+                            ),
                           ),
                         ),
                       ],
@@ -1961,12 +2662,16 @@ class ParentNotificationBanner extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Container(
-                          width: 42, height: 42,
+                          width: 42,
+                          height: 42,
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
-                              colors: [color.withValues(alpha: .15), color.withValues(alpha: .06)],
+                              colors: [
+                                color.withValues(alpha: .15),
+                                color.withValues(alpha: .06),
+                              ],
                             ),
                             borderRadius: BorderRadius.circular(13),
                           ),
@@ -1982,14 +2687,24 @@ class ParentNotificationBanner extends StatelessWidget {
                                 '${note['title'] ?? 'EduTrack Guardian'}',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: kInk, height: 1.2),
+                                style: const TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: kInk,
+                                  height: 1.2,
+                                ),
                               ),
                               const SizedBox(height: 3),
                               Text(
                                 '${note['message'] ?? ''}',
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: kMuted, height: 1.35),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: kMuted,
+                                  height: 1.35,
+                                ),
                               ),
                             ],
                           ),
@@ -2003,16 +2718,27 @@ class ParentNotificationBanner extends StatelessWidget {
                         color: color.withValues(alpha: .07),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 7,
+                      ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
                             'Tap to open full details',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color),
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: color,
+                            ),
                           ),
                           const SizedBox(width: 5),
-                          Icon(Icons.arrow_forward_rounded, size: 13, color: color),
+                          Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 13,
+                            color: color,
+                          ),
                         ],
                       ),
                     ),
@@ -2062,20 +2788,37 @@ class ParentHeader extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(radius)),
-        boxShadow: const [BoxShadow(color: Color(0x330C5A3C), blurRadius: 16, offset: Offset(0, 6))],
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x330C5A3C),
+            blurRadius: 16,
+            offset: Offset(0, 6),
+          ),
+        ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(radius)),
         child: Stack(
           children: [
-            Positioned.fill(child: CustomPaint(painter: _HeaderPatternPainter())),
+            Positioned.fill(
+              child: CustomPaint(painter: _HeaderPatternPainter()),
+            ),
             Positioned(
               right: 14,
               bottom: compact ? -34 : -18,
-              child: Icon(Icons.school_rounded, size: compact ? 88 : 104, color: Colors.white.withValues(alpha: .06)),
+              child: Icon(
+                Icons.school_rounded,
+                size: compact ? 88 : 104,
+                color: Colors.white.withValues(alpha: .06),
+              ),
             ),
             Padding(
-              padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + (compact ? 7 : 10), 16, compact ? 10 : 16),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                MediaQuery.paddingOf(context).top + (compact ? 7 : 10),
+                16,
+                compact ? 10 : 16,
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -2088,15 +2831,28 @@ class ParentHeader extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(kAppName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(color: Colors.white, fontSize: compact ? 18 : 20, fontWeight: FontWeight.w900, letterSpacing: -.2)),
+                            Text(
+                              kAppName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: compact ? 18 : 20,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -.2,
+                              ),
+                            ),
                             SizedBox(height: compact ? 1 : 2),
-                            Text(kSubtitle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(color: Colors.white70, fontSize: compact ? 10.5 : 11.5, fontWeight: FontWeight.w600)),
+                            Text(
+                              kSubtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: compact ? 10.5 : 11.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -2117,15 +2873,35 @@ class ParentHeader extends StatelessWidget {
                               const SizedBox(height: 14),
                               Row(
                                 children: [
-                                  _chip(Row(mainAxisSize: MainAxisSize.min, children: const [
-                                    LiveDot(color: Color(0xFFFF3B30), size: 9),
-                                    SizedBox(width: 6),
-                                    Text('LIVE', style: TextStyle(color: Color(0xFFE5403A), fontWeight: FontWeight.w900, fontSize: 11.5)),
-                                  ])),
+                                  _chip(
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: const [
+                                        LiveDot(
+                                          color: Color(0xFFFF3B30),
+                                          size: 9,
+                                        ),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'LIVE',
+                                          style: TextStyle(
+                                            color: Color(0xFFE5403A),
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 11.5,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                   const SizedBox(width: 8),
                                   _chip(Text(shortDateString()), dense: true),
                                   const SizedBox(width: 8),
-                                  Flexible(child: _chip(Text(isoDateString()), dense: true)),
+                                  Flexible(
+                                    child: _chip(
+                                      Text(isoDateString()),
+                                      dense: true,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ],
@@ -2141,78 +2917,126 @@ class ParentHeader extends StatelessWidget {
   }
 
   Widget _seal(double size) => AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-        width: size,
-        height: size,
-        padding: EdgeInsets.all(size * .115),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withValues(alpha: .45), width: 3),
-          boxShadow: [BoxShadow(color: const Color(0xFF06301F).withValues(alpha: .28), blurRadius: 12, offset: const Offset(0, 4))],
+    duration: const Duration(milliseconds: 220),
+    curve: Curves.easeOutCubic,
+    width: size,
+    height: size,
+    padding: EdgeInsets.all(size * .115),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      shape: BoxShape.circle,
+      border: Border.all(color: Colors.white.withValues(alpha: .45), width: 3),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF06301F).withValues(alpha: .28),
+          blurRadius: 12,
+          offset: const Offset(0, 4),
         ),
-        child: ClipOval(child: brandLogoImage(logoData ?? gSchoolLogo, fit: BoxFit.cover)),
-      );
+      ],
+    ),
+    child: ClipOval(
+      child: brandLogoImage(logoData ?? gSchoolLogo, fit: BoxFit.cover),
+    ),
+  );
 
-  Widget _headerAction(IconData icon, VoidCallback onTap, double size) => Material(
+  Widget _headerAction(IconData icon, VoidCallback onTap, double size) =>
+      Material(
         color: Colors.white.withValues(alpha: .14),
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
           onTap: onTap,
-          child: SizedBox(width: size, height: size, child: Icon(icon, size: 20, color: Colors.white)),
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: Icon(icon, size: 20, color: Colors.white),
+          ),
         ),
       );
 
   // Notification bell with a live unread badge — stays visible when minimized.
   Widget _bellAction(double size) => Material(
-        color: Colors.white.withValues(alpha: .14),
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: onBell,
-          child: SizedBox(
-            width: size,
-            height: size,
-            child: Stack(
-              alignment: Alignment.center,
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(Icons.notifications_rounded, size: 20, color: Colors.white),
-                if (unreadCount > 0)
-                  Positioned(
-                    top: 7,
-                    right: 7,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                      constraints: const BoxConstraints(minWidth: 15, minHeight: 15),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEF4444),
-                        borderRadius: BorderRadius.circular(99),
-                        border: Border.all(color: const Color(0xFF0D6347), width: 1.5),
-                      ),
-                      child: Text(
-                        unreadCount > 99 ? '99+' : '$unreadCount',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.w900, height: 1.1),
-                      ),
+    color: Colors.white.withValues(alpha: .14),
+    borderRadius: BorderRadius.circular(14),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onBell,
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            const Icon(
+              Icons.notifications_rounded,
+              size: 20,
+              color: Colors.white,
+            ),
+            if (unreadCount > 0)
+              Positioned(
+                top: 7,
+                right: 7,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 1,
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 15,
+                    minHeight: 15,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444),
+                    borderRadius: BorderRadius.circular(99),
+                    border: Border.all(
+                      color: const Color(0xFF0D6347),
+                      width: 1.5,
                     ),
                   ),
-              ],
-            ),
-          ),
+                  child: Text(
+                    unreadCount > 99 ? '99+' : '$unreadCount',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 8.5,
+                      fontWeight: FontWeight.w900,
+                      height: 1.1,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
-      );
+      ),
+    ),
+  );
 
-  Widget _chip(Widget child, {bool dense = false, double fontSize = 11.5}) => Container(
-        padding: EdgeInsets.symmetric(horizontal: dense ? 11 : 13, vertical: dense ? 8 : 9),
+  Widget _chip(Widget child, {bool dense = false, double fontSize = 11.5}) =>
+      Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: dense ? 11 : 13,
+          vertical: dense ? 8 : 9,
+        ),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(13),
-          boxShadow: [BoxShadow(color: const Color(0xFF06301F).withValues(alpha: .14), blurRadius: 10, offset: const Offset(0, 4))],
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF06301F).withValues(alpha: .14),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-        child: DefaultTextStyle(style: TextStyle(color: kSeal, fontWeight: FontWeight.w900, fontSize: fontSize), child: child),
+        child: DefaultTextStyle(
+          style: TextStyle(
+            color: kSeal,
+            fontWeight: FontWeight.w900,
+            fontSize: fontSize,
+          ),
+          child: child,
+        ),
       );
 }
 
@@ -2238,7 +3062,15 @@ class _HeaderPatternPainter extends CustomPainter {
 // Home tab — greeting card + stat tiles + Today Analytics donut
 // ---------------------------------------------------------------------------
 class HomeTab extends StatelessWidget {
-  const HomeTab({super.key, required this.parentName, required this.children, required this.selected, this.picker, this.schoolArt, this.schoolLogo});
+  const HomeTab({
+    super.key,
+    required this.parentName,
+    required this.children,
+    required this.selected,
+    this.picker,
+    this.schoolArt,
+    this.schoolLogo,
+  });
   final String parentName;
   final List<dynamic> children;
   final int selected;
@@ -2249,18 +3081,78 @@ class HomeTab extends StatelessWidget {
   int _count(bool Function(Map<String, dynamic>) test) =>
       children.where((c) => test(c as Map<String, dynamic>)).length;
 
+  String _text(dynamic value) {
+    final raw = '${value ?? ''}'.trim();
+    return raw.toLowerCase() == 'null' ? '' : raw;
+  }
+
+  bool _isBlankValue(String value) {
+    final v = value.trim().toLowerCase();
+    return v.isEmpty || v == '—' || v == '-' || v == 'n/a' || v == 'none';
+  }
+
+  bool _hasAttendanceScan(Map<String, dynamic> child) {
+    final timeline = child['timeline'];
+    if (timeline is List && timeline.isNotEmpty) return true;
+    return !_isBlankValue(_text(child['latest_scan_time']));
+  }
+
+  bool _isAbsentChild(Map<String, dynamic> child) {
+    final key = _text(child['status_key']).toLowerCase();
+    final today = _text(child['today_status']).toLowerCase();
+    final current = _text(child['current_status']).toLowerCase();
+    return key == 'absent' || today == 'absent' || current == 'absent';
+  }
+
+  bool _isNoScanChild(Map<String, dynamic> child) {
+    if (_isAbsentChild(child)) return false;
+    final key = _text(child['status_key']).toLowerCase();
+    final today = _text(child['today_status']).toLowerCase();
+    final current = _text(child['current_status']).toLowerCase();
+    final combined = '$key $today $current';
+    if (key == 'no_time_in' || key == 'not_scanned' || key == 'pending')
+      return true;
+    if (combined.contains('no time') ||
+        combined.contains('not scanned') ||
+        combined.contains('waiting'))
+      return true;
+    // Guard against old/default API rows that say "present" without a scan.
+    // No scan evidence must never count as present.
+    return !_hasAttendanceScan(child);
+  }
+
+  bool _isPresentChild(Map<String, dynamic> child) =>
+      _hasAttendanceScan(child) &&
+      !_isAbsentChild(child) &&
+      !_isNoScanChild(child);
+
+  String _displayStatus(Map<String, dynamic> child) {
+    if (_isAbsentChild(child)) return 'Absent';
+    if (_isNoScanChild(child)) return 'No Time In';
+    final current = _text(child['current_status']);
+    if (!_isBlankValue(current)) return current;
+    final today = _text(child['today_status']);
+    if (!_isBlankValue(today)) return today;
+    return 'Present';
+  }
+
+  String _todayStatus(Map<String, dynamic> child) {
+    if (_isAbsentChild(child)) return 'Absent';
+    if (_isNoScanChild(child)) return 'No Time In';
+    final today = _text(child['today_status']);
+    return _isBlankValue(today) ? _displayStatus(child) : today;
+  }
+
+  String _latestScan(Map<String, dynamic> child) =>
+      _hasAttendanceScan(child) ? _text(child['latest_scan_time']) : '—';
+
   @override
   Widget build(BuildContext context) {
     final total = children.length;
     // "No Time In" (no scan yet, before the end-of-day cutoff) is neither present
     // nor absent — a child is only counted absent once the day's status is final.
-    bool isAbsentChild(Map<String, dynamic> c) =>
-        '${c['status_key']}' == 'absent' || '${c['today_status']}' == 'Absent';
-    bool isPendingChild(Map<String, dynamic> c) =>
-        '${c['status_key']}' == 'no_time_in' || '${c['today_status']}' == 'No Time In';
-    final present =
-        _count((c) => !isAbsentChild(c) && !isPendingChild(c));
-    final absent = _count(isAbsentChild);
+    final present = _count(_isPresentChild);
+    final absent = _count(_isAbsentChild);
     final pct = total == 0 ? 0 : ((present / total) * 100).round();
 
     return ListView(
@@ -2280,28 +3172,80 @@ class HomeTab extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(greeting(), style: const TextStyle(color: kMuted, fontSize: 13.5, fontWeight: FontWeight.w700)),
+                        Text(
+                          greeting(),
+                          style: const TextStyle(
+                            color: kMuted,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                         const SizedBox(height: 2),
-                        Text(parentName, maxLines: 2, overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: kInk, fontSize: 26, fontWeight: FontWeight.w900, height: 1.02)),
+                        Text(
+                          parentName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: kInk,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w900,
+                            height: 1.02,
+                          ),
+                        ),
                         const SizedBox(height: 8),
-                        Text(fullDateString(), maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: kMuted, fontSize: 12.5, fontWeight: FontWeight.w700)),
+                        Text(
+                          fullDateString(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: kMuted,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ],
                     ),
                   ),
                   const SizedBox(width: 8),
-                  SizedBox(width: 124, height: 92, child: SchoolArt(data: schoolArt, logo: schoolLogo)),
+                  SizedBox(
+                    width: 124,
+                    height: 92,
+                    child: SchoolArt(data: schoolArt, logo: schoolLogo),
+                  ),
                 ],
               ),
               const SizedBox(height: 18),
               Row(
                 children: [
-                  Expanded(child: _dashboardStatTile(const Color(0xFFE8FAF0), kGreen, Icons.groups_rounded, '$total', total == 1 ? 'Child' : 'Children')),
+                  Expanded(
+                    child: _dashboardStatTile(
+                      const Color(0xFFE8FAF0),
+                      kGreen,
+                      Icons.groups_rounded,
+                      '$total',
+                      total == 1 ? 'Child' : 'Children',
+                    ),
+                  ),
                   const SizedBox(width: 12),
-                  Expanded(child: _dashboardStatTile(const Color(0xFFEEF2FF), const Color(0xFF4F46E5), Icons.school_rounded, '$present', 'Present')),
+                  Expanded(
+                    child: _dashboardStatTile(
+                      const Color(0xFFEEF2FF),
+                      const Color(0xFF4F46E5),
+                      Icons.school_rounded,
+                      '$present',
+                      'Present',
+                    ),
+                  ),
                   const SizedBox(width: 12),
-                  Expanded(child: _dashboardStatTile(const Color(0xFFFDF2F2), const Color(0xFFDC2626), Icons.person_off_rounded, '$absent', 'Absent')),
+                  Expanded(
+                    child: _dashboardStatTile(
+                      const Color(0xFFFDF2F2),
+                      const Color(0xFFDC2626),
+                      Icons.person_off_rounded,
+                      '$absent',
+                      'Absent',
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -2320,12 +3264,33 @@ class HomeTab extends StatelessWidget {
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    CustomPaint(size: const Size(120, 120), painter: RingPainter(total == 0 ? 0.0 : present / total, color: kGreen)),
+                    CustomPaint(
+                      size: const Size(120, 120),
+                      painter: RingPainter(
+                        total == 0 ? 0.0 : present / total,
+                        color: kGreen,
+                      ),
+                    ),
                     Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('$pct%', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: kInk)),
-                        const Text('ATTENDANCE', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: kMuted, letterSpacing: 0.5)),
+                        Text(
+                          '$pct%',
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            color: kInk,
+                          ),
+                        ),
+                        const Text(
+                          'ATTENDANCE',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: kMuted,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
                       ],
                     ),
                   ],
@@ -2336,16 +3301,42 @@ class HomeTab extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Today Analytics', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: kInk)),
+                    const Text(
+                      'Today Analytics',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: kInk,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(color: const Color(0xFFE8FAF0), borderRadius: BorderRadius.circular(20)),
-                      child: Text(attendanceScoreLabel(pct), style: const TextStyle(color: kGreenDark, fontWeight: FontWeight.w800, fontSize: 11.5)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8FAF0),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        attendanceScoreLabel(pct),
+                        style: const TextStyle(
+                          color: kGreenDark,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 11.5,
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 10),
-                    Text('$present of $total ${total == 1 ? 'child' : 'children'} present today',
-                        style: const TextStyle(fontSize: 13, color: kInk, fontWeight: FontWeight.w600)),
+                    Text(
+                      '$present of $total ${total == 1 ? 'child' : 'children'} present today',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: kInk,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -2360,9 +3351,10 @@ class HomeTab extends StatelessWidget {
   }
 
   Widget _childRow(Map<String, dynamic> child) {
-    final status = '${child['current_status'] ?? 'No Time In'}';
-    final today = '${child['today_status'] ?? 'No Time In'}';
-    final flagged = ((child['consecutive_absences'] as num?)?.toInt() ?? 0) >= 2;
+    final status = _displayStatus(child);
+    final today = _todayStatus(child);
+    final flagged =
+        ((child['consecutive_absences'] as num?)?.toInt() ?? 0) >= 2;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -2371,15 +3363,37 @@ class HomeTab extends StatelessWidget {
         children: [
           Row(
             children: [
-              CircleAvatar(radius: 22, backgroundColor: const Color(0xFFEEF2FF), child: Text(_initials('${child['name']}'), style: const TextStyle(color: Color(0xFF4F46E5), fontWeight: FontWeight.w800))),
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: const Color(0xFFEEF2FF),
+                child: Text(
+                  _initials('${child['name']}'),
+                  style: const TextStyle(
+                    color: Color(0xFF4F46E5),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('${child['name']}', style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: kInk)),
+                    Text(
+                      '${child['name']}',
+                      style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w800,
+                        color: kInk,
+                      ),
+                    ),
                     const SizedBox(height: 2),
-                    Text('${child['grade_level']} • ${child['section']} • ${child['school_name']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, color: kMuted)),
+                    Text(
+                      '${child['grade_level']} • ${child['section']} • ${child['school_name']}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11.5, color: kMuted),
+                    ),
                   ],
                 ),
               ),
@@ -2391,9 +3405,13 @@ class HomeTab extends StatelessWidget {
             children: [
               _miniInfo('Today', today, statusColor(today)),
               const SizedBox(width: 8),
-              _miniInfo('Latest Scan', '${child['latest_scan_time'] ?? '—'}', kInk),
+              _miniInfo('Latest Scan', _latestScan(child), kInk),
               const SizedBox(width: 8),
-              _miniInfo('Adviser', '${child['adviser_name']}'.split(' ').first, kInk),
+              _miniInfo(
+                'Adviser',
+                '${child['adviser_name']}'.split(' ').first,
+                kInk,
+              ),
             ],
           ),
           if (flagged) ...[
@@ -2401,12 +3419,31 @@ class HomeTab extends StatelessWidget {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: const Color(0xFFFEF2F2), border: Border.all(color: const Color(0xFFFECACA)), borderRadius: BorderRadius.circular(10)),
-              child: Row(children: [
-                const Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 18),
-                const SizedBox(width: 8),
-                Expanded(child: Text('${child['consecutive_absences']} consecutive absences — please contact the adviser.', style: const TextStyle(color: Color(0xFF991B1B), fontSize: 11.5, fontWeight: FontWeight.w600))),
-              ]),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                border: Border.all(color: const Color(0xFFFECACA)),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    color: Color(0xFFDC2626),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${child['consecutive_absences']} consecutive absences — please contact the adviser.',
+                      style: const TextStyle(
+                        color: Color(0xFF991B1B),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ],
@@ -2415,50 +3452,100 @@ class HomeTab extends StatelessWidget {
   }
 
   Widget _miniInfo(String label, String value, Color color) => Expanded(
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-          decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(9)),
-          child: Column(
-            children: [
-              Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: color)),
-              const SizedBox(height: 1),
-              Text(label, style: const TextStyle(fontSize: 9.5, color: kMuted, fontWeight: FontWeight.w600)),
-            ],
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 1),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 9.5,
+              color: kMuted,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _dashboardStatTile(
+    Color bg,
+    Color fg,
+    IconData icon,
+    String value,
+    String label,
+  ) => Container(
+    constraints: const BoxConstraints(minHeight: 102),
+    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+    decoration: BoxDecoration(
+      color: bg.withValues(alpha: .72),
+      borderRadius: BorderRadius.circular(17),
+      border: Border.all(color: fg.withValues(alpha: .13)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .72),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: fg, size: 18),
+        ),
+        const Spacer(),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            color: kInk,
           ),
         ),
-      );
-
-  Widget _dashboardStatTile(Color bg, Color fg, IconData icon, String value, String label) => Container(
-        constraints: const BoxConstraints(minHeight: 102),
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
-        decoration: BoxDecoration(
-          color: bg.withValues(alpha: .72),
-          borderRadius: BorderRadius.circular(17),
-          border: Border.all(color: fg.withValues(alpha: .13)),
+        const SizedBox(height: 3),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 10.5,
+            color: kMuted,
+            fontWeight: FontWeight.w800,
+          ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(color: Colors.white.withValues(alpha: .72), borderRadius: BorderRadius.circular(12)),
-              child: Icon(icon, color: fg, size: 18),
-            ),
-            const Spacer(),
-            Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: kInk)),
-            const SizedBox(height: 3),
-            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10.5, color: kMuted, fontWeight: FontWeight.w800)),
-          ],
-        ),
-      );
+      ],
+    ),
+  );
 }
 
 BoxDecoration _cardDecoration() => BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 18, offset: const Offset(0, 6))],
-    );
+  color: Colors.white,
+  borderRadius: BorderRadius.circular(18),
+  boxShadow: [
+    BoxShadow(
+      color: Colors.black.withValues(alpha: 0.05),
+      blurRadius: 18,
+      offset: const Offset(0, 6),
+    ),
+  ],
+);
 
 String _initials(String name) {
   final parts = name.replaceAll(',', ' ').trim().split(RegExp(r'\s+'));
@@ -2475,8 +3562,18 @@ class StatusPill extends StatelessWidget {
     final color = statusColor(label);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-      child: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 10.5)),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w800,
+          fontSize: 10.5,
+        ),
+      ),
     );
   }
 }
@@ -2507,7 +3604,11 @@ class AttendanceTab extends StatelessWidget {
                   "Today’s Scan History",
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w900, color: kInk),
+                  style: const TextStyle(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w900,
+                    color: kInk,
+                  ),
                 ),
               ),
               Flexible(
@@ -2516,7 +3617,11 @@ class AttendanceTab extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.right,
-                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: kMuted),
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: kMuted,
+                  ),
                 ),
               ),
             ],
@@ -2524,7 +3629,16 @@ class AttendanceTab extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         if (timeline.isEmpty)
-          Container(padding: const EdgeInsets.all(28), decoration: _cardDecoration(), child: const Center(child: Text('No scans recorded yet today.', style: TextStyle(color: kMuted))))
+          Container(
+            padding: const EdgeInsets.all(28),
+            decoration: _cardDecoration(),
+            child: const Center(
+              child: Text(
+                'No scans recorded yet today.',
+                style: TextStyle(color: kMuted),
+              ),
+            ),
+          )
         else
           ...timeline.map((e) {
             final entry = e as Map<String, dynamic>;
@@ -2535,18 +3649,43 @@ class AttendanceTab extends StatelessWidget {
               margin: const EdgeInsets.only(bottom: 10),
               decoration: _cardDecoration(),
               child: ListTile(
-                leading: CircleAvatar(backgroundColor: toneColor(tone).withValues(alpha: 0.12), child: Icon(scanTypeIcon(label, tone), color: toneColor(tone), size: 20)),
-                title: Text(label, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: kInk)),
+                leading: CircleAvatar(
+                  backgroundColor: toneColor(tone).withValues(alpha: 0.12),
+                  child: Icon(
+                    scanTypeIcon(label, tone),
+                    color: toneColor(tone),
+                    size: 20,
+                  ),
+                ),
+                title: Text(
+                  label,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13.5,
+                    color: kInk,
+                  ),
+                ),
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (studentName.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 2, bottom: 1),
-                        child: Text(studentName, maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: kInk)),
+                        child: Text(
+                          studentName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: kInk,
+                          ),
+                        ),
                       ),
-                    Text('${entry['time_display'] ?? ''}', style: const TextStyle(fontSize: 12, color: kMuted)),
+                    Text(
+                      '${entry['time_display'] ?? ''}',
+                      style: const TextStyle(fontSize: 12, color: kMuted),
+                    ),
                   ],
                 ),
               ),
@@ -2593,15 +3732,30 @@ String parentNotificationCategory(Map<String, dynamic> note) {
   if (type.startsWith('attendance_')) return 'attendance';
   if (type.contains('meeting')) return 'meetings';
   if (type.contains('holiday') || type.contains('no_class')) return 'holidays';
-  if (type.contains('emergency') || type.contains('absent') || type.contains('flagged') || type.contains('early')) return 'alerts';
+  if (type.contains('emergency') ||
+      type.contains('absent') ||
+      type.contains('flagged') ||
+      type.contains('early'))
+    return 'alerts';
   return 'announcements';
 }
 
 Color parentNotificationColor(Map<String, dynamic> note) {
   final type = '${note['type'] ?? ''}'.toLowerCase();
-  if (type.contains('emergency') || type.contains('early') || type.contains('absent') || type.contains('flagged')) return const Color(0xFFDC2626);
-  if (type.contains('late') || type.contains('holiday') || type.contains('meeting') || type.contains('lunch')) return const Color(0xFFEA580C);
-  if (type.contains('completed') || type.contains('returned') || type.contains('time_in')) return kGreen;
+  if (type.contains('emergency') ||
+      type.contains('early') ||
+      type.contains('absent') ||
+      type.contains('flagged'))
+    return const Color(0xFFDC2626);
+  if (type.contains('late') ||
+      type.contains('holiday') ||
+      type.contains('meeting') ||
+      type.contains('lunch'))
+    return const Color(0xFFEA580C);
+  if (type.contains('completed') ||
+      type.contains('returned') ||
+      type.contains('time_in'))
+    return kGreen;
   return const Color(0xFF2563EB);
 }
 
@@ -2648,16 +3802,21 @@ IconData parentNotificationIcon(Map<String, dynamic> note) {
   if (type.contains('meeting')) return Icons.groups_rounded;
   if (type.contains('holiday')) return Icons.event_busy_rounded;
   if (type.contains('emergency')) return Icons.warning_amber_rounded;
-  if (type.contains('absent') || type.contains('flagged')) return Icons.report_problem_rounded;
+  if (type.contains('absent') || type.contains('flagged'))
+    return Icons.report_problem_rounded;
   if (type.contains('early')) return Icons.logout_rounded;
   if (type.contains('lunch')) return Icons.restaurant_rounded;
   if (type.contains('completed')) return Icons.task_alt_rounded;
   if (type.contains('late')) return Icons.running_with_errors_rounded;
-  if (type.contains('announcement') || type.contains('reminder') || type.contains('event')) return Icons.campaign_rounded;
+  if (type.contains('announcement') ||
+      type.contains('reminder') ||
+      type.contains('event'))
+    return Icons.campaign_rounded;
   return Icons.login_rounded;
 }
 
-bool _isSameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+bool _isSameDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
 
 String _clockLabel(DateTime t) {
   final hour = t.hour == 0 ? 12 : (t.hour > 12 ? t.hour - 12 : t.hour);
@@ -2670,18 +3829,22 @@ String _clockLabel(DateTime t) {
 // Recent → relative ("Just now", "5m ago"); else dated/absolute.
 String parentNotificationTime(Map<String, dynamic> note) {
   final raw = '${note['created_at'] ?? ''}'.trim();
-  final parsed = (raw.isEmpty || raw == 'null') ? null : DateTime.tryParse(raw.replaceFirst(' ', 'T'));
+  final parsed = (raw.isEmpty || raw == 'null')
+      ? null
+      : DateTime.tryParse(raw.replaceFirst(' ', 'T'));
   if (parsed != null) {
     final now = DateTime.now();
     final diff = now.difference(parsed);
     if (!diff.isNegative) {
       if (diff.inMinutes < 1) return 'Just now';
       if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-      if (diff.inHours < 6 && _isSameDay(parsed, now)) return '${diff.inHours}h ago';
+      if (diff.inHours < 6 && _isSameDay(parsed, now))
+        return '${diff.inHours}h ago';
     }
     final time = _clockLabel(parsed);
     if (_isSameDay(parsed, now)) return 'Today $time';
-    if (_isSameDay(parsed, now.subtract(const Duration(days: 1)))) return 'Yesterday $time';
+    if (_isSameDay(parsed, now.subtract(const Duration(days: 1))))
+      return 'Yesterday $time';
     return '${_moShort[parsed.month - 1]} ${parsed.day}, $time';
   }
   final display = '${note['time_display'] ?? ''}'.trim();
@@ -2704,23 +3867,55 @@ class _NotificationPreviewSheet extends StatelessWidget {
       builder: (context, controller) => Column(
         children: [
           const SizedBox(height: 10),
-          Container(width: 44, height: 5, decoration: BoxDecoration(color: const Color(0xFFD7DEE7), borderRadius: BorderRadius.circular(99))),
+          Container(
+            width: 44,
+            height: 5,
+            decoration: BoxDecoration(
+              color: const Color(0xFFD7DEE7),
+              borderRadius: BorderRadius.circular(99),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
             child: Row(
               children: [
-                const CircleAvatar(radius: 18, backgroundColor: Color(0xFFDCFCE7), child: Icon(Icons.notifications_active_rounded, color: kGreen, size: 18)),
+                const CircleAvatar(
+                  radius: 18,
+                  backgroundColor: Color(0xFFDCFCE7),
+                  child: Icon(
+                    Icons.notifications_active_rounded,
+                    color: kGreen,
+                    size: 18,
+                  ),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('All notification types', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: kInk)),
-                      Text('Tap any alert to send it to your tray • ${samples.length} types', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: kMuted)),
+                      const Text(
+                        'All notification types',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: kInk,
+                        ),
+                      ),
+                      Text(
+                        'Tap any alert to send it to your tray • ${samples.length} types',
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: kMuted,
+                        ),
+                      ),
                     ],
                   ),
                 ),
-                IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded, color: kMuted)),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded, color: kMuted),
+                ),
               ],
             ),
           ),
@@ -2746,7 +3941,11 @@ class _NotificationPreviewSheet extends StatelessWidget {
       decoration: BoxDecoration(
         color: isAlert ? color.withValues(alpha: .05) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isAlert ? color.withValues(alpha: .35) : const Color(0xFFE9EEF4)),
+        border: Border.all(
+          color: isAlert
+              ? color.withValues(alpha: .35)
+              : const Color(0xFFE9EEF4),
+        ),
       ),
       clipBehavior: Clip.antiAlias,
       child: Material(
@@ -2776,7 +3975,15 @@ class _NotificationPreviewSheet extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CircleAvatar(radius: 21, backgroundColor: color.withValues(alpha: .12), child: Icon(parentNotificationIcon(n), color: color, size: 19)),
+                CircleAvatar(
+                  radius: 21,
+                  backgroundColor: color.withValues(alpha: .12),
+                  child: Icon(
+                    parentNotificationIcon(n),
+                    color: color,
+                    size: 19,
+                  ),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -2785,30 +3992,83 @@ class _NotificationPreviewSheet extends StatelessWidget {
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(color: color.withValues(alpha: .1), borderRadius: BorderRadius.circular(99)),
-                            child: Text(parentNotificationTypeLabel(n), style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w900)),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: .1),
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                            child: Text(
+                              parentNotificationTypeLabel(n),
+                              style: TextStyle(
+                                color: color,
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
                           ),
                           const Spacer(),
-                          Text(parentNotificationTime(n), style: const TextStyle(color: kMuted, fontSize: 10.5, fontWeight: FontWeight.w700)),
+                          Text(
+                            parentNotificationTime(n),
+                            style: const TextStyle(
+                              color: kMuted,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 7),
-                      Text('${n['title']}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: kInk)),
+                      Text(
+                        '${n['title']}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          color: kInk,
+                        ),
+                      ),
                       const SizedBox(height: 3),
-                      Text('${n['message']}', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: kMuted, height: 1.28)),
+                      Text(
+                        '${n['message']}',
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: kMuted,
+                          height: 1.28,
+                        ),
+                      ),
                       const SizedBox(height: 7),
                       Row(
                         children: [
                           if (student.isNotEmpty) ...[
-                            const Icon(Icons.person_rounded, size: 13, color: Color(0xFF94A3B8)),
+                            const Icon(
+                              Icons.person_rounded,
+                              size: 13,
+                              color: Color(0xFF94A3B8),
+                            ),
                             const SizedBox(width: 4),
-                            Text(student, style: const TextStyle(color: kMuted, fontSize: 11, fontWeight: FontWeight.w700)),
+                            Text(
+                              student,
+                              style: const TextStyle(
+                                color: kMuted,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ],
                           const Spacer(),
                           Icon(Icons.send_rounded, size: 13, color: color),
                           const SizedBox(width: 4),
-                          Text('Tap to send', style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w800)),
+                          Text(
+                            'Tap to send',
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                         ],
                       ),
                     ],
@@ -2843,15 +4103,22 @@ class NotificationsTab extends StatefulWidget {
 class _NotificationsTabState extends State<NotificationsTab> {
   String _filter = 'all';
 
-  bool _isUnread(Map<String, dynamic> n) => n['is_read'] != true && n['is_read'] != 1;
+  bool _isUnread(Map<String, dynamic> n) =>
+      n['is_read'] != true && n['is_read'] != 1;
 
-  int _idOf(Map<String, dynamic> n) => int.tryParse('${n['notification_id'] ?? ''}') ?? 0;
+  int _idOf(Map<String, dynamic> n) =>
+      int.tryParse('${n['notification_id'] ?? ''}') ?? 0;
 
   @override
   Widget build(BuildContext context) {
-    final all = widget.notifications.whereType<Map>().map((n) => Map<String, dynamic>.from(n)).toList();
+    final all = widget.notifications
+        .whereType<Map>()
+        .map((n) => Map<String, dynamic>.from(n))
+        .toList();
     final unreadCount = all.where(_isUnread).length;
-    final notifications = _filter == 'all' ? all : all.where((n) => parentNotificationCategory(n) == _filter).toList();
+    final notifications = _filter == 'all'
+        ? all
+        : all.where((n) => parentNotificationCategory(n) == _filter).toList();
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
@@ -2860,7 +4127,15 @@ class _NotificationsTabState extends State<NotificationsTab> {
         _filterBar(),
         const SizedBox(height: 12),
         if (notifications.isEmpty)
-          const Padding(padding: EdgeInsets.all(24), child: Center(child: Text('No notifications yet.', style: TextStyle(color: kMuted))))
+          const Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(
+              child: Text(
+                'No notifications yet.',
+                style: TextStyle(color: kMuted),
+              ),
+            ),
+          )
         else
           ...notifications.map(_notificationCard),
       ],
@@ -2868,27 +4143,47 @@ class _NotificationsTabState extends State<NotificationsTab> {
   }
 
   Widget _header(int unreadCount) => Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Notifications', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: kInk)),
-                Text(
-                  unreadCount == 0 ? 'You are all caught up' : '$unreadCount unread',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: kMuted),
-                ),
-              ],
+    children: [
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Notifications',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: kInk,
+              ),
+            ),
+            Text(
+              unreadCount == 0
+                  ? 'You are all caught up'
+                  : '$unreadCount unread',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: kMuted,
+              ),
+            ),
+          ],
+        ),
+      ),
+      if (unreadCount > 0 && widget.onMarkAllRead != null)
+        TextButton.icon(
+          onPressed: () => widget.onMarkAllRead!.call(),
+          icon: const Icon(Icons.done_all_rounded, size: 18, color: kGreen),
+          label: const Text(
+            'Mark all read',
+            style: TextStyle(
+              color: kGreen,
+              fontWeight: FontWeight.w800,
+              fontSize: 12.5,
             ),
           ),
-          if (unreadCount > 0 && widget.onMarkAllRead != null)
-            TextButton.icon(
-              onPressed: () => widget.onMarkAllRead!.call(),
-              icon: const Icon(Icons.done_all_rounded, size: 18, color: kGreen),
-              label: const Text('Mark all read', style: TextStyle(color: kGreen, fontWeight: FontWeight.w800, fontSize: 12.5)),
-            ),
-        ],
-      );
+        ),
+    ],
+  );
 
   Widget _filterBar() {
     const filters = [
@@ -2913,10 +4208,18 @@ class _NotificationsTabState extends State<NotificationsTab> {
             selected: selected,
             onSelected: (_) => setState(() => _filter = key),
             label: Text(label),
-            labelStyle: TextStyle(color: selected ? Colors.white : kInk, fontSize: 12, fontWeight: FontWeight.w800),
+            labelStyle: TextStyle(
+              color: selected ? Colors.white : kInk,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
             selectedColor: kGreen,
             backgroundColor: Colors.white,
-            shape: StadiumBorder(side: BorderSide(color: selected ? kGreen : const Color(0xFFE5E7EB))),
+            shape: StadiumBorder(
+              side: BorderSide(
+                color: selected ? kGreen : const Color(0xFFE5E7EB),
+              ),
+            ),
           );
         },
       ),
@@ -2934,8 +4237,18 @@ class _NotificationsTabState extends State<NotificationsTab> {
       decoration: BoxDecoration(
         color: isAlert ? color.withValues(alpha: .05) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isAlert ? color.withValues(alpha: .35) : const Color(0xFFE9EEF4)),
-        boxShadow: const [BoxShadow(color: Color(0x0F101828), blurRadius: 12, offset: Offset(0, 6))],
+        border: Border.all(
+          color: isAlert
+              ? color.withValues(alpha: .35)
+              : const Color(0xFFE9EEF4),
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0F101828),
+            blurRadius: 12,
+            offset: Offset(0, 6),
+          ),
+        ],
       ),
       child: Material(
         color: Colors.transparent,
@@ -2950,7 +4263,11 @@ class _NotificationsTabState extends State<NotificationsTab> {
                 CircleAvatar(
                   radius: 22,
                   backgroundColor: color.withValues(alpha: .12),
-                  child: Icon(parentNotificationIcon(n), color: color, size: 20),
+                  child: Icon(
+                    parentNotificationIcon(n),
+                    color: color,
+                    size: 20,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -2960,27 +4277,69 @@ class _NotificationsTabState extends State<NotificationsTab> {
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(color: color.withValues(alpha: .1), borderRadius: BorderRadius.circular(99)),
-                            child: Text(parentNotificationTypeLabel(n), style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w900)),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: .1),
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                            child: Text(
+                              parentNotificationTypeLabel(n),
+                              style: TextStyle(
+                                color: color,
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
                           ),
                           const Spacer(),
                           if (unread)
-                            Container(width: 9, height: 9, decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle)),
+                            Container(
+                              width: 9,
+                              height: 9,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFEF4444),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
                         ],
                       ),
                       const SizedBox(height: 8),
-                      Text('${n['title'] ?? 'EduTrack Guardian'}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: kInk)),
+                      Text(
+                        '${n['title'] ?? 'EduTrack Guardian'}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          color: kInk,
+                        ),
+                      ),
                       const SizedBox(height: 4),
-                      Text('${n['message'] ?? ''}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: kMuted, height: 1.28)),
+                      Text(
+                        '${n['message'] ?? ''}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: kMuted,
+                          height: 1.28,
+                        ),
+                      ),
                       const SizedBox(height: 9),
                       Wrap(
                         spacing: 8,
                         runSpacing: 4,
                         children: [
-                          if (student.isNotEmpty) _miniMeta(Icons.person_rounded, student),
-                          if (school.isNotEmpty) _miniMeta(Icons.school_rounded, school),
-                          _miniMeta(Icons.schedule_rounded, parentNotificationTime(n)),
+                          if (student.isNotEmpty)
+                            _miniMeta(Icons.person_rounded, student),
+                          if (school.isNotEmpty)
+                            _miniMeta(Icons.school_rounded, school),
+                          _miniMeta(
+                            Icons.schedule_rounded,
+                            parentNotificationTime(n),
+                          ),
                         ],
                       ),
                     ],
@@ -2995,16 +4354,25 @@ class _NotificationsTabState extends State<NotificationsTab> {
   }
 
   Widget _miniMeta(IconData icon, String text) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: const Color(0xFF94A3B8)),
-          const SizedBox(width: 4),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 210),
-            child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: kMuted, fontSize: 11, fontWeight: FontWeight.w700)),
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: 13, color: const Color(0xFF94A3B8)),
+      const SizedBox(width: 4),
+      ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 210),
+        child: Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: kMuted,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
           ),
-        ],
-      );
+        ),
+      ),
+    ],
+  );
 
   void _openDetail(Map<String, dynamic> n) {
     final id = _idOf(n);
@@ -3015,7 +4383,9 @@ class _NotificationsTabState extends State<NotificationsTab> {
       context: context,
       backgroundColor: Colors.white,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
       builder: (_) => _NotificationDetailSheet(note: n, child: widget.child),
     );
   }
@@ -3031,10 +4401,15 @@ class _NotificationDetailSheet extends StatelessWidget {
     try {
       final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!ok && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No app available for this action.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No app available for this action.')),
+        );
       }
     } catch (_) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open this action.')));
+      if (context.mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open this action.')),
+        );
     }
   }
 
@@ -3042,9 +4417,13 @@ class _NotificationDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = parentNotificationColor(note);
     final isAlert = parentNotificationCategory(note) == 'alerts';
-    final student = '${note['student_name'] ?? note['child_name'] ?? ''}'.trim();
+    final student = '${note['student_name'] ?? note['child_name'] ?? ''}'
+        .trim();
     final school = '${note['school_name'] ?? ''}'.trim();
-    final phone = '${child?['adviser_contact'] ?? ''}'.replaceAll(RegExp(r'[^0-9+]'), '');
+    final phone = '${child?['adviser_contact'] ?? ''}'.replaceAll(
+      RegExp(r'[^0-9+]'),
+      '',
+    );
     final email = '${child?['adviser_email'] ?? ''}'.trim();
     return SafeArea(
       child: Padding(
@@ -3053,40 +4432,103 @@ class _NotificationDetailSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(child: Container(width: 44, height: 5, decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(99)))),
+            Center(
+              child: Container(
+                width: 44,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE2E8F0),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+            ),
             const SizedBox(height: 16),
             Row(
               children: [
-                CircleAvatar(radius: 24, backgroundColor: color.withValues(alpha: .12), child: Icon(parentNotificationIcon(note), color: color, size: 22)),
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: color.withValues(alpha: .12),
+                  child: Icon(
+                    parentNotificationIcon(note),
+                    color: color,
+                    size: 22,
+                  ),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(color: color.withValues(alpha: .1), borderRadius: BorderRadius.circular(99)),
-                        child: Text(parentNotificationTypeLabel(note), style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w900)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: .1),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                        child: Text(
+                          parentNotificationTypeLabel(note),
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 6),
-                      Text('${note['title'] ?? 'EduTrack Guardian'}', style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w900, color: kInk)),
+                      Text(
+                        '${note['title'] ?? 'EduTrack Guardian'}',
+                        style: const TextStyle(
+                          fontSize: 16.5,
+                          fontWeight: FontWeight.w900,
+                          color: kInk,
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 14),
-            Text('${note['message'] ?? ''}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF334155), height: 1.4)),
+            Text(
+              '${note['message'] ?? ''}',
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF334155),
+                height: 1.4,
+              ),
+            ),
             const SizedBox(height: 16),
-            if (student.isNotEmpty) _metaRow(Icons.person_rounded, 'Student', student),
-            if (school.isNotEmpty) _metaRow(Icons.school_rounded, 'School', school),
-            _metaRow(Icons.schedule_rounded, 'Received', parentNotificationTime(note)),
+            if (student.isNotEmpty)
+              _metaRow(Icons.person_rounded, 'Student', student),
+            if (school.isNotEmpty)
+              _metaRow(Icons.school_rounded, 'School', school),
+            _metaRow(
+              Icons.schedule_rounded,
+              'Received',
+              parentNotificationTime(note),
+            ),
             if (isAlert && (phone.isNotEmpty || email.isNotEmpty)) ...[
               const SizedBox(height: 16),
               if (phone.isNotEmpty)
-                _contactButton(context, Icons.call_rounded, 'Contact Adviser', kGreen, Uri.parse('tel:$phone')),
+                _contactButton(
+                  context,
+                  Icons.call_rounded,
+                  'Contact Adviser',
+                  kGreen,
+                  Uri.parse('tel:$phone'),
+                ),
               if (phone.isEmpty && email.isNotEmpty)
-                _contactButton(context, Icons.email_rounded, 'Email Adviser', const Color(0xFF2563EB), Uri.parse('mailto:$email')),
+                _contactButton(
+                  context,
+                  Icons.email_rounded,
+                  'Email Adviser',
+                  const Color(0xFF2563EB),
+                  Uri.parse('mailto:$email'),
+                ),
             ],
           ],
         ),
@@ -3095,27 +4537,54 @@ class _NotificationDetailSheet extends StatelessWidget {
   }
 
   Widget _metaRow(IconData icon, String label, String value) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Row(
-          children: [
-            Icon(icon, size: 16, color: const Color(0xFF94A3B8)),
-            const SizedBox(width: 8),
-            Text('$label: ', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: kMuted)),
-            Expanded(child: Text(value, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: kInk))),
-          ],
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Row(
+      children: [
+        Icon(icon, size: 16, color: const Color(0xFF94A3B8)),
+        const SizedBox(width: 8),
+        Text(
+          '$label: ',
+          style: const TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w800,
+            color: kMuted,
+          ),
         ),
-      );
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: kInk,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 
-  Widget _contactButton(BuildContext context, IconData icon, String label, Color color, Uri uri) => SizedBox(
-        width: double.infinity,
-        height: 48,
-        child: ElevatedButton.icon(
-          onPressed: () => _launch(context, uri),
-          icon: Icon(icon, size: 19),
-          label: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
-          style: ElevatedButton.styleFrom(backgroundColor: color, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-        ),
-      );
+  Widget _contactButton(
+    BuildContext context,
+    IconData icon,
+    String label,
+    Color color,
+    Uri uri,
+  ) => SizedBox(
+    width: double.infinity,
+    height: 48,
+    child: ElevatedButton.icon(
+      onPressed: () => _launch(context, uri),
+      icon: Icon(icon, size: 19),
+      label: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -3130,10 +4599,15 @@ class AdviserTab extends StatelessWidget {
     try {
       final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!ok && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No app available for this action.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No app available for this action.')),
+        );
       }
     } catch (_) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open this action.')));
+      if (context.mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open this action.')),
+        );
     }
   }
 
@@ -3143,7 +4617,9 @@ class AdviserTab extends StatelessWidget {
     final contact = '${child['adviser_contact'] ?? ''}'.trim();
     final email = '${child['adviser_email'] ?? ''}'.trim();
     final phone = contact.replaceAll(RegExp(r'[^0-9+]'), '');
-    final body = Uri.encodeComponent('Good day Teacher, this is the parent/guardian of ${child['name']} (${child['grade_level']} - ${child['section']}). ');
+    final body = Uri.encodeComponent(
+      'Good day Teacher, this is the parent/guardian of ${child['name']} (${child['grade_level']} - ${child['section']}). ',
+    );
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
@@ -3154,27 +4630,67 @@ class AdviserTab extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(children: [
-                const CircleAvatar(radius: 22, backgroundColor: Color(0xFFDCFCE7), child: Icon(Icons.co_present, color: kGreen)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(adviser, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: kInk)),
-                    Text('Class Adviser • ${child['section']}', style: const TextStyle(fontSize: 12, color: kMuted)),
-                  ]),
-                ),
-              ]),
+              Row(
+                children: [
+                  const CircleAvatar(
+                    radius: 22,
+                    backgroundColor: Color(0xFFDCFCE7),
+                    child: Icon(Icons.co_present, color: kGreen),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          adviser,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: kInk,
+                          ),
+                        ),
+                        Text(
+                          'Class Adviser • ${child['section']}',
+                          style: const TextStyle(fontSize: 12, color: kMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 18),
               if (phone.isNotEmpty) ...[
-                _actionButton(context, Icons.call, 'Call Adviser', kGreen, Uri.parse('tel:$phone')),
+                _actionButton(
+                  context,
+                  Icons.call,
+                  'Call Adviser',
+                  kGreen,
+                  Uri.parse('tel:$phone'),
+                ),
                 const SizedBox(height: 10),
-                _actionButton(context, Icons.sms, 'Send SMS', const Color(0xFF2563EB), Uri.parse('sms:$phone?body=$body')),
+                _actionButton(
+                  context,
+                  Icons.sms,
+                  'Send SMS',
+                  const Color(0xFF2563EB),
+                  Uri.parse('sms:$phone?body=$body'),
+                ),
                 const SizedBox(height: 10),
               ],
               if (email.isNotEmpty)
-                _actionButton(context, Icons.email, 'Send Email', const Color(0xFFEA580C), Uri.parse('mailto:$email?body=$body')),
+                _actionButton(
+                  context,
+                  Icons.email,
+                  'Send Email',
+                  const Color(0xFFEA580C),
+                  Uri.parse('mailto:$email?body=$body'),
+                ),
               if (phone.isEmpty && email.isEmpty)
-                const Text('No adviser contact details on file. Please reach the school office.', style: TextStyle(color: kMuted, fontSize: 12.5)),
+                const Text(
+                  'No adviser contact details on file. Please reach the school office.',
+                  style: TextStyle(color: kMuted, fontSize: 12.5),
+                ),
             ],
           ),
         ),
@@ -3182,23 +4698,40 @@ class AdviserTab extends StatelessWidget {
     );
   }
 
-  Widget _actionButton(BuildContext context, IconData icon, String label, Color color, Uri uri) => SizedBox(
-        width: double.infinity,
-        height: 46,
-        child: OutlinedButton.icon(
-          onPressed: () => _launch(context, uri),
-          icon: Icon(icon, color: color, size: 19),
-          label: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w700)),
-          style: OutlinedButton.styleFrom(side: BorderSide(color: color.withValues(alpha: 0.4)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-        ),
-      );
+  Widget _actionButton(
+    BuildContext context,
+    IconData icon,
+    String label,
+    Color color,
+    Uri uri,
+  ) => SizedBox(
+    width: double.infinity,
+    height: 46,
+    child: OutlinedButton.icon(
+      onPressed: () => _launch(context, uri),
+      icon: Icon(icon, color: color, size: 19),
+      label: Text(
+        label,
+        style: TextStyle(color: color, fontWeight: FontWeight.w700),
+      ),
+      style: OutlinedButton.styleFrom(
+        side: BorderSide(color: color.withValues(alpha: 0.4)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Profile tab
 // ---------------------------------------------------------------------------
 class ProfileTab extends StatefulWidget {
-  const ProfileTab({super.key, required this.api, required this.childCount, required this.onLogout});
+  const ProfileTab({
+    super.key,
+    required this.api,
+    required this.childCount,
+    required this.onLogout,
+  });
   final ParentApi api;
   final int childCount;
   final VoidCallback onLogout;
@@ -3224,7 +4757,9 @@ class _ProfileTabState extends State<ProfileTab> {
     try {
       final info = await PackageInfo.fromPlatform();
       if (mounted) setState(() => _current = info.version);
-    } catch (_) {/* ignore */}
+    } catch (_) {
+      /* ignore */
+    }
     final v = await widget.api.appVersion();
     if (!mounted) return;
     setState(() {
@@ -3237,7 +4772,8 @@ class _ProfileTabState extends State<ProfileTab> {
     if (_updateAvailable) {
       try {
         final prefs = await SharedPreferences.getInstance();
-        final lastNotified = prefs.getString('last_update_notify_version') ?? '';
+        final lastNotified =
+            prefs.getString('last_update_notify_version') ?? '';
         if (lastNotified != _latest) {
           await prefs.setString('last_update_notify_version', _latest);
           await showParentNotification(
@@ -3249,13 +4785,18 @@ class _ProfileTabState extends State<ProfileTab> {
             type: 'announcement_general',
           );
         }
-      } catch (_) {/* notification is best-effort */}
+      } catch (_) {
+        /* notification is best-effort */
+      }
     }
   }
 
   bool get _updateAvailable {
     if (_latest.isEmpty || _current.isEmpty) return false;
-    List<int> p(String s) => s.split('.').map((x) => int.tryParse(x.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0).toList();
+    List<int> p(String s) => s
+        .split('.')
+        .map((x) => int.tryParse(x.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0)
+        .toList();
     final a = p(_latest), b = p(_current);
     for (var i = 0; i < a.length; i++) {
       final bi = i < b.length ? b[i] : 0;
@@ -3273,7 +4814,9 @@ class _ProfileTabState extends State<ProfileTab> {
     try {
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/edutrack-parent.apk');
-      final resp = await http.Client().send(http.Request('GET', Uri.parse(_apkUrl))).timeout(const Duration(minutes: 4));
+      final resp = await http.Client()
+          .send(http.Request('GET', Uri.parse(_apkUrl)))
+          .timeout(const Duration(minutes: 4));
       final total = resp.contentLength ?? 0;
       final sink = file.openWrite();
       var received = 0;
@@ -3281,7 +4824,9 @@ class _ProfileTabState extends State<ProfileTab> {
         sink.add(chunk);
         received += chunk.length;
         if (total > 0 && mounted) {
-          setState(() => _otaMsg = 'Downloading ${(received / total * 100).round()}%');
+          setState(
+            () => _otaMsg = 'Downloading ${(received / total * 100).round()}%',
+          );
         }
       }
       await sink.close();
@@ -3290,12 +4835,21 @@ class _ProfileTabState extends State<ProfileTab> {
         _otaBusy = false;
         _otaMsg = 'Opening installer — tap Install to finish.';
       });
-      final result = await OpenFilex.open(file.path, type: 'application/vnd.android.package-archive');
+      final result = await OpenFilex.open(
+        file.path,
+        type: 'application/vnd.android.package-archive',
+      );
       if (mounted) {
-        setState(() => _otaMsg = 'If Android shows package conflict, uninstall the old EduTrack Guardian app once, then install this signed update. Future updates will install normally.');
+        setState(
+          () => _otaMsg =
+              'If Android shows package conflict, uninstall the old EduTrack Guardian app once, then install this signed update. Future updates will install normally.',
+        );
       }
       if (result.type != ResultType.done && mounted) {
-        setState(() => _otaMsg = 'Allow “Install unknown apps” for EduTrack Guardian, then tap Install Update again.');
+        setState(
+          () => _otaMsg =
+              'Allow “Install unknown apps” for EduTrack Guardian, then tap Install Update again.',
+        );
       }
     } catch (_) {
       if (!mounted) return;
@@ -3312,23 +4866,32 @@ class _ProfileTabState extends State<ProfileTab> {
     final granted = await ensureParentNotificationPermission();
     if (!mounted) return;
     if (!granted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Notifications are turned off. Enable them in Settings → Apps → EduTrack Guardian → Notifications.'),
-        duration: Duration(seconds: 5),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Notifications are turned off. Enable them in Settings → Apps → EduTrack Guardian → Notifications.',
+          ),
+          duration: Duration(seconds: 5),
+        ),
+      );
       return;
     }
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: const Color(0xFFF6F8FB),
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
-      builder: (_) => _NotificationPreviewSheet(samples: sampleParentNotifications()),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (_) =>
+          _NotificationPreviewSheet(samples: sampleParentNotifications()),
     );
   }
 
   Future<void> _editProfile() async {
-    final name = TextEditingController(text: widget.api.parentName == 'Parent' ? '' : widget.api.parentName);
+    final name = TextEditingController(
+      text: widget.api.parentName == 'Parent' ? '' : widget.api.parentName,
+    );
     final contact = TextEditingController(text: widget.api.parentContact);
     final username = TextEditingController(text: widget.api.parentUsername);
     bool busy = false;
@@ -3342,7 +4905,8 @@ class _ProfileTabState extends State<ProfileTab> {
               setLocal(() => err = 'Please enter your name.');
               return;
             }
-            if (contact.text.trim().replaceAll(RegExp(r'[^0-9]'), '').length < 7) {
+            if (contact.text.trim().replaceAll(RegExp(r'[^0-9]'), '').length <
+                7) {
               setLocal(() => err = 'Please enter a valid contact number.');
               return;
             }
@@ -3350,14 +4914,22 @@ class _ProfileTabState extends State<ProfileTab> {
               busy = true;
               err = null;
             });
-            final res = await widget.api.updateProfile(name.text.trim(), contact.text.trim(), username.text.trim());
+            final res = await widget.api.updateProfile(
+              name.text.trim(),
+              contact.text.trim(),
+              username.text.trim(),
+            );
             if (res['success'] == true) {
               if (ctx.mounted) Navigator.pop(ctx);
               if (mounted) {
                 setState(() {});
                 final linked = res['linked_students'] ?? 0;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Profile updated. Synced to $linked student record(s).')),
+                  SnackBar(
+                    content: Text(
+                      'Profile updated. Synced to $linked student record(s).',
+                    ),
+                  ),
                 );
               }
             } else {
@@ -3368,7 +4940,12 @@ class _ProfileTabState extends State<ProfileTab> {
             }
           }
 
-          InputDecoration dec(String l, [String? h]) => InputDecoration(labelText: l, hintText: h, isDense: true, border: const OutlineInputBorder());
+          InputDecoration dec(String l, [String? h]) => InputDecoration(
+            labelText: l,
+            hintText: h,
+            isDense: true,
+            border: const OutlineInputBorder(),
+          );
           return AlertDialog(
             title: const Text('Edit Profile'),
             content: SingleChildScrollView(
@@ -3376,12 +4953,32 @@ class _ProfileTabState extends State<ProfileTab> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (err != null)
-                    Padding(padding: const EdgeInsets.only(bottom: 10), child: Text(err!, style: const TextStyle(color: Color(0xFFDC2626), fontSize: 12.5))),
-                  TextField(controller: name, textCapitalization: TextCapitalization.words, decoration: dec('Full name')),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text(
+                        err!,
+                        style: const TextStyle(
+                          color: Color(0xFFDC2626),
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ),
+                  TextField(
+                    controller: name,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: dec('Full name'),
+                  ),
                   const SizedBox(height: 10),
-                  TextField(controller: contact, keyboardType: TextInputType.phone, decoration: dec('Contact number', '09xxxxxxxxx')),
+                  TextField(
+                    controller: contact,
+                    keyboardType: TextInputType.phone,
+                    decoration: dec('Contact number', '09xxxxxxxxx'),
+                  ),
                   const SizedBox(height: 10),
-                  TextField(controller: username, decoration: dec('Username (optional)')),
+                  TextField(
+                    controller: username,
+                    decoration: dec('Username (optional)'),
+                  ),
                   const SizedBox(height: 10),
                   const Text(
                     'Changing your number keeps you linked to your children and updates the number your teacher and principal use to reach you.',
@@ -3391,10 +4988,19 @@ class _ProfileTabState extends State<ProfileTab> {
               ),
             ),
             actions: [
-              TextButton(onPressed: busy ? null : () => Navigator.pop(ctx), child: const Text('Cancel')),
+              TextButton(
+                onPressed: busy ? null : () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
               TextButton(
                 onPressed: busy ? null : submit,
-                child: busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Save'),
+                child: busy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Save'),
               ),
             ],
           );
@@ -3422,10 +5028,19 @@ class _ProfileTabState extends State<ProfileTab> {
               busy = true;
               err = null;
             });
-            final res = await widget.api.changePassword(cur.text, nw.text, cf.text);
+            final res = await widget.api.changePassword(
+              cur.text,
+              nw.text,
+              cf.text,
+            );
             if (res['success'] == true) {
               if (ctx.mounted) Navigator.pop(ctx);
-              if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password updated successfully.')));
+              if (mounted)
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Password updated successfully.'),
+                  ),
+                );
             } else {
               setLocal(() {
                 busy = false;
@@ -3434,7 +5049,11 @@ class _ProfileTabState extends State<ProfileTab> {
             }
           }
 
-          InputDecoration dec(String l) => InputDecoration(labelText: l, isDense: true, border: const OutlineInputBorder());
+          InputDecoration dec(String l) => InputDecoration(
+            labelText: l,
+            isDense: true,
+            border: const OutlineInputBorder(),
+          );
           return AlertDialog(
             title: const Text('Change Password'),
             content: SingleChildScrollView(
@@ -3442,24 +5061,60 @@ class _ProfileTabState extends State<ProfileTab> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (err != null)
-                    Padding(padding: const EdgeInsets.only(bottom: 10), child: Text(err!, style: const TextStyle(color: Color(0xFFDC2626), fontSize: 12.5))),
-                  TextField(controller: cur, obscureText: obscure, decoration: dec('Current password')),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text(
+                        err!,
+                        style: const TextStyle(
+                          color: Color(0xFFDC2626),
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ),
+                  TextField(
+                    controller: cur,
+                    obscureText: obscure,
+                    decoration: dec('Current password'),
+                  ),
                   const SizedBox(height: 10),
-                  TextField(controller: nw, obscureText: obscure, decoration: dec('New password')),
+                  TextField(
+                    controller: nw,
+                    obscureText: obscure,
+                    decoration: dec('New password'),
+                  ),
                   const SizedBox(height: 10),
-                  TextField(controller: cf, obscureText: obscure, decoration: dec('Confirm new password')),
+                  TextField(
+                    controller: cf,
+                    obscureText: obscure,
+                    decoration: dec('Confirm new password'),
+                  ),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: TextButton(onPressed: () => setLocal(() => obscure = !obscure), child: Text(obscure ? 'Show' : 'Hide', style: const TextStyle(fontSize: 12))),
+                    child: TextButton(
+                      onPressed: () => setLocal(() => obscure = !obscure),
+                      child: Text(
+                        obscure ? 'Show' : 'Hide',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
             actions: [
-              TextButton(onPressed: busy ? null : () => Navigator.pop(ctx), child: const Text('Cancel')),
+              TextButton(
+                onPressed: busy ? null : () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
               TextButton(
                 onPressed: busy ? null : submit,
-                child: busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Update'),
+                child: busy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Update'),
               ),
             ],
           );
@@ -3480,43 +5135,112 @@ class _ProfileTabState extends State<ProfileTab> {
         Container(
           padding: const EdgeInsets.all(20),
           decoration: _cardDecoration(),
-          child: Column(children: [
-            CircleAvatar(radius: 34, backgroundColor: const Color(0xFFDCFCE7), child: Text(_initials(api.parentName), style: const TextStyle(color: kGreen, fontWeight: FontWeight.w800, fontSize: 22))),
-            const SizedBox(height: 12),
-            Text(api.parentName, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: kInk)),
-            const SizedBox(height: 2),
-            const Text('Parent / Guardian', style: TextStyle(fontSize: 12.5, color: kMuted)),
-          ]),
+          child: Column(
+            children: [
+              CircleAvatar(
+                radius: 34,
+                backgroundColor: const Color(0xFFDCFCE7),
+                child: Text(
+                  _initials(api.parentName),
+                  style: const TextStyle(
+                    color: kGreen,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 22,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                api.parentName,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: kInk,
+                ),
+              ),
+              const SizedBox(height: 2),
+              const Text(
+                'Parent / Guardian',
+                style: TextStyle(fontSize: 12.5, color: kMuted),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         // Account info + change password
         Container(
           decoration: _cardDecoration(),
-          child: Column(children: [
-            ListTile(
-              leading: const Icon(Icons.badge_outlined, color: kGreen, size: 20),
-              title: const Text('Edit Profile', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: kInk)),
-              subtitle: const Text('Update your name, contact number & username', style: TextStyle(fontSize: 11.5, color: kMuted)),
-              trailing: const Icon(Icons.chevron_right, color: kMuted),
-              onTap: _editProfile,
-            ),
-            const Divider(height: 1),
-            _tile(Icons.person_outline, 'Name', api.parentName == 'Parent' ? '—' : api.parentName),
-            const Divider(height: 1),
-            _tile(Icons.phone_outlined, 'Contact Number', api.parentContact.isEmpty ? '—' : api.parentContact),
-            const Divider(height: 1),
-            _tile(Icons.alternate_email, 'Username', api.parentUsername.isEmpty ? '—' : api.parentUsername),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.lock_outline, color: kGreen, size: 20),
-              title: const Text('Change Password', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: kInk)),
-              subtitle: const Text('Update your account password', style: TextStyle(fontSize: 11.5, color: kMuted)),
-              trailing: const Icon(Icons.chevron_right, color: kMuted),
-              onTap: _changePassword,
-            ),
-            const Divider(height: 1),
-            _tile(Icons.family_restroom, 'Linked Children', '${widget.childCount}'),
-          ]),
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(
+                  Icons.badge_outlined,
+                  color: kGreen,
+                  size: 20,
+                ),
+                title: const Text(
+                  'Edit Profile',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: kInk,
+                  ),
+                ),
+                subtitle: const Text(
+                  'Update your name, contact number & username',
+                  style: TextStyle(fontSize: 11.5, color: kMuted),
+                ),
+                trailing: const Icon(Icons.chevron_right, color: kMuted),
+                onTap: _editProfile,
+              ),
+              const Divider(height: 1),
+              _tile(
+                Icons.person_outline,
+                'Name',
+                api.parentName == 'Parent' ? '—' : api.parentName,
+              ),
+              const Divider(height: 1),
+              _tile(
+                Icons.phone_outlined,
+                'Contact Number',
+                api.parentContact.isEmpty ? '—' : api.parentContact,
+              ),
+              const Divider(height: 1),
+              _tile(
+                Icons.alternate_email,
+                'Username',
+                api.parentUsername.isEmpty ? '—' : api.parentUsername,
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(
+                  Icons.lock_outline,
+                  color: kGreen,
+                  size: 20,
+                ),
+                title: const Text(
+                  'Change Password',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: kInk,
+                  ),
+                ),
+                subtitle: const Text(
+                  'Update your account password',
+                  style: TextStyle(fontSize: 11.5, color: kMuted),
+                ),
+                trailing: const Icon(Icons.chevron_right, color: kMuted),
+                onTap: _changePassword,
+              ),
+              const Divider(height: 1),
+              _tile(
+                Icons.family_restroom,
+                'Linked Children',
+                '${widget.childCount}',
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         // App updates
@@ -3526,31 +5250,69 @@ class _ProfileTabState extends State<ProfileTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(children: const [
-                Icon(Icons.system_update, color: kGreen, size: 20),
-                SizedBox(width: 8),
-                Text('App Updates', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: kInk)),
-              ]),
+              Row(
+                children: const [
+                  Icon(Icons.system_update, color: kGreen, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'App Updates',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                      color: kInk,
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 8),
-              Text('Installed: v${_current.isEmpty ? '…' : _current}${_latest.isEmpty ? '' : '   •   Latest: v$_latest'}',
-                  style: const TextStyle(fontSize: 12.5, color: kMuted, fontWeight: FontWeight.w600)),
+              Text(
+                'Installed: v${_current.isEmpty ? '…' : _current}${_latest.isEmpty ? '' : '   •   Latest: v$_latest'}',
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  color: kMuted,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               if (_updateAvailable) ...[
                 const SizedBox(height: 12),
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: const Color(0xFFFFF7ED), border: Border.all(color: const Color(0xFFFED7AA)), borderRadius: BorderRadius.circular(10)),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF7ED),
+                    border: Border.all(color: const Color(0xFFFED7AA)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Row(children: [
-                        Icon(Icons.new_releases, color: Color(0xFFEA580C), size: 18),
-                        SizedBox(width: 6),
-                        Text('Update available', style: TextStyle(color: Color(0xFF9A3412), fontWeight: FontWeight.w800, fontSize: 13)),
-                      ]),
+                      const Row(
+                        children: [
+                          Icon(
+                            Icons.new_releases,
+                            color: Color(0xFFEA580C),
+                            size: 18,
+                          ),
+                          SizedBox(width: 6),
+                          Text(
+                            'Update available',
+                            style: TextStyle(
+                              color: Color(0xFF9A3412),
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
                       if (_notes.isNotEmpty) ...[
                         const SizedBox(height: 4),
-                        Text(_notes, style: const TextStyle(color: Color(0xFF9A3412), fontSize: 12)),
+                        Text(
+                          _notes,
+                          style: const TextStyle(
+                            color: Color(0xFF9A3412),
+                            fontSize: 12,
+                          ),
+                        ),
                       ],
                     ],
                   ),
@@ -3562,15 +5324,35 @@ class _ProfileTabState extends State<ProfileTab> {
                   child: ElevatedButton.icon(
                     onPressed: _otaBusy ? null : _installUpdate,
                     icon: _otaBusy
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
                         : const Icon(Icons.download_rounded, size: 19),
                     label: const Text('Install Update Now'),
-                    style: ElevatedButton.styleFrom(backgroundColor: kGreen, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kGreen,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
                   ),
                 ),
                 if (_otaMsg.isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  Text(_otaMsg, style: const TextStyle(fontSize: 12, color: kGreenDark, fontWeight: FontWeight.w600)),
+                  Text(
+                    _otaMsg,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: kGreenDark,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
                 const SizedBox(height: 8),
                 const Text(
@@ -3580,7 +5362,11 @@ class _ProfileTabState extends State<ProfileTab> {
                 const SizedBox(height: 6),
                 const Text(
                   'Package conflict fix: uninstall the old EduTrack Guardian app once, then install this signed update. After that, future updates will install normally.',
-                  style: TextStyle(fontSize: 11, color: Color(0xFF9A3412), fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF9A3412),
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ] else if (_latest.isNotEmpty) ...[
                 const SizedBox(height: 12),
@@ -3594,17 +5380,33 @@ class _ProfileTabState extends State<ProfileTab> {
                   ),
                   child: Row(
                     children: const [
-                      Icon(Icons.verified_rounded, color: Color(0xFF047857), size: 22),
+                      Icon(
+                        Icons.verified_rounded,
+                        color: Color(0xFF047857),
+                        size: 22,
+                      ),
                       SizedBox(width: 10),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text("You're up to date",
-                                style: TextStyle(color: Color(0xFF064E3B), fontWeight: FontWeight.w900, fontSize: 14)),
+                            Text(
+                              "You're up to date",
+                              style: TextStyle(
+                                color: Color(0xFF064E3B),
+                                fontWeight: FontWeight.w900,
+                                fontSize: 14,
+                              ),
+                            ),
                             SizedBox(height: 2),
-                            Text("EduTrack Guardian is on the latest version. We'll alert you when a new update is published.",
-                                style: TextStyle(color: Color(0xFF065F46), fontSize: 12, height: 1.4)),
+                            Text(
+                              "EduTrack Guardian is on the latest version. We'll alert you when a new update is published.",
+                              style: TextStyle(
+                                color: Color(0xFF065F46),
+                                fontSize: 12,
+                                height: 1.4,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -3618,13 +5420,19 @@ class _ProfileTabState extends State<ProfileTab> {
                   child: OutlinedButton.icon(
                     onPressed: _otaBusy ? null : _loadVersions,
                     icon: _otaBusy
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
                         : const Icon(Icons.refresh_rounded, size: 18),
                     label: const Text('Check again'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: kGreenDark,
                       side: const BorderSide(color: Color(0xFFA7F3D0)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                   ),
                 ),
@@ -3632,9 +5440,23 @@ class _ProfileTabState extends State<ProfileTab> {
                 const SizedBox(height: 12),
                 Row(
                   children: const [
-                    SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: kGreen)),
+                    SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: kGreen,
+                      ),
+                    ),
                     SizedBox(width: 8),
-                    Text('Checking for updates…', style: TextStyle(fontSize: 12, color: kMuted, fontWeight: FontWeight.w600)),
+                    Text(
+                      'Checking for updates…',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: kMuted,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -3649,22 +5471,53 @@ class _ProfileTabState extends State<ProfileTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(children: const [
-                Icon(Icons.notifications_active_outlined, color: kGreen, size: 20),
-                SizedBox(width: 8),
-                Text('Notifications', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: kInk)),
-              ]),
+              Row(
+                children: const [
+                  Icon(
+                    Icons.notifications_active_outlined,
+                    color: kGreen,
+                    size: 20,
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    'Notifications',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                      color: kInk,
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 6),
-              const Text('Preview every alert type — tap any one to send it to your notification tray.', style: TextStyle(fontSize: 12, color: kMuted)),
+              const Text(
+                'Preview every alert type — tap any one to send it to your notification tray.',
+                style: TextStyle(fontSize: 12, color: kMuted),
+              ),
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 height: 46,
                 child: OutlinedButton.icon(
                   onPressed: _testNotification,
-                  icon: const Icon(Icons.notifications_active_rounded, color: kGreen, size: 19),
-                  label: const Text('Preview all notifications', style: TextStyle(color: kGreen, fontWeight: FontWeight.w700)),
-                  style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFBBF7D0)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                  icon: const Icon(
+                    Icons.notifications_active_rounded,
+                    color: kGreen,
+                    size: 19,
+                  ),
+                  label: const Text(
+                    'Preview all notifications',
+                    style: TextStyle(
+                      color: kGreen,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFFBBF7D0)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -3677,21 +5530,44 @@ class _ProfileTabState extends State<ProfileTab> {
           child: OutlinedButton.icon(
             onPressed: widget.onLogout,
             icon: const Icon(Icons.logout, color: Color(0xFFDC2626), size: 19),
-            label: const Text('Log Out', style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.w700)),
-            style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFFECACA)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            label: const Text(
+              'Log Out',
+              style: TextStyle(
+                color: Color(0xFFDC2626),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Color(0xFFFECACA)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
           ),
         ),
         const SizedBox(height: 20),
-        Center(child: Text('EduTrack Guardian • v${_current.isEmpty ? '1.0.1' : _current}', style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5))),
+        Center(
+          child: Text(
+            'EduTrack Guardian • v${_current.isEmpty ? '1.0.1' : _current}',
+            style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 11.5),
+          ),
+        ),
       ],
     );
   }
 
   Widget _tile(IconData icon, String label, String value) => ListTile(
-        leading: Icon(icon, color: kMuted, size: 20),
-        title: Text(label, style: const TextStyle(fontSize: 12.5, color: kMuted)),
-        trailing: Text(value, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: kInk)),
-      );
+    leading: Icon(icon, color: kMuted, size: 20),
+    title: Text(label, style: const TextStyle(fontSize: 12.5, color: kMuted)),
+    trailing: Text(
+      value,
+      style: const TextStyle(
+        fontSize: 13.5,
+        fontWeight: FontWeight.w700,
+        color: kInk,
+      ),
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -3716,11 +5592,18 @@ class RingPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..color = color;
     canvas.drawCircle(center, radius, bg);
-    canvas.drawArc(Rect.fromCircle(center: center, radius: radius), -math.pi / 2, math.pi * 2 * progress.clamp(0, 1), false, fg);
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -math.pi / 2,
+      math.pi * 2 * progress.clamp(0, 1),
+      false,
+      fg,
+    );
   }
 
   @override
-  bool shouldRepaint(RingPainter oldDelegate) => oldDelegate.progress != progress || oldDelegate.color != color;
+  bool shouldRepaint(RingPainter oldDelegate) =>
+      oldDelegate.progress != progress || oldDelegate.color != color;
 }
 
 // Renders the admin-uploaded school art (same image as the SDS/ASDS dashboard)
@@ -3767,7 +5650,8 @@ class SchoolArt extends StatelessWidget {
 class _DefaultSchoolArt extends StatelessWidget {
   const _DefaultSchoolArt();
   @override
-  Widget build(BuildContext context) => CustomPaint(painter: _SchoolArtPainter());
+  Widget build(BuildContext context) =>
+      CustomPaint(painter: _SchoolArtPainter());
 }
 
 class _SchoolArtPainter extends CustomPainter {
@@ -3780,10 +5664,35 @@ class _SchoolArtPainter extends CustomPainter {
     final pale = Paint()..color = const Color(0xFFF8FFFB);
     final sky = Paint()..color = const Color(0xFFEAF7FF);
 
-    canvas.drawOval(Rect.fromLTWH(6, size.height - 18, size.width - 12, 15), ground);
+    canvas.drawOval(
+      Rect.fromLTWH(6, size.height - 18, size.width - 12, 15),
+      ground,
+    );
     canvas.drawCircle(Offset(size.width * .18, size.height * .64), 18, mid);
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(size.width * .16, size.height * .64, size.width * .08, size.height * .26), const Radius.circular(4)), deep);
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(size.width * .38, size.height * .40, size.width * .52, size.height * .42), const Radius.circular(5)), mid);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          size.width * .16,
+          size.height * .64,
+          size.width * .08,
+          size.height * .26,
+        ),
+        const Radius.circular(4),
+      ),
+      deep,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          size.width * .38,
+          size.height * .40,
+          size.width * .52,
+          size.height * .42,
+        ),
+        const Radius.circular(5),
+      ),
+      mid,
+    );
 
     final roof = Path()
       ..moveTo(size.width * .34, size.height * .42)
@@ -3792,20 +5701,47 @@ class _SchoolArtPainter extends CustomPainter {
       ..close();
     canvas.drawPath(roof, deep);
 
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(size.width * .58, size.height * .58, size.width * .14, size.height * .27), const Radius.circular(4)), deep);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          size.width * .58,
+          size.height * .58,
+          size.width * .14,
+          size.height * .27,
+        ),
+        const Radius.circular(4),
+      ),
+      deep,
+    );
     for (final x in [0.45, 0.78]) {
-      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(size.width * x, size.height * .54, 12, 15), const Radius.circular(2)), pale);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(size.width * x, size.height * .54, 12, 15),
+          const Radius.circular(2),
+        ),
+        pale,
+      );
     }
     canvas.drawCircle(Offset(size.width * .65, size.height * .37), 14, pale);
-    canvas.drawLine(Offset(size.width * .65, size.height * .28), Offset(size.width * .65, size.height * .08), deep..strokeWidth = 3);
+    canvas.drawLine(
+      Offset(size.width * .65, size.height * .28),
+      Offset(size.width * .65, size.height * .08),
+      deep..strokeWidth = 3,
+    );
     final flag = Path()
       ..moveTo(size.width * .66, size.height * .08)
       ..lineTo(size.width * .82, size.height * .13)
       ..lineTo(size.width * .66, size.height * .18)
       ..close();
     canvas.drawPath(flag, green);
-    canvas.drawOval(Rect.fromLTWH(size.width * .08, 6, size.width * .22, 9), sky);
-    canvas.drawOval(Rect.fromLTWH(size.width * .78, 15, size.width * .18, 8), sky);
+    canvas.drawOval(
+      Rect.fromLTWH(size.width * .08, 6, size.width * .22, 9),
+      sky,
+    );
+    canvas.drawOval(
+      Rect.fromLTWH(size.width * .78, 15, size.width * .18, 8),
+      sky,
+    );
   }
 
   @override
@@ -3814,17 +5750,24 @@ class _SchoolArtPainter extends CustomPainter {
 
 Color statusColor(String s) {
   final v = s.toLowerCase();
-  if (v.contains('no time') || v.contains('pending')) {
+  if (v.contains('no time') ||
+      v.contains('not scanned') ||
+      v.contains('waiting') ||
+      v.contains('pending')) {
     return const Color(0xFF64748B); // slate — no scan yet, not absent
   }
-  if (v.contains('inside')) return kGreen;
+  if (v.contains('inside') || v.contains('present') || v.contains('time in')) {
+    return kGreen;
+  }
   if (v.contains('lunch')) return const Color(0xFFD97706);
   if (v.contains('completed')) return const Color(0xFF2563EB);
-  if (v.contains('outside') || v.contains('early')) return const Color(0xFFEA580C);
+  if (v.contains('outside') || v.contains('early')) {
+    return const Color(0xFFEA580C);
+  }
   if (v.contains('absent')) return const Color(0xFFDC2626);
   if (v.contains('late')) return const Color(0xFFD97706);
   if (v.contains('half')) return const Color(0xFFEA580C);
-  return kGreen;
+  return const Color(0xFF64748B);
 }
 
 IconData toneIcon(String tone) {
@@ -3848,7 +5791,9 @@ IconData toneIcon(String tone) {
 // late, lunch, returned, completed, PM, and plain time in/out are all different.
 IconData scanTypeIcon(String label, String tone) {
   final l = label.toUpperCase();
-  if (l.contains('EARLY')) return Icons.directions_run_rounded;     // early dismissal
+  if (l.contains('EARLY')) {
+    return Icons.directions_run_rounded; // early dismissal
+  }
   if (l.contains('LATE')) return Icons.running_with_errors_rounded; // late
   if (l.contains('LUNCH')) return Icons.restaurant_rounded;
   if (l.contains('RETURN')) return Icons.keyboard_return_rounded;
