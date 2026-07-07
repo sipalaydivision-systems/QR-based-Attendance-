@@ -63,6 +63,13 @@ function normalizeOptionalSchoolId(value) {
     return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+function normalizeContact(value) {
+    let digits = String(value || '').replace(/\D/g, '');
+    if (digits.startsWith('63') && digits.length === 12) digits = `0${digits.slice(2)}`;
+    if (digits.length === 10 && digits.startsWith('9')) digits = `0${digits}`;
+    return digits;
+}
+
 // Coordinates are optional on a school — blank/invalid always coerces to
 // NULL rather than blocking the rest of the record from saving.
 function normalizeCoordinate(value, min, max) {
@@ -3498,6 +3505,95 @@ router.get('/users', requireRole('super_admin'), async (req, res) => {
     }
 });
 
+router.get('/active-users-overview', requireRole('super_admin'), async (req, res) => {
+    try {
+        const [staff] = await db.query(
+            `SELECT u.id, u.username, u.fullname, u.email, u.contact, u.role, u.school_id, u.status,
+                    u.last_login,
+                    COALESCE(ud.last_seen_at, u.last_login) AS last_seen_at,
+                    COALESCE(ud.device_count, 0) AS device_count,
+                    s.name AS school_name
+             FROM users u
+             LEFT JOIN schools s ON s.id = u.school_id
+             LEFT JOIN (
+                SELECT user_id, MAX(updated_at) AS last_seen_at, COUNT(*) AS device_count
+                FROM user_devices
+                GROUP BY user_id
+             ) ud ON ud.user_id = u.id
+             WHERE u.role IN ('super_admin','principal','superintendent','asst_superintendent')
+             ORDER BY FIELD(u.role,'super_admin','superintendent','asst_superintendent','principal'), u.fullname`
+        );
+        const [teachers] = await db.query(
+            `SELECT t.id, t.employee_id, t.firstname, t.lastname, t.middlename, t.email, t.contact,
+                    t.category, t.status, t.last_login AS last_seen_at,
+                    IF(t.password IS NOT NULL AND t.password != '', 1, 0) AS has_password,
+                    s.name AS school_name, gl.name AS grade_name, sec.name AS section_name
+             FROM teachers t
+             LEFT JOIN schools s ON s.id = t.school_id
+             LEFT JOIN grade_levels gl ON gl.id = t.grade_level_id
+             LEFT JOIN sections sec ON sec.id = t.section_id
+             WHERE t.status <> 'deleted'
+             ORDER BY t.lastname, t.firstname`
+        );
+        const [parents] = await db.query(
+            `SELECT p.id, p.guardian_name, p.contact_number, p.normalized_contact, p.username,
+                    p.status, p.last_login,
+                    COALESCE(pd.last_seen_at, p.last_login) AS last_seen_at,
+                    COALESCE(pd.device_count, 0) AS device_count
+             FROM parents p
+             LEFT JOIN (
+                SELECT parent_id, MAX(last_seen_at) AS last_seen_at, COUNT(*) AS device_count
+                FROM parent_devices
+                GROUP BY parent_id
+             ) pd ON pd.parent_id = p.id
+             ORDER BY p.guardian_name`
+        );
+        return res.json({
+            generated_at: nowDateTime(),
+            summary: {
+                staff: staff.length,
+                teachers: teachers.length,
+                parents: parents.length,
+                mobile_devices: parents.reduce((sum, p) => sum + Number(p.device_count || 0), 0) +
+                    staff.reduce((sum, u) => sum + Number(u.device_count || 0), 0)
+            },
+            staff,
+            teachers,
+            parents
+        });
+    } catch (err) {
+        console.error('Active users overview error:', err);
+        return res.status(500).json({ error: 'Failed to load active users.' });
+    }
+});
+
+router.post('/active-users/:accountType/:id/password', requireRole('super_admin'), express.json(), async (req, res) => {
+    const accountType = String(req.params.accountType || '').toLowerCase();
+    const id = parseInt(req.params.id, 10);
+    const password = String(req.body.password || '');
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid account.' });
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    try {
+        const hash = await bcrypt.hash(password, 10);
+        if (accountType === 'admin' || accountType === 'staff') {
+            const [result] = await db.query('UPDATE users SET password = ? WHERE id = ?', [hash, id]);
+            if (!result.affectedRows) return res.status(404).json({ error: 'User not found.' });
+        } else if (accountType === 'teacher' || accountType === 'adviser') {
+            const [result] = await db.query('UPDATE teachers SET password = ? WHERE id = ?', [hash, id]);
+            if (!result.affectedRows) return res.status(404).json({ error: 'Teacher not found.' });
+        } else if (accountType === 'parent') {
+            const [result] = await db.query('UPDATE parents SET password = ? WHERE id = ?', [hash, id]);
+            if (!result.affectedRows) return res.status(404).json({ error: 'Parent not found.' });
+        } else {
+            return res.status(400).json({ error: 'Unsupported account type.' });
+        }
+        return res.json({ success: true });
+    } catch (err) {
+        console.error('Active user password reset error:', err);
+        return res.status(500).json({ error: 'Failed to change password.' });
+    }
+});
+
 // ---- Attendance records ----
 router.get('/attendance', requireAuth, async (req, res) => {
     try {
@@ -5181,6 +5277,129 @@ router.get('/adviser-dashboard', requireAuth, async (req, res) => {
     } catch (err) {
         console.error('Adviser dashboard error:', err);
         return res.status(500).json({ error: 'Failed to load dashboard data.' });
+    }
+});
+
+async function getAdviserParentScope(teacherId) {
+    const [[teacher]] = await db.query(
+        `SELECT t.id, t.section_id,
+                COALESCE(sec.school_id, t.school_id) AS school_id,
+                COALESCE(sec.grade_level_id, t.grade_level_id) AS grade_level_id,
+                sec.name AS section_name,
+                gl.name AS grade_name,
+                sc.name AS school_name
+         FROM teachers t
+         LEFT JOIN sections sec ON sec.id = t.section_id
+         LEFT JOIN grade_levels gl ON gl.id = COALESCE(sec.grade_level_id, t.grade_level_id)
+         LEFT JOIN schools sc ON sc.id = COALESCE(sec.school_id, t.school_id)
+         WHERE t.id = ?`,
+        [teacherId]
+    );
+    const activeYear = await schoolYears.getActiveSchoolYear().catch(() => null);
+    if (!teacher || !teacher.section_id || !activeYear) {
+        return { teacher, activeYear, contacts: [], parents: [] };
+    }
+    const [students] = await db.query(
+        `SELECT s.id, s.lrn, s.firstname, s.lastname, s.middlename, s.guardian_contact,
+                e.school_id, e.grade_level_id, e.section_id,
+                sc.name AS school_name, gl.name AS grade_name, sec.name AS section_name
+         FROM student_enrollments e
+         INNER JOIN students s ON s.id = e.student_id
+         LEFT JOIN schools sc ON sc.id = e.school_id
+         LEFT JOIN grade_levels gl ON gl.id = e.grade_level_id
+         LEFT JOIN sections sec ON sec.id = e.section_id
+         WHERE e.school_year_id = ?
+           AND e.section_id = ?
+           AND e.status = 'enrolled'
+           AND s.status = 'active'
+           AND s.guardian_contact IS NOT NULL
+           AND s.guardian_contact != ''
+         ORDER BY s.lastname, s.firstname`,
+        [activeYear.id, teacher.section_id]
+    );
+    const childrenByContact = new Map();
+    students.forEach(student => {
+        const contact = normalizeContact(student.guardian_contact);
+        if (!contact) return;
+        if (!childrenByContact.has(contact)) childrenByContact.set(contact, []);
+        childrenByContact.get(contact).push({
+            id: student.id,
+            lrn: student.lrn || '',
+            name: [student.firstname, student.middlename ? `${String(student.middlename).charAt(0).toUpperCase()}.` : '', student.lastname]
+                .filter(Boolean).join(' ').replace(/\s+/g, ' ').trim(),
+            school_name: student.school_name || '',
+            grade_name: student.grade_name || '',
+            section_name: student.section_name || ''
+        });
+    });
+    const contacts = Array.from(childrenByContact.keys());
+    if (!contacts.length) return { teacher, activeYear, contacts, parents: [] };
+    const [parents] = await db.query(
+        `SELECT p.id, p.guardian_name, p.contact_number, p.normalized_contact, p.username,
+                p.status, p.last_login,
+                COALESCE(pd.last_seen_at, p.last_login) AS last_seen_at,
+                COALESCE(pd.device_count, 0) AS device_count
+         FROM parents p
+         LEFT JOIN (
+            SELECT parent_id, MAX(last_seen_at) AS last_seen_at, COUNT(*) AS device_count
+            FROM parent_devices
+            GROUP BY parent_id
+         ) pd ON pd.parent_id = p.id
+         WHERE p.normalized_contact IN (?)
+         ORDER BY p.guardian_name`,
+        [contacts]
+    );
+    return {
+        teacher,
+        activeYear,
+        contacts,
+        parents: parents.map(parent => ({
+            ...parent,
+            children: childrenByContact.get(parent.normalized_contact) || []
+        }))
+    };
+}
+
+// ---- Adviser Parent Registry (registered Guardian app accounts in my active section) ----
+router.get('/adviser-parents', requireAuth, async (req, res) => {
+    const user = req.session.user;
+    if (user.role !== 'adviser' || !user.teacher_id) {
+        return res.status(403).json({ error: 'Access denied' });
+    }
+    try {
+        const scope = await getAdviserParentScope(user.teacher_id);
+        return res.json({
+            teacher: scope.teacher,
+            active_year: scope.activeYear,
+            parents: scope.parents
+        });
+    } catch (err) {
+        console.error('Adviser parents error:', err);
+        return res.status(500).json({ error: 'Failed to load registered parents.' });
+    }
+});
+
+router.post('/adviser-parents/:id/password', requireAuth, express.json(), async (req, res) => {
+    const user = req.session.user;
+    if (user.role !== 'adviser' || !user.teacher_id) {
+        return res.status(403).json({ error: 'Access denied' });
+    }
+    const parentId = parseInt(req.params.id, 10);
+    const password = String(req.body.password || '');
+    if (!Number.isInteger(parentId) || parentId <= 0) return res.status(400).json({ error: 'Invalid parent account.' });
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    try {
+        const scope = await getAdviserParentScope(user.teacher_id);
+        const [[parent]] = await db.query('SELECT id, normalized_contact FROM parents WHERE id = ? LIMIT 1', [parentId]);
+        if (!parent || !scope.contacts.includes(parent.normalized_contact)) {
+            return res.status(403).json({ error: 'This parent is not linked to your active section.' });
+        }
+        const hash = await bcrypt.hash(password, 10);
+        await db.query('UPDATE parents SET password = ? WHERE id = ?', [hash, parentId]);
+        return res.json({ success: true });
+    } catch (err) {
+        console.error('Adviser parent password reset error:', err);
+        return res.status(500).json({ error: 'Failed to change parent password.' });
     }
 });
 

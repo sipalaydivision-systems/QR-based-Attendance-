@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../config/database');
 const { requireAuth } = require('../middleware/auth');
 const { nowDateTime } = require('../utils/appTime');
+const schoolYears = require('../utils/schoolYear');
 
 const ADMIN_ROLES = ['principal', 'super_admin', 'superintendent', 'asst_superintendent'];
 
@@ -38,12 +39,29 @@ async function loadSection(id) {
 }
 
 async function applyStudentMove(studentId, toSectionId, toGradeLevelId) {
+    const [[section]] = await db.query('SELECT school_id FROM sections WHERE id = ? LIMIT 1', [toSectionId]);
     const [[grade]] = await db.query('SELECT name FROM grade_levels WHERE id = ? LIMIT 1', [toGradeLevelId]);
     const match = String(grade?.name || '').match(/\d+/);
     const gradeNumber = match ? parseInt(match[0], 10) : NaN;
     const category = gradeNumber >= 11 && gradeNumber <= 12 ? 'shs_student' : 'student';
-    await db.query('UPDATE students SET section_id = ?, grade_level_id = ?, category = ? WHERE id = ?',
-        [toSectionId, toGradeLevelId || null, category, studentId]);
+    const schoolId = section?.school_id || null;
+    await db.query('UPDATE students SET school_id = COALESCE(?, school_id), section_id = ?, grade_level_id = ?, category = ? WHERE id = ?',
+        [schoolId, toSectionId, toGradeLevelId || null, category, studentId]);
+    const activeYear = await schoolYears.getActiveSchoolYear().catch(() => null);
+    if (activeYear && schoolId) {
+        await db.query(
+            `INSERT INTO student_enrollments
+                (student_id, school_year_id, school_id, grade_level_id, section_id, status, updated_at)
+             VALUES (?, ?, ?, ?, ?, 'enrolled', NOW())
+             ON DUPLICATE KEY UPDATE
+                school_id = VALUES(school_id),
+                grade_level_id = VALUES(grade_level_id),
+                section_id = VALUES(section_id),
+                status = 'enrolled',
+                updated_at = NOW()`,
+            [studentId, activeYear.id, schoolId, toGradeLevelId || null, toSectionId]
+        );
+    }
 }
 // Move a teacher's advisory section and keep sections.adviser_teacher_id in sync.
 async function applyTeacherMove(teacherId, toSectionId, toGradeLevelId, teacherName) {

@@ -324,6 +324,7 @@ router.post('/adviser-login', async (req, res) => {
             school_logo: teacher.school_logo,
             teacher_id: teacher.id
         };
+        await db.query('UPDATE teachers SET last_login = ? WHERE id = ?', [nowDateTime(), teacher.id]).catch(() => {});
         return res.redirect('/admin/adviser-dashboard');
     } catch (err) {
         console.error('Adviser login error:', err);
@@ -389,6 +390,7 @@ router.post('/adviser-setup-password', async (req, res) => {
             req.session.user.school_id = teacher[0].school_id;
             req.session.user.school_logo = teacher[0].school_logo;
         }
+        await db.query('UPDATE teachers SET last_login = ? WHERE id = ?', [nowDateTime(), teacherId]).catch(() => {});
 
         return res.redirect('/admin/adviser-dashboard');
     } catch (err) {

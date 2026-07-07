@@ -1,0 +1,242 @@
+<%- include('partials/header') %>
+
+<style>
+.au-page { display:flex; flex-direction:column; gap:18px; }
+.au-hero {
+    display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap;
+    padding:22px 24px; border-radius:18px;
+    background:linear-gradient(135deg,#065f46,#10b981); color:#fff;
+    box-shadow:0 18px 36px rgba(15,118,110,.18);
+}
+.au-hero h1 { margin:0; font-size:1.45rem; font-weight:850; display:flex; align-items:center; gap:10px; }
+.au-hero p { margin:6px 0 0; opacity:.9; font-size:.9rem; }
+.au-refresh { border:1px solid rgba(255,255,255,.45); background:rgba(255,255,255,.14); color:#fff; border-radius:999px; padding:10px 14px; font-weight:800; cursor:pointer; }
+.au-summary { display:grid; grid-template-columns:repeat(4,minmax(150px,1fr)); gap:14px; }
+.au-stat { background:#fff; border:1px solid var(--gray-200); border-radius:16px; padding:16px; box-shadow:var(--shadow); display:flex; align-items:center; gap:12px; }
+.au-stat i { width:42px; height:42px; display:grid; place-items:center; border-radius:13px; background:#ecfdf5; color:#059669; }
+.au-stat strong { display:block; font-size:1.45rem; color:var(--gray-900); line-height:1; }
+.au-stat span { display:block; margin-top:4px; color:var(--gray-500); font-size:.74rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
+.au-tabs { display:flex; gap:8px; flex-wrap:wrap; }
+.au-tab { border:1px solid var(--gray-200); background:#fff; border-radius:999px; padding:9px 14px; cursor:pointer; font-weight:800; color:var(--gray-600); }
+.au-tab.active { background:#059669; border-color:#059669; color:#fff; box-shadow:0 10px 22px rgba(5,150,105,.18); }
+.au-card { background:#fff; border:1px solid var(--gray-200); border-radius:18px; box-shadow:var(--shadow); overflow:hidden; }
+.au-card-head { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; padding:16px 18px; border-bottom:1px solid var(--gray-100); }
+.au-card-head h3 { margin:0; font-size:1rem; display:flex; align-items:center; gap:9px; }
+.au-search { min-width:260px; max-width:100%; border:1px solid var(--gray-300); border-radius:12px; padding:10px 12px; font-size:.86rem; }
+.au-table { width:100%; border-collapse:collapse; font-size:.84rem; }
+.au-table th { text-align:left; padding:12px 14px; background:#f8fafc; color:var(--gray-500); font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; }
+.au-table td { padding:13px 14px; border-top:1px solid var(--gray-100); vertical-align:middle; color:var(--gray-700); }
+.au-table tr:hover td { background:#fbfdfc; }
+.au-name { font-weight:850; color:var(--gray-900); }
+.au-sub { margin-top:2px; color:var(--gray-500); font-size:.75rem; }
+.au-pill { display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:5px 10px; font-weight:850; font-size:.72rem; }
+.au-pill.online { background:#dcfce7; color:#047857; }
+.au-pill.offline { background:#f1f5f9; color:#64748b; }
+.au-pill.inactive { background:#fee2e2; color:#b91c1c; }
+.au-dot { width:8px; height:8px; border-radius:50%; background:currentColor; }
+.au-reset { border:1px solid #bfdbfe; background:#eff6ff; color:#1d4ed8; border-radius:10px; padding:8px 10px; font-weight:850; cursor:pointer; }
+.au-reset:hover { background:#dbeafe; }
+.au-empty { text-align:center; padding:36px 16px; color:var(--gray-400); }
+.au-empty i { display:block; font-size:2rem; margin-bottom:8px; }
+@media (max-width: 980px) {
+    .au-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .au-table { min-width:860px; }
+}
+@media (max-width: 640px) { .au-summary { grid-template-columns:1fr; } }
+</style>
+
+<div class="au-page">
+    <div class="au-hero">
+        <div>
+            <h1><i class="fa-solid fa-users-viewfinder"></i> Active Users & App Accounts</h1>
+            <p>Super Admin can monitor staff, advisers/teachers, principals, and registered Guardian parents using the system or mobile apps.</p>
+        </div>
+        <button class="au-refresh" onclick="loadActiveUsers()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+    </div>
+
+    <div class="au-summary">
+        <div class="au-stat"><i class="fa-solid fa-user-tie"></i><div><strong id="auStaff">—</strong><span>Admin / Principal</span></div></div>
+        <div class="au-stat"><i class="fa-solid fa-chalkboard-user"></i><div><strong id="auTeachers">—</strong><span>Teachers / Advisers</span></div></div>
+        <div class="au-stat"><i class="fa-solid fa-people-roof"></i><div><strong id="auParents">—</strong><span>Guardian Parents</span></div></div>
+        <div class="au-stat"><i class="fa-solid fa-mobile-screen-button"></i><div><strong id="auDevices">—</strong><span>Registered Devices</span></div></div>
+    </div>
+
+    <div class="au-tabs">
+        <button class="au-tab active" data-tab="staff" onclick="switchAuTab('staff')"><i class="fa-solid fa-user-shield"></i> Staff & Principals</button>
+        <button class="au-tab" data-tab="teachers" onclick="switchAuTab('teachers')"><i class="fa-solid fa-person-chalkboard"></i> Teachers</button>
+        <button class="au-tab" data-tab="parents" onclick="switchAuTab('parents')"><i class="fa-solid fa-users"></i> Parents</button>
+    </div>
+
+    <div class="au-card">
+        <div class="au-card-head">
+            <h3 id="auTableTitle"><i class="fa-solid fa-user-shield"></i> Staff & Principal Accounts</h3>
+            <input class="au-search" id="auSearch" placeholder="Search name, school, contact, role..." oninput="renderActiveUsers()">
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="au-table">
+                <thead id="auHead"></thead>
+                <tbody id="auBody">
+                    <tr><td class="au-empty"><i class="fa-solid fa-spinner fa-spin"></i> Loading active users...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+var auData = { staff: [], teachers: [], parents: [], summary: {} };
+var auTab = 'staff';
+var auTitles = {
+    staff: '<i class="fa-solid fa-user-shield"></i> Staff & Principal Accounts',
+    teachers: '<i class="fa-solid fa-person-chalkboard"></i> Teacher / Adviser Accounts',
+    parents: '<i class="fa-solid fa-users"></i> Registered Guardian Parents'
+};
+
+function esc(v) {
+    return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function displayDateTime(value) {
+    if (!value) return 'Not seen yet';
+    var d = new Date(value);
+    if (isNaN(d.getTime())) return String(value);
+    return d.toLocaleString();
+}
+
+function isOnline(value) {
+    if (!value) return false;
+    var d = new Date(value);
+    if (isNaN(d.getTime())) return false;
+    return (Date.now() - d.getTime()) <= 5 * 60 * 1000;
+}
+
+function accountStatus(row) {
+    if (row.status && row.status !== 'active') return '<span class="au-pill inactive"><span class="au-dot"></span>Inactive</span>';
+    return isOnline(row.last_seen_at)
+        ? '<span class="au-pill online"><span class="au-dot"></span>Online</span>'
+        : '<span class="au-pill offline"><span class="au-dot"></span>Offline</span>';
+}
+
+function roleLabel(role) {
+    return {
+        super_admin: 'Super Admin',
+        superintendent: 'SDS',
+        asst_superintendent: 'ASDS',
+        principal: 'Principal'
+    }[role] || role || 'Staff';
+}
+
+function teacherName(t) {
+    return [t.firstname, t.middlename ? String(t.middlename).charAt(0).toUpperCase() + '.' : '', t.lastname].filter(Boolean).join(' ').replace(/\s+/g,' ').trim();
+}
+
+function switchAuTab(tab) {
+    auTab = tab;
+    document.querySelectorAll('.au-tab').forEach(function(btn){ btn.classList.toggle('active', btn.dataset.tab === tab); });
+    document.getElementById('auTableTitle').innerHTML = auTitles[tab];
+    renderActiveUsers();
+}
+
+async function loadActiveUsers() {
+    document.getElementById('auBody').innerHTML = '<tr><td colspan="7" class="au-empty"><i class="fa-solid fa-spinner fa-spin"></i> Loading active users...</td></tr>';
+    try {
+        var res = await fetch('/api/active-users-overview');
+        var data = await res.json();
+        if (data.error) throw new Error(data.error);
+        auData = data;
+        document.getElementById('auStaff').textContent = data.summary.staff || 0;
+        document.getElementById('auTeachers').textContent = data.summary.teachers || 0;
+        document.getElementById('auParents').textContent = data.summary.parents || 0;
+        document.getElementById('auDevices').textContent = data.summary.mobile_devices || 0;
+        renderActiveUsers();
+    } catch (err) {
+        document.getElementById('auBody').innerHTML = '<tr><td colspan="7" class="au-empty"><i class="fa-solid fa-triangle-exclamation"></i> Failed to load active users.</td></tr>';
+    }
+}
+
+function filteredRows(rows) {
+    var q = (document.getElementById('auSearch').value || '').trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(function(row) {
+        return Object.keys(row).some(function(k) {
+            if (typeof row[k] === 'object') return false;
+            return String(row[k] == null ? '' : row[k]).toLowerCase().indexOf(q) !== -1;
+        });
+    });
+}
+
+function renderActiveUsers() {
+    var head = document.getElementById('auHead');
+    var body = document.getElementById('auBody');
+    if (auTab === 'staff') {
+        head.innerHTML = '<tr><th>User</th><th>Role</th><th>School</th><th>Status</th><th>Last Seen</th><th>Devices</th><th>Action</th></tr>';
+        var rows = filteredRows(auData.staff || []);
+        body.innerHTML = rows.map(function(u) {
+            return '<tr>' +
+                '<td><div class="au-name">' + esc(u.fullname) + '</div><div class="au-sub">@' + esc(u.username) + (u.email ? ' · ' + esc(u.email) : '') + '</div></td>' +
+                '<td>' + esc(roleLabel(u.role)) + '</td>' +
+                '<td>' + esc(u.school_name || 'All Schools / Division') + '</td>' +
+                '<td>' + accountStatus(u) + '</td>' +
+                '<td>' + esc(displayDateTime(u.last_seen_at)) + '</td>' +
+                '<td>' + Number(u.device_count || 0) + '</td>' +
+                '<td><button class="au-reset" onclick="resetPassword(\'admin\',' + u.id + ',\'' + esc(u.fullname).replace(/&#39;/g,"\\'") + '\')"><i class="fa-solid fa-key"></i> Change Password</button></td>' +
+            '</tr>';
+        }).join('') || '<tr><td colspan="7" class="au-empty"><i class="fa-solid fa-user-slash"></i> No staff users found.</td></tr>';
+    } else if (auTab === 'teachers') {
+        head.innerHTML = '<tr><th>Teacher</th><th>Type</th><th>School / Section</th><th>Status</th><th>Last Seen</th><th>Password</th><th>Action</th></tr>';
+        var teacherRows = filteredRows(auData.teachers || []);
+        body.innerHTML = teacherRows.map(function(t) {
+            var name = teacherName(t);
+            return '<tr>' +
+                '<td><div class="au-name">' + esc(name) + '</div><div class="au-sub">' + esc(t.employee_id || 'No employee ID') + (t.email ? ' · ' + esc(t.email) : '') + '</div></td>' +
+                '<td>' + (t.category === 'shs_teacher' ? 'SHS Teacher' : 'Regular Teacher') + '</td>' +
+                '<td>' + esc(t.school_name || 'No school') + '<div class="au-sub">' + esc([t.grade_name, t.section_name].filter(Boolean).join(' — ') || 'No advisory section') + '</div></td>' +
+                '<td>' + accountStatus(t) + '</td>' +
+                '<td>' + esc(displayDateTime(t.last_seen_at)) + '</td>' +
+                '<td>' + (Number(t.has_password) ? '<span class="au-pill online">Set</span>' : '<span class="au-pill offline">Not Set</span>') + '</td>' +
+                '<td><button class="au-reset" onclick="resetPassword(\'teacher\',' + t.id + ',\'' + esc(name).replace(/&#39;/g,"\\'") + '\')"><i class="fa-solid fa-key"></i> Change Password</button></td>' +
+            '</tr>';
+        }).join('') || '<tr><td colspan="7" class="au-empty"><i class="fa-solid fa-person-circle-question"></i> No teachers found.</td></tr>';
+    } else {
+        head.innerHTML = '<tr><th>Parent</th><th>Contact / Username</th><th>Status</th><th>Last Seen</th><th>Devices</th><th>Last Login</th><th>Action</th></tr>';
+        var parentRows = filteredRows(auData.parents || []);
+        body.innerHTML = parentRows.map(function(p) {
+            return '<tr>' +
+                '<td><div class="au-name">' + esc(p.guardian_name) + '</div><div class="au-sub">Guardian account</div></td>' +
+                '<td>' + esc(p.contact_number || p.normalized_contact || '') + '<div class="au-sub">' + esc(p.username ? '@' + p.username : 'No username') + '</div></td>' +
+                '<td>' + accountStatus(p) + '</td>' +
+                '<td>' + esc(displayDateTime(p.last_seen_at)) + '</td>' +
+                '<td>' + Number(p.device_count || 0) + '</td>' +
+                '<td>' + esc(displayDateTime(p.last_login)) + '</td>' +
+                '<td><button class="au-reset" onclick="resetPassword(\'parent\',' + p.id + ',\'' + esc(p.guardian_name).replace(/&#39;/g,"\\'") + '\')"><i class="fa-solid fa-key"></i> Change Password</button></td>' +
+            '</tr>';
+        }).join('') || '<tr><td colspan="7" class="au-empty"><i class="fa-solid fa-users-slash"></i> No registered parents found.</td></tr>';
+    }
+}
+
+async function resetPassword(type, id, name) {
+    var pass = prompt('Enter a new password for ' + name + ' (minimum 6 characters):');
+    if (pass === null) return;
+    if (pass.length < 6) { alert('Password must be at least 6 characters.'); return; }
+    var confirmPass = prompt('Confirm the new password:');
+    if (confirmPass === null) return;
+    if (pass !== confirmPass) { alert('Passwords do not match.'); return; }
+    var res = await fetch('/api/active-users/' + encodeURIComponent(type) + '/' + encodeURIComponent(id) + '/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pass })
+    });
+    var data = await res.json().catch(function(){ return {}; });
+    if (!res.ok || !data.success) {
+        alert(data.error || 'Failed to change password.');
+        return;
+    }
+    alert('Password updated.');
+    loadActiveUsers();
+}
+
+loadActiveUsers();
+setInterval(loadActiveUsers, 15000);
+</script>
+
+<%- include('partials/footer') %>

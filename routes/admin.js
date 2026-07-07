@@ -1799,6 +1799,10 @@ router.get('/users', requireRole('super_admin'), async (req, res) => {
     res.render('users', { title: 'Users', page: 'users', schools });
 });
 
+router.get('/active-users', requireRole('super_admin'), async (req, res) => {
+    res.render('active_users', { title: 'Active Users', page: 'active_users' });
+});
+
 // ---- Register User ----
 router.get('/register-user', requireRole('super_admin'), async (req, res) => {
     const [schools] = await db.query("SELECT * FROM schools WHERE status = 'active' ORDER BY name");

@@ -101,10 +101,13 @@ async function contactExistsForStudent(normalizedContact) {
     if (!normalizedContact) return false;
     const [rows] = await db.query(
         `SELECT guardian_contact
-         FROM students
-         WHERE status != 'deleted'
-           AND guardian_contact IS NOT NULL
-           AND guardian_contact != ''`
+         FROM student_enrollments e
+         INNER JOIN school_years sy ON sy.id = e.school_year_id AND sy.status = 'active'
+         INNER JOIN students s ON s.id = e.student_id
+         WHERE e.status = 'enrolled'
+           AND s.status = 'active'
+           AND s.guardian_contact IS NOT NULL
+           AND s.guardian_contact != ''`
     );
     return rows.some(row => normalizeContact(row.guardian_contact) === normalizedContact);
 }
@@ -114,19 +117,22 @@ async function getParentChildren(normalizedContact) {
     const [rows] = await db.query(
         `SELECT
             s.id, s.lrn, s.firstname, s.lastname, s.middlename, s.guardian_contact, s.status,
-            s.school_id, s.grade_level_id, s.section_id,
+            e.school_id, e.grade_level_id, e.section_id,
             sc.name AS school_name, sc.logo AS school_logo,
             gl.name AS grade_name,
             sec.name AS section_name,
             COALESCE(NULLIF(sec.adviser, ''), TRIM(CONCAT_WS(' ', at.firstname, at.middlename, at.lastname))) AS adviser_name,
             at.contact AS adviser_contact,
             at.email AS adviser_email
-         FROM students s
-         LEFT JOIN schools sc ON s.school_id = sc.id
-         LEFT JOIN grade_levels gl ON s.grade_level_id = gl.id
-         LEFT JOIN sections sec ON s.section_id = sec.id
+         FROM student_enrollments e
+         INNER JOIN school_years sy ON sy.id = e.school_year_id AND sy.status = 'active'
+         INNER JOIN students s ON s.id = e.student_id
+         LEFT JOIN schools sc ON e.school_id = sc.id
+         LEFT JOIN grade_levels gl ON e.grade_level_id = gl.id
+         LEFT JOIN sections sec ON e.section_id = sec.id
          LEFT JOIN teachers at ON sec.adviser_teacher_id = at.id
-         WHERE s.status != 'deleted'
+         WHERE e.status = 'enrolled'
+           AND s.status = 'active'
            AND s.guardian_contact IS NOT NULL
            AND s.guardian_contact != ''
          ORDER BY s.lastname, s.firstname`

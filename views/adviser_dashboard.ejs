@@ -126,6 +126,22 @@
 .ad-status-pill.inactive { background: var(--gray-100); color: var(--gray-400); }
 .ad-edit-btn { width: 32px; height: 32px; border: 1px solid var(--gray-200); background: #fff; color: var(--primary); border-radius: 8px; cursor: pointer; transition: background .15s, border-color .15s; }
 .ad-edit-btn:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
+.ad-parent-reset-btn {
+    border: 1px solid #bfdbfe; background: #eff6ff; color: #1d4ed8;
+    border-radius: 9px; padding: 7px 10px; font-size: 0.74rem;
+    font-weight: 800; cursor: pointer;
+}
+.ad-parent-reset-btn:hover { background: #dbeafe; }
+.ad-parent-kids { display:flex; flex-direction:column; gap:3px; }
+.ad-parent-kids span { color:var(--gray-600); font-size:.75rem; }
+.ad-parent-status {
+    display:inline-flex; align-items:center; gap:6px; padding:4px 9px;
+    border-radius:999px; font-size:.68rem; font-weight:800;
+}
+.ad-parent-status.online { background:#dcfce7; color:#047857; }
+.ad-parent-status.offline { background:#f1f5f9; color:#64748b; }
+.ad-parent-status.inactive { background:#fee2e2; color:#b91c1c; }
+.ad-parent-status i { font-size:.55rem; }
 .adv-options summary::-webkit-details-marker { display: none; }
 .adv-options[open] summary { border-bottom: 1px solid var(--gray-200); }
 .ad-status-pill.flagged { background: #fef2f2; color: #b91c1c; }
@@ -330,6 +346,30 @@
         </div>
     </div>
 
+    <div class="ad-table-card">
+        <div class="ad-table-header">
+            <h3><i class="fa-solid fa-people-roof"></i> Registered Guardian Parents</h3>
+            <div style="font-size:.78rem;color:var(--gray-500);font-weight:700;" id="adParentCount">Loading parent accounts...</div>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="ad-student-table">
+                <thead>
+                    <tr>
+                        <th>Parent</th>
+                        <th>Contact</th>
+                        <th>Linked Active Child</th>
+                        <th>App Status</th>
+                        <th>Devices</th>
+                        <th style="text-align:center;">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="adParentBody">
+                    <tr><td colspan="6" class="ad-empty"><i class="fa-solid fa-spinner fa-spin"></i> Loading registered parents...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <% } %>
 </div>
 
@@ -503,6 +543,86 @@
             .replace(/'/g, '&#39;');
     }
 
+    function displaySeen(value) {
+        if (!value) return 'Not seen yet';
+        var d = new Date(value);
+        if (isNaN(d.getTime())) return String(value);
+        var diff = Math.max(0, Math.round((Date.now() - d.getTime()) / 1000));
+        if (diff < 60) return diff + 's ago';
+        if (diff < 3600) return Math.round(diff / 60) + 'm ago';
+        if (diff < 86400) return Math.round(diff / 3600) + 'h ago';
+        return d.toLocaleDateString();
+    }
+
+    function parentStatus(p) {
+        if (p.status && p.status !== 'active') return '<span class="ad-parent-status inactive"><i class="fa-solid fa-circle"></i>Inactive</span>';
+        if (!p.last_seen_at) return '<span class="ad-parent-status offline"><i class="fa-solid fa-circle"></i>No app check-in</span>';
+        var d = new Date(p.last_seen_at);
+        var online = !isNaN(d.getTime()) && (Date.now() - d.getTime()) <= 5 * 60 * 1000;
+        return online
+            ? '<span class="ad-parent-status online"><i class="fa-solid fa-circle"></i>Online · ' + esc(displaySeen(p.last_seen_at)) + '</span>'
+            : '<span class="ad-parent-status offline"><i class="fa-solid fa-circle"></i>Offline · ' + esc(displaySeen(p.last_seen_at)) + '</span>';
+    }
+
+    function renderParents(parents) {
+        var body = document.getElementById('adParentBody');
+        var count = document.getElementById('adParentCount');
+        if (!body) return;
+        count.textContent = (parents || []).length + ' registered parent account(s) linked to this active section';
+        if (!parents || !parents.length) {
+            body.innerHTML = '<tr><td colspan="6" class="ad-empty"><i class="fa-solid fa-user-group"></i> No registered Guardian parent accounts for this active section yet.</td></tr>';
+            return;
+        }
+        body.innerHTML = parents.map(function(p) {
+            var kids = (p.children || []).map(function(c) {
+                return '<span>' + esc(c.name) + ' · ' + esc([c.grade_name, c.section_name].filter(Boolean).join(' — ')) + '</span>';
+            }).join('');
+            var name = esc(p.guardian_name || 'Parent');
+            var safeName = name.replace(/&#39;/g, "\\'");
+            return '<tr>' +
+                '<td><div class="ad-student-name">' + name + '</div><div class="ad-student-lrn">' + esc(p.username ? '@' + p.username : 'No username') + '</div></td>' +
+                '<td>' + esc(p.contact_number || p.normalized_contact || '--') + '</td>' +
+                '<td><div class="ad-parent-kids">' + (kids || '<span>No active child listed</span>') + '</div></td>' +
+                '<td>' + parentStatus(p) + '</td>' +
+                '<td>' + Number(p.device_count || 0) + '</td>' +
+                '<td style="text-align:center;"><button class="ad-parent-reset-btn" onclick="resetParentPassword(' + p.id + ',\'' + safeName + '\')"><i class="fa-solid fa-key"></i> Change Password</button></td>' +
+            '</tr>';
+        }).join('');
+    }
+
+    async function loadParents() {
+        var body = document.getElementById('adParentBody');
+        try {
+            var res = await fetch('/api/adviser-parents', { headers: { 'Accept': 'application/json' } });
+            var data = await res.json();
+            if (data.error) throw new Error(data.error);
+            renderParents(data.parents || []);
+        } catch (err) {
+            if (body) body.innerHTML = '<tr><td colspan="6" class="ad-empty"><i class="fa-solid fa-triangle-exclamation"></i> Failed to load registered parents.</td></tr>';
+        }
+    }
+
+    window.resetParentPassword = async function(parentId, parentName) {
+        var pass = prompt('Enter a new password for ' + parentName + ' (minimum 6 characters):');
+        if (pass === null) return;
+        if (pass.length < 6) { alert('Password must be at least 6 characters.'); return; }
+        var confirmPass = prompt('Confirm the new password:');
+        if (confirmPass === null) return;
+        if (pass !== confirmPass) { alert('Passwords do not match.'); return; }
+        var res = await fetch('/api/adviser-parents/' + encodeURIComponent(parentId) + '/password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: pass })
+        });
+        var data = await res.json().catch(function(){ return {}; });
+        if (!res.ok || !data.success) {
+            alert(data.error || 'Failed to change parent password.');
+            return;
+        }
+        alert('Parent password updated.');
+        loadParents();
+    };
+
     function scanLabelClass(label) {
         var value = String(label || '').toLowerCase();
         if (value.indexOf('completed') !== -1) return 'ad-scan-label-complete';
@@ -602,6 +722,8 @@
     window.loadDashboard = loadDashboard;
     loadDashboard(dateInput.value);
     loadTrend(dateInput.value);
+    loadParents();
+    setInterval(loadParents, 30000);
     loadAdviserSections();
 })();
 

@@ -374,6 +374,15 @@ async function ensureRuntimeSchema() {
         console.log('Added teachers.profile_photo column for adviser profile photos.');
     }
 
+    const [teacherLastLoginCol] = await db.query(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'teachers' AND COLUMN_NAME = 'last_login'`
+    );
+    if (teacherLastLoginCol.length === 0) {
+        await db.query('ALTER TABLE teachers ADD COLUMN last_login TIMESTAMP NULL AFTER status');
+        console.log('Added teachers.last_login column for active-user monitoring.');
+    }
+
     await db.query(`
         CREATE TABLE IF NOT EXISTS parents (
             id INT AUTO_INCREMENT PRIMARY KEY,
