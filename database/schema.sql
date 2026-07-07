@@ -323,6 +323,7 @@ CREATE TABLE IF NOT EXISTS parent_devices (
     push_token TEXT,
     platform VARCHAR(50) DEFAULT 'android',
     app_version VARCHAR(50),
+    device_name VARCHAR(150),
     user_agent TEXT,
     last_seen_at TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

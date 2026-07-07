@@ -937,6 +937,25 @@ class ParentApi {
     return token;
   }
 
+  Future<String> currentDeviceName() async {
+    try {
+      var platformName = 'Mobile';
+      if (Platform.isAndroid) {
+        platformName = 'Android';
+      } else if (Platform.operatingSystem.isNotEmpty) {
+        platformName = Platform.operatingSystem[0].toUpperCase() +
+            Platform.operatingSystem.substring(1);
+      }
+      final host = Platform.localHostname.trim();
+      if (host.isNotEmpty && host.toLowerCase() != 'localhost') {
+        return '$host · $platformName';
+      }
+      return '$platformName device';
+    } catch (_) {
+      return 'Guardian mobile device';
+    }
+  }
+
   Future<void> registerDeviceToken({bool force = false}) async {
     if (!isLoggedIn || gFcmToken.trim().isEmpty || _registeringDevice) return;
     final now = DateTime.now();
@@ -949,6 +968,7 @@ class ParentApi {
     try {
       final info = await PackageInfo.fromPlatform();
       final token = await ensureDeviceToken();
+      final deviceName = await currentDeviceName();
       final response = await http
           .post(
             Uri.parse('$kBaseUrl/api/parent/device-token'),
@@ -960,6 +980,7 @@ class ParentApi {
                   ? 'android'
                   : Platform.operatingSystem,
               'app_version': info.version,
+              'device_name': deviceName,
             },
           )
           .timeout(const Duration(seconds: 15));

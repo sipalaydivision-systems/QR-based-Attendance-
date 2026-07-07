@@ -70,6 +70,33 @@ function normalizeContact(value) {
     return digits;
 }
 
+function titleCasePlatform(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (/^android$/i.test(raw)) return 'Android';
+    if (/^ios$/i.test(raw)) return 'iOS';
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+function parentDeviceLabel(row) {
+    const name = String(row.latest_device_name || '').trim();
+    const platform = titleCasePlatform(row.latest_device_platform || row.platform || '');
+    const version = String(row.latest_device_app_version || row.app_version || '').trim();
+    const agent = String(row.latest_device_user_agent || row.user_agent || '').trim();
+    if (name) return version && !name.includes(version) ? `${name} · v${version}` : name;
+    if (platform) return `${platform} Guardian App${version ? ` · v${version}` : ''}`;
+    if (/Android/i.test(agent)) return `Android Guardian App${version ? ` · v${version}` : ''}`;
+    return version ? `Guardian App · v${version}` : 'Registered Guardian device';
+}
+
+function attachParentDeviceLabels(rows) {
+    return (rows || []).map(row => ({
+        ...row,
+        device_count: Number(row.device_count || 0),
+        latest_device_label: parentDeviceLabel(row)
+    }));
+}
+
 // Coordinates are optional on a school — blank/invalid always coerces to
 // NULL rather than blocking the rest of the record from saving.
 function normalizeCoordinate(value, min, max) {
@@ -3539,27 +3566,39 @@ router.get('/active-users-overview', requireRole('super_admin'), async (req, res
             `SELECT p.id, p.guardian_name, p.contact_number, p.normalized_contact, p.username,
                     p.status, p.last_login,
                     COALESCE(pd.last_seen_at, p.last_login) AS last_seen_at,
-                    COALESCE(pd.device_count, 0) AS device_count
+                    COALESCE(pd.device_count, 0) AS device_count,
+                    lpd.device_name AS latest_device_name,
+                    lpd.platform AS latest_device_platform,
+                    lpd.app_version AS latest_device_app_version,
+                    lpd.user_agent AS latest_device_user_agent
              FROM parents p
              LEFT JOIN (
-                SELECT parent_id, MAX(last_seen_at) AS last_seen_at, COUNT(*) AS device_count
+                SELECT parent_id, MAX(COALESCE(last_seen_at, updated_at, created_at)) AS last_seen_at, COUNT(*) AS device_count
                 FROM parent_devices
                 GROUP BY parent_id
              ) pd ON pd.parent_id = p.id
+             LEFT JOIN parent_devices lpd ON lpd.id = (
+                SELECT pd2.id
+                FROM parent_devices pd2
+                WHERE pd2.parent_id = p.id
+                ORDER BY COALESCE(pd2.last_seen_at, pd2.updated_at, pd2.created_at) DESC, pd2.id DESC
+                LIMIT 1
+             )
              ORDER BY p.guardian_name`
         );
+        const parentRows = attachParentDeviceLabels(parents);
         return res.json({
             generated_at: nowDateTime(),
             summary: {
                 staff: staff.length,
                 teachers: teachers.length,
-                parents: parents.length,
-                mobile_devices: parents.reduce((sum, p) => sum + Number(p.device_count || 0), 0) +
+                parents: parentRows.length,
+                mobile_devices: parentRows.reduce((sum, p) => sum + Number(p.device_count || 0), 0) +
                     staff.reduce((sum, u) => sum + Number(u.device_count || 0), 0)
             },
             staff,
             teachers,
-            parents
+            parents: parentRows
         });
     } catch (err) {
         console.error('Active users overview error:', err);
@@ -5338,13 +5377,24 @@ async function getAdviserParentScope(teacherId) {
         `SELECT p.id, p.guardian_name, p.contact_number, p.normalized_contact, p.username,
                 p.status, p.last_login,
                 COALESCE(pd.last_seen_at, p.last_login) AS last_seen_at,
-                COALESCE(pd.device_count, 0) AS device_count
+                COALESCE(pd.device_count, 0) AS device_count,
+                lpd.device_name AS latest_device_name,
+                lpd.platform AS latest_device_platform,
+                lpd.app_version AS latest_device_app_version,
+                lpd.user_agent AS latest_device_user_agent
          FROM parents p
          LEFT JOIN (
-            SELECT parent_id, MAX(last_seen_at) AS last_seen_at, COUNT(*) AS device_count
+            SELECT parent_id, MAX(COALESCE(last_seen_at, updated_at, created_at)) AS last_seen_at, COUNT(*) AS device_count
             FROM parent_devices
             GROUP BY parent_id
          ) pd ON pd.parent_id = p.id
+         LEFT JOIN parent_devices lpd ON lpd.id = (
+            SELECT pd2.id
+            FROM parent_devices pd2
+            WHERE pd2.parent_id = p.id
+            ORDER BY COALESCE(pd2.last_seen_at, pd2.updated_at, pd2.created_at) DESC, pd2.id DESC
+            LIMIT 1
+         )
          WHERE p.normalized_contact IN (?)
          ORDER BY p.guardian_name`,
         [contacts]
@@ -5353,7 +5403,7 @@ async function getAdviserParentScope(teacherId) {
         teacher,
         activeYear,
         contacts,
-        parents: parents.map(parent => ({
+        parents: attachParentDeviceLabels(parents).map(parent => ({
             ...parent,
             children: childrenByContact.get(parent.normalized_contact) || []
         }))

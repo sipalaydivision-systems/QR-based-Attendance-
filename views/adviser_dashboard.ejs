@@ -359,7 +359,7 @@
                         <th>Contact</th>
                         <th>Linked Active Child</th>
                         <th>App Status</th>
-                        <th>Devices</th>
+                        <th>Device Used</th>
                         <th style="text-align:center;">Action</th>
                     </tr>
                 </thead>
@@ -579,12 +579,15 @@
             }).join('');
             var name = esc(p.guardian_name || 'Parent');
             var safeName = name.replace(/&#39;/g, "\\'");
+            var deviceCount = Number(p.device_count || 0);
+            var deviceInfo = esc(p.latest_device_label || 'No registered device') +
+                (deviceCount > 1 ? '<div class="ad-student-lrn">' + deviceCount + ' registered device records</div>' : '');
             return '<tr>' +
                 '<td><div class="ad-student-name">' + name + '</div><div class="ad-student-lrn">' + esc(p.username ? '@' + p.username : 'No username') + '</div></td>' +
                 '<td>' + esc(p.contact_number || p.normalized_contact || '--') + '</td>' +
                 '<td><div class="ad-parent-kids">' + (kids || '<span>No active child listed</span>') + '</div></td>' +
                 '<td>' + parentStatus(p) + '</td>' +
-                '<td>' + Number(p.device_count || 0) + '</td>' +
+                '<td>' + deviceInfo + '</td>' +
                 '<td style="text-align:center;"><button class="ad-parent-reset-btn" onclick="resetParentPassword(' + p.id + ',\'' + safeName + '\')"><i class="fa-solid fa-key"></i> Change Password</button></td>' +
             '</tr>';
         }).join('');

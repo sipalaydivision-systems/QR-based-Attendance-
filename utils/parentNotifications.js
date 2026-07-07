@@ -478,12 +478,12 @@ async function markParentNotificationsRead(parentId, ids) {
     return result.affectedRows || 0;
 }
 
-async function registerParentDevice({ parentId, contactNumber, normalizedContact, deviceToken, pushToken, platform, appVersion, userAgent }) {
+async function registerParentDevice({ parentId, contactNumber, normalizedContact, deviceToken, pushToken, platform, appVersion, deviceName, userAgent }) {
     if (!parentId || !deviceToken) return false;
     await db.query(
         `INSERT INTO parent_devices
-            (parent_id, contact_number, normalized_contact, device_token, push_token, platform, app_version, user_agent, last_seen_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (parent_id, contact_number, normalized_contact, device_token, push_token, platform, app_version, device_name, user_agent, last_seen_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
             parent_id = VALUES(parent_id),
             contact_number = VALUES(contact_number),
@@ -491,6 +491,7 @@ async function registerParentDevice({ parentId, contactNumber, normalizedContact
             push_token = COALESCE(VALUES(push_token), push_token),
             platform = VALUES(platform),
             app_version = VALUES(app_version),
+            device_name = COALESCE(NULLIF(VALUES(device_name), ''), device_name),
             user_agent = VALUES(user_agent),
             last_seen_at = VALUES(last_seen_at),
             updated_at = CURRENT_TIMESTAMP`,
@@ -502,6 +503,7 @@ async function registerParentDevice({ parentId, contactNumber, normalizedContact
             pushToken || null,
             platform || 'android',
             appVersion || '',
+            deviceName || '',
             userAgent || '',
             nowDateTime()
         ]

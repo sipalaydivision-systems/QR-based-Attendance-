@@ -881,6 +881,7 @@ router.post('/api/parent/device-token', requireParentAuth, async (req, res) => {
             pushToken: String(req.body.push_token || '').trim() || null,
             platform: String(req.body.platform || '').trim() || 'android',
             appVersion: String(req.body.app_version || '').trim(),
+            deviceName: String(req.body.device_name || '').trim(),
             userAgent: req.get('user-agent') || ''
         });
         return res.json({ success: true });

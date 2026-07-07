@@ -198,15 +198,18 @@ function renderActiveUsers() {
             '</tr>';
         }).join('') || '<tr><td colspan="7" class="au-empty"><i class="fa-solid fa-person-circle-question"></i> No teachers found.</td></tr>';
     } else {
-        head.innerHTML = '<tr><th>Parent</th><th>Contact / Username</th><th>Status</th><th>Last Seen</th><th>Devices</th><th>Last Login</th><th>Action</th></tr>';
+        head.innerHTML = '<tr><th>Parent</th><th>Contact / Username</th><th>Status</th><th>Last Seen</th><th>Device Used</th><th>Last Login</th><th>Action</th></tr>';
         var parentRows = filteredRows(auData.parents || []);
         body.innerHTML = parentRows.map(function(p) {
+            var deviceCount = Number(p.device_count || 0);
+            var deviceInfo = esc(p.latest_device_label || 'No registered device') +
+                (deviceCount > 1 ? '<div class="au-sub">' + deviceCount + ' registered device records</div>' : '');
             return '<tr>' +
                 '<td><div class="au-name">' + esc(p.guardian_name) + '</div><div class="au-sub">Guardian account</div></td>' +
                 '<td>' + esc(p.contact_number || p.normalized_contact || '') + '<div class="au-sub">' + esc(p.username ? '@' + p.username : 'No username') + '</div></td>' +
                 '<td>' + accountStatus(p) + '</td>' +
                 '<td>' + esc(displayDateTime(p.last_seen_at)) + '</td>' +
-                '<td>' + Number(p.device_count || 0) + '</td>' +
+                '<td>' + deviceInfo + '</td>' +
                 '<td>' + esc(displayDateTime(p.last_login)) + '</td>' +
                 '<td><button class="au-reset" onclick="resetPassword(\'parent\',' + p.id + ',\'' + esc(p.guardian_name).replace(/&#39;/g,"\\'") + '\')"><i class="fa-solid fa-key"></i> Change Password</button></td>' +
             '</tr>';

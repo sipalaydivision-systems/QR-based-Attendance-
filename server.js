@@ -551,6 +551,7 @@ async function ensureRuntimeSchema() {
             push_token TEXT,
             platform VARCHAR(50) DEFAULT 'android',
             app_version VARCHAR(50),
+            device_name VARCHAR(150),
             user_agent TEXT,
             last_seen_at TIMESTAMP NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -561,6 +562,7 @@ async function ensureRuntimeSchema() {
             FOREIGN KEY (parent_id) REFERENCES parents(id) ON DELETE CASCADE
         ) ENGINE=InnoDB
     `);
+    await ensureRuntimeColumn('parent_devices', 'device_name', 'VARCHAR(150) NULL AFTER app_version');
 
     await db.query(`
         CREATE TABLE IF NOT EXISTS parent_notifications (
