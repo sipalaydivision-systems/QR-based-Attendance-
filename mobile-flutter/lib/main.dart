@@ -44,6 +44,7 @@ final ValueNotifier<String> brandSubtitle = ValueNotifier<String>(
   AppConfig.subtitle,
 );
 const MethodChannel nativeBridge = MethodChannel('edutrack/native');
+const String _mainViewedAlertKeysPreference = 'main_viewed_alert_keys_v1';
 
 Future<void> cancelNativeBackgroundNotifications() async {
   if (!Platform.isAndroid) return;
@@ -1748,6 +1749,8 @@ class _HomeShellState extends State<HomeShell>
   Map<String, dynamic>? alertIntent;
   bool headerCompact = false;
   bool dashboardRequestRunning = false;
+  Set<String> viewedAlertKeys = <String>{};
+  bool viewedAlertKeysLoaded = false;
 
   @override
   void initState() {
@@ -1760,6 +1763,7 @@ class _HomeShellState extends State<HomeShell>
       vsync: this,
       duration: const Duration(seconds: 9),
     )..repeat();
+    _loadViewedAlertKeys();
     load();
     // Keep the dashboard live without stacking requests when mobile data is
     // slow or Railway is waking up.
@@ -1774,6 +1778,64 @@ class _HomeShellState extends State<HomeShell>
     timer?.cancel();
     backgroundController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadViewedAlertKeys() async {
+    final stored =
+        widget.api.prefs.getStringList(_mainViewedAlertKeysPreference) ??
+        const <String>[];
+    if (!mounted) return;
+    setState(() {
+      viewedAlertKeys = stored.toSet();
+      viewedAlertKeysLoaded = true;
+    });
+  }
+
+  Set<String> _currentAlertKeys({
+    List<dynamic>? sourceFlags,
+    Map<String, dynamic>? sourceDashboard,
+  }) {
+    final currentFlags = sourceFlags ?? flags;
+    final currentDashboard = sourceDashboard ?? dashboard;
+    final keys = <String>{};
+    for (final item in currentFlags) {
+      if (item is Map) {
+        keys.add(mainAbsenceAlertKey(Map<String, dynamic>.from(item)));
+      }
+    }
+    if (widget.api.isSuperAdmin &&
+        intValue(currentDashboard['scanner_offline']) > 0) {
+      keys.add(mainScannerOfflineAlertKey(currentDashboard));
+    }
+    return keys;
+  }
+
+  int _unreadAlertCount({
+    List<dynamic>? sourceFlags,
+    Map<String, dynamic>? sourceDashboard,
+  }) {
+    final keys = _currentAlertKeys(
+      sourceFlags: sourceFlags,
+      sourceDashboard: sourceDashboard,
+    );
+    if (!viewedAlertKeysLoaded) return keys.length;
+    return keys.where((key) => !viewedAlertKeys.contains(key)).length;
+  }
+
+  Future<void> _markCurrentAlertsViewed() async {
+    final keys = _currentAlertKeys();
+    if (keys.isEmpty) return;
+    final next = {...viewedAlertKeys, ...keys};
+    if (next.length == viewedAlertKeys.length) return;
+    final list = next.toList()..sort();
+    // Keep this device-local list compact while preserving recent alert keys.
+    final trimmed = list.length > 500 ? list.sublist(list.length - 500) : list;
+    await widget.api.prefs.setStringList(
+      _mainViewedAlertKeysPreference,
+      trimmed,
+    );
+    if (!mounted) return;
+    setState(() => viewedAlertKeys = trimmed.toSet());
   }
 
   Future<void> load({bool silent = false}) async {
@@ -1799,6 +1861,7 @@ class _HomeShellState extends State<HomeShell>
           loading = false;
           error = null;
         });
+        if (tab == 3) unawaited(_markCurrentAlertsViewed());
       }
     } on AuthExpired {
       await widget.api.logout();
@@ -1843,7 +1906,11 @@ class _HomeShellState extends State<HomeShell>
         loading: loading,
         error: error,
         onRefresh: load,
-        onOpenTab: (value) => setState(() => tab = value.clamp(0, 3).toInt()),
+        onOpenTab: (value) {
+          final next = value.clamp(0, 3).toInt();
+          setState(() => tab = next);
+          if (next == 3) unawaited(_markCurrentAlertsViewed());
+        },
       ),
       SchoolsPage(api: widget.api),
       ReportsPage(api: widget.api),
@@ -1851,6 +1918,9 @@ class _HomeShellState extends State<HomeShell>
         api: widget.api,
         flags: flags,
         dashboard: dashboard,
+        viewedAlertKeys: viewedAlertKeys,
+        onMarkAllViewed: _markCurrentAlertsViewed,
+        onAlertViewed: (row) => unawaited(_markCurrentAlertsViewed()),
         notificationIntent: alertIntent,
         onIntentConsumed: () => setState(() {
           alertIntent = null;
@@ -1858,9 +1928,7 @@ class _HomeShellState extends State<HomeShell>
         }),
       ),
     ];
-    final alertBadgeCount =
-        flags.length +
-        (widget.api.isSuperAdmin ? intValue(dashboard['scanner_offline']) : 0);
+    final alertBadgeCount = _unreadAlertCount();
     final destinations = <NavigationDestination>[
       const NavigationDestination(
         icon: Icon(Icons.dashboard_customize_rounded),
@@ -1935,7 +2003,10 @@ class _HomeShellState extends State<HomeShell>
               compact: headerCompact,
               onLogout: doLogout,
               alertCount: alertBadgeCount,
-              onAlerts: () => setState(() => tab = 3),
+              onAlerts: () {
+                setState(() => tab = 3);
+                unawaited(_markCurrentAlertsViewed());
+              },
             ),
             Expanded(
               child: NotificationListener<ScrollNotification>(
@@ -1984,7 +2055,10 @@ class _HomeShellState extends State<HomeShell>
                 labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
                 backgroundColor: Colors.transparent,
                 selectedIndex: selectedTab,
-                onDestinationSelected: (value) => setState(() => tab = value),
+                onDestinationSelected: (value) {
+                  setState(() => tab = value);
+                  if (value == 3) unawaited(_markCurrentAlertsViewed());
+                },
                 destinations: destinations,
               ),
             ),
@@ -7345,12 +7419,18 @@ class AlertsPage extends StatefulWidget {
     required this.api,
     required this.flags,
     this.dashboard = const {},
+    this.viewedAlertKeys = const <String>{},
+    this.onMarkAllViewed,
+    this.onAlertViewed,
     this.notificationIntent,
     this.onIntentConsumed,
   });
   final ApiService api;
   final List<dynamic> flags;
   final Map<String, dynamic> dashboard;
+  final Set<String> viewedAlertKeys;
+  final Future<void> Function()? onMarkAllViewed;
+  final void Function(Map<String, dynamic> row)? onAlertViewed;
   final Map<String, dynamic>? notificationIntent;
   final VoidCallback? onIntentConsumed;
 
@@ -7385,6 +7465,7 @@ class _AlertsPageState extends State<AlertsPage> {
     }
 
     if (row != null && mounted) {
+      widget.onAlertViewed?.call(row);
       if (action == 'contact') {
         await contactAdviserViaCall(context, row);
       } else if (action == 'view') {
@@ -7409,13 +7490,29 @@ class _AlertsPageState extends State<AlertsPage> {
         : intValue(d['attendance_rate']);
     final scannerOffline = intValue(d['scanner_offline']);
     final isAdmin = widget.api.isSuperAdmin;
+    final flagRows = widget.flags
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+    final scannerAlertKey = mainScannerOfflineAlertKey(d);
+    final unreadCount =
+        flagRows
+            .where(
+              (row) =>
+                  !widget.viewedAlertKeys.contains(mainAbsenceAlertKey(row)),
+            )
+            .length +
+        (isAdmin &&
+                scannerOffline > 0 &&
+                !widget.viewedAlertKeys.contains(scannerAlertKey)
+            ? 1
+            : 0);
+    final totalAlerts =
+        flagRows.length + (isAdmin && scannerOffline > 0 ? 1 : 0);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const SectionTitle(
-          'Notifications',
-          "Division alerts and today's attendance at a glance.",
-        ),
+        _alertsHeader(unreadCount, totalAlerts),
         const SizedBox(height: 16),
         // Division-wide attendance summary (shown to SDS / ASDS / Admin).
         PremiumCard(
@@ -7453,28 +7550,303 @@ class _AlertsPageState extends State<AlertsPage> {
           ),
         ),
         const SizedBox(height: 12),
-        // Scanner-offline alerts — Admin only.
-        if (isAdmin) ...[
-          ScannerOfflineCard(api: widget.api, offlineCount: scannerOffline),
-          const SizedBox(height: 12),
-        ],
-        // Consecutive-absence flags (scoped per role by the backend).
         PremiumCard(
-          title: 'Absence Alerts',
-          subtitle:
-              '${widget.flags.length} student(s) flagged for consecutive absences',
+          title: 'Alert Inbox',
+          subtitle: totalAlerts == 0
+              ? 'No active alerts right now.'
+              : '$totalAlerts current alert${totalAlerts == 1 ? '' : 's'} for your role',
           child: Column(
             children: [
-              if (widget.flags.isEmpty)
-                const EmptyText('No flagged absentees right now.'),
-              for (final item in widget.flags)
-                FlagTile(Map<String, dynamic>.from(item as Map)),
+              if (totalAlerts == 0)
+                const EmptyText('No active alerts right now.'),
+              if (isAdmin && scannerOffline > 0)
+                _scannerNotificationCard(
+                  offlineCount: scannerOffline,
+                  unread: !widget.viewedAlertKeys.contains(scannerAlertKey),
+                ),
+              for (final row in flagRows)
+                _absenceNotificationCard(
+                  row,
+                  unread:
+                      !widget.viewedAlertKeys.contains(mainAbsenceAlertKey(row)),
+                ),
             ],
           ),
         ),
+        if (isAdmin) ...[
+          const SizedBox(height: 12),
+          ScannerOfflineCard(api: widget.api, offlineCount: scannerOffline),
+        ],
       ],
     );
   }
+
+  Widget _alertsHeader(int unreadCount, int totalAlerts) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: .96),
+      borderRadius: BorderRadius.circular(22),
+      border: Border.all(color: const Color(0xFFDCE6E1)),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF111827).withValues(alpha: .06),
+          blurRadius: 16,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: const Color(0xFFEAF7F1),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: const Icon(
+            Icons.notifications_active_rounded,
+            color: Color(0xFF138A64),
+            size: 24,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Notifications',
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF0F211B),
+                  letterSpacing: -.35,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                unreadCount == 0
+                    ? totalAlerts == 0
+                          ? 'You are all caught up'
+                          : 'All current alerts are viewed'
+                    : '$unreadCount new alert${unreadCount == 1 ? '' : 's'}',
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF667872),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (unreadCount > 0 && widget.onMarkAllViewed != null)
+          TextButton.icon(
+            onPressed: () => widget.onMarkAllViewed?.call(),
+            icon: const Icon(
+              Icons.done_all_rounded,
+              size: 18,
+              color: Color(0xFF138A64),
+            ),
+            label: const Text(
+              'Mark viewed',
+              style: TextStyle(
+                color: Color(0xFF138A64),
+                fontSize: 12.5,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+
+  Widget _scannerNotificationCard({
+    required int offlineCount,
+    required bool unread,
+  }) => _mainNotificationCard(
+    color: const Color(0xFFDC2626),
+    icon: Icons.wifi_off_rounded,
+    label: 'Scanner',
+    title: 'Desktop Scanner Offline',
+    message:
+        '$offlineCount school scanner${offlineCount == 1 ? '' : 's'} need attention.',
+    meta: 'Division scanner monitor',
+    unread: unread,
+    onTap: () {},
+  );
+
+  Widget _absenceNotificationCard(
+    Map<String, dynamic> row, {
+    required bool unread,
+  }) {
+    final days = absenceDayCount(row);
+    final student = '${row['name'] ?? 'Student'}'.trim();
+    final school = '${row['school_name'] ?? '-'}'.trim();
+    final grade = '${row['grade_name'] ?? '-'}'.trim();
+    final section = '${row['section_name'] ?? '-'}'.trim();
+    return _mainNotificationCard(
+      color: const Color(0xFFEA580C),
+      icon: Icons.flag_rounded,
+      label: 'Attendance',
+      title: '$days-Day Absence Alert',
+      message: '$student\n$grade - $section | $school',
+      meta: adviserText(row),
+      unread: unread,
+      onTap: () {
+        widget.onAlertViewed?.call(row);
+        FlagTile.openStudentDetailsModal(context, row);
+      },
+    );
+  }
+
+  Widget _mainNotificationCard({
+    required Color color,
+    required IconData icon,
+    required String label,
+    required String title,
+    required String message,
+    required String meta,
+    required bool unread,
+    required VoidCallback onTap,
+  }) => Container(
+    margin: const EdgeInsets.only(bottom: 10),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .045),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: color.withValues(alpha: .25)),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x0F101828),
+          blurRadius: 12,
+          offset: Offset(0, 6),
+        ),
+      ],
+    ),
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: color.withValues(alpha: .12),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: .10),
+                            borderRadius: BorderRadius.circular(99),
+                          ),
+                          child: Text(
+                            label,
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          'now',
+                          style: TextStyle(
+                            color: unread
+                                ? color
+                                : const Color(0xFF94A3B8),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        if (unread) ...[
+                          const SizedBox(width: 7),
+                          Container(
+                            width: 9,
+                            height: 9,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFEF4444),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF0F211B),
+                        height: 1.12,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      message,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF667872),
+                        height: 1.28,
+                      ),
+                    ),
+                    const SizedBox(height: 9),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.info_outline_rounded,
+                          size: 13,
+                          color: Color(0xFF94A3B8),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            meta,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF667872),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: color,
+                          size: 21,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 
   Widget _summaryStat(IconData icon, String label, String value, Color color) {
     return Container(
@@ -8130,10 +8502,15 @@ class _ProfilePageState extends State<ProfilePage> {
     final api = widget.api;
     final role = _roleLabel(api.role);
     final email = api.email.isEmpty ? 'No email saved' : api.email;
+    final username = api.username.isEmpty ? 'No username saved' : api.username;
+    final version = _version.isEmpty ? 'Checking version...' : 'v$_version';
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 26),
       children: [
-        const SectionTitle('Profile', 'Manage your EduTrack account.'),
+        const SectionTitle(
+          'Profile',
+          'Your secure EduTrack account and mobile app settings.',
+        ),
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.all(18),
@@ -8254,9 +8631,13 @@ class _ProfilePageState extends State<ProfilePage> {
             children: [
               _infoTile(Icons.person_outline, 'Name', api.fullname),
               const SizedBox(height: 10),
+              _infoTile(Icons.account_circle_outlined, 'Username', username),
+              const SizedBox(height: 10),
               _infoTile(Icons.alternate_email, 'Email', email),
               const SizedBox(height: 10),
               _infoTile(Icons.verified_user_outlined, 'Role', role),
+              const SizedBox(height: 10),
+              _infoTile(Icons.system_update_alt_rounded, 'App Version', version),
             ],
           ),
         ),
@@ -11146,6 +11527,20 @@ String? notificationIntentKey(Map<String, dynamic>? intent) {
   } catch (_) {
     return '${intent['type']}:${intent['action']}';
   }
+}
+
+String mainAbsenceAlertKey(Map<String, dynamic> row) {
+  final studentId =
+      '${row['id'] ?? row['student_id'] ?? row['lrn'] ?? row['name'] ?? 'student'}'
+          .trim();
+  final days = absenceDayCount(row);
+  final status = statusKey(row['attendance_status'] ?? 'absent');
+  return 'main-absence:${date()}:$studentId:$days:$status';
+}
+
+String mainScannerOfflineAlertKey(Map<String, dynamic> dashboard) {
+  final count = intValue(dashboard['scanner_offline']);
+  return 'main-scanner-offline:${date()}:$count';
 }
 
 String absenceDays(Map<String, dynamic> row) {
