@@ -240,6 +240,61 @@
     background: #f1f5f9; color: var(--primary);
 }
 .dash-system-row strong { color: var(--gray-900); }
+.weather-widget {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    min-width: 260px;
+    text-align: right;
+}
+.weather-icon {
+    width: 54px;
+    height: 54px;
+    border-radius: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.18);
+    color: #fff;
+    font-size: 1.6rem;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.24);
+    flex-shrink: 0;
+}
+.weather-main {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+.weather-temp {
+    font-size: 1.9rem;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -0.04em;
+}
+.weather-label {
+    font-size: 0.78rem;
+    font-weight: 900;
+    line-height: 1.2;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.weather-meta {
+    font-size: 0.7rem;
+    font-weight: 700;
+    opacity: 0.86;
+    line-height: 1.2;
+}
+@media (max-width: 720px) {
+    .weather-widget {
+        width: 100%;
+        min-width: 0;
+        justify-content: space-between;
+        text-align: left;
+    }
+    .weather-main { align-items: flex-start; }
+}
 </style>
 
 <div class="dashboard-v2">
@@ -251,9 +306,13 @@
         <p><i class="fa-solid fa-gauge-high"></i> Division Overview &nbsp;&middot;&nbsp; <span id="saDateLabel"></span></p>
     </div>
     <div class="wb-right">
-        <div class="wb-stat">
-            <span class="wb-stat-val" id="saWbRate">&mdash;</span>
-            <span class="wb-stat-lbl">Today's Rate</span>
+        <div class="weather-widget" id="weatherWidget" title="Sipalay City live weather">
+            <div class="weather-main">
+                <span class="weather-temp" id="weatherTemp">&mdash;</span>
+                <span class="weather-label" id="weatherLabel">Loading weather</span>
+                <span class="weather-meta" id="weatherMeta">Sipalay City</span>
+            </div>
+            <div class="weather-icon"><i class="fa-solid fa-cloud-sun" id="weatherIcon"></i></div>
         </div>
     </div>
 </div>
@@ -600,6 +659,55 @@
         return r >= 80 ? 'var(--success)' : r >= 50 ? 'var(--warning)' : 'var(--danger)';
     }
 
+    function weatherInfo(code, precipitation) {
+        var c = Number(code);
+        if (Number(precipitation || 0) > 0 && c <= 3) {
+            return { label: 'Rain nearby', icon: 'fa-cloud-rain' };
+        }
+        if (c === 0) return { label: 'Clear skies', icon: 'fa-sun' };
+        if (c === 1) return { label: 'Mostly sunny', icon: 'fa-cloud-sun' };
+        if (c === 2) return { label: 'Partly cloudy', icon: 'fa-cloud-sun' };
+        if (c === 3) return { label: 'Cloudy', icon: 'fa-cloud' };
+        if (c === 45 || c === 48) return { label: 'Foggy', icon: 'fa-smog' };
+        if ([51, 53, 55, 56, 57].includes(c)) return { label: 'Drizzle', icon: 'fa-cloud-rain' };
+        if ([61, 63, 65, 66, 67, 80, 81, 82].includes(c)) return { label: 'Rainy', icon: 'fa-cloud-showers-heavy' };
+        if ([71, 73, 75, 77, 85, 86].includes(c)) return { label: 'Snow', icon: 'fa-snowflake' };
+        if ([95, 96, 99].includes(c)) return { label: 'Thunderstorm', icon: 'fa-cloud-bolt' };
+        return { label: 'Weather', icon: 'fa-cloud-sun' };
+    }
+
+    async function loadWeather() {
+        var tempEl = document.getElementById('weatherTemp');
+        var labelEl = document.getElementById('weatherLabel');
+        var metaEl = document.getElementById('weatherMeta');
+        var iconEl = document.getElementById('weatherIcon');
+        if (!tempEl || !labelEl || !metaEl || !iconEl) return;
+        try {
+            var params = new URLSearchParams({
+                latitude: '9.735',
+                longitude: '122.405',
+                current: 'temperature_2m,relative_humidity_2m,precipitation,rain,weather_code,wind_speed_10m',
+                timezone: 'Asia/Manila'
+            });
+            var res = await fetch('https://api.open-meteo.com/v1/forecast?' + params.toString(), { cache: 'no-store' });
+            var data = await res.json();
+            var current = data.current || {};
+            var info = weatherInfo(current.weather_code, current.precipitation || current.rain || 0);
+            var temp = Math.round(Number(current.temperature_2m));
+            var humidity = Math.round(Number(current.relative_humidity_2m || 0));
+            var wind = Math.round(Number(current.wind_speed_10m || 0));
+            tempEl.textContent = Number.isFinite(temp) ? temp + '°C' : '—';
+            labelEl.textContent = info.label;
+            metaEl.textContent = 'Sipalay City · Humidity ' + humidity + '% · Wind ' + wind + ' km/h';
+            iconEl.className = 'fa-solid ' + info.icon;
+        } catch (err) {
+            tempEl.textContent = '—';
+            labelEl.textContent = 'Weather unavailable';
+            metaEl.textContent = 'Sipalay City';
+            iconEl.className = 'fa-solid fa-cloud-sun';
+        }
+    }
+
     function formatCount(value) {
         return Number(value || 0).toLocaleString('en-US');
     }
@@ -730,7 +838,6 @@
             if (halfDayEl) halfDayEl.textContent = data.students_half_day || 0;
             document.getElementById('statAbsent').textContent   = data.students_absent;
             document.getElementById('statRate').textContent     = data.attendance_rate + '%';
-            document.getElementById('saWbRate').textContent     = data.attendance_rate + '%';
             document.getElementById('statTeachers').textContent = data.teachers_present;
             document.getElementById('statTimedOut').textContent = data.teachers_timed_out || data.students_timed_out || 0;
             document.getElementById('statFlagged').textContent  = data.flagged_absent_2day;
@@ -1044,9 +1151,11 @@
     }
 
     // Initial load + polling
+    loadWeather();
     load();
     loadTrend();
     refreshTimer = setInterval(load, 5000);
+    setInterval(loadWeather, 10 * 60 * 1000);
     loadSchoolMap();
     mapPollTimer = setInterval(loadSchoolMap, 5000);
 })();
