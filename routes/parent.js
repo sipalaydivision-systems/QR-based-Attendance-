@@ -38,6 +38,24 @@ function normalizeContact(value) {
     return digits;
 }
 
+function normalizedContactCandidates(value) {
+    const raw = String(value || '');
+    const candidates = new Set();
+    const add = (part) => {
+        const normalized = normalizeContact(part);
+        if (normalized.length >= 7) candidates.add(normalized);
+    };
+    add(raw);
+    raw.split(/[,;/|]+|\s+(?:or|and)\s+/i).forEach(add);
+    (raw.match(/(?:\+?63|0)?9[\d\s().-]{7,}\d/g) || []).forEach(add);
+    return candidates;
+}
+
+function contactMatches(candidateValue, normalizedContact) {
+    if (!normalizedContact) return false;
+    return normalizedContactCandidates(candidateValue).has(normalizedContact);
+}
+
 function isContactLike(value) {
     return normalizeContact(value).length >= 7;
 }
@@ -97,6 +115,54 @@ async function renderParentAuth(res, view, opts = {}) {
     }, opts));
 }
 
+async function createOrReactivateParentAccount({ guardianName, contactNumber, normalized, username, password }) {
+    const [existingContact] = await db.query(
+        'SELECT id, status FROM parents WHERE normalized_contact = ? LIMIT 1',
+        [normalized]
+    );
+    const existing = existingContact[0] || null;
+    if (existing && existing.status === 'active') {
+        const error = new Error('This contact number already has a parent account. Please log in.');
+        error.code = 'PARENT_EXISTS';
+        throw error;
+    }
+
+    if (username) {
+        let usernameRows;
+        if (existing) {
+            [usernameRows] = await db.query(
+                'SELECT id FROM parents WHERE username = ? AND id != ? LIMIT 1',
+                [username, existing.id]
+            );
+        } else {
+            [usernameRows] = await db.query('SELECT id FROM parents WHERE username = ? LIMIT 1', [username]);
+        }
+        if (usernameRows.length) {
+            const error = new Error('This username is already taken.');
+            error.code = 'USERNAME_EXISTS';
+            throw error;
+        }
+    }
+
+    const hashed = await bcrypt.hash(password, 10);
+    if (existing) {
+        await db.query(
+            `UPDATE parents
+             SET guardian_name = ?, contact_number = ?, normalized_contact = ?,
+                 username = ?, password = ?, status = 'active', last_login = ?
+             WHERE id = ?`,
+            [guardianName, contactNumber, normalized, username || null, hashed, nowDateTime(), existing.id]
+        );
+        return { id: existing.id, reactivated: true };
+    }
+
+    const [result] = await db.query(
+        'INSERT INTO parents (guardian_name, contact_number, normalized_contact, username, password) VALUES (?, ?, ?, ?, ?)',
+        [guardianName, contactNumber, normalized, username || null, hashed]
+    );
+    return { id: result.insertId, reactivated: false };
+}
+
 async function contactExistsForStudent(normalizedContact) {
     if (!normalizedContact) return false;
     const [rows] = await db.query(
@@ -109,7 +175,7 @@ async function contactExistsForStudent(normalizedContact) {
            AND s.guardian_contact IS NOT NULL
            AND s.guardian_contact != ''`
     );
-    return rows.some(row => normalizeContact(row.guardian_contact) === normalizedContact);
+    return rows.some(row => contactMatches(row.guardian_contact, normalizedContact));
 }
 
 async function getParentChildren(normalizedContact) {
@@ -138,7 +204,7 @@ async function getParentChildren(normalizedContact) {
          ORDER BY s.lastname, s.firstname`
     );
     return rows
-        .filter(row => normalizeContact(row.guardian_contact) === normalizedContact)
+        .filter(row => contactMatches(row.guardian_contact, normalizedContact))
         .map(row => ({
             ...row,
             name: displayStudentName(row)
@@ -652,25 +718,16 @@ router.post('/parent-register', async (req, res) => {
                 values
             });
         }
-        const [existingContact] = await db.query('SELECT id FROM parents WHERE normalized_contact = ? LIMIT 1', [normalized]);
-        if (existingContact.length) {
-            return renderParentAuth(res, 'parent_register', { error: 'This contact number already has a parent account. Please log in.', values });
-        }
-        if (username) {
-            const [existingUsername] = await db.query('SELECT id FROM parents WHERE username = ? LIMIT 1', [username]);
-            if (existingUsername.length) {
-                return renderParentAuth(res, 'parent_register', { error: 'This username is already taken.', values });
-            }
-        }
-        const hashed = await bcrypt.hash(password, 10);
-        const [result] = await db.query(
-            `INSERT INTO parents (guardian_name, contact_number, normalized_contact, username, password)
-             VALUES (?, ?, ?, ?, ?)`,
-            [guardianName, contactNumber, normalized, username || null, hashed]
-        );
+        const account = await createOrReactivateParentAccount({
+            guardianName,
+            contactNumber,
+            normalized,
+            username,
+            password
+        });
         req.session.user = {
-            id: result.insertId,
-            parent_id: result.insertId,
+            id: account.id,
+            parent_id: account.id,
             username: username || contactNumber,
             fullname: guardianName,
             role: 'parent',
@@ -679,6 +736,9 @@ router.post('/parent-register', async (req, res) => {
         };
         return res.redirect('/parent/app');
     } catch (err) {
+        if (err.code === 'PARENT_EXISTS' || err.code === 'USERNAME_EXISTS') {
+            return renderParentAuth(res, 'parent_register', { error: err.message, values });
+        }
         console.error('Parent registration error:', err);
         return renderParentAuth(res, 'parent_register', { error: 'A server error occurred. Please try again.', values });
     }
@@ -761,24 +821,16 @@ router.post('/api/parent/register', async (req, res) => {
         if (!(await contactExistsForStudent(normalized))) {
             return res.status(404).json({ success: false, error: 'This contact number is not registered. Please contact the school adviser or administrator.' });
         }
-        const [existingContact] = await db.query('SELECT id FROM parents WHERE normalized_contact = ? LIMIT 1', [normalized]);
-        if (existingContact.length) {
-            return res.status(409).json({ success: false, error: 'This contact number already has a parent account. Please log in.' });
-        }
-        if (username) {
-            const [existingUsername] = await db.query('SELECT id FROM parents WHERE username = ? LIMIT 1', [username]);
-            if (existingUsername.length) {
-                return res.status(409).json({ success: false, error: 'This username is already taken.' });
-            }
-        }
-        const hashed = await bcrypt.hash(password, 10);
-        const [result] = await db.query(
-            'INSERT INTO parents (guardian_name, contact_number, normalized_contact, username, password) VALUES (?, ?, ?, ?, ?)',
-            [guardianName, contactNumber, normalized, username || null, hashed]
-        );
+        const account = await createOrReactivateParentAccount({
+            guardianName,
+            contactNumber,
+            normalized,
+            username,
+            password
+        });
         req.session.user = {
-            id: result.insertId,
-            parent_id: result.insertId,
+            id: account.id,
+            parent_id: account.id,
             username: username || contactNumber,
             fullname: guardianName,
             role: 'parent',
@@ -787,9 +839,12 @@ router.post('/api/parent/register', async (req, res) => {
         };
         return res.json({
             success: true,
-            parent: { id: result.insertId, guardian_name: guardianName, contact_number: contactNumber, username: username || '' }
+            parent: { id: account.id, guardian_name: guardianName, contact_number: contactNumber, username: username || '' }
         });
     } catch (err) {
+        if (err.code === 'PARENT_EXISTS' || err.code === 'USERNAME_EXISTS') {
+            return res.status(409).json({ success: false, error: err.message });
+        }
         console.error('Parent API register error:', err);
         return res.status(500).json({ success: false, error: 'A server error occurred. Please try again.' });
     }
@@ -1024,7 +1079,7 @@ router.post('/api/parent/profile', requireParentAuth, async (req, res) => {
              WHERE status != 'deleted' AND guardian_contact IS NOT NULL AND guardian_contact != ''`
         );
         const linkedIds = students
-            .filter(s => normalizeContact(s.guardian_contact) === oldNormalized)
+            .filter(s => contactMatches(s.guardian_contact, oldNormalized))
             .map(s => s.id);
         if (linkedIds.length) {
             await conn.query(

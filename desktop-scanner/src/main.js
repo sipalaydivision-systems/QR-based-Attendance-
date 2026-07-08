@@ -1962,7 +1962,16 @@ async function submitScan(payload) {
   // scan from the local directory INSTANTLY and probe for reconnection in the
   // background. The user never waits on a dead/slow network. Once the probe
   // restores the connection, subsequent scans go straight to the server.
-  const canTryServer = !!settings.kioskToken && runtimeState.online;
+  let canTryServer = !!settings.kioskToken && runtimeState.online;
+  if (!canTryServer && settings.kioskToken && runtimeState.schoolDayStatus?.isSchoolDay === false) {
+    try {
+      await refreshSchoolDayStatus(localDateString());
+      updateRuntimeConnectionState(true, 'Connected to Server.');
+      canTryServer = true;
+    } catch (_) {
+      // Keep the existing offline behavior if the server is still unreachable.
+    }
+  }
   if (settings.offlineSync && !canTryServer && payload?.allowQueue !== false) {
     scheduleBackgroundReconnect();
     return buildOfflineScanResponse(qrCode, scanTime, payload);
@@ -1979,6 +1988,9 @@ async function submitScan(payload) {
     }, 6000);
     updateRuntimeConnectionState(true, 'Connected to Server.');
     persistServerScanResult(qrCode, scanTime, data);
+    if (data && data.non_school_day !== true && data.non_school_day_type == null) {
+      runtimeState.schoolDayStatus = { isSchoolDay: true, reason: null, type: null };
+    }
     const result = { ...data, online: true, ...currentDashboard() };
     broadcastScannerStatus();
     return result;
