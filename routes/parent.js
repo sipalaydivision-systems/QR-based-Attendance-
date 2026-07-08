@@ -123,7 +123,7 @@ async function createOrReactivateParentAccount({ guardianName, contactNumber, no
     );
     const existing = existingContact[0] || null;
     if (existing && existing.status === 'active') {
-        const error = new Error('This contact number already has a parent account. Please log in.');
+        const error = new Error('This mobile number is already registered. Please log in instead.');
         error.code = 'PARENT_EXISTS';
         throw error;
     }
@@ -862,7 +862,7 @@ router.post('/api/parent/register', async (req, res) => {
         });
     } catch (err) {
         if (err.code === 'PARENT_EXISTS' || err.code === 'USERNAME_EXISTS') {
-            return res.status(409).json({ success: false, error: err.message });
+            return res.status(409).json({ success: false, code: err.code, error: err.message });
         }
         console.error('Parent API register error:', err);
         return res.status(500).json({ success: false, error: 'A server error occurred. Please try again.' });

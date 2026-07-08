@@ -909,6 +909,8 @@ class ParentApi {
       }
       return {
         'success': false,
+        'code': data['code'] ?? '',
+        'statusCode': res.statusCode,
         'error': data['error'] ?? 'Registration failed.',
       };
     } catch (e) {
@@ -1773,11 +1775,85 @@ class _RegisterScreenState extends State<RegisterScreen> {
         (r) => false,
       );
     } else {
+      final message = '${res['error'] ?? 'Registration failed.'}';
       setState(() {
         _busy = false;
-        _error = '${res['error']}';
+        _error = message;
       });
+      if (_isDuplicateMobileResponse(res, message)) {
+        await _showDuplicateMobilePrompt(message);
+      }
     }
+  }
+
+  bool _isDuplicateMobileResponse(Map<String, dynamic> res, String message) {
+    final code = '${res['code'] ?? ''}'.toUpperCase();
+    final lower = message.toLowerCase();
+    return code == 'PARENT_EXISTS' ||
+        (lower.contains('mobile') &&
+            lower.contains('already') &&
+            lower.contains('registered')) ||
+        (lower.contains('contact number') &&
+            lower.contains('already') &&
+            lower.contains('account'));
+  }
+
+  Future<void> _showDuplicateMobilePrompt(String message) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+        contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        title: const Row(
+          children: [
+            Icon(Icons.info_rounded, color: kGreen),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Mobile number already registered',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          message.isEmpty
+              ? 'This mobile number is already registered. Please log in instead.'
+              : message,
+          style: const TextStyle(
+            color: Color(0xFF475569),
+            height: 1.35,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text(
+              'Stay Here',
+              style: TextStyle(color: Color(0xFF64748B)),
+            ),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: kGreen,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              Navigator.of(context).pop();
+            },
+            child: const Text('Go to Login'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
