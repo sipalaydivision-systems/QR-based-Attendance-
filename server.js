@@ -29,8 +29,8 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(trackSystemTraffic);
 
 const DESKTOP_SCANNER_LATEST = {
-    version: '1.0.30',
-    notes: 'Fixes stale non-school day cache after a class suspension is removed.'
+    version: '1.0.31',
+    notes: 'Improves Windows autostart so the scanner opens immediately after sign-in.'
 };
 
 app.get('/mobile-config.json', (req, res) => {

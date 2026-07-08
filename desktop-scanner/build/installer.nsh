@@ -24,10 +24,21 @@
     "SOFTWARE\Microsoft\Windows\CurrentVersion\Run" \
     "EduTrack Scanner" \
     '"$INSTDIR\EduTrack Scanner.exe" --autostart'
+
+  ; Also register a no-delay Windows logon task. Some Windows builds throttle
+  ; Run-key startup apps during boot; Task Scheduler starts more reliably after
+  ; sign-in. The app has a single-instance lock, so this cannot create duplicate
+  ; scanner windows if both mechanisms fire.
+  nsExec::ExecToLog 'schtasks /Delete /TN "EduTrack Scanner Autostart" /F'
+  Pop $0
+  nsExec::ExecToLog 'schtasks /Create /SC ONLOGON /TN "EduTrack Scanner Autostart" /TR "$\"$INSTDIR\EduTrack Scanner.exe$\" --autostart" /RL HIGHEST /F'
+  Pop $0
 !macroend
 
 ; Remove the machine-wide startup registry key on uninstall.
 !macro customUnInstall
+  nsExec::ExecToLog 'schtasks /Delete /TN "EduTrack Scanner Autostart" /F'
+  Pop $0
   DeleteRegValue HKLM \
     "SOFTWARE\Microsoft\Windows\CurrentVersion\Run" \
     "EduTrack Scanner"

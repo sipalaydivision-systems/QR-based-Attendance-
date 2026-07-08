@@ -784,7 +784,10 @@ function createWindow() {
   const settings = loadSettings();
   const launchedFromAutoStart = process.argv.includes('--autostart');
   const shouldFullscreen = !!settings.startFullscreen;
-  const shouldStartHidden = launchedFromAutoStart && !!settings.minimizeToTray;
+  // Autostart is for attendance stations: after a reboot/sign-in, the scanner
+  // must appear immediately. Keep minimize-to-tray only for manual close/minimize
+  // behavior, not for Windows startup.
+  const shouldStartHidden = false;
 
   mainWindow = new BrowserWindow({
     width: 1360,
