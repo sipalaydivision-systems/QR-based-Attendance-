@@ -33,17 +33,46 @@ const DESKTOP_SCANNER_LATEST = {
     notes: 'Improves Windows autostart so the scanner opens immediately after sign-in.'
 };
 
+const MOBILE_APP_LATEST = {
+    version: '2.1.45',
+    version_code: 76,
+    notes: 'Latest EduTrack mobile app update is ready to install from Profile.'
+};
+
 app.get('/mobile-config.json', (req, res) => {
     res.json({
         base_url: getPublicAppBaseUrl(req),
         fallback_urls: [],
-        mobile_app_version: '2.1.44',
+        mobile_app_version: MOBILE_APP_LATEST.version,
         desktop_scanner_version: DESKTOP_SCANNER_LATEST.version,
         notification_capabilities: {
             closed_app_fcm: true,
             daily_report_7pm: true,
             two_day_absence_flags: true
         }
+    });
+});
+
+app.get('/api/mobile-app-version', (req, res) => {
+    const apkPath = path.join(__dirname, 'public', 'downloads', 'school-attendance-division.apk');
+    let apkSize = null;
+    let apkUpdatedAt = null;
+    try {
+        const stat = fs.statSync(apkPath);
+        apkSize = stat.size;
+        apkUpdatedAt = stat.mtime.toISOString();
+    } catch (_) {
+        /* APK may not be uploaded yet */
+    }
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.json({
+        latest_version: MOBILE_APP_LATEST.version,
+        latest_version_code: MOBILE_APP_LATEST.version_code,
+        apk_url: `${getPublicAppBaseUrl(req)}/download/mobile-app`,
+        apk_available: apkSize !== null,
+        apk_size: apkSize,
+        apk_updated_at: apkUpdatedAt,
+        notes: MOBILE_APP_LATEST.notes
     });
 });
 

@@ -1,7 +1,7 @@
 ﻿name: edutrack_mobile
 description: "Edutrack Flutter mobile application for Schools Division of Sipalay City."
 publish_to: 'none'
-version: 2.1.44+75
+version: 2.1.45+76
 
 environment:
   sdk: ^3.11.5
@@ -17,6 +17,8 @@ dependencies:
   firebase_core: ^3.8.0
   firebase_messaging: ^15.1.5
   package_info_plus: ^8.3.1
+  path_provider: ^2.1.5
+  open_filex: ^4.5.0
   cupertino_icons: ^1.0.8
 
 dev_dependencies:

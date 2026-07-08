@@ -10,6 +10,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
@@ -903,6 +905,28 @@ class ApiService {
       'current_password': currentPassword,
       'new_password': newPassword,
     });
+  }
+
+  // Latest published EduTrack Android APK for the in-app Profile updater.
+  Future<Map<String, dynamic>> appVersion() async {
+    try {
+      final response = await _request(
+        () => http.get(
+          Uri.parse('${AppConfig.baseUrl}/api/mobile-app-version'),
+          headers: authHeaders,
+        ),
+        retries: 1,
+        timeout: const Duration(seconds: 15),
+      );
+      if (response.statusCode == 401) throw AuthExpired();
+      if (response.statusCode >= 400) return <String, dynamic>{};
+      return _decodeJsonMap(
+        response,
+        fallback: 'Server returned an invalid app version response.',
+      );
+    } catch (_) {
+      return <String, dynamic>{};
+    }
   }
 
   Future<Map<String, dynamic>> postJson(
@@ -8055,19 +8079,133 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   String _version = '';
+  String _latestVersion = '';
+  String _apkUrl = '${AppConfig.baseUrl}/download/mobile-app';
+  String _updateNotes = '';
+  bool _updateBusy = false;
+  String _updateMessage = '';
 
   @override
   void initState() {
     super.initState();
-    _loadVersion();
+    _loadAppUpdateInfo();
   }
 
-  Future<void> _loadVersion() async {
+  Future<void> _loadAppUpdateInfo() async {
     try {
       final info = await PackageInfo.fromPlatform();
       if (mounted) setState(() => _version = info.version);
     } catch (_) {
       /* version is best-effort */
+    }
+    final latest = await widget.api.appVersion();
+    if (!mounted) return;
+    setState(() {
+      _latestVersion = '${latest['latest_version'] ?? ''}'.trim();
+      final url = '${latest['apk_url'] ?? ''}'.trim();
+      if (url.isNotEmpty) _apkUrl = url;
+      _updateNotes = '${latest['notes'] ?? ''}'.trim();
+    });
+    if (_updateAvailable) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final lastNotified = prefs.getString('main_last_update_notify_version') ?? '';
+        if (lastNotified != _latestVersion) {
+          await prefs.setString('main_last_update_notify_version', _latestVersion);
+          await showLocalNotification(
+            'EduTrack update available',
+            _updateNotes.isNotEmpty
+                ? '$_updateNotes Open Profile to install v$_latestVersion.'
+                : 'Version $_latestVersion is ready. Open Profile to install.',
+            id: 99002,
+            showToast: false,
+          );
+        }
+      } catch (_) {
+        /* update notification is best-effort */
+      }
+    }
+  }
+
+  bool get _updateAvailable {
+    if (_latestVersion.isEmpty || _version.isEmpty) return false;
+    List<int> parts(String value) => value
+        .split('.')
+        .map((part) => int.tryParse(part.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0)
+        .toList();
+    final latest = parts(_latestVersion);
+    final current = parts(_version);
+    for (var i = 0; i < latest.length; i++) {
+      final currentPart = i < current.length ? current[i] : 0;
+      if (latest[i] != currentPart) return latest[i] > currentPart;
+    }
+    return false;
+  }
+
+  Future<void> _installUpdate() async {
+    if (!Platform.isAndroid) {
+      final uri = Uri.tryParse(_apkUrl);
+      if (uri != null) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+      return;
+    }
+    setState(() {
+      _updateBusy = true;
+      _updateMessage = 'Downloading update...';
+    });
+    final client = http.Client();
+    try {
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/edutrack-mobile.apk');
+      final request = http.Request('GET', Uri.parse(_apkUrl));
+      final response = await client.send(request).timeout(const Duration(minutes: 4));
+      if (response.statusCode >= 400) {
+        throw Exception('Download failed.');
+      }
+      final total = response.contentLength ?? 0;
+      final sink = file.openWrite();
+      var received = 0;
+      await for (final chunk in response.stream) {
+        sink.add(chunk);
+        received += chunk.length;
+        if (total > 0 && mounted) {
+          setState(
+            () => _updateMessage =
+                'Downloading ${(received / total * 100).round()}%',
+          );
+        }
+      }
+      await sink.close();
+      if (!mounted) return;
+      setState(() {
+        _updateBusy = false;
+        _updateMessage = 'Opening installer — tap Install to finish.';
+      });
+      final result = await OpenFilex.open(
+        file.path,
+        type: 'application/vnd.android.package-archive',
+      );
+      if (!mounted) return;
+      if (result.type != ResultType.done) {
+        setState(
+          () => _updateMessage =
+              'Allow "Install unknown apps" for EduTrack, then tap Install Update again.',
+        );
+      } else {
+        setState(
+          () => _updateMessage =
+              'If Android shows package conflict, uninstall the old EduTrack app once, then install this update.',
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _updateBusy = false;
+        _updateMessage = 'Update failed. Check your connection and try again.';
+      });
+    } finally {
+      client.close();
     }
   }
 
@@ -8652,6 +8790,209 @@ class _ProfilePageState extends State<ProfilePage> {
                 'Change Password',
                 'Update your account password',
                 _changePassword,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        PremiumCard(
+          title: 'App Updates',
+          subtitle: 'Check and install the latest EduTrack Android app.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEAF7F1),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.system_update_alt_rounded,
+                      color: Color(0xFF138A64),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Installed: ${_version.isEmpty ? 'Checking...' : 'v$_version'}',
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            color: Color(0xFF0F211B),
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _latestVersion.isEmpty
+                              ? 'Checking latest version...'
+                              : 'Latest: v$_latestVersion',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF667872),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (_updateAvailable) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(13),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF7ED),
+                    border: Border.all(color: const Color(0xFFFED7AA)),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(
+                            Icons.new_releases_rounded,
+                            color: Color(0xFFEA580C),
+                            size: 18,
+                          ),
+                          SizedBox(width: 7),
+                          Text(
+                            'Update available',
+                            style: TextStyle(
+                              color: Color(0xFF9A3412),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 13.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_updateNotes.isNotEmpty) ...[
+                        const SizedBox(height: 5),
+                        Text(
+                          _updateNotes,
+                          style: const TextStyle(
+                            color: Color(0xFF9A3412),
+                            fontSize: 12,
+                            height: 1.35,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: ElevatedButton.icon(
+                    onPressed: _updateBusy ? null : _installUpdate,
+                    icon: _updateBusy
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.download_rounded, size: 19),
+                    label: const Text('Install Update Now'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF138A64),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+              ] else if (_latestVersion.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(13),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFECFDF5),
+                    border: Border.all(color: const Color(0xFFA7F3D0)),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(
+                        Icons.verified_rounded,
+                        color: Color(0xFF047857),
+                        size: 22,
+                      ),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          "You're up to date. EduTrack will show a new update here when it is published.",
+                          style: TextStyle(
+                            color: Color(0xFF065F46),
+                            fontSize: 12,
+                            height: 1.35,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              if (_updateMessage.isNotEmpty) ...[
+                const SizedBox(height: 9),
+                Text(
+                  _updateMessage,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF0C5A3C),
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                height: 42,
+                child: OutlinedButton.icon(
+                  onPressed: _updateBusy ? null : _loadAppUpdateInfo,
+                  icon: _updateBusy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text('Check again'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF0C5A3C),
+                    side: const BorderSide(color: Color(0xFFA7F3D0)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Installs directly inside EduTrack — no browser needed. If Android asks, allow "Install unknown apps" for EduTrack, then tap Install.',
+                style: TextStyle(
+                  fontSize: 11.2,
+                  color: Color(0xFF667872),
+                  height: 1.35,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
