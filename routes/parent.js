@@ -28,6 +28,7 @@ const {
     syncAnnouncementNotificationsForParent,
     syncAttendanceNotificationsForParent
 } = require('../utils/parentNotifications');
+const schoolYears = require('../utils/schoolYear');
 
 const router = express.Router();
 
@@ -346,6 +347,24 @@ function resolveAttendance(attendance, schedule, storedEvents, absenceFinal = tr
 }
 
 async function isSchoolDay(dateStr, schoolId) {
+    const activeYear = await schoolYears.getActiveSchoolYear().catch(() => null);
+    if (activeYear) {
+        const dateOnly = value => {
+            if (!value) return null;
+            if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+            const match = String(value).trim().match(/\d{4}-\d{2}-\d{2}/);
+            return match ? match[0] : null;
+        };
+        const start = dateOnly(activeYear.start_date);
+        const end = dateOnly(activeYear.end_date);
+        const label = activeYear.label ? ` ${activeYear.label}` : '';
+        if (start && dateStr < start) {
+            return { is_school_day: false, reason: `School year${label} has not started yet.`, type: 'School Year' };
+        }
+        if (end && dateStr > end) {
+            return { is_school_day: false, reason: `School year${label} has ended.`, type: 'School Year' };
+        }
+    }
     const [year, month, dayOfMonth] = String(dateStr).split('-').map(part => parseInt(part, 10));
     const date = new Date(year, month - 1, dayOfMonth);
     const day = date.getDay();

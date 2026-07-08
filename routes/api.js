@@ -1531,10 +1531,42 @@ async function hasSchoolDayEnded(dateStr) {
     return compareDateTime(nowDateTime(), await getSchoolDayEndDateTime(dateStr)) >= 0;
 }
 
+function dateOnly(value) {
+    if (!value) return null;
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+    const match = String(value).trim().match(/\d{4}-\d{2}-\d{2}/);
+    return match ? match[0] : null;
+}
+
+async function activeSchoolYearBoundaryStatus(dateStr) {
+    const activeYear = await schoolYears.getActiveSchoolYear().catch(() => null);
+    if (!activeYear) return { inRange: true, reason: null, type: null };
+    const start = dateOnly(activeYear.start_date);
+    const end = dateOnly(activeYear.end_date);
+    const label = activeYear.label ? ` ${activeYear.label}` : '';
+    if (start && dateStr < start) {
+        return { inRange: false, reason: `School year${label} has not started yet.`, type: 'School Year' };
+    }
+    if (end && dateStr > end) {
+        return { inRange: false, reason: `School year${label} has ended.`, type: 'School Year' };
+    }
+    return { inRange: true, reason: null, type: null };
+}
+
+async function checkOperationalSchoolDay(dateStr, schoolId) {
+    const schoolDay = await checkSchoolDay(dateStr, schoolId);
+    if (!schoolDay.isSchoolDay) return schoolDay;
+    const boundary = await activeSchoolYearBoundaryStatus(dateStr);
+    if (!boundary.inRange) {
+        return { isSchoolDay: false, reason: boundary.reason, type: boundary.type };
+    }
+    return schoolDay;
+}
+
 async function shouldCountComputedAbsences(dateStr, schoolId) {
     const today = todayDate();
     if (dateStr > today) return false;
-    const schoolDay = await checkSchoolDay(dateStr, schoolId);
+    const schoolDay = await checkOperationalSchoolDay(dateStr, schoolId);
     if (!schoolDay.isSchoolDay) return false;
     return hasSchoolDayEnded(dateStr);
 }
@@ -1771,7 +1803,7 @@ async function getConsecutiveAbsenceFlags({ baseDate, schoolId, days = 2, includ
     const schoolDateSet = new Set(schoolDates);
     const breakDates = [...schoolDates];
     if (!schoolDateSet.has(cappedBaseDate)) {
-        const baseSchoolDay = await checkSchoolDay(cappedBaseDate, schoolId);
+        const baseSchoolDay = await checkOperationalSchoolDay(cappedBaseDate, schoolId);
         if (baseSchoolDay.isSchoolDay) breakDates.unshift(cappedBaseDate);
     }
 
@@ -1871,7 +1903,7 @@ router.get('/is-school-day', requireAuthOrScannerKiosk, async (req, res) => {
     try {
         const date = req.query.date || todayDate();
         const schoolId = req.query.school_id ? parseInt(req.query.school_id, 10) : null;
-        const result = await checkSchoolDay(date, schoolId);
+        const result = await checkOperationalSchoolDay(date, schoolId);
         return res.json({ date, ...result });
     } catch (err) {
         console.error('is-school-day error:', err);
@@ -1970,7 +2002,7 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
             });
         }
 
-        const schoolDay = await checkSchoolDay(today, person.school_id);
+        const schoolDay = await checkOperationalSchoolDay(today, person.school_id);
         if (!schoolDay.isSchoolDay) {
             return res.json({
                 success: false,
@@ -2455,7 +2487,7 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
         });
 
         // Check if today is a school day (uses helper with holidays + weekends + overrides)
-        const schoolDayResult = await checkSchoolDay(date, schoolId);
+        const schoolDayResult = await checkOperationalSchoolDay(date, schoolId);
         const isSchoolDay = schoolDayResult.isSchoolDay;
         const nonSchoolDayReason = schoolDayResult.reason;
         const nonSchoolDayType = schoolDayResult.type;
@@ -2651,7 +2683,7 @@ router.get('/weekly-absence', requireAuth, async (req, res) => {
 
         const week = [];
         for (const dayDate of days) {
-            const schoolDay = await checkSchoolDay(dayDate, schoolId);
+            const schoolDay = await checkOperationalSchoolDay(dayDate, schoolId);
             const absent = schoolDay.isSchoolDay
                 ? await countStudentsWithoutTimeIn(dayDate, schoolId)
                 : 0;
@@ -4481,7 +4513,7 @@ router.get('/date-attendance-details', requireAuth, async (req, res) => {
         const isFutureDate = targetDate > today;
         const schoolFilter = schoolId ? ' AND s.school_id = ?' : '';
         const schoolParams = schoolId ? [targetDate, schoolId] : [targetDate];
-        const schoolDay = await checkSchoolDay(targetDate, schoolId);
+        const schoolDay = await checkOperationalSchoolDay(targetDate, schoolId);
         const canCountAbsences = await shouldCountComputedAbsences(targetDate, schoolId);
 
         const [[totalRow]] = await db.query(
@@ -4681,7 +4713,7 @@ router.get('/not-scanned-today', requireAuth, async (req, res) => {
     const type = req.query.type || 'student';
     const schoolId = applySchoolFilter(req);
     try {
-        const schoolDay = await checkSchoolDay(today, schoolId);
+        const schoolDay = await checkOperationalSchoolDay(today, schoolId);
         const canCountAbsences = await shouldCountComputedAbsences(today, schoolId);
         if (today > todayDate() || !schoolDay.isSchoolDay) {
             return res.json([]);
@@ -4747,7 +4779,7 @@ router.get('/is-school-day', requireAuthOrScannerKiosk, async (req, res) => {
     const date = req.query.date || todayDate();
     try {
         const schoolId = normalizeOptionalSchoolId(req.query.school_id);
-        const schoolDay = await checkSchoolDay(date, schoolId);
+        const schoolDay = await checkOperationalSchoolDay(date, schoolId);
         return res.json({
             is_school_day: schoolDay.isSchoolDay,
             isSchoolDay: schoolDay.isSchoolDay,

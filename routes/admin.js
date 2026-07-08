@@ -498,6 +498,12 @@ router.get('/sf2-report', async (req, res) => {
     if (!teacherId) return res.render('error', { title: 'SF2 Error', message: 'No teacher record linked.', user: req.session.user });
 
     const pad2 = n => String(n).padStart(2, '0');
+    const dateOnly = value => {
+        if (!value) return null;
+        if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+        const match = String(value).trim().match(/\d{4}-\d{2}-\d{2}/);
+        return match ? match[0] : null;
+    };
     // School year + month selection. SF2 is monthly; the chosen school year labels
     // the report and (for past years) drives the historical roster. Archived SF2
     // stays reachable by picking an older school year from the dropdown.
@@ -513,8 +519,10 @@ router.get('/sf2-report', async (req, res) => {
     if (!validMonth) {
         if (selectedYear && selectedYear.start_date && selectedYear.end_date) {
             const cm = currentMonth();
-            monthParam = (`${cm}-01` >= selectedYear.start_date && `${cm}-01` <= selectedYear.end_date)
-                ? cm : selectedYear.start_date.slice(0, 7);
+            const syStart = dateOnly(selectedYear.start_date);
+            const syEnd = dateOnly(selectedYear.end_date);
+            monthParam = (syStart && syEnd && `${cm}-01` >= syStart && `${cm}-01` <= syEnd)
+                ? cm : String(syStart || selectedYear.start_date).slice(0, 7);
         } else {
             monthParam = currentMonth();
         }
@@ -523,8 +531,8 @@ router.get('/sf2-report', async (req, res) => {
     // configured month range. The browser picker enforces this too, but the
     // server remains authoritative for manually edited URLs.
     if (selectedYear && selectedYear.start_date && selectedYear.end_date) {
-        const startMonth = String(selectedYear.start_date).slice(0, 7);
-        const endMonth = String(selectedYear.end_date).slice(0, 7);
+        const startMonth = String(dateOnly(selectedYear.start_date) || selectedYear.start_date).slice(0, 7);
+        const endMonth = String(dateOnly(selectedYear.end_date) || selectedYear.end_date).slice(0, 7);
         if (monthParam < startMonth) monthParam = startMonth;
         if (monthParam > endMonth) monthParam = endMonth;
     }
@@ -572,6 +580,10 @@ router.get('/sf2-report', async (req, res) => {
         const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
         const startDate = `${year}-${pad2(month)}-01`;
         const endDate = `${year}-${pad2(month)}-${pad2(daysInMonth)}`;
+        const syStartDate = selectedYear ? dateOnly(selectedYear.start_date) : null;
+        const syEndDate = selectedYear ? dateOnly(selectedYear.end_date) : null;
+        const reportStartDate = syStartDate && syStartDate > startDate ? syStartDate : startDate;
+        const reportEndDate = syEndDate && syEndDate < endDate ? syEndDate : endDate;
 
         // Attendance for the month (time_in = present). status drives the SF2
         // codes: late => Tardy (upper-half shade), half_day => Cutting (lower-half shade).
@@ -581,7 +593,7 @@ router.get('/sf2-report', async (req, res) => {
              WHERE person_type = 'student'
                AND school_id = ?
                AND date BETWEEN ? AND ?`,
-            [teacher.school_id, startDate, endDate]
+            [teacher.school_id, reportStartDate, reportEndDate]
         );
         const presentSet = new Set(attendance.filter(r => r.time_in).map(r => `${r.person_id}-${r.date_str}`));
         const lateSet = new Set();
@@ -600,13 +612,13 @@ router.get('/sf2-report', async (req, res) => {
             `SELECT DATE_FORMAT(holiday_date,'%Y-%m-%d') as d
              FROM holidays
              WHERE holiday_date BETWEEN ? AND ? AND (school_id IS NULL OR school_id = ?)`,
-            [startDate, endDate, teacher.school_id]
+            [reportStartDate, reportEndDate, teacher.school_id]
         );
         const holidaySet = new Set(holidayRows.map(r => r.d));
         const [overrideRows] = await db.query(
             `SELECT DATE_FORMAT(date,'%Y-%m-%d') as d, is_school_day
              FROM school_days WHERE date BETWEEN ? AND ?`,
-            [startDate, endDate]
+            [reportStartDate, reportEndDate]
         ).catch(() => [[]]);
         const overrides = new Map(overrideRows.map(r => [r.d, !!r.is_school_day]));
 
@@ -615,6 +627,7 @@ router.get('/sf2-report', async (req, res) => {
         const schoolDays = [];
         for (let day = 1; day <= daysInMonth; day++) {
             const dstr = `${year}-${pad2(month)}-${pad2(day)}`;
+            if (dstr < reportStartDate || dstr > reportEndDate) continue;
             const dow = new Date(dstr + 'T00:00:00Z').getUTCDay(); // string-derived, TZ-safe
             if (dow === 0 || dow === 6) continue;
             const isSchool = overrides.has(dstr) ? overrides.get(dstr) : !holidaySet.has(dstr);
@@ -638,8 +651,8 @@ router.get('/sf2-report', async (req, res) => {
         // shouldCountComputedAbsences() in the attendance API.
         const today = todayDate();
         let lastCountable;
-        if (endDate < today) {
-            lastCountable = endDate;
+        if (reportEndDate < today) {
+            lastCountable = reportEndDate;
         } else {
             const [cutRows] = await db.query(
                 `SELECT setting_key, setting_value FROM settings
@@ -649,13 +662,15 @@ router.get('/sf2-report', async (req, res) => {
             const cutoffTime = normalizeTime(cut.absence_cutoff_time || cut.pm_time_out_end, '17:00:00');
             const dayEnded = compareDateTime(nowDateTime(), sqlDateTime(today, cutoffTime)) >= 0;
             if (dayEnded) {
-                lastCountable = today;
+                lastCountable = today < reportStartDate ? reportStartDate : today;
             } else {
                 const t = new Date(today + 'T00:00:00Z');
                 t.setUTCDate(t.getUTCDate() - 1);
                 lastCountable = t.toISOString().slice(0, 10);
             }
         }
+        if (lastCountable > reportEndDate) lastCountable = reportEndDate;
+        if (lastCountable < reportStartDate) lastCountable = '';
 
         // Enrollment cut-off: first Friday of the report month
         let firstFriday = endDate;
