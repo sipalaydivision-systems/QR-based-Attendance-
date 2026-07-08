@@ -43,7 +43,7 @@
     </div>
     <div class="filter-item">
         <label>Search</label>
-        <input type="text" id="teacherSearch" placeholder="Search name, employee ID, contact, or section">
+        <input type="text" id="teacherSearch" placeholder="Search name, employee ID, contact, school, or section" oninput="scheduleTeacherSearch()" onkeydown="searchTeachersOnEnter(event)">
     </div>
     <button class="btn-filter" onclick="loadTeachers()"><i class="fa-solid fa-magnifying-glass"></i> Filter</button>
 </div>
@@ -155,6 +155,20 @@
 
 <script>
 var allTeachers = [];
+var teacherSearchTimer = null;
+
+function scheduleTeacherSearch() {
+    clearTimeout(teacherSearchTimer);
+    teacherSearchTimer = setTimeout(loadTeachers, 250);
+}
+
+function searchTeachersOnEnter(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        clearTimeout(teacherSearchTimer);
+        loadTeachers();
+    }
+}
 
 function esc(v) {
     return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');

@@ -2922,10 +2922,15 @@ router.get('/students', requireAuth, async (req, res) => {
         if (req.query.section_id) { query += ' AND s.section_id = ?'; params.push(parseInt(req.query.section_id, 10)); }
         if (req.query.status) { query += ' AND s.status = ?'; params.push(req.query.status); }
         if (req.query.category) { query += ' AND s.category = ?'; params.push(req.query.category); }
-        if (req.query.search) {
-            query += ' AND (s.firstname LIKE ? OR s.lastname LIKE ? OR s.lrn LIKE ?)';
-            const s = `%${req.query.search}%`;
-            params.push(s, s, s);
+        const searchTerm = String(req.query.search || '').trim();
+        if (searchTerm) {
+            query += ` AND (
+                s.firstname LIKE ? OR s.lastname LIKE ? OR s.middlename LIKE ? OR s.lrn LIKE ?
+                OR s.guardian_name LIKE ? OR s.guardian_contact LIKE ?
+                OR sc.name LIKE ? OR gl.name LIKE ? OR sec.name LIKE ?
+            )`;
+            const s = `%${searchTerm}%`;
+            params.push(s, s, s, s, s, s, s, s, s);
         }
         query += ' ORDER BY s.lastname, s.firstname';
         const [rows] = await db.query(query, params);
@@ -3066,10 +3071,16 @@ router.get('/teachers', requireAuth, async (req, res) => {
         if (schoolId) { query += ' AND t.school_id = ?'; params.push(schoolId); }
         if (req.query.category) { query += ' AND t.category = ?'; params.push(req.query.category); }
         if (req.query.status) { query += ' AND t.status = ?'; params.push(req.query.status); }
-        if (req.query.search) {
-            query += ' AND (t.firstname LIKE ? OR t.lastname LIKE ? OR t.employee_id LIKE ? OR t.contact LIKE ? OR t.email LIKE ? OR sec.name LIKE ? OR gl.name LIKE ? OR s.name LIKE ?)';
-            const s = `%${req.query.search}%`;
-            params.push(s, s, s, s, s, s, s, s);
+        const searchTerm = String(req.query.search || '').trim();
+        if (searchTerm) {
+            query += ` AND (
+                t.firstname LIKE ? OR t.lastname LIKE ? OR t.middlename LIKE ?
+                OR t.employee_id LIKE ? OR t.contact LIKE ? OR t.email LIKE ?
+                OR t.department LIKE ? OR t.subject LIKE ?
+                OR sec.name LIKE ? OR gl.name LIKE ? OR s.name LIKE ?
+            )`;
+            const s = `%${searchTerm}%`;
+            params.push(s, s, s, s, s, s, s, s, s, s, s);
         }
         query += ' ORDER BY t.lastname, t.firstname';
         const [rows] = await db.query(query, params);

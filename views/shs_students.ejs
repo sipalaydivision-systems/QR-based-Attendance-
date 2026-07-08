@@ -13,7 +13,7 @@
     <% if (user.role !== 'principal') { %>
     <div class="filter-item">
         <label>School</label>
-        <select id="filterSchool">
+        <select id="filterSchool" onchange="loadStudents()">
             <option value="">All Schools</option>
             <% schools.forEach(s => { %>
             <option value="<%= s.id %>"><%= s.name %></option>
@@ -25,7 +25,7 @@
     <% } %>
     <div class="filter-item">
         <label>Grade Level</label>
-        <select id="filterGrade">
+        <select id="filterGrade" onchange="loadStudents()">
             <option value="">All Grades</option>
             <% gradeLevels.forEach(g => { %>
             <option value="<%= g.id %>"><%= g.name %></option>
@@ -34,7 +34,7 @@
     </div>
     <div class="filter-item">
         <label>Track/Strand</label>
-        <select id="filterTrack">
+        <select id="filterTrack" onchange="loadStudents()">
             <option value="">All Tracks</option>
             <option value="ABM">ABM</option>
             <option value="STEM">STEM</option>
@@ -47,7 +47,7 @@
     </div>
     <div class="filter-item">
         <label>Search</label>
-        <input type="text" id="studentSearch" placeholder="Search by name or LRN...">
+        <input type="text" id="studentSearch" placeholder="Search name, LRN, guardian, section..." oninput="scheduleStudentSearch()" onkeydown="searchStudentsOnEnter(event)">
     </div>
     <button class="btn-filter" onclick="loadStudents()"><i class="fa-solid fa-magnifying-glass"></i> Filter</button>
 </div>
@@ -154,6 +154,20 @@
 
 <script>
 var allStudents = [];
+var studentSearchTimer = null;
+
+function scheduleStudentSearch() {
+    clearTimeout(studentSearchTimer);
+    studentSearchTimer = setTimeout(loadStudents, 250);
+}
+
+function searchStudentsOnEnter(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        clearTimeout(studentSearchTimer);
+        loadStudents();
+    }
+}
 
 async function loadStudents() {
     var search = document.getElementById('studentSearch').value;
