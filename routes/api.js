@@ -39,7 +39,7 @@ const {
 const { sendPushToUsers } = require('../utils/firebasePush');
 
 function requireAuthOrScannerKiosk(req, res, next) {
-    if (req.session && req.session.user) return next();
+    if (req.session && req.session.user) return requireAuth(req, res, next);
     if (isValidScannerKioskToken(getScannerKioskTokenFromRequest(req))) return next();
     return res.status(401).json({ error: 'Not authenticated' });
 }
@@ -3613,6 +3613,7 @@ router.get('/active-users-overview', requireRole('super_admin'), async (req, res
                 GROUP BY user_id
              ) ud ON ud.user_id = u.id
              WHERE u.role IN ('super_admin','principal','superintendent','asst_superintendent')
+               AND u.status <> 'deleted'
              ORDER BY FIELD(u.role,'super_admin','superintendent','asst_superintendent','principal'), u.fullname`
         );
         const [teachers] = await db.query(
@@ -3649,6 +3650,7 @@ router.get('/active-users-overview', requireRole('super_admin'), async (req, res
                 ORDER BY COALESCE(pd2.last_seen_at, pd2.updated_at, pd2.created_at) DESC, pd2.id DESC
                 LIMIT 1
              )
+             WHERE p.status <> 'deleted'
              ORDER BY p.guardian_name`
         );
         const parentRows = attachParentDeviceLabels(parents);
@@ -3695,6 +3697,53 @@ router.post('/active-users/:accountType/:id/password', requireRole('super_admin'
     } catch (err) {
         console.error('Active user password reset error:', err);
         return res.status(500).json({ error: 'Failed to change password.' });
+    }
+});
+
+router.delete('/active-users/:accountType/:id', requireRole('super_admin'), async (req, res) => {
+    const accountType = String(req.params.accountType || '').toLowerCase();
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid account.' });
+    try {
+        if (accountType === 'admin' || accountType === 'staff') {
+            if (Number(req.session.user.id) === id) {
+                return res.status(400).json({ error: 'You cannot delete the account you are currently using.' });
+            }
+            const [[user]] = await db.query('SELECT id, role, status FROM users WHERE id = ? LIMIT 1', [id]);
+            if (!user || user.status === 'deleted') return res.status(404).json({ error: 'User not found.' });
+            if (user.role === 'super_admin') {
+                const [[remaining]] = await db.query(
+                    "SELECT COUNT(*) AS cnt FROM users WHERE role = 'super_admin' AND status = 'active' AND id <> ?",
+                    [id]
+                );
+                if (!Number(remaining.cnt || 0)) {
+                    return res.status(400).json({ error: 'At least one active Super Admin account must remain.' });
+                }
+            }
+            await db.query("UPDATE users SET status = 'deleted' WHERE id = ?", [id]);
+            await db.query('DELETE FROM user_devices WHERE user_id = ?', [id]);
+        } else if (accountType === 'teacher' || accountType === 'adviser') {
+            const [[teacher]] = await db.query('SELECT id, section_id, status FROM teachers WHERE id = ? LIMIT 1', [id]);
+            if (!teacher || teacher.status === 'deleted') return res.status(404).json({ error: 'Teacher not found.' });
+            await db.query("UPDATE teachers SET status = 'deleted', password = NULL WHERE id = ?", [id]);
+            if (teacher.section_id) {
+                await db.query(
+                    'UPDATE sections SET adviser = NULL, adviser_teacher_id = NULL WHERE id = ? AND adviser_teacher_id = ?',
+                    [teacher.section_id, id]
+                );
+            }
+        } else if (accountType === 'parent') {
+            const [[parent]] = await db.query('SELECT id, status FROM parents WHERE id = ? LIMIT 1', [id]);
+            if (!parent || parent.status === 'deleted') return res.status(404).json({ error: 'Parent not found.' });
+            await db.query("UPDATE parents SET status = 'deleted', password = CONCAT('deleted-', UUID()) WHERE id = ?", [id]);
+            await db.query('DELETE FROM parent_devices WHERE parent_id = ?', [id]);
+        } else {
+            return res.status(400).json({ error: 'Unsupported account type.' });
+        }
+        return res.json({ success: true });
+    } catch (err) {
+        console.error('Active user delete error:', err);
+        return res.status(500).json({ error: 'Failed to delete account.' });
     }
 });
 

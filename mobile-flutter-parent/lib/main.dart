@@ -2554,7 +2554,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           parentName: widget.api.parentName,
           children: _children,
           selected: _child,
-          picker: _childPicker(),
+          picker: null,
           schoolArt: _schoolArt,
           schoolLogo: _schoolLogo,
         );

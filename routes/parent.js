@@ -99,12 +99,29 @@ function isAbsenceFinal(dateStr) {
     return compareDateTime(nowDateTime(), `${dateStr} 16:00:00`) >= 0;
 }
 
-function requireParentAuth(req, res, next) {
-    if (req.session && req.session.user && req.session.user.role === 'parent') return next();
-    if ((req.originalUrl || '').startsWith('/api/parent/')) {
-        return res.status(401).json({ error: 'Parent login required.' });
+async function requireParentAuth(req, res, next) {
+    const isApi = (req.originalUrl || '').startsWith('/api/parent/');
+    const user = req.session && req.session.user;
+    if (!user || user.role !== 'parent') {
+        if (isApi) return res.status(401).json({ error: 'Parent login required.', code: 'SESSION_EXPIRED' });
+        return res.redirect('/parent-login');
     }
-    return res.redirect('/parent-login');
+    try {
+        const parentId = user.parent_id || user.id;
+        const [[parent]] = await db.query('SELECT id, status FROM parents WHERE id = ? LIMIT 1', [parentId]);
+        if (!parent || parent.status !== 'active') {
+            const message = 'This Guardian account was removed or disabled. Please contact the school administrator.';
+            return req.session.destroy(() => {
+                if (isApi) return res.status(401).json({ error: message, code: 'ACCOUNT_DISABLED' });
+                return res.redirect('/parent-login');
+            });
+        }
+        return next();
+    } catch (err) {
+        console.error('Parent session validation error:', err);
+        if (isApi) return res.status(500).json({ error: 'Unable to verify parent session.' });
+        return res.redirect('/parent-login');
+    }
 }
 
 async function renderParentAuth(res, view, opts = {}) {
@@ -125,6 +142,11 @@ async function createOrReactivateParentAccount({ guardianName, contactNumber, no
     if (existing && existing.status === 'active') {
         const error = new Error('This mobile number is already registered. Please log in instead.');
         error.code = 'PARENT_EXISTS';
+        throw error;
+    }
+    if (existing && existing.status === 'deleted') {
+        const error = new Error('This mobile number was removed by the administrator. Please contact the school adviser or administrator.');
+        error.code = 'PARENT_DELETED';
         throw error;
     }
 
@@ -669,6 +691,15 @@ router.post('/parent-login', async (req, res) => {
             [identifier, normalized]
         );
         if (rows.length === 0) {
+            const [removedRows] = await db.query(
+                "SELECT status FROM parents WHERE username = ? OR normalized_contact = ? LIMIT 1",
+                [identifier, normalized]
+            );
+            if (removedRows[0] && removedRows[0].status === 'deleted') {
+                return renderParentAuth(res, 'parent_login', {
+                    error: 'This Guardian account was removed by the administrator. Please contact the school adviser or administrator.'
+                });
+            }
             if (isContactLike(identifier) && !(await contactExistsForStudent(normalized))) {
                 return renderParentAuth(res, 'parent_login', {
                     error: 'This contact number is not registered. Please contact the school adviser or administrator.',
@@ -755,7 +786,7 @@ router.post('/parent-register', async (req, res) => {
         };
         return res.redirect('/parent/app');
     } catch (err) {
-        if (err.code === 'PARENT_EXISTS' || err.code === 'USERNAME_EXISTS') {
+        if (err.code === 'PARENT_EXISTS' || err.code === 'PARENT_DELETED' || err.code === 'USERNAME_EXISTS') {
             return renderParentAuth(res, 'parent_register', { error: err.message, values });
         }
         console.error('Parent registration error:', err);
@@ -790,6 +821,17 @@ router.post('/api/parent/login', async (req, res) => {
             [identifier, normalized]
         );
         if (rows.length === 0) {
+            const [removedRows] = await db.query(
+                "SELECT status FROM parents WHERE username = ? OR normalized_contact = ? LIMIT 1",
+                [identifier, normalized]
+            );
+            if (removedRows[0] && removedRows[0].status === 'deleted') {
+                return res.status(403).json({
+                    success: false,
+                    code: 'PARENT_DELETED',
+                    error: 'This Guardian account was removed by the administrator. Please contact the school adviser or administrator.'
+                });
+            }
             if (isContactLike(identifier) && !(await contactExistsForStudent(normalized))) {
                 return res.status(404).json({ success: false, error: 'This contact number is not registered. Please contact the school adviser or administrator.' });
             }
@@ -861,7 +903,7 @@ router.post('/api/parent/register', async (req, res) => {
             parent: { id: account.id, guardian_name: guardianName, contact_number: contactNumber, username: username || '' }
         });
     } catch (err) {
-        if (err.code === 'PARENT_EXISTS' || err.code === 'USERNAME_EXISTS') {
+        if (err.code === 'PARENT_EXISTS' || err.code === 'PARENT_DELETED' || err.code === 'USERNAME_EXISTS') {
             return res.status(409).json({ success: false, code: err.code, error: err.message });
         }
         console.error('Parent API register error:', err);

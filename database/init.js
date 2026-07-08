@@ -77,6 +77,8 @@ async function init() {
         await ensureColumn('notifications', 'created_by_role', 'VARCHAR(50) NULL AFTER created_by_name');
         await ensureColumn('holidays', 'notification_id', 'INT NULL AFTER is_national');
         await ensureColumnDefinition('users', 'role', "ENUM('super_admin','principal','superintendent','asst_superintendent','adviser','parent') NOT NULL DEFAULT 'principal'");
+        await ensureColumnDefinition('users', 'status', "ENUM('active','inactive','deleted') DEFAULT 'active'");
+        await ensureColumnDefinition('parents', 'status', "ENUM('active','inactive','deleted') DEFAULT 'active'");
         await ensureColumnDefinition('students', 'status', "ENUM('active','inactive','deleted') DEFAULT 'inactive'");
         await ensureColumnDefinition('teachers', 'status', "ENUM('active','inactive','deleted') DEFAULT 'inactive'");
         await ensureColumnDefinition('attendance', 'status', "ENUM('present','late','half_day','absent') DEFAULT 'present'");
