@@ -151,9 +151,11 @@ var DAY_ABBR = ['M','T','W','TH','F'];
 var pSet = new Set(presentSet);
 var lSet = new Set(lateSet);
 var cSet = new Set(cuttingSet);
+var schoolDaySet = new Set(schoolDays);
 function isPresent(studentId, dateStr) { return pSet.has(studentId + '-' + dateStr); }
 function isTardy(studentId, dateStr) { return lSet.has(studentId + '-' + dateStr); }
 function isCutting(studentId, dateStr) { return cSet.has(studentId + '-' + dateStr); }
+function isSf2SchoolDay(dateStr) { return !!dateStr && schoolDaySet.has(dateStr); }
 
 // Absences only count for school days that have already ended (lastCountable from server)
 var countableDays = schoolDays.filter(function(d) { return d <= lastCountable; });
@@ -171,6 +173,7 @@ var females     = students.filter(function(s) { return sexOf(s) === 'F'; });
 var unspecified = students.filter(function(s) { return sexOf(s) === '?'; });
 
 function isAbsentOn(s, d) {
+    if (!isSf2SchoolDay(d)) return false;
     return d >= s.enrolled_from && d <= lastCountable && !isPresent(s.id, d);
 }
 
@@ -255,6 +258,7 @@ function codeClassOf(code) {
 }
 function cellHtml(s, d) {
     if (!d) return '<td class="day-cell"></td>';
+    if (!isSf2SchoolDay(d)) return '<td class="day-cell"></td>';
     var canEdit = d >= s.enrolled_from && d <= lastCountable;
     var code = cellCode(s, d);
     var codeClass = codeClassOf(code);
