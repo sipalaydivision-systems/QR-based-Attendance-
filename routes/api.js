@@ -2956,6 +2956,28 @@ router.put('/students/:id', requireAuth, async (req, res) => {
         }
         params.push(req.params.id);
         await db.query(`UPDATE students SET ${fields.join(', ')} WHERE id=?`, params);
+
+        // Keep the active school-year enrollment in sync with the student edit
+        // modal. Guardian registration checks active enrollments, so changing a
+        // guardian contact / section here must stay visible to the parent app.
+        if ((!validStatus || validStatus === 'active') && school_id && grade_level_id && section_id) {
+            const [[studentRow]] = await db.query(
+                'SELECT status FROM students WHERE id = ? LIMIT 1',
+                [req.params.id]
+            );
+            if (studentRow && studentRow.status === 'active') {
+                try {
+                    await schoolYears.enrollStudentInActiveYear({
+                        studentId: req.params.id,
+                        schoolId: school_id,
+                        gradeLevelId: grade_level_id,
+                        sectionId: section_id
+                    });
+                } catch (enrollErr) {
+                    console.error('Update student: enrollment sync skipped:', enrollErr.message);
+                }
+            }
+        }
         return res.json({ success: true });
     } catch (err) {
         console.error('Update student error:', err);
