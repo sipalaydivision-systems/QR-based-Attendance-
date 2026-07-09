@@ -111,6 +111,7 @@ const DESKTOP_SCANNER_RECENT_SECONDS = 2 * 60;
 const DESKTOP_SCANNER_REMOTE_COMMANDS = new Set(['open_settings', 'refresh_config', 'sync_queue', 'start_preview', 'stop_preview', 'remote_click', 'remote_key', 'remote_text']);
 const DESKTOP_SCANNER_PREVIEW_MAX_CHARS = 900000;
 const DESKTOP_SCANNER_REMOTE_TEXT_MAX_CHARS = 1000;
+const DESKTOP_SCANNER_CALENDAR_REFRESH_WINDOW_MINUTES = 10;
 
 function limitText(value, maxLength) {
     return String(value || '').trim().slice(0, maxLength);
@@ -119,6 +120,54 @@ function limitText(value, maxLength) {
 function normalizeScannerRemoteCommand(value) {
     const command = String(value || '').trim().toLowerCase().replace(/[^a-z0-9_:-]/g, '');
     return DESKTOP_SCANNER_REMOTE_COMMANDS.has(command) ? command : '';
+}
+
+async function queueCalendarRefreshForDesktopScanners({ schoolId = null, requestedBy = null, reason = 'calendar-update' } = {}) {
+    const scopedSchoolId = normalizeOptionalSchoolId(schoolId);
+    const user = requestedBy || {};
+    const payload = JSON.stringify({
+        source: 'school_calendar',
+        reason: limitText(reason, 200),
+        school_id: scopedSchoolId,
+        queued_at: nowDateTime()
+    });
+
+    const [result] = await db.query(
+        `INSERT INTO desktop_scanner_commands
+            (scanner_id, school_id, command, payload_json, status, requested_by, requested_by_name, expires_at)
+         SELECT d.scanner_id, d.school_id, 'refresh_config', ?, 'pending', ?, ?, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 10 MINUTE)
+         FROM desktop_scanner_devices d
+         WHERE d.scanner_id IS NOT NULL
+           AND d.scanner_id <> ''
+           AND d.last_seen_at >= DATE_SUB(CURRENT_TIMESTAMP, INTERVAL ${DESKTOP_SCANNER_CALENDAR_REFRESH_WINDOW_MINUTES} MINUTE)
+           AND (? IS NULL OR d.school_id = ?)
+           AND NOT EXISTS (
+                SELECT 1
+                FROM desktop_scanner_commands c
+                WHERE c.scanner_id = d.scanner_id
+                  AND c.command = 'refresh_config'
+                  AND c.status = 'pending'
+                  AND c.expires_at > CURRENT_TIMESTAMP
+           )`,
+        [
+            payload,
+            user.id || null,
+            user.fullname || user.username || 'EduTrack System',
+            scopedSchoolId,
+            scopedSchoolId
+        ]
+    );
+
+    return result.affectedRows || 0;
+}
+
+async function queueCalendarRefreshSafely(options) {
+    try {
+        return await queueCalendarRefreshForDesktopScanners(options);
+    } catch (err) {
+        console.error('Desktop scanner calendar refresh queue error:', err);
+        return 0;
+    }
 }
 
 function normalizeRemoteClickPayload(payload) {
@@ -4201,7 +4250,7 @@ router.post('/holidays', requireRole('super_admin'), async (req, res) => {
         conn.release();
         conn = null;
 
-        const [parentDelivery, userDelivery] = await Promise.all([
+        const [parentDelivery, userDelivery, scannerRefreshCount] = await Promise.all([
             fanOutAnnouncement(notificationResult.insertId).catch(error => {
                 console.error('Holiday Guardian delivery error:', error.message);
                 return { parentCount: 0, pushSuccessCount: 0, pushFailureCount: 0, registeredDeviceCount: 0 };
@@ -4215,6 +4264,11 @@ router.post('/holidays', requireRole('super_admin'), async (req, res) => {
             }).catch(error => {
                 console.error('Holiday EduTrack FCM send error:', error.message);
                 return { successCount: 0, failureCount: 0, registeredDeviceCount: 0 };
+            }),
+            queueCalendarRefreshSafely({
+                schoolId,
+                requestedBy: user,
+                reason: `${typeLabel}: ${holidayName}`
             })
         ]);
         return res.json({
@@ -4225,7 +4279,8 @@ router.post('/holidays', requireRole('super_admin'), async (req, res) => {
             guardian_push_count: parentDelivery.pushSuccessCount,
             guardian_device_count: parentDelivery.registeredDeviceCount,
             edutrack_push_count: userDelivery.successCount,
-            edutrack_device_count: userDelivery.registeredDeviceCount
+            edutrack_device_count: userDelivery.registeredDeviceCount,
+            scanner_refresh_count: scannerRefreshCount
         });
     } catch (err) {
         if (conn) {
@@ -4243,7 +4298,7 @@ router.delete('/holidays/:id', requireRole('super_admin'), async (req, res) => {
     try {
         conn = await db.getConnection();
         await conn.beginTransaction();
-        const [[holiday]] = await conn.query('SELECT id, notification_id FROM holidays WHERE id = ? LIMIT 1', [req.params.id]);
+        const [[holiday]] = await conn.query('SELECT id, notification_id, school_id, holiday_date, name, is_national FROM holidays WHERE id = ? LIMIT 1', [req.params.id]);
         if (!holiday) {
             await conn.rollback();
             conn.release();
@@ -4256,7 +4311,13 @@ router.delete('/holidays/:id', requireRole('super_admin'), async (req, res) => {
         await conn.query('DELETE FROM holidays WHERE id = ?', [holiday.id]);
         await conn.commit();
         conn.release();
-        return res.json({ success: true });
+        conn = null;
+        const scannerRefreshCount = await queueCalendarRefreshSafely({
+            schoolId: holiday.school_id,
+            requestedBy: req.session.user,
+            reason: `Removed ${holidayTypeLabel(holiday.is_national)}: ${holiday.name || holiday.holiday_date}`
+        });
+        return res.json({ success: true, scanner_refresh_count: scannerRefreshCount });
     } catch (err) {
         if (conn) {
             try { await conn.rollback(); } catch (_) {}
@@ -4475,7 +4536,11 @@ router.post('/school-days', requireRole('super_admin'), async (req, res) => {
             'INSERT INTO school_days (date, is_school_day, reason) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE is_school_day = VALUES(is_school_day), reason = VALUES(reason)',
             [date, is_school_day !== undefined ? is_school_day : 1, reason || null]
         );
-        return res.json({ success: true });
+        const scannerRefreshCount = await queueCalendarRefreshSafely({
+            requestedBy: req.session.user,
+            reason: `${is_school_day === false || String(is_school_day) === '0' ? 'Non-school day posted' : 'School day restored'}: ${date}${reason ? ` - ${reason}` : ''}`
+        });
+        return res.json({ success: true, scanner_refresh_count: scannerRefreshCount });
     } catch (err) {
         return res.status(500).json({ error: 'Failed to save school day.' });
     }
@@ -4483,8 +4548,13 @@ router.post('/school-days', requireRole('super_admin'), async (req, res) => {
 
 router.delete('/school-days/:id', requireRole('super_admin'), async (req, res) => {
     try {
+        const [[schoolDay]] = await db.query('SELECT id, date, reason, is_school_day FROM school_days WHERE id = ? LIMIT 1', [req.params.id]);
         await db.query('DELETE FROM school_days WHERE id = ?', [req.params.id]);
-        return res.json({ success: true });
+        const scannerRefreshCount = schoolDay ? await queueCalendarRefreshSafely({
+            requestedBy: req.session.user,
+            reason: `Removed school-day override: ${schoolDay.date}${schoolDay.reason ? ` - ${schoolDay.reason}` : ''}`
+        }) : 0;
+        return res.json({ success: true, scanner_refresh_count: scannerRefreshCount });
     } catch (err) {
         return res.status(500).json({ error: 'Failed to delete school day.' });
     }

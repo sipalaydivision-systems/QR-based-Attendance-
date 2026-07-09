@@ -29,8 +29,8 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(trackSystemTraffic);
 
 const DESKTOP_SCANNER_LATEST = {
-    version: '1.0.32',
-    notes: 'Allows Time Out after class suspension for students and teachers who already timed in.'
+    version: '1.0.33',
+    notes: 'Pushes school calendar and class suspension updates to active desktop scanners faster.'
 };
 
 const MOBILE_APP_LATEST = {

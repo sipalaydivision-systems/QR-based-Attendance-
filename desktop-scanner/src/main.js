@@ -42,7 +42,7 @@ const CONNECTION_RESTORED_MESSAGE = 'Connection Restored - Synchronizing attenda
 const SYNC_COMPLETED_MESSAGE = 'Synchronization Completed Successfully.';
 const DIRECTORY_REFRESH_INTERVAL_MS = 60 * 1000;
 const CONNECTION_CHECK_INTERVAL_MS = 15000;
-const REMOTE_COMMAND_POLL_INTERVAL_MS = 2000;
+const REMOTE_COMMAND_POLL_INTERVAL_MS = 1000;
 const ADMIN_SYNCED_SETTING_KEYS = new Set([
   'kioskToken',
   'brandName',
@@ -1434,6 +1434,14 @@ async function executeRemoteCommand(command) {
 
   if (action === 'refresh_config') {
     await refreshConnectionState({ trigger: 'remote-command', forceDirectory: true, syncIfPossible: false });
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('scanner:remote-command', command);
+      setTimeout(() => {
+        if (remotePreviewTimer) {
+          uploadPreviewFrame('remote-config-refresh').catch((err) => console.warn('Preview frame upload failed:', err.message));
+        }
+      }, 450);
+    }
     return;
   }
 
