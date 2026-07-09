@@ -1355,6 +1355,7 @@ const OUTSIDE_MONITORING_STATUSES = [
     'OUT',
     ATTENDANCE_SCAN_LABELS.EARLY_OUT,
     ATTENDANCE_SCAN_LABELS.LUNCH_OUT,
+    ATTENDANCE_SCAN_LABELS.SUSPENSION_OUT,
     ATTENDANCE_SCAN_LABELS.COMPLETED
 ];
 
@@ -1363,6 +1364,91 @@ function isCurrentlyInside(attendanceRow) {
     if (monitoring) return !OUTSIDE_MONITORING_STATUSES.includes(monitoring);
     // Legacy rows without monitoring_status: inside unless a time_out was recorded.
     return !attendanceRow.time_out;
+}
+
+function buildScanPersonInfo(person, personType, qrCode) {
+    const personInfo = {
+        id: person.id,
+        qr_code: person.qr_code || qrCode,
+        name: person.firstname + ' ' + person.lastname,
+        type: personType,
+        category: personType === 'student' ? (person.category || 'student') : (person.category || 'teacher'),
+        school: person.school_name || 'N/A',
+        person_status: person.person_status || 'active',
+        adviser: person.adviser || 'N/A',
+        adviser_contact: person.adviser_contact || '',
+        adviser_email: person.adviser_email || ''
+    };
+    if (personType === 'student') {
+        personInfo.lrn = person.lrn || 'N/A';
+        personInfo.grade = person.grade_name || 'N/A';
+        personInfo.section = person.section_name || 'N/A';
+    } else {
+        personInfo.employee_id = person.employee_id || 'N/A';
+        personInfo.grade = person.grade_name || 'N/A';
+        personInfo.section = person.section_name || 'N/A';
+    }
+    return personInfo;
+}
+
+async function handleNonSchoolDayScan({ res, qr_code, person, personType, today, now, schoolDay }) {
+    const personInfo = buildScanPersonInfo(person, personType, qr_code);
+    const [existing] = await db.query(
+        'SELECT * FROM attendance WHERE person_type = ? AND person_id = ? AND date = ?',
+        [personType, person.id, today]
+    );
+    const attendanceRow = existing[0] || null;
+    const reasonText = nonSchoolDayScanMessage(schoolDay);
+
+    if (attendanceRow && isCurrentlyInside(attendanceRow)) {
+        const label = ATTENDANCE_SCAN_LABELS.SUSPENSION_OUT;
+        await logAttendanceEvent(attendanceRow.id, personType, person.id, person.school_id, today, 'time_out', label, now);
+        notifyParentsForStudentScan({ personType, personId: person.id, label, eventTime: now })
+            .catch(err => console.error('Parent scan notification error:', err));
+        await db.query(
+            'UPDATE attendance SET time_out = ?, monitoring_status = ?, updated_at = ? WHERE id = ?',
+            [now, label, now, attendanceRow.id]
+        );
+        return res.json({
+            success: true,
+            action: 'TIME_OUT',
+            status: attendanceRow.status || 'present',
+            display_status: label,
+            attendance_status: 'Suspension Dismissal',
+            remarks: reasonText,
+            monitoring_status: label,
+            suspension_dismissal: true,
+            non_school_day: true,
+            non_school_day_type: schoolDay.type,
+            non_school_day_reason: schoolDay.reason,
+            message: 'Class suspension time out recorded. This person is now marked out.',
+            person: personInfo,
+            time: formatTime12(now),
+            time_in: attendanceRow.last_time_in || attendanceRow.time_in ? formatTime12(attendanceRow.last_time_in || attendanceRow.time_in) : null,
+            time_out: formatTime12(now)
+        });
+    }
+
+    return res.json({
+        success: false,
+        action: attendanceRow ? 'ALREADY_RECORDED' : 'NON_SCHOOL_DAY',
+        status: attendanceRow ? attendanceRow.status : 'absent',
+        display_status: attendanceRow ? (attendanceRow.monitoring_status || ATTENDANCE_SCAN_LABELS.SUSPENSION_OUT) : 'NON-SCHOOL DAY',
+        attendance_status: attendanceRow ? 'Already Timed Out' : 'No Classes',
+        error: attendanceRow
+            ? 'Class suspension is active and this person is already timed out.'
+            : reasonText,
+        message: attendanceRow
+            ? 'Class suspension is active and this person is already timed out.'
+            : reasonText,
+        person: personInfo,
+        non_school_day: true,
+        non_school_day_type: schoolDay.type,
+        non_school_day_reason: schoolDay.reason,
+        time: formatTime12(now),
+        time_in: attendanceRow && (attendanceRow.last_time_in || attendanceRow.time_in) ? formatTime12(attendanceRow.last_time_in || attendanceRow.time_in) : null,
+        time_out: attendanceRow && attendanceRow.time_out ? formatTime12(attendanceRow.time_out) : null
+    });
 }
 
 async function getBaseAttendanceStatus(personType, dateStr, timeIn) {
@@ -1384,6 +1470,7 @@ async function resolveAttendanceStatus(personType, dateStr, rowState) {
         timeIn,
         lastTimeIn: rowState.last_time_in || timeIn,
         timeOut: rowState.time_out,
+        monitoringStatus: rowState.monitoring_status,
         schedule,
         baseStatus
     });
@@ -2004,12 +2091,14 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
 
         const schoolDay = await checkOperationalSchoolDay(today, person.school_id);
         if (!schoolDay.isSchoolDay) {
-            return res.json({
-                success: false,
-                error: nonSchoolDayScanMessage(schoolDay),
-                non_school_day: true,
-                non_school_day_type: schoolDay.type,
-                non_school_day_reason: schoolDay.reason
+            return handleNonSchoolDayScan({
+                res,
+                qr_code,
+                person,
+                personType,
+                today,
+                now,
+                schoolDay
             });
         }
 

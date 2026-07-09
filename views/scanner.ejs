@@ -575,6 +575,11 @@
             icon.innerHTML = '<i class="fas fa-arrow-right-from-bracket"></i>';
             label.textContent = 'EARLY OUT';
             fill.className = 'fill orange';
+        } else if (data.action === 'TIME_OUT' && ds === 'SUSPENSION OUT') {
+            banner.className = 'status-banner time-out';
+            icon.innerHTML = '<i class="fas fa-person-walking-arrow-right"></i>';
+            label.textContent = 'SUSPENSION OUT';
+            fill.className = 'fill orange';
         } else {
             banner.className = 'status-banner time-out';
             icon.innerHTML = '<i class="fas fa-arrow-right-from-bracket"></i>';

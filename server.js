@@ -29,8 +29,8 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(trackSystemTraffic);
 
 const DESKTOP_SCANNER_LATEST = {
-    version: '1.0.31',
-    notes: 'Improves Windows autostart so the scanner opens immediately after sign-in.'
+    version: '1.0.32',
+    notes: 'Allows Time Out after class suspension for students and teachers who already timed in.'
 };
 
 const MOBILE_APP_LATEST = {

@@ -395,6 +395,7 @@ function titleForResult(data) {
   if (data.action === 'TIME_OUT' && ds === 'LUNCH OUT') return 'Lunch out recorded';
   if (data.action === 'TIME_OUT' && ds === 'COMPLETED') return 'Attendance completed';
   if (data.action === 'TIME_OUT' && ds === 'EARLY OUT') return 'Early dismissal recorded';
+  if (data.action === 'TIME_OUT' && ds === 'SUSPENSION OUT') return 'Suspension time out recorded';
   if (data.action === 'TIME_IN' && data.status === 'late') return 'Late time in recorded';
   if (data.action === 'TIME_IN' && ds === 'PM TIME IN') return 'PM time in recorded';
   if (data.action === 'TIME_IN' && ds === 'PM LATE TIME IN') return 'PM late time in recorded';
@@ -489,6 +490,7 @@ function resolveLogBadge(scan) {
     case 'LUNCH OUT':  return { label: 'Lunch Out',  cls: 'lunch-out' };
     case 'COMPLETED':  return { label: 'Completed',  cls: 'completed' };
     case 'EARLY OUT':  return { label: 'Early Dismissal',  cls: 'early-out' };
+    case 'SUSPENSION OUT': return { label: 'Suspension Out', cls: 'suspension-out' };
     case 'TIME OUT':
     case 'TIME_OUT':   return { label: 'Out', cls: 'out' };
     case 'OUT':
@@ -728,6 +730,7 @@ function bannerHeadingFor(data, tone, fallbackTitle) {
   if (action === 'TIME_OUT') {
     if (ds === 'LUNCH OUT') return 'Lunch time out!'.toUpperCase();
     if (ds === 'EARLY OUT') return 'Early dismissal recorded!'.toUpperCase();
+    if (ds === 'SUSPENSION OUT') return 'Suspension time out!'.toUpperCase();
     if (ds === 'COMPLETED') return 'Completed!'.toUpperCase();
     if (data.status === 'half_day') return (data.late_half_day ? 'Half-day · Late' : 'Half-day attendance').toUpperCase();
     return 'Time out recorded!'.toUpperCase();
@@ -762,6 +765,7 @@ function bannerSubFor(data, tone, fallbackMessage) {
   }
   if (action === 'TIME_OUT') {
     if (ds === 'LUNCH OUT') return 'Enjoy your lunch break. Scan again when you return.';
+    if (ds === 'SUSPENSION OUT') return 'Class suspension dismissal recorded. This person is now marked out.';
     if (ds === 'COMPLETED') {
       const isFriday = new Date().getDay() === 5;
       return isFriday
@@ -789,7 +793,8 @@ function heroConfigFor(data) {
     const pills = {
       'COMPLETED': { pill: '&#10003; Completed', pillClass: 'out' },
       'LUNCH OUT': { pill: 'Lunch Out', pillClass: 'pending' },
-      'EARLY OUT': { pill: 'Early Dismissal', pillClass: 'out' }
+      'EARLY OUT': { pill: 'Early Dismissal', pillClass: 'out' },
+      'SUSPENSION OUT': { pill: 'Suspension Out', pillClass: 'out' }
     };
     if (data.offline) return { label: 'Time Out', value: data.time_out || data.time || '—', variant: 'offline', pill: 'Saved Offline', pillClass: 'offline' };
     if (pills[ds]) {

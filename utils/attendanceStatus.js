@@ -9,6 +9,7 @@ const ATTENDANCE_SCAN_LABELS = Object.freeze({
     WELCOME_BACK: 'WELCOME BACK',
     RETURNED: 'RETURNED',
     EARLY_OUT: 'EARLY OUT',
+    SUSPENSION_OUT: 'SUSPENSION OUT',
     COMPLETED: 'COMPLETED',
     ALREADY_RECORDED: 'ALREADY RECORDED',
     ALREADY_COMPLETED: 'ALREADY COMPLETED',
@@ -22,6 +23,8 @@ const LEGACY_LABELS = Object.freeze({
     'PM PRESENT': ATTENDANCE_SCAN_LABELS.PM_TIME_IN,
     'PM LATE': ATTENDANCE_SCAN_LABELS.PM_LATE_TIME_IN,
     OUT: ATTENDANCE_SCAN_LABELS.EARLY_OUT,
+    'SUSPENSION OUT': ATTENDANCE_SCAN_LABELS.SUSPENSION_OUT,
+    'SUSPENSION_OUT': ATTENDANCE_SCAN_LABELS.SUSPENSION_OUT,
     COMPLETE: ATTENDANCE_SCAN_LABELS.COMPLETED,
     // Legacy: returns from lunch were previously recorded as WELCOME BACK
     // when they arrived before pmInStart. Treat those rows as PM Time In so
@@ -69,7 +72,8 @@ function statusLabel(value) {
         attendance_closed: 'Attendance Closed',
         already_recorded: 'Already Recorded',
         already_completed: 'Already Completed',
-        pending_time_out: 'Pending Time Out'
+        pending_time_out: 'Pending Time Out',
+        suspension_out: 'Suspension Out'
     };
     if (labels[status]) return labels[status];
     if (LEGACY_LABELS[raw.toUpperCase()]) return titleCaseWords(LEGACY_LABELS[raw.toUpperCase()]);
@@ -275,6 +279,7 @@ function computeDailyAttendanceStatusFromEvents(input = {}) {
     let lastOut = null;
     let returnedFromEarlyOut = false;
     let returnedFromLunch = false;
+    let suspensionDismissal = false;
     let completed = false;
 
     events.forEach((event) => {
@@ -287,6 +292,11 @@ function computeDailyAttendanceStatusFromEvents(input = {}) {
             inside = false;
             if (label === ATTENDANCE_SCAN_LABELS.COMPLETED) {
                 completed = true;
+                lastOut = null;
+                return;
+            }
+            if (label === ATTENDANCE_SCAN_LABELS.SUSPENSION_OUT) {
+                suspensionDismissal = true;
                 lastOut = null;
                 return;
             }
@@ -323,6 +333,10 @@ function computeDailyAttendanceStatusFromEvents(input = {}) {
             return halfDayResult('Early Dismissal (AM)', 'am_early_out', 'Early Dismissal During AM Session');
         }
         return halfDayResult('Early Dismissal (PM)', 'pm_early_out', 'Early Dismissal During PM Session');
+    }
+
+    if (suspensionDismissal) {
+        return baseResult(broadStatus, 'Suspension Dismissal', 'Class suspension dismissal recorded');
     }
 
     if (completed && broadStatus !== 'half_day') {
@@ -363,6 +377,11 @@ function computeDailyAttendanceStatus(input = {}) {
     const lastTimeIn = input.lastTimeIn || timeIn;
     const timeOut = input.timeOut || null;
     const returnedAfterOut = timeOut && compareDateTime(lastTimeIn, timeOut) > 0;
+    const monitoring = normalizeEventLabel(input.monitoringStatus || input.monitoring_status);
+
+    if (timeOut && monitoring === ATTENDANCE_SCAN_LABELS.SUSPENSION_OUT) {
+        return baseResult(firstDecision.status, 'Suspension Dismissal', 'Class suspension dismissal recorded');
+    }
 
     if (timeOut && isAtOrAfter(timeOut, schedule.pmOutStart)) {
         if (firstDecision.status === 'half_day') {

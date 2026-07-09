@@ -138,6 +138,11 @@ function attendanceCopy(label, studentName, eventTime) {
             title: 'Early Dismissal Alert',
             message: `Your child ${studentName} left school early at ${time}. Please contact the adviser if needed.`
         },
+        [ATTENDANCE_SCAN_LABELS.SUSPENSION_OUT]: {
+            type: 'attendance_suspension_out',
+            title: 'Class Suspension Time Out',
+            message: `Your child ${studentName} timed out due to class suspension at ${time}.`
+        },
         [ATTENDANCE_SCAN_LABELS.COMPLETED]: {
             type: 'attendance_completed',
             title: 'Attendance Completed',
