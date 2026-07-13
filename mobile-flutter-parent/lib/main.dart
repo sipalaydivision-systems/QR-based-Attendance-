@@ -1017,8 +1017,15 @@ class ParentApi {
 
   Future<Map<String, dynamic>> branding() async {
     try {
+      final uri = Uri.parse('$kBaseUrl/api/parent/branding').replace(
+        queryParameters: {
+          'logo_version': prefs.getString('parent_logo_version') ?? '',
+          'school_art_version':
+              prefs.getString('parent_school_art_version') ?? '',
+        },
+      );
       final res = await http
-          .get(Uri.parse('$kBaseUrl/api/parent/branding'), headers: _headers)
+          .get(uri, headers: _headers)
           .timeout(const Duration(seconds: 15));
       return _decode(res.body);
     } catch (_) {
@@ -1029,8 +1036,13 @@ class ParentApi {
   // Pre-login branding so the splash/login can show the admin-uploaded logo.
   Future<void> refreshPublicBranding() async {
     try {
+      final uri = Uri.parse('$kBaseUrl/api/parent/public-branding').replace(
+        queryParameters: {
+          'logo_version': prefs.getString('parent_logo_version') ?? '',
+        },
+      );
       final res = await http
-          .get(Uri.parse('$kBaseUrl/api/parent/public-branding'))
+          .get(uri)
           .timeout(const Duration(seconds: 10));
       final data = _decode(res.body);
       final logo = '${data['system_logo'] ?? ''}'.trim();
@@ -1041,6 +1053,12 @@ class ParentApi {
         } else {
           await prefs.setString('parent_school_logo', logo);
         }
+      }
+      if (data.containsKey('logo_version')) {
+        await prefs.setString(
+          'parent_logo_version',
+          '${data['logo_version'] ?? ''}',
+        );
       }
     } catch (_) {
       /* best-effort branding refresh */
@@ -1139,6 +1157,7 @@ class ParentApi {
     await prefs.remove('parent_contact');
     await prefs.remove('parent_username');
     await prefs.remove('parent_notified_notifications');
+    await prefs.remove('parent_dashboard_cache_v1');
     await prefs.remove(_fcmDeliveredPreference);
     await prefs.remove(_workerReadyPreference);
   }
@@ -2188,6 +2207,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int _unreadCount = 0;
   Map<String, dynamic> _data = {};
   Timer? _timer;
+  bool _dashboardRequestRunning = false;
   // In-app banner is reserved for announcements only (attendance alerts rely on
   // the system push notification instead).
   Map<String, dynamic>? _bannerNote;
@@ -2199,7 +2219,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     ensureParentNotificationPermission();
     widget.api.registerDeviceToken();
-    _load();
+    _restoreCachedDashboard();
+    _load(silent: _data.isNotEmpty);
     _loadBranding();
     guardianDashboardRefresh.addListener(_refreshFromPush);
     _startDashboardRefresh();
@@ -2207,6 +2228,23 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
   void _refreshFromPush() {
     _load(silent: true);
+  }
+
+  void _restoreCachedDashboard() {
+    try {
+      final raw = widget.api.prefs.getString('parent_dashboard_cache_v1');
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+      _data = Map<String, dynamic>.from(decoded);
+      _unreadCount =
+          ((_data['unread_count'] as num?) ??
+                  _countUnread(_data['notifications'] as List?))
+              .toInt();
+      _loading = false;
+    } catch (_) {
+      unawaited(widget.api.prefs.remove('parent_dashboard_cache_v1'));
+    }
   }
 
   void _startDashboardRefresh() {
@@ -2241,6 +2279,12 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         await widget.api.prefs.setString('parent_school_logo', logo);
       }
     }
+    if (b.containsKey('logo_version')) {
+      await widget.api.prefs.setString(
+        'parent_logo_version',
+        '${b['logo_version'] ?? ''}',
+      );
+    }
     if (b.containsKey('mobile_dashboard_school_art')) {
       gSchoolArt = art;
       if (art.isEmpty) {
@@ -2248,6 +2292,12 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       } else {
         await widget.api.prefs.setString('parent_school_art', art);
       }
+    }
+    if (b.containsKey('school_art_version')) {
+      await widget.api.prefs.setString(
+        'parent_school_art_version',
+        '${b['school_art_version'] ?? ''}',
+      );
     }
   }
 
@@ -2284,6 +2334,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   }
 
   Future<void> _load({bool silent = false}) async {
+    if (_dashboardRequestRunning) return;
+    _dashboardRequestRunning = true;
     if (!silent) setState(() => _loading = true);
     try {
       final data = await widget.api.dashboard();
@@ -2298,6 +2350,12 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         _loading = false;
         _error = null;
       });
+      unawaited(
+        widget.api.prefs.setString(
+          'parent_dashboard_cache_v1',
+          jsonEncode(data),
+        ),
+      );
       await _processNotificationUpdates(data, showPopups: !_firstDashboardLoad);
       unawaited(widget.api.registerDeviceToken());
       _firstDashboardLoad = false;
@@ -2311,6 +2369,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         _loading = false;
         if (!silent) _error = 'Unable to load right now. Pull down to retry.';
       });
+    } finally {
+      _dashboardRequestRunning = false;
     }
   }
 

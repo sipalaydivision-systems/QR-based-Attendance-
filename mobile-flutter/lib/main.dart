@@ -827,6 +827,8 @@ class ApiService {
     await prefs.remove('email');
     await prefs.remove('username');
     await prefs.remove('last_absence_key');
+    await prefs.remove('main_dashboard_cache_v1');
+    await prefs.remove('main_flags_cache_v1');
   }
 
   Future<Map<String, dynamic>> map(String path) async {
@@ -1807,7 +1809,8 @@ class _HomeShellState extends State<HomeShell>
     )..repeat();
     _loadViewedAlertKeys();
     mainDashboardRefresh.addListener(_refreshFromFirebase);
-    load();
+    _restoreCachedDashboard();
+    load(silent: dashboard.isNotEmpty);
     // Keep the dashboard live without stacking requests when mobile data is
     // slow or Railway is waking up.
     _startDashboardRefresh();
@@ -1816,13 +1819,36 @@ class _HomeShellState extends State<HomeShell>
   void _startDashboardRefresh() {
     timer?.cancel();
     timer = Timer.periodic(
-      const Duration(seconds: 30),
+      const Duration(minutes: 5),
       (_) => load(silent: true),
     );
   }
 
   void _refreshFromFirebase() {
     load(silent: true);
+  }
+
+  void _restoreCachedDashboard() {
+    try {
+      final rawDashboard = widget.api.prefs.getString(
+        'main_dashboard_cache_v1',
+      );
+      final rawFlags = widget.api.prefs.getString('main_flags_cache_v1');
+      if (rawDashboard != null && rawDashboard.isNotEmpty) {
+        final decoded = jsonDecode(rawDashboard);
+        if (decoded is Map) {
+          dashboard = Map<String, dynamic>.from(decoded);
+          loading = false;
+        }
+      }
+      if (rawFlags != null && rawFlags.isNotEmpty) {
+        final decoded = jsonDecode(rawFlags);
+        if (decoded is List) flags = List<dynamic>.from(decoded);
+      }
+    } catch (_) {
+      unawaited(widget.api.prefs.remove('main_dashboard_cache_v1'));
+      unawaited(widget.api.prefs.remove('main_flags_cache_v1'));
+    }
   }
 
   void _scheduleDashboardRetry() {
@@ -1931,6 +1957,15 @@ class _HomeShellState extends State<HomeShell>
       ]);
       dashboard = results[0] as Map<String, dynamic>;
       flags = results[1] as List<dynamic>;
+      unawaited(
+        widget.api.prefs.setString(
+          'main_dashboard_cache_v1',
+          jsonEncode(dashboard),
+        ),
+      );
+      unawaited(
+        widget.api.prefs.setString('main_flags_cache_v1', jsonEncode(flags)),
+      );
       await syncBranding(dashboard, widget.api);
       // Daily reports and 2-day flags are delivered by Railway FCM. They stay
       // visible in the UI here without generating a second local notification.
@@ -4970,7 +5005,7 @@ class _WeeklyAbsenceAnalyticsState extends State<WeeklyAbsenceAnalytics> {
     }
     load(silent: week.isNotEmpty);
     timer = Timer.periodic(
-      const Duration(seconds: 90),
+      const Duration(minutes: 5),
       (_) => load(silent: true),
     );
   }

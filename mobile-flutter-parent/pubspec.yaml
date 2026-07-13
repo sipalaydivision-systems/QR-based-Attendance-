@@ -2,7 +2,7 @@ name: edutrack_parent
 description: "EduTrack Guardian App — monitor your child's attendance in real time."
 publish_to: 'none'
 # Keep this build number aligned with PARENT_APP_LATEST in routes/parent.js.
-version: 1.0.49+51
+version: 1.0.50+52
 
 environment:
   sdk: ^3.11.5

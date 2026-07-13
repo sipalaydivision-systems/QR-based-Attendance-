@@ -1874,6 +1874,83 @@ async function getAttendanceStatusCounts(personType, dateStr, filters = {}) {
     };
 }
 
+// Batch dashboard totals by school. The old dashboard executed the same six
+// aggregate queries once per school, which could turn one SDS/ASDS refresh into
+// hundreds of sequential MySQL calls and make the mobile app report a timeout.
+async function getAttendanceStatusCountsBySchool(personType, dateStr, schoolId = null) {
+    const isTeacher = personType === 'teacher';
+    const table = isTeacher ? 'teachers' : 'students';
+    const alias = isTeacher ? 't' : 's';
+    let query = `
+        SELECT ${alias}.school_id,
+            COUNT(DISTINCT CASE WHEN a.status = 'present' THEN a.person_id END) AS present,
+            COUNT(DISTINCT CASE WHEN a.status = 'late' THEN a.person_id END) AS late,
+            COUNT(DISTINCT CASE WHEN a.status = 'half_day' THEN a.person_id END) AS half_day,
+            COUNT(DISTINCT CASE WHEN a.status IN ('present','late') THEN a.person_id END) AS full_day,
+            COUNT(DISTINCT CASE WHEN a.time_in IS NOT NULL THEN a.person_id END) AS timed_in,
+            COUNT(DISTINCT CASE WHEN a.time_out IS NOT NULL THEN a.person_id END) AS timed_out
+        FROM attendance a
+        INNER JOIN ${table} ${alias}
+            ON a.person_id = ${alias}.id
+           AND a.person_type = ?
+           AND ${alias}.status = 'active'
+        WHERE a.date = ? AND a.time_in IS NOT NULL`;
+    const params = [personType, dateStr];
+    if (schoolId) {
+        query += ` AND ${alias}.school_id = ?`;
+        params.push(schoolId);
+    }
+    query += ` GROUP BY ${alias}.school_id`;
+    const [rows] = await db.query(query, params);
+    return new Map(rows.map(row => [String(row.school_id), {
+        present: Number(row.present || 0),
+        late: Number(row.late || 0),
+        half_day: Number(row.half_day || 0),
+        full_day: Number(row.full_day || 0),
+        timed_in: Number(row.timed_in || 0),
+        timed_out: Number(row.timed_out || 0)
+    }]));
+}
+
+async function getEligibleCountsBySchool(personType, dateStr, schoolId = null) {
+    const table = personType === 'teacher' ? 'teachers' : 'students';
+    let query = `SELECT school_id, COUNT(*) AS count FROM ${table}
+        WHERE status = 'active' AND COALESCE(active_from, DATE(created_at)) < ?`;
+    const params = [dateStr];
+    if (schoolId) {
+        query += ' AND school_id = ?';
+        params.push(schoolId);
+    }
+    query += ' GROUP BY school_id';
+    const [rows] = await db.query(query, params);
+    return new Map(rows.map(row => [String(row.school_id), Number(row.count || 0)]));
+}
+
+async function getAbsentCountsBySchool(personType, dateStr, schoolId = null) {
+    const isTeacher = personType === 'teacher';
+    const table = isTeacher ? 'teachers' : 'students';
+    const alias = isTeacher ? 't' : 's';
+    let query = `SELECT ${alias}.school_id, COUNT(*) AS count
+        FROM ${table} ${alias}
+        WHERE ${alias}.status = 'active'
+          AND COALESCE(${alias}.active_from, DATE(${alias}.created_at)) < ?
+          AND NOT EXISTS (
+              SELECT 1 FROM attendance a
+              WHERE a.person_type = ?
+                AND a.person_id = ${alias}.id
+                AND a.date = ?
+                AND a.time_in IS NOT NULL
+          )`;
+    const params = [dateStr, personType, dateStr];
+    if (schoolId) {
+        query += ` AND ${alias}.school_id = ?`;
+        params.push(schoolId);
+    }
+    query += ` GROUP BY ${alias}.school_id`;
+    const [rows] = await db.query(query, params);
+    return new Map(rows.map(row => [String(row.school_id), Number(row.count || 0)]));
+}
+
 async function countSectionStudentsWithoutTimeIn(dateStr, sectionId) {
     const [[section]] = await db.query('SELECT school_id FROM sections WHERE id = ? LIMIT 1', [sectionId]);
     const schoolId = section?.school_id || null;
@@ -2546,11 +2623,11 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
         const canSeeDesktopScanners = req.session?.user?.role === 'super_admin';
         const absenceCountingActive = await shouldCountComputedAbsences(date, schoolId);
         cacheKey = `${date}-${schoolId || 'all'}-${absenceCountingActive ? 'absence-closed' : 'attendance-open'}-${canSeeDesktopScanners ? 'scanner-visible' : 'scanner-hidden'}`;
-        const cacheTtlMs = canSeeDesktopScanners ? 3000 : 15000;
+        const cacheTtlMs = 30000;
 
         // A client cache-busting query parameter must not force duplicate MySQL
-        // work. Regular role/school summaries are shared for 15 seconds. Super
-        // Admin scanner visibility keeps its existing 3-second freshness.
+        // work. Dashboard aggregates are shared briefly; live scanner detail is
+        // served by its dedicated endpoint and is not slowed by this cache.
         const cached = dashboardCache.get(cacheKey);
         if (cached && (Date.now() - cached.timestamp) < cacheTtlMs) {
             return res.json(cached.data);
@@ -2610,13 +2687,51 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
         const [schoolBreakdown] = await db.query(schoolBreakdownQuery, breakdownParams);
         const scannerPresence = canSeeDesktopScanners ? await getDesktopScannerPresence(schoolId) : null;
 
+        // Fetch division totals in six grouped queries instead of repeating six
+        // queries for every school. This keeps SDS/ASDS dashboard loads bounded
+        // even when the division has many schools and thousands of students.
+        const [
+            eligibleStudentsBySchool,
+            eligibleTeachersBySchool,
+            studentStatusBySchool,
+            teacherStatusBySchool,
+            absentStudentsBySchool,
+            absentTeachersBySchool,
+            schoolAbsenceDecisions
+        ] = await Promise.all([
+            getEligibleCountsBySchool('student', date, schoolId),
+            getEligibleCountsBySchool('teacher', date, schoolId),
+            getAttendanceStatusCountsBySchool('student', date, schoolId),
+            getAttendanceStatusCountsBySchool('teacher', date, schoolId),
+            absenceCountingActive ? getAbsentCountsBySchool('student', date, schoolId) : Promise.resolve(new Map()),
+            absenceCountingActive ? getAbsentCountsBySchool('teacher', date, schoolId) : Promise.resolve(new Map()),
+            absenceCountingActive
+                ? Promise.all(schoolBreakdown.map(async school => [
+                    String(school.id),
+                    await shouldCountComputedAbsences(date, school.id)
+                ]))
+                : Promise.resolve([])
+        ]);
+        const absenceActiveBySchool = new Map(schoolAbsenceDecisions);
+        const emptyStatusCounts = {
+            present: 0,
+            late: 0,
+            half_day: 0,
+            full_day: 0,
+            timed_in: 0,
+            timed_out: 0
+        };
+
         const breakdown = [];
         for (const s of schoolBreakdown) {
-            const eligible = await countAttendanceEligibleStudents(date, s.id);
-            const teacherEligible = await countAttendanceEligibleTeachers(date, s.id);
-            const teacherAbsent = await countTeachersWithoutTimeIn(date, s.id);
-            const studentCounts = await getAttendanceStatusCounts('student', date, { schoolId: s.id });
-            const teacherCounts = await getAttendanceStatusCounts('teacher', date, { schoolId: s.id });
+            const schoolKey = String(s.id);
+            const eligible = eligibleStudentsBySchool.get(schoolKey) || 0;
+            const teacherEligible = eligibleTeachersBySchool.get(schoolKey) || 0;
+            const studentCounts = studentStatusBySchool.get(schoolKey) || emptyStatusCounts;
+            const teacherCounts = teacherStatusBySchool.get(schoolKey) || emptyStatusCounts;
+            const schoolAbsenceActive = absenceActiveBySchool.get(schoolKey) === true;
+            const studentAbsent = schoolAbsenceActive ? (absentStudentsBySchool.get(schoolKey) || 0) : 0;
+            const teacherAbsent = schoolAbsenceActive ? (absentTeachersBySchool.get(schoolKey) || 0) : 0;
             const fullDayStudents = studentCounts.full_day;
             const fullDayTeachers = teacherCounts.full_day;
             const scannerInfo = scannerPresence ? (scannerPresence.bySchool.get(String(s.id)) || null) : null;
@@ -2631,7 +2746,7 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
                 late: studentCounts.late,
                 half_day: studentCounts.half_day,
                 full_day: fullDayStudents,
-                absent: await countStudentsWithoutTimeIn(date, s.id),
+                absent: studentAbsent,
                 rate: Math.max(eligible, studentCounts.timed_in || 0) > 0 ? Math.min(100, Math.round((fullDayStudents / Math.max(eligible, studentCounts.timed_in || 0)) * 100)) : 0,
                 teachers_total: s.teachers_total || 0,
                 attendance_eligible_teachers: Math.max(teacherEligible, teacherCounts.timed_in || 0),

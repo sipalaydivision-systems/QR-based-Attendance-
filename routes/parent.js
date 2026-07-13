@@ -64,6 +64,17 @@ function contactMatches(candidateValue, normalizedContact) {
     return normalizedContactCandidates(candidateValue).has(normalizedContact);
 }
 
+// Keep contact matching compatible with formatted and multi-number fields, but
+// let MySQL discard unrelated rows before Node receives them. Previously every
+// Guardian dashboard loaded every active enrolment in the division.
+const guardianContactDigitsSql = `REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+    s.guardian_contact, ' ', ''), '-', ''), '(', ''), ')', ''), '+', ''), '.', ''), '/', '')`;
+
+function contactSearchSuffix(normalizedContact) {
+    const value = String(normalizedContact || '');
+    return value.length > 10 ? value.slice(-10) : value;
+}
+
 function isContactLike(value) {
     return normalizeContact(value).length >= 7;
 }
@@ -203,7 +214,9 @@ async function contactExistsForStudent(normalizedContact) {
          WHERE e.status = 'enrolled'
            AND s.status = 'active'
            AND s.guardian_contact IS NOT NULL
-           AND s.guardian_contact != ''`
+           AND s.guardian_contact != ''
+           AND ${guardianContactDigitsSql} LIKE ?`,
+        [`%${contactSearchSuffix(normalizedContact)}%`]
     );
     return rows.some(row => contactMatches(row.guardian_contact, normalizedContact));
 }
@@ -231,7 +244,9 @@ async function getParentChildren(normalizedContact) {
            AND s.status = 'active'
            AND s.guardian_contact IS NOT NULL
            AND s.guardian_contact != ''
-         ORDER BY s.lastname, s.firstname`
+           AND ${guardianContactDigitsSql} LIKE ?
+         ORDER BY s.lastname, s.firstname`,
+        [`%${contactSearchSuffix(normalizedContact)}%`]
     );
     return rows
         .filter(row => contactMatches(row.guardian_contact, normalizedContact))
@@ -461,8 +476,10 @@ async function countConsecutiveAbsences(studentId, schoolId, baseDate) {
 }
 
 async function buildParentPayload(parent, date) {
-    const children = await getParentChildren(parent.normalized_contact);
-    const schedule = await getAttendanceScheduleTimes(date);
+    const [children, schedule] = await Promise.all([
+        getParentChildren(parent.normalized_contact),
+        getAttendanceScheduleTimes(date)
+    ]);
     const childIds = children.map(child => child.id);
     const attendanceByStudent = new Map();
     if (childIds.length) {
@@ -480,10 +497,13 @@ async function buildParentPayload(parent, date) {
         Array.from(attendanceByStudent.values()).map(row => row.id)
     );
 
+    const uniqueSchoolIds = [...new Set(children.map(child => child.school_id).filter(Boolean))];
+    const schoolDayEntries = await Promise.all(uniqueSchoolIds.map(async id => [String(id), await isSchoolDay(date, id)]));
+    const schoolDays = new Map(schoolDayEntries);
     const childPayload = [];
     for (const child of children) {
         const attendance = attendanceByStudent.get(child.id) || null;
-        const schoolDay = await isSchoolDay(date, child.school_id);
+        const schoolDay = schoolDays.get(String(child.school_id)) || await isSchoolDay(date, child.school_id);
         const resolved = (!schoolDay.is_school_day && (!attendance || !attendance.time_in))
             ? {
                 status: 'non_school_day',
@@ -523,14 +543,19 @@ async function buildParentPayload(parent, date) {
         });
     }
 
-    const schoolIds = [...new Set(children.map(child => child.school_id).filter(Boolean))];
-    await syncAttendanceNotificationsForParent(parent, childPayload, date);
-    await syncAnnouncementNotificationsForParent(parent, childPayload);
+    const schoolIds = uniqueSchoolIds;
+    const parentId = parent.parent_id || parent.id;
+    const backfillKey = `${parentId}:${date}`;
+    const lastBackfill = parentNotificationBackfill.get(backfillKey) || 0;
+    if ((Date.now() - lastBackfill) > PARENT_NOTIFICATION_BACKFILL_TTL_MS) {
+        await syncAttendanceNotificationsForParent(parent, childPayload, date);
+        await syncAnnouncementNotificationsForParent(parent, childPayload);
+        parentNotificationBackfill.set(backfillKey, Date.now());
+    }
     for (const schoolId of schoolIds.length ? schoolIds : [null]) {
-        const day = await isSchoolDay(date, schoolId);
+        const day = schoolDays.get(String(schoolId)) || await isSchoolDay(date, schoolId);
         await createNoClassNotificationForParent(parent, schoolId, date, day);
     }
-    const parentId = parent.parent_id || parent.id;
     const notifications = await getParentInbox(parentId, { limit: 100 });
     const unread_count = await getParentUnreadCount(parentId);
     return {
@@ -545,6 +570,15 @@ async function buildParentPayload(parent, date) {
         notifications,
         unread_count
     };
+}
+
+const parentNotificationBackfill = new Map();
+const PARENT_NOTIFICATION_BACKFILL_TTL_MS = 6 * 60 * 60 * 1000;
+
+function brandingVersion(value) {
+    return value
+        ? crypto.createHash('md5').update(String(value)).digest('hex').slice(0, 12)
+        : '';
 }
 
 async function buildParentNotifications(children, schoolIds, date) {
@@ -961,12 +995,21 @@ router.get('/api/parent/me', requireParentAuth, (req, res) => {
 router.get('/api/parent/branding', requireParentAuth, async (req, res) => {
     try {
         const branding = await loadBranding();
-        return res.json({
-            system_logo: branding.system_logo || '',
+        const logoVersion = brandingVersion(branding.system_logo);
+        const schoolArtVersion = brandingVersion(branding.mobile_dashboard_school_art);
+        const payload = {
             system_name: branding.system_name || 'EduTrack',
             division_name: branding.division_name || 'Schools Division of Sipalay City',
-            mobile_dashboard_school_art: branding.mobile_dashboard_school_art || ''
-        });
+            logo_version: logoVersion,
+            school_art_version: schoolArtVersion
+        };
+        if (!req.query.logo_version || String(req.query.logo_version) !== logoVersion) {
+            payload.system_logo = branding.system_logo || '';
+        }
+        if (!req.query.school_art_version || String(req.query.school_art_version) !== schoolArtVersion) {
+            payload.mobile_dashboard_school_art = branding.mobile_dashboard_school_art || '';
+        }
+        return res.json(payload);
     } catch (err) {
         return res.status(500).json({ error: 'Failed to load parent app branding.' });
     }
@@ -977,11 +1020,16 @@ router.get('/api/parent/branding', requireParentAuth, async (req, res) => {
 router.get('/api/parent/public-branding', async (req, res) => {
     try {
         const branding = await loadBranding();
-        return res.json({
-            system_logo: branding.system_logo || '',
+        const logoVersion = brandingVersion(branding.system_logo);
+        const payload = {
             system_name: branding.system_name || 'EduTrack',
-            division_name: branding.division_name || 'Schools Division of Sipalay City'
-        });
+            division_name: branding.division_name || 'Schools Division of Sipalay City',
+            logo_version: logoVersion
+        };
+        if (!req.query.logo_version || String(req.query.logo_version) !== logoVersion) {
+            payload.system_logo = branding.system_logo || '';
+        }
+        return res.json(payload);
     } catch (err) {
         return res.json({});
     }
@@ -1022,9 +1070,12 @@ router.get('/api/parent/poll', requireParentAuth, async (req, res) => {
 
 router.get('/api/parent/notifications', requireParentAuth, async (req, res) => {
     try {
-        const date = req.query.date || todayDate();
-        const payload = await buildParentPayload(req.session.user, date);
-        return res.json({ notifications: payload.notifications, unread_count: payload.unread_count || 0 });
+        const parentId = req.session.user.parent_id || req.session.user.id;
+        const [notifications, unread_count] = await Promise.all([
+            getParentInbox(parentId, { limit: 100 }),
+            getParentUnreadCount(parentId)
+        ]);
+        return res.json({ notifications, unread_count });
     } catch (err) {
         console.error('Parent notifications error:', err);
         return res.status(500).json({ error: 'Failed to load parent notifications.' });
@@ -1080,11 +1131,14 @@ router.post('/api/parent/device-notifications', async (req, res) => {
             return res.status(401).json({ success: false, error: 'Notification device is not registered.' });
         }
         await db.query('UPDATE parent_devices SET last_seen_at = ?, updated_at = CURRENT_TIMESTAMP WHERE device_token = ?', [nowDateTime(), deviceToken]);
-        const payload = await buildParentPayload(device, todayDate());
+        const [notifications, unread_count] = await Promise.all([
+            getParentInbox(device.parent_id, { limit: 100 }),
+            getParentUnreadCount(device.parent_id)
+        ]);
         return res.json({
             success: true,
-            notifications: payload.notifications || [],
-            unread_count: payload.unread_count || 0
+            notifications,
+            unread_count
         });
     } catch (err) {
         console.error('Parent background notifications error:', err);
@@ -1182,8 +1236,10 @@ router.post('/api/parent/profile', requireParentAuth, async (req, res) => {
         // Cascade the new contact + name to the students currently linked by the
         // old number (normalizeContact is JS logic, so compare in app code).
         const [students] = await conn.query(
-            `SELECT id, guardian_contact FROM students
-             WHERE status != 'deleted' AND guardian_contact IS NOT NULL AND guardian_contact != ''`
+            `SELECT s.id, s.guardian_contact FROM students s
+             WHERE s.status != 'deleted' AND s.guardian_contact IS NOT NULL AND s.guardian_contact != ''
+               AND ${guardianContactDigitsSql} LIKE ?`,
+            [`%${contactSearchSuffix(oldNormalized)}%`]
         );
         const linkedIds = students
             .filter(s => contactMatches(s.guardian_contact, oldNormalized))
