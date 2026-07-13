@@ -65,6 +65,21 @@ jobs:
              public/downloads/school-attendance-division.apk
           echo "APK size: $(du -sh public/downloads/school-attendance-division.apk)"
 
+      - name: Publish Mobile APK to GitHub Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="$(awk '/^version:/ {print $2}' mobile-flutter/pubspec.yaml | cut -d+ -f1)"
+          tag="mobile-v${version}"
+          asset="EduTrack-Mobile-${version}.apk"
+          cp public/downloads/school-attendance-division.apk "$RUNNER_TEMP/$asset"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --target "$GITHUB_SHA" \
+              --title "EduTrack Mobile ${version}" \
+              --notes "Official EduTrack Android installer."
+          fi
+          gh release upload "$tag" "$RUNNER_TEMP/$asset" --clobber
+
       - name: Commit and push updated APK
         run: |
           git config user.name  "github-actions[bot]"
