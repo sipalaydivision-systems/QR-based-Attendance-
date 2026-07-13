@@ -51,6 +51,22 @@ jobs:
             -Force
           Write-Host "Installer size: $((Get-Item 'public\downloads\Edutrack-Scanner-Setup.exe').Length) bytes"
 
+      - name: Publish versioned installer to GitHub Releases
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = (Get-Content 'desktop-scanner\package.json' | ConvertFrom-Json).version
+          $tag = "desktop-v$version"
+          $asset = "Edutrack-Scanner-Setup-$version.exe"
+          Copy-Item 'public\downloads\Edutrack-Scanner-Setup.exe' $asset -Force
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag $asset --title "EduTrack Scanner $version" --notes "Optimized background data use with responsive remote controls and unchanged attendance scanning."
+          } else {
+            gh release upload $tag $asset --clobber
+          }
+
       - name: Commit and push updated installer
         shell: pwsh
         run: |

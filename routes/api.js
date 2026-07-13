@@ -44,6 +44,76 @@ function schoolLogoUrl(schoolId, logo) {
     return `/api/schools/${schoolId}/logo-image?v=${version}`;
 }
 
+function systemLogoUrl(logo) {
+    if (!logo) return '';
+    const version = crypto.createHash('md5').update(String(logo)).digest('hex').slice(0, 12);
+    return `/brand/system-logo-image?v=${version}`;
+}
+
+const SCANNER_DESKTOP_CONFIG_CACHE_MS = 5000;
+let scannerDesktopConfigCache = { loadedAt: 0, value: null };
+
+async function loadScannerDesktopConfigCore(force = false) {
+    if (!force && scannerDesktopConfigCache.value
+        && Date.now() - scannerDesktopConfigCache.loadedAt < SCANNER_DESKTOP_CONFIG_CACHE_MS) {
+        return scannerDesktopConfigCache.value;
+    }
+
+    const [settingsResult, schoolsResult] = await Promise.all([
+        db.query(
+            `SELECT setting_key, setting_value
+             FROM settings
+             WHERE setting_key IN (
+                'system_name',
+                'division_name',
+                'system_logo',
+                'am_time_in_end',
+                'am_late_time',
+                'pm_time_out_end',
+                'lunch_break_start',
+                'pm_time_in_start',
+                'pm_late_time',
+                'late_threshold',
+                'teacher_duty_start_time',
+                'teacher_duty_end_time',
+                'teacher_late_threshold',
+                'student_attendance_rule',
+                'teacher_attendance_rule',
+                'teacher_time_out_rule',
+                'absence_cutoff_time',
+                'attendance_policy'
+             )`
+        ),
+        db.query("SELECT id, name, logo FROM schools WHERE status = 'active' ORDER BY name")
+    ]);
+
+    const rawSettings = {};
+    settingsResult[0].forEach(row => { rawSettings[row.setting_key] = row.setting_value; });
+    const rawSchools = schoolsResult[0];
+    const versionPayload = {
+        settings: Object.keys(rawSettings).sort().map(key => [key, rawSettings[key]]),
+        schools: rawSchools.map(school => [school.id, school.name, school.logo || ''])
+    };
+    const configVersion = crypto.createHash('sha256')
+        .update(JSON.stringify(versionPayload))
+        .digest('hex')
+        .slice(0, 20);
+    const value = {
+        configVersion,
+        settings: {
+            ...rawSettings,
+            system_logo: systemLogoUrl(rawSettings.system_logo)
+        },
+        schools: rawSchools.map(school => ({
+            id: school.id,
+            name: school.name,
+            logo: schoolLogoUrl(school.id, school.logo)
+        }))
+    };
+    scannerDesktopConfigCache = { loadedAt: Date.now(), value };
+    return value;
+}
+
 // School logos are public branding assets. Serve them separately so frequently
 // refreshed dashboard JSON never retransmits large base64 image strings.
 router.get('/schools/:id/logo-image', async (req, res) => {
@@ -723,48 +793,25 @@ router.post('/scanner-admin-login', async (req, res) => {
 router.get('/scanner-desktop-config', async (req, res) => {
     try {
         const schoolId = normalizeOptionalSchoolId(req.query.school_id);
-        const [settingsRows] = await db.query(
-            `SELECT setting_key, setting_value
-             FROM settings
-             WHERE setting_key IN (
-                'system_name',
-                'division_name',
-                'system_logo',
-                'am_time_in_end',
-                'am_late_time',
-                'pm_time_out_end',
-                'lunch_break_start',
-                'pm_time_in_start',
-                'pm_late_time',
-                'late_threshold',
-                'teacher_duty_start_time',
-                'teacher_duty_end_time',
-                'teacher_late_threshold',
-                'student_attendance_rule',
-                'teacher_attendance_rule',
-                'teacher_time_out_rule',
-                'absence_cutoff_time',
-                'attendance_policy'
-             )`
-        );
-        const settings = {};
-        settingsRows.forEach(row => { settings[row.setting_key] = row.setting_value; });
-
-        const [[schools], summary] = await Promise.all([
-            db.query("SELECT id, name, logo FROM schools WHERE status = 'active' ORDER BY name"),
+        const requestedVersion = limitText(req.query.config_version, 100);
+        const force = req.query.force === '1' || req.query.force === 'true';
+        const [core, summary] = await Promise.all([
+            loadScannerDesktopConfigCore(force),
             getScannerDesktopSummary(schoolId)
         ]);
-
-        return res.json({
+        const common = {
             success: true,
             baseUrl: getPublicBaseUrl(req),
             kioskToken: getScannerKioskToken(),
             serverTime: nowDateTime(),
             today: todayDate(),
-            settings,
-            schools,
+            config_version: core.configVersion,
             summary
-        });
+        };
+        if (requestedVersion && requestedVersion === core.configVersion) {
+            return res.json({ ...common, not_modified: true });
+        }
+        return res.json({ ...common, not_modified: false, settings: core.settings, schools: core.schools });
     } catch (err) {
         console.error('Scanner desktop config error:', err);
         return res.status(500).json({ success: false, error: 'Failed to load scanner desktop configuration.' });
@@ -962,7 +1009,13 @@ router.get('/scanner-desktop-command', requireAuthOrScannerKiosk, async (req, re
             return res.status(400).json({ success: false, error: 'Scanner ID is required.' });
         }
 
-        const command = await pullPendingDesktopScannerCommand(scannerId);
+        const waitSeconds = Math.max(0, Math.min(20, Number.parseInt(req.query.wait, 10) || 0));
+        const deadline = Date.now() + (waitSeconds * 1000);
+        let command = await pullPendingDesktopScannerCommand(scannerId);
+        while (!command && Date.now() < deadline) {
+            await new Promise(resolve => setTimeout(resolve, Math.min(750, Math.max(1, deadline - Date.now()))));
+            command = await pullPendingDesktopScannerCommand(scannerId);
+        }
         if (!command) return res.json({ success: true, command: null });
 
         return res.json({ success: true, command });

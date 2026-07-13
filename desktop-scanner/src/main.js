@@ -42,7 +42,8 @@ const CONNECTION_RESTORED_MESSAGE = 'Connection Restored - Synchronizing attenda
 const SYNC_COMPLETED_MESSAGE = 'Synchronization Completed Successfully.';
 const DIRECTORY_REFRESH_INTERVAL_MS = 60 * 1000;
 const CONNECTION_CHECK_INTERVAL_MS = 15000;
-const REMOTE_COMMAND_POLL_INTERVAL_MS = 1000;
+const REMOTE_COMMAND_LONG_POLL_SECONDS = 20;
+const REMOTE_COMMAND_RETRY_DELAY_MS = 1000;
 const ADMIN_SYNCED_SETTING_KEYS = new Set([
   'kioskToken',
   'brandName',
@@ -71,6 +72,7 @@ let tray = null;
 let isQuitting = false;
 let remoteCommandTimer = null;
 let remoteCommandBusy = false;
+let remoteCommandLoopGeneration = 0;
 let remotePreviewTimer = null;
 let remotePreviewBusy = false;
 let remotePreviewUntil = 0;
@@ -119,6 +121,7 @@ function defaultSettings() {
     minimizeToTray: true,
     scannerId: '',
     kioskToken: '',
+    configVersion: '',
     brandName: 'EduTrack',
     divisionName: 'Schools Division of Sipalay City',
     systemLogo: '',
@@ -975,11 +978,15 @@ function broadcastScannerStatus(extra = {}) {
   return payload;
 }
 
-async function refreshDesktopConfig() {
+async function refreshDesktopConfig(options = {}) {
   const settings = loadSettings();
   const serverUrl = normalizeServerUrl(settings.serverUrl);
-  const schoolSuffix = selectedSchoolQueryValue(settings.selectedSchoolId);
-  const res = await fetchWithTimeout(`${serverUrl}/api/scanner-desktop-config${schoolSuffix}`, { cache: 'no-store' }, 15000);
+  const params = new URLSearchParams();
+  if (settings.selectedSchoolId) params.set('school_id', String(settings.selectedSchoolId));
+  if (settings.configVersion && !options.force) params.set('config_version', settings.configVersion);
+  if (options.force) params.set('force', '1');
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  const res = await fetchWithTimeout(`${serverUrl}/api/scanner-desktop-config${suffix}`, { cache: 'no-store' }, 15000);
   const text = await res.text();
   let data;
   try {
@@ -994,12 +1001,25 @@ async function refreshDesktopConfig() {
     throw error;
   }
 
+  if (data.not_modified) {
+    const nextSettings = saveSettings({
+      serverUrl,
+      kioskToken: data.kioskToken || settings.kioskToken,
+      configVersion: data.config_version || settings.configVersion
+    }, { allowAdminSyncedSettings: true });
+    return { ...data, settings: nextSettings };
+  }
+
+  const serverSettings = data.settings || {};
+  const hasSystemLogo = Object.prototype.hasOwnProperty.call(serverSettings, 'system_logo');
+
   const nextSettings = saveSettings({
     serverUrl,
     kioskToken: data.kioskToken || settings.kioskToken,
     brandName: data.settings?.system_name || settings.brandName,
     divisionName: data.settings?.division_name || settings.divisionName,
-    systemLogo: data.settings?.system_logo || settings.systemLogo,
+    systemLogo: hasSystemLogo ? serverSettings.system_logo : settings.systemLogo,
+    configVersion: data.config_version || settings.configVersion,
     timeInStart: String(data.settings?.am_time_in_end || settings.timeInStart || '07:00').slice(0, 5),
     amLateTime: String(data.settings?.am_late_time ?? settings.amLateTime ?? '07:15').slice(0, 5),
     timeOutOpen: String(data.settings?.pm_time_out_end || settings.timeOutOpen || '16:00').slice(0, 5),
@@ -1481,19 +1501,22 @@ async function executeRemoteCommand(command) {
 }
 
 async function pollRemoteCommand() {
-  if (remoteCommandBusy) return;
+  if (remoteCommandBusy) return false;
   const settings = loadSettings();
-  if (!settings.kioskToken || !settings.scannerId) return;
+  if (!settings.kioskToken || !settings.scannerId) return false;
   remoteCommandBusy = true;
+  let pollSucceeded = false;
   try {
     const serverUrl = normalizeServerUrl(settings.serverUrl);
-    const url = `${serverUrl}/api/scanner-desktop-command?scanner_id=${encodeURIComponent(settings.scannerId)}`;
+    const url = `${serverUrl}/api/scanner-desktop-command?scanner_id=${encodeURIComponent(settings.scannerId)}&wait=${REMOTE_COMMAND_LONG_POLL_SECONDS}`;
     const res = await fetchWithTimeout(url, {
       cache: 'no-store',
       headers: { 'X-Scanner-Kiosk-Token': settings.kioskToken }
-    }, 8000);
+    }, (REMOTE_COMMAND_LONG_POLL_SECONDS + 6) * 1000);
     const data = await res.json();
-    if (!res.ok || !data.success || !data.command) return;
+    if (!res.ok || !data.success) return false;
+    pollSucceeded = true;
+    if (!data.command) return true;
     try {
       await executeRemoteCommand(data.command);
       await acknowledgeRemoteCommand(settings, data.command.id, 'acknowledged');
@@ -1507,15 +1530,22 @@ async function pollRemoteCommand() {
   } finally {
     remoteCommandBusy = false;
   }
+  return pollSucceeded;
 }
 
 function startRemoteCommandPolling() {
-  if (remoteCommandTimer) clearInterval(remoteCommandTimer);
-  remoteCommandTimer = setInterval(() => {
-    pollRemoteCommand().catch(() => {});
-  }, REMOTE_COMMAND_POLL_INTERVAL_MS);
+  if (remoteCommandTimer) clearTimeout(remoteCommandTimer);
+  const generation = ++remoteCommandLoopGeneration;
+  const run = async () => {
+    if (generation !== remoteCommandLoopGeneration || isQuitting) return;
+    let succeeded = false;
+    try { succeeded = await pollRemoteCommand(); } catch (_) {}
+    if (generation !== remoteCommandLoopGeneration || isQuitting) return;
+    remoteCommandTimer = setTimeout(run, succeeded ? 100 : REMOTE_COMMAND_RETRY_DELAY_MS);
+    if (remoteCommandTimer.unref) remoteCommandTimer.unref();
+  };
+  remoteCommandTimer = setTimeout(run, 1200);
   if (remoteCommandTimer.unref) remoteCommandTimer.unref();
-  setTimeout(() => { pollRemoteCommand().catch(() => {}); }, 1200);
 }
 
 function findExistingEvent(events, scanTime, action) {
@@ -2225,7 +2255,7 @@ async function refreshConnectionState(options = {}) {
   let config = null;
 
   try {
-    config = await refreshDesktopConfig();
+    config = await refreshDesktopConfig({ force: forceDirectory });
     updateRuntimeConnectionState(true, 'Connected to Server.');
 
     try {
