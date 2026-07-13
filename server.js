@@ -41,6 +41,11 @@ const MOBILE_APP_LATEST = {
     notes: 'Uses less mobile data while keeping attendance notifications immediate and school logos visible.'
 };
 
+function mobileApkReleaseUrl() {
+    const version = MOBILE_APP_LATEST.version;
+    return `https://github.com/sipalaydivision-systems/QR-based-Attendance-/releases/download/mobile-v${version}/EduTrack-Mobile-${version}.apk`;
+}
+
 app.get('/mobile-config.json', (req, res) => {
     res.json({
         base_url: getPublicAppBaseUrl(req),
@@ -915,8 +920,10 @@ app.get('/download/mobile-app', (req, res) => {
         return res.redirect(302, `/download/mobile-app?v=${MOBILE_APP_LATEST.version_code}`);
     }
 
+    // Keep the public EduTrack link stable, but let GitHub Releases carry the
+    // large binary payload instead of charging it to Railway network egress.
     res.set('Cache-Control', 'public, max-age=31536000, immutable');
-    return res.download(apkPath, `EduTrack-Mobile-${MOBILE_APP_LATEST.version}.apk`);
+    return res.redirect(302, mobileApkReleaseUrl());
 });
 
 app.get('/download/ios-app', (req, res) => {

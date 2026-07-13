@@ -679,8 +679,10 @@ router.get('/download/parent-app', (req, res) => {
     if (String(req.query.v || '') !== String(PARENT_APP_LATEST.version_code)) {
         return res.redirect(302, `/download/parent-app?v=${PARENT_APP_LATEST.version_code}`);
     }
+    const version = PARENT_APP_LATEST.version;
+    const releaseUrl = `https://github.com/sipalaydivision-systems/QR-based-Attendance-/releases/download/guardian-v${version}/EduTrack-Guardian-${version}.apk`;
     res.set('Cache-Control', 'public, max-age=31536000, immutable');
-    return res.download(parentApkPath, `EduTrack-Guardian-${PARENT_APP_LATEST.version}.apk`);
+    return res.redirect(302, releaseUrl);
 });
 
 router.get('/parent', (req, res) => {
