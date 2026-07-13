@@ -4,6 +4,7 @@ const compression = require('compression');
 const session = require('express-session');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const db = require('./config/database');
 const MySQLSessionStore = require('./config/mysqlSessionStore');
 const { getScannerKioskToken } = require('./utils/scannerKiosk');
@@ -35,6 +36,41 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(compression({ threshold: 1024 }));
 app.use(trackSystemTraffic);
+
+function settingImageUrl(asset, value) {
+    if (!value) return '';
+    const version = crypto.createHash('md5').update(String(value)).digest('hex').slice(0, 12);
+    return `/brand/${asset}-image?v=${version}`;
+}
+
+function serveSettingImage(settingKey) {
+    return async (_req, res) => {
+        try {
+            const [[row]] = await db.query('SELECT setting_value FROM settings WHERE setting_key = ? LIMIT 1', [settingKey]);
+            const value = String(row?.setting_value || '').trim();
+            if (!value) return res.status(404).end();
+            const dataUrl = value.match(/^data:(image\/(?:png|jpe?g|gif|webp));base64,(.+)$/i);
+            if (dataUrl) {
+                const bytes = Buffer.from(dataUrl[2], 'base64');
+                res.set('Content-Type', dataUrl[1].toLowerCase());
+                res.set('Cache-Control', 'public, max-age=31536000, immutable');
+                res.set('ETag', `"${crypto.createHash('md5').update(bytes).digest('hex')}"`);
+                return res.send(bytes);
+            }
+            if (value.startsWith('/') || /^https?:\/\//i.test(value)) {
+                res.set('Cache-Control', 'public, max-age=3600');
+                return res.redirect(302, value);
+            }
+            return res.status(404).end();
+        } catch (err) {
+            console.error('Brand image error:', err);
+            return res.status(500).end();
+        }
+    };
+}
+
+app.get('/brand/system-logo-image', serveSettingImage('system_logo'));
+app.get('/brand/school-art-image', serveSettingImage('mobile_dashboard_school_art'));
 
 const DESKTOP_SCANNER_LATEST = {
     version: '1.0.33',
@@ -145,12 +181,24 @@ app.use(async (req, res, next) => {
     res.locals.baseUrl = process.env.BASE_URL || `http://localhost:${PORT}`;
     res.locals.todayDate = todayDate();
     res.locals.currentMonth = currentMonth();
+    // JSON/mobile requests never render the shared header. Skipping its branding
+    // and school-context queries removes two unrelated database reads from every
+    // dashboard poll, Guardian sync, and notification request.
+    if (req.path.startsWith('/api/')) {
+        res.locals.settings = {};
+        res.locals.headerSchool = null;
+        res.locals.adviserIsShs = false;
+        return next();
+    }
     try {
         const [rows] = await db.query(
             "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('system_name','division_name','system_logo','platform_android_logo','platform_ios_logo','platform_windows_logo','platform_mac_logo')"
         );
         const settings = {};
         rows.forEach(r => { settings[r.setting_key] = r.setting_value; });
+        if (settings.system_logo) {
+            settings.system_logo = settingImageUrl('system-logo', settings.system_logo);
+        }
         res.locals.settings = settings;
     } catch (e) {
         res.locals.settings = {};
@@ -179,10 +227,15 @@ app.use(async (req, res, next) => {
                 [u.teacher_id]
             );
             if (teacherSchool && teacherSchool.school_id) {
-                res.locals.headerSchool = { name: teacherSchool.name, logo: teacherSchool.logo || null };
+                res.locals.headerSchool = {
+                    name: teacherSchool.name,
+                    logo: teacherSchool.logo
+                        ? `/api/schools/${teacherSchool.school_id}/logo-image?v=${crypto.createHash('md5').update(String(teacherSchool.logo)).digest('hex').slice(0, 12)}`
+                        : null
+                };
                 // Keep legacy/session-scoped code from pointing at the old school.
                 u.school_id = teacherSchool.school_id;
-                u.school_logo = teacherSchool.logo || null;
+                u.school_logo = res.locals.headerSchool.logo;
             }
             const gradeNumber = parseInt(String(teacherSchool && teacherSchool.grade_name || '').match(/\d+/)?.[0] || '', 10);
             res.locals.adviserIsShs = (teacherSchool && teacherSchool.category === 'shs_teacher') || (Number.isFinite(gradeNumber) && gradeNumber >= 11 && gradeNumber <= 12);
@@ -191,7 +244,14 @@ app.use(async (req, res, next) => {
                 "SELECT name, logo FROM schools WHERE id = ? AND status = 'active'",
                 [u.school_id]
             );
-            if (school) res.locals.headerSchool = { name: school.name, logo: school.logo || null };
+            if (school) {
+                res.locals.headerSchool = {
+                    name: school.name,
+                    logo: school.logo
+                        ? `/api/schools/${u.school_id}/logo-image?v=${crypto.createHash('md5').update(String(school.logo)).digest('hex').slice(0, 12)}`
+                        : null
+                };
+            }
         }
     } catch (e) {
         res.locals.headerSchool = null;

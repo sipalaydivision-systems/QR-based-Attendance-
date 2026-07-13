@@ -212,6 +212,7 @@
     var schoolId = '<%= principalSchoolId || "" %>';
     var POLL_MS = 15000;
     var donutChart = null, trendChart = null, pollTimer = null;
+    var coreLoading = false, corePending = false;
     var sig = { donut: '', absent: '', flagged: '', trend: '' };
 
     function $(id) { return document.getElementById(id); }
@@ -274,14 +275,18 @@
     }
 
     async function loadCore() {
+        if (coreLoading) { corePending = true; return; }
+        coreLoading = true;
         var date = $('pdDate').value;
+        var bundledFlags = null;
         $('pdDateLabel').textContent = formatDate(date);
-        var params = new URLSearchParams({ date: date });
+        var params = new URLSearchParams({ date: date, include_flags: '1' });
         if (schoolId) params.append('school_id', schoolId);
         try {
             var res = await fetch('/api/dashboard-data?' + params, { headers: { 'Accept': 'application/json' } });
             var data = await res.json();
-            if (data.error) return;
+            if (data.error) throw new Error(data.error);
+            if (Array.isArray(data.absence_flags)) bundledFlags = data.absence_flags;
 
             if (data.schools && data.schools.length === 1) $('pdSchoolName').textContent = data.schools[0].name;
 
@@ -305,8 +310,12 @@
             updateDonut(present, late, halfDay, absent);
         } catch (e) { /* keep last good values; no disruptive UI */ }
 
-        loadAbsentList(date);
-        loadFlaggedList(date);
+        await Promise.all([loadAbsentList(date), loadFlaggedList(date, bundledFlags)]);
+        coreLoading = false;
+        if (corePending) {
+            corePending = false;
+            loadCore();
+        }
     }
 
     async function loadTrend() {
@@ -363,13 +372,16 @@
         } catch (e) { /* ignore */ }
     }
 
-    async function loadFlaggedList(date) {
+    async function loadFlaggedList(date, bundledFlags) {
         var params = new URLSearchParams({ days: 2 });
         if (date) params.append('date', date);
         if (schoolId) params.append('school_id', schoolId);
         try {
-            var res = await fetch('/api/absence-flags?' + params, { headers: { 'Accept': 'application/json' } });
-            var data = await res.json();
+            var data = bundledFlags;
+            if (!Array.isArray(data)) {
+                var res = await fetch('/api/absence-flags?' + params, { headers: { 'Accept': 'application/json' } });
+                data = await res.json();
+            }
             $('pdFlaggedCount').textContent = data.length;
             var s = data.map(function(x){ return x.id; }).join(',');
             if (s === sig.flagged) return;

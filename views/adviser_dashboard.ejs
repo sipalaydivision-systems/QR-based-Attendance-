@@ -593,7 +593,10 @@
         }).join('');
     }
 
+    var parentsLoading = false;
     async function loadParents() {
+        if (parentsLoading) return;
+        parentsLoading = true;
         var body = document.getElementById('adParentBody');
         try {
             var res = await fetch('/api/adviser-parents', { headers: { 'Accept': 'application/json' } });
@@ -602,6 +605,8 @@
             renderParents(data.parents || []);
         } catch (err) {
             if (body) body.innerHTML = '<tr><td colspan="6" class="ad-empty"><i class="fa-solid fa-triangle-exclamation"></i> Failed to load registered parents.</td></tr>';
+        } finally {
+            parentsLoading = false;
         }
     }
 

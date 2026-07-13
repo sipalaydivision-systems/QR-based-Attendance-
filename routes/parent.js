@@ -39,6 +39,20 @@ function schoolLogoUrl(schoolId, logo) {
     return `/api/schools/${schoolId}/logo-image?v=${version}`;
 }
 
+function settingImageUrl(asset, value) {
+    if (!value) return '';
+    const version = crypto.createHash('md5').update(String(value)).digest('hex').slice(0, 12);
+    return `/brand/${asset}-image?v=${version}`;
+}
+
+function brandingForWebPage(branding) {
+    return {
+        ...branding,
+        system_logo: settingImageUrl('system-logo', branding.system_logo),
+        mobile_dashboard_school_art: settingImageUrl('school-art', branding.mobile_dashboard_school_art)
+    };
+}
+
 function normalizeContact(value) {
     let digits = String(value || '').replace(/\D/g, '');
     if (digits.startsWith('63') && digits.length === 12) digits = `0${digits.slice(2)}`;
@@ -699,7 +713,7 @@ router.get('/Download-app', async (req, res) => {
         missing: req.query.missing === '1',
         latestVersion: PARENT_APP_LATEST.version,
         latestVersionCode: PARENT_APP_LATEST.version_code,
-        branding
+        branding: brandingForWebPage(branding)
     });
 });
 
@@ -861,7 +875,7 @@ router.get('/parent/app', requireParentAuth, async (req, res) => {
     return res.render('parent_app', {
         title: 'EduTrack Guardian App',
         parent: req.session.user,
-        branding
+        branding: brandingForWebPage(branding)
     });
 });
 

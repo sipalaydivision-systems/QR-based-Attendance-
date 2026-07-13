@@ -311,6 +311,27 @@
   function startMobileRealtimePoll() {
     if (!isMobileAppShell() || !isDashboardPage() || window.__mobileRealtimeStarted) return;
     window.__mobileRealtimeStarted = true;
+
+    // The Super Admin page owns its visible-tab live loop. Reuse its data and
+    // refresh action instead of starting a second three-second network loop.
+    if (window.__edutrackDashboardRealtimeOwner) {
+      function applyOwnerDashboard(data) {
+        if (!data) return;
+        applyDashboardData(data);
+        syncMobileSchoolArt(data);
+        updateMobileDashboardShell();
+      }
+      window.addEventListener('edutrack-dashboard-data', function(event) {
+        applyOwnerDashboard(event.detail);
+      });
+      window.addEventListener('edutrack-force-refresh', function() {
+        if (typeof window.__edutrackDashboardRefresh === 'function') {
+          window.__edutrackDashboardRefresh();
+        }
+      });
+      applyOwnerDashboard(window.__edutrackDashboardData);
+      return;
+    }
     var currentHash = '';
     var refreshing = false;
 

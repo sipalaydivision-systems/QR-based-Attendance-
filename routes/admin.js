@@ -4,6 +4,7 @@ const multer = require('multer');
 const csv = require('csv-parser');
 const QRCode = require('qrcode');
 const { Readable } = require('stream');
+const crypto = require('crypto');
 const router = express.Router();
 const db = require('../config/database');
 const { requireAuth, requireRole } = require('../middleware/auth');
@@ -12,6 +13,12 @@ const { todayDate, currentMonth, nowDateTime, normalizeTime, sqlDateTime, compar
 const schoolYears = require('../utils/schoolYear');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+function schoolLogoUrl(schoolId, logo) {
+    if (!schoolId || !logo) return '';
+    const version = crypto.createHash('md5').update(String(logo)).digest('hex').slice(0, 12);
+    return `/api/schools/${schoolId}/logo-image?v=${version}`;
+}
 
 // Scanner kiosk is intentionally available without a dashboard login for guard stations and autostart desktops.
 router.get('/scanner', async (req, res) => {
@@ -985,6 +992,7 @@ async function loadAdviserTeacher(teacherId) {
          WHERE t.id = ?`, [teacherId]
     );
     if (teacher) {
+        teacher.school_logo = schoolLogoUrl(teacher.school_id, teacher.school_logo);
         const gradeNumber = parseGradeNumber(teacher.grade_name || '');
         teacher.is_shs = teacher.category === 'shs_teacher' || (gradeNumber >= 11 && gradeNumber <= 12);
         teacher.track = teacher.is_shs ? deriveTrackFromSection(teacher.section_name) : '';

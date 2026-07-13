@@ -574,9 +574,10 @@
 <script>
 (function() {
     var refreshTimer = null;
+    var dashboardLoading = false, dashboardPending = false, dashboardHash = '';
     var donutChart = null, trendChart = null;
     var trendSig = '', donutSig = '';
-    var dashMap = null, schoolMarkers = {}, mapPollTimer = null, mapRotationTimer = null;
+    var dashMap = null, schoolMarkers = {}, mapPollTimer = null, mapRotationTimer = null, mapLoading = false;
     var mappedSchoolFeed = [], mapRotationIndex = -1, mapHovering = false, mapRotationStarted = false;
     var SIPALAY_CENTER = [9.735, 122.405];
     var SIPALAY_BOUNDS = [[9.45, 122.10], [10.08, 122.82]];
@@ -796,15 +797,27 @@
     }
 
     async function load() {
+        if (dashboardLoading) {
+            dashboardPending = true;
+            return;
+        }
+        dashboardLoading = true;
         var date   = document.getElementById('dashDate').value;
         var school = document.getElementById('dashSchool') ? document.getElementById('dashSchool').value : '';
-        var params = new URLSearchParams({ date: date });
-        if (school) params.append('school_id', school);
+        var params = new URLSearchParams({
+            date: date,
+            include_flags: '1',
+            include_scanner_devices: '0'
+        });
+        if (school) params.append('school', school);
 
         try {
             var res  = await fetch('/api/dashboard-data?' + params);
+            if (!res.ok) return;
             var data = await res.json();
             if (data.error) return;
+            window.__edutrackDashboardData = data;
+            window.dispatchEvent(new CustomEvent('edutrack-dashboard-data', { detail: data }));
 
             // Non-school day banner
             var banner = document.getElementById('nonSchoolDayBanner');
@@ -863,7 +876,7 @@
                 tbody.innerHTML = data.schools.map(function(s) {
                     var sRate = s.rate;
                     var tRate = s.teacher_rate;
-                    return '<tr>' +
+                    return '<tr data-school-id="' + esc(s.id) + '">' +
                         '<td style="font-weight:600;color:var(--gray-800);">' +
                             '<div style="display:flex;align-items:center;gap:8px;">' +
                             logoBadge(s.logo, s.name, 32) +
@@ -879,7 +892,7 @@
                             '<span style="font-weight:700;font-size:0.8125rem;color:' + rateColor(sRate) + ';min-width:38px;">' + sRate + '%</span>' +
                             '</div>' +
                         '</td>' +
-                        '<td>' + scannerStatusCell(s) + '</td>' +
+                        '<td class="dashboard-scanner-status">' + scannerStatusCell(s) + '</td>' +
                         '<td>' + s.teachers_present + '<span style="color:var(--gray-400);font-size:0.75rem;"> / ' + s.teachers_total + '</span></td>' +
                         '<td>' +
                             '<div style="display:flex;align-items:center;gap:8px;">' +
@@ -897,23 +910,32 @@
                 var fc = document.getElementById('flaggedCount');
                 if (fc) fc.textContent = data.flagged_absent_2day + ' student(s)';
                 flaggedCard.style.display = 'block';
-                loadFlagged(date, school);
+                loadFlagged(date, school, data.absence_flags);
             } else {
                 flaggedCard.style.display = 'none';
             }
 
         } catch (e) {
             console.error('Dashboard error:', e);
+        } finally {
+            dashboardLoading = false;
+            if (dashboardPending) {
+                dashboardPending = false;
+                load();
+            }
         }
     }
 
-    async function loadFlagged(date, school) {
+    async function loadFlagged(date, school, bundledFlags) {
         var params = new URLSearchParams({ days: 2 });
         if (date) params.append('date', date);
-        if (school) params.append('school_id', school);
+        if (school) params.append('school', school);
         try {
-            var res  = await fetch('/api/absence-flags?' + params);
-            var data = await res.json();
+            var data = Array.isArray(bundledFlags) ? bundledFlags : null;
+            if (!data) {
+                var res = await fetch('/api/absence-flags?' + params);
+                data = await res.json();
+            }
             var tbody = document.getElementById('flaggedBody');
             var previewBody = document.getElementById('flaggedPreviewBody');
             if (!data.length) {
@@ -982,20 +1004,45 @@
         } catch (e) { console.error('Flagged error:', e); }
     }
 
-    // Watch changes
-    document.getElementById('dashDate').addEventListener('change', function() {
-        clearInterval(refreshTimer);
+    // A tiny change check keeps the visible dashboard live without downloading
+    // the full division payload every five seconds. Hidden tabs do no polling.
+    function scheduleDashboardPoll(delay) {
+        if (refreshTimer) clearTimeout(refreshTimer);
+        if (document.hidden) return;
+        refreshTimer = setTimeout(pollDashboardChanges, delay == null ? 3000 : delay);
+    }
+
+    async function pollDashboardChanges() {
+        if (document.hidden) return;
+        var school = document.getElementById('dashSchool') ? document.getElementById('dashSchool').value : '';
+        var params = new URLSearchParams({ hash: dashboardHash, _: String(Date.now()) });
+        if (school) params.append('school', school);
+        try {
+            var res = await fetch('/api/realtime-poll?' + params, { cache: 'no-store' });
+            if (res.ok) {
+                var state = await res.json();
+                if (dashboardHash && state.changed) await load();
+                dashboardHash = state.hash || dashboardHash;
+            }
+        } catch (_err) {
+            // A temporary connection issue is retried by the next lightweight poll.
+        } finally {
+            scheduleDashboardPoll(3000);
+        }
+    }
+
+    function refreshDashboardFilters() {
+        dashboardHash = '';
         trendSig = ''; donutSig = '';
         load(); loadTrend();
-        refreshTimer = setInterval(load, 5000);
-    });
+        scheduleDashboardPoll(3000);
+    }
+
+    document.getElementById('dashDate').addEventListener('change', refreshDashboardFilters);
     var schoolEl = document.getElementById('dashSchool');
-    if (schoolEl) schoolEl.addEventListener('change', function() {
-        clearInterval(refreshTimer);
-        trendSig = ''; donutSig = '';
-        load(); loadTrend();
-        refreshTimer = setInterval(load, 5000);
-    });
+    if (schoolEl) schoolEl.addEventListener('change', refreshDashboardFilters);
+    window.__edutrackDashboardRealtimeOwner = true;
+    window.__edutrackDashboardRefresh = load;
 
     // ---- Sipalay City school map ----
     // Independent of the dashDate/dashSchool filters above — the map is a
@@ -1078,13 +1125,42 @@
     }
 
     async function loadSchoolMap() {
+        if (document.hidden || mapLoading) return;
+        mapLoading = true;
         ensureDashMap();
-        if (!dashMap) return;
+        if (!dashMap) {
+            mapLoading = false;
+            return;
+        }
         try {
             var res = await fetch('/api/school-map-data');
             if (!res.ok) return;
             var data = await res.json();
             var schools = data.schools || [];
+            // Refresh scanner-only cells from this compact feed. Attendance and
+            // absence data stay on the change-driven dashboard response.
+            var totalScanners = schools.reduce(function(sum, s) { return sum + Number(s.scanner_total || 0); }, 0);
+            var activeScanners = schools.reduce(function(sum, s) { return sum + Number(s.scanner_active || 0); }, 0);
+            var scannerEl = document.getElementById('statScanners');
+            if (scannerEl) scannerEl.textContent = activeScanners + ' / ' + totalScanners;
+            var security = data.system_security || {};
+            var sysTraffic = document.getElementById('sysTrafficRequests');
+            var sysDdos = document.getElementById('sysDdosAttempts');
+            var sysSuspicious = document.getElementById('sysSuspiciousRequests');
+            var sysSecurityStatus = document.getElementById('sysSecurityStatus');
+            if (sysTraffic) sysTraffic.textContent = formatCount(security.requests_last_hour) + ' req/h';
+            if (sysDdos) sysDdos.textContent = formatCount(security.ddos_attempts);
+            if (sysSuspicious) sysSuspicious.textContent = formatCount(security.suspicious_requests);
+            if (sysSecurityStatus) {
+                var securityStatus = security.security_status || 'Healthy';
+                sysSecurityStatus.textContent = securityStatus;
+                sysSecurityStatus.style.color = securityStatus === 'Healthy' ? 'var(--success)' : 'var(--warning)';
+            }
+            Array.prototype.forEach.call(document.querySelectorAll('#schoolBreakdownBody tr[data-school-id]'), function(row) {
+                var school = schools.find(function(s) { return String(s.id) === row.getAttribute('data-school-id'); });
+                var cell = row.querySelector('.dashboard-scanner-status');
+                if (school && cell) cell.innerHTML = scannerStatusCell(school);
+            });
             var unmapped = 0;
             var seenIds = {};
             schools.forEach(function(s) {
@@ -1148,17 +1224,31 @@
             }
             var hint = document.getElementById('mapUnmappedHint');
             if (hint) hint.textContent = unmapped > 0 ? (unmapped + ' school(s) not yet mapped') : '';
-        } catch (e) { console.error('School map error:', e); }
+        } catch (e) {
+            console.error('School map error:', e);
+        } finally {
+            mapLoading = false;
+        }
     }
 
     // Initial load + polling
     loadWeather();
     load();
     loadTrend();
-    refreshTimer = setInterval(load, 5000);
+    scheduleDashboardPoll(3000);
     setInterval(loadWeather, 10 * 60 * 1000);
     loadSchoolMap();
     mapPollTimer = setInterval(loadSchoolMap, 5000);
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            if (refreshTimer) clearTimeout(refreshTimer);
+        } else {
+            dashboardHash = '';
+            load();
+            loadSchoolMap();
+            scheduleDashboardPoll(3000);
+        }
+    });
 })();
 </script>
 

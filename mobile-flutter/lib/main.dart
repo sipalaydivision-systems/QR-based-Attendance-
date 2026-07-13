@@ -1949,14 +1949,17 @@ class _HomeShellState extends State<HomeShell>
     dashboardRequestRunning = true;
     if (!silent && mounted) setState(() => loading = true);
     try {
-      final results = await Future.wait([
-        widget.api.map(
-          '/api/dashboard-data?date=${date()}&_=${DateTime.now().millisecondsSinceEpoch}',
-        ),
-        widget.api.list('/api/absence-flags?days=2&include_teachers=0'),
-      ]);
-      dashboard = results[0] as Map<String, dynamic>;
-      flags = results[1] as List<dynamic>;
+      final dashboardData = await widget.api.map(
+        '/api/dashboard-data?date=${date()}&include_flags=1&include_scanner_devices=0&_=${DateTime.now().millisecondsSinceEpoch}',
+      );
+      final bundledFlags = dashboardData['absence_flags'];
+      final flagData = bundledFlags is List
+          ? List<dynamic>.from(bundledFlags)
+          : await widget.api.list(
+              '/api/absence-flags?days=2&include_teachers=0',
+            );
+      dashboard = dashboardData;
+      flags = flagData;
       unawaited(
         widget.api.prefs.setString(
           'main_dashboard_cache_v1',
