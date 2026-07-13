@@ -1029,7 +1029,7 @@ router.get('/scanner-desktop-command', requireAuthOrScannerKiosk, async (req, re
         const deadline = Date.now() + (waitSeconds * 1000);
         let command = await pullPendingDesktopScannerCommand(scannerId);
         while (!command && Date.now() < deadline) {
-            await new Promise(resolve => setTimeout(resolve, Math.min(750, Math.max(1, deadline - Date.now()))));
+            await new Promise(resolve => setTimeout(resolve, Math.min(1000, Math.max(1, deadline - Date.now()))));
             command = await pullPendingDesktopScannerCommand(scannerId);
         }
         if (!command) return res.json({ success: true, command: null });
