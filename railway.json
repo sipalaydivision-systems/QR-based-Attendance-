@@ -4,9 +4,9 @@
         "builder": "NIXPACKS"
     },
     "deploy": {
-        "startCommand": "npm run db:init && node server.js",
+        "startCommand": "node server.js",
         "healthcheckPath": "/health",
-        "healthcheckTimeout": 300,
+        "healthcheckTimeout": 900,
         "overlapSeconds": "20",
         "drainingSeconds": "10",
         "restartPolicyType": "ON_FAILURE",

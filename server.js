@@ -236,6 +236,35 @@ function getPublicAppBaseUrl(req) {
     return `${req.protocol}://${host}`.replace(/\/+$/, '');
 }
 
+async function ensureRuntimeColumnDefinition({
+    tableName,
+    columnName,
+    definition,
+    expectedType,
+    expectedNullable,
+    expectedDefault
+}) {
+    if (!/^[a-z_]+$/i.test(tableName) || !/^[a-z_]+$/i.test(columnName)) {
+        throw new Error('Unsafe runtime schema identifier.');
+    }
+    const [[column]] = await db.query(
+        `SELECT COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT
+         FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?
+         LIMIT 1`,
+        [tableName, columnName]
+    );
+    if (!column) return;
+    const actualType = String(column.COLUMN_TYPE || '').toLowerCase();
+    const actualNullable = String(column.IS_NULLABLE || '').toUpperCase();
+    const actualDefault = column.COLUMN_DEFAULT == null ? null : String(column.COLUMN_DEFAULT).toLowerCase();
+    if (actualType === expectedType.toLowerCase()
+        && actualNullable === expectedNullable
+        && actualDefault === expectedDefault) return;
+    await db.query(`ALTER TABLE ${tableName} MODIFY COLUMN ${columnName} ${definition}`);
+    console.log(`Updated ${tableName}.${columnName} definition.`);
+}
+
 async function ensureRuntimeSchema() {
     const [columns] = await db.query(
         `SELECT COLUMN_NAME
@@ -261,9 +290,30 @@ async function ensureRuntimeSchema() {
         console.log('Added missing teachers.active_from column.');
     }
 
-    await db.query("ALTER TABLE students MODIFY COLUMN status ENUM('active','inactive','deleted') DEFAULT 'inactive'");
-    await db.query("ALTER TABLE teachers MODIFY COLUMN status ENUM('active','inactive','deleted') DEFAULT 'inactive'");
-    await db.query("ALTER TABLE attendance MODIFY COLUMN status ENUM('present','late','half_day','absent') DEFAULT 'present'");
+    await ensureRuntimeColumnDefinition({
+        tableName: 'students',
+        columnName: 'status',
+        definition: "ENUM('active','inactive','deleted') DEFAULT 'inactive'",
+        expectedType: "enum('active','inactive','deleted')",
+        expectedNullable: 'YES',
+        expectedDefault: 'inactive'
+    });
+    await ensureRuntimeColumnDefinition({
+        tableName: 'teachers',
+        columnName: 'status',
+        definition: "ENUM('active','inactive','deleted') DEFAULT 'inactive'",
+        expectedType: "enum('active','inactive','deleted')",
+        expectedNullable: 'YES',
+        expectedDefault: 'inactive'
+    });
+    await ensureRuntimeColumnDefinition({
+        tableName: 'attendance',
+        columnName: 'status',
+        definition: "ENUM('present','late','half_day','absent') DEFAULT 'present'",
+        expectedType: "enum('present','late','half_day','absent')",
+        expectedNullable: 'YES',
+        expectedDefault: 'present'
+    });
 
     // Imported students should not become attendance-eligible until their first valid attendance scan.
     const [inactiveResult] = await db.query(`
@@ -375,7 +425,14 @@ async function ensureRuntimeSchema() {
     `);
 
     // Role support: expand users.role ENUM + add teacher_id link column.
-    await db.query("ALTER TABLE users MODIFY COLUMN role ENUM('super_admin','principal','superintendent','asst_superintendent','adviser','parent') NOT NULL DEFAULT 'principal'");
+    await ensureRuntimeColumnDefinition({
+        tableName: 'users',
+        columnName: 'role',
+        definition: "ENUM('super_admin','principal','superintendent','asst_superintendent','adviser','parent') NOT NULL DEFAULT 'principal'",
+        expectedType: "enum('super_admin','principal','superintendent','asst_superintendent','adviser','parent')",
+        expectedNullable: 'NO',
+        expectedDefault: 'principal'
+    });
     const [teacherIdCol] = await db.query(
         `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'teacher_id'`
