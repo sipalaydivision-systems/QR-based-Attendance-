@@ -266,6 +266,16 @@ async function syncAttendanceNotificationsForParent(parent, children, date) {
     const parentId = parent.parent_id || parent.id;
     if (!parentId) return;
     for (const child of children || []) {
+        // Calendar closures can never produce an absence. Remove an older alert
+        // too, in case the closure was declared after the parent opened the app.
+        if (child.is_school_day === false) {
+            await db.query(
+                `DELETE FROM parent_notifications
+                 WHERE parent_id = ? AND student_id = ?
+                   AND source_key IN (?, ?)`,
+                [parentId, child.id, `absent:${child.id}:${date}`, `flagged:${child.id}:${date}`]
+            );
+        }
         for (const entry of child.timeline || []) {
             const copy = attendanceCopy(entry.label || entry.label_display, child.name, entry.time);
             if (!copy) continue;
@@ -284,7 +294,7 @@ async function syncAttendanceNotificationsForParent(parent, children, date) {
                 createdAt: entry.time
             });
         }
-        if (child.absence_final && !child.timeline?.length && child.today_status === 'Absent') {
+        if (child.is_school_day !== false && child.absence_final && !child.timeline?.length && child.today_status === 'Absent') {
             await insertParentNotification({
                 parentId,
                 studentId: child.id,
@@ -300,7 +310,7 @@ async function syncAttendanceNotificationsForParent(parent, children, date) {
                 createdAt: nowDateTime()
             });
         }
-        if (Number(child.consecutive_absences || 0) >= 2) {
+        if (child.is_school_day !== false && Number(child.consecutive_absences || 0) >= 2) {
             await insertParentNotification({
                 parentId,
                 studentId: child.id,

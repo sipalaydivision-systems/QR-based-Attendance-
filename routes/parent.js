@@ -476,7 +476,17 @@ async function buildParentPayload(parent, date) {
     const childPayload = [];
     for (const child of children) {
         const attendance = attendanceByStudent.get(child.id) || null;
-        const resolved = resolveAttendance(attendance, schedule, attendance ? (eventsByAttendance.get(attendance.id) || []) : [], isAbsenceFinal(date));
+        const schoolDay = await isSchoolDay(date, child.school_id);
+        const resolved = (!schoolDay.is_school_day && (!attendance || !attendance.time_in))
+            ? {
+                status: 'non_school_day',
+                label: schoolDay.type || 'No Classes',
+                remarks: schoolDay.reason || 'No classes are scheduled today.',
+                timeline: [],
+                current_status: schoolDay.type || 'No Classes',
+                latest_scan_time: null
+            }
+            : resolveAttendance(attendance, schedule, attendance ? (eventsByAttendance.get(attendance.id) || []) : [], isAbsenceFinal(date));
         const consecutiveAbsences = await countConsecutiveAbsences(child.id, child.school_id, date);
         childPayload.push({
             id: child.id,
@@ -499,7 +509,10 @@ async function buildParentPayload(parent, date) {
             remarks: resolved.remarks || '',
             timeline: resolved.timeline,
             consecutive_absences: consecutiveAbsences,
-            absence_final: isAbsenceFinal(date)
+            absence_final: schoolDay.is_school_day && isAbsenceFinal(date),
+            is_school_day: schoolDay.is_school_day,
+            non_school_day_type: schoolDay.is_school_day ? null : schoolDay.type,
+            non_school_day_reason: schoolDay.is_school_day ? null : schoolDay.reason
         });
     }
 
@@ -1171,13 +1184,13 @@ router.post('/api/parent/profile', requireParentAuth, async (req, res) => {
 
 // Latest published parent-app version. Bump this (and the Flutter pubspec version)
 // whenever a new APK is released so the in-app updater offers the update.
-const PARENT_APP_LATEST = { version: '1.0.45', version_code: 47 };
+const PARENT_APP_LATEST = { version: '1.0.46', version_code: 48 };
 router.get('/api/parent/app-version', (req, res) => {
     return res.json({
         latest_version: PARENT_APP_LATEST.version,
         latest_version_code: PARENT_APP_LATEST.version_code,
         apk_url: `${req.protocol}://${req.get('host')}/download/parent-app`,
-        notes: 'You now get a system notification when a new Guardian update is available.'
+        notes: 'Attendance no longer marks students absent on weekends, holidays, suspensions, or declared no-class days.'
     });
 });
 
