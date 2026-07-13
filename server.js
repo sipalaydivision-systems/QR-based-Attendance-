@@ -882,6 +882,7 @@ app.get('/api/mobile-health', (req, res) => {
     return res.json({
         ok: true,
         authenticated: !!(req.session && req.session.user),
+        firebase: firebasePushStatus(),
         serverTime: nowIso()
     });
 });
