@@ -3569,7 +3569,15 @@ router.get('/school-map-data', requireRole('super_admin'), async (req, res) => {
 });
 
 function uploadedFileToDataUrl(file) {
-    return `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const safeMime = {
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.gif': 'image/gif',
+        '.webp': 'image/webp'
+    }[ext];
+    return `data:${safeMime || file.mimetype};base64,${file.buffer.toString('base64')}`;
 }
 
 router.delete('/schools/:id', requireRole('super_admin'), async (req, res) => {
@@ -5834,6 +5842,7 @@ router.post('/schools/:id/logo', requireAuth, function(req, res) {
         try {
             const logoPath = uploadedFileToDataUrl(req.file);
             await db.query('UPDATE schools SET logo = ? WHERE id = ?', [logoPath, req.params.id]);
+            invalidateLiveDashboardCaches();
             return res.json({ success: true, logo: logoPath });
         } catch (e) {
             console.error('Logo upload error:', e);
@@ -5845,6 +5854,7 @@ router.post('/schools/:id/logo', requireAuth, function(req, res) {
 router.delete('/schools/:id/logo', requireAuth, async (req, res) => {
     try {
         await db.query('UPDATE schools SET logo = NULL WHERE id = ?', [req.params.id]);
+        invalidateLiveDashboardCaches();
         return res.json({ success: true });
     } catch (e) {
         console.error('Logo delete error:', e);

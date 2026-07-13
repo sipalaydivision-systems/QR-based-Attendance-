@@ -620,7 +620,10 @@
     }
     async function pollDashboard() {
         if (pollBusy || dashboardBusy || document.hidden) return;
-        if (Date.now() - lastFullRefresh >= 5 * 60 * 1000) return loadDashboard();
+        if (Date.now() - lastFullRefresh >= 5 * 60 * 1000) {
+            await Promise.all([loadDashboard(), loadBranding()]);
+            return;
+        }
         pollBusy = true;
         try {
             var res = await fetch('/api/parent/poll', { headers: { 'Accept': 'application/json' } });
@@ -643,13 +646,15 @@
         try {
             var res = await fetch('/api/parent/branding');
             var data = await res.json();
-            if (data.system_logo) {
-                state.logo = data.system_logo;
-                document.getElementById('appLogo').src = data.system_logo;
+            if (Object.prototype.hasOwnProperty.call(data, 'system_logo')) {
+                state.logo = data.system_logo || '/uploads/logos/system-logo.png';
+                document.getElementById('appLogo').src = state.logo;
             }
             if (data.system_name) document.getElementById('systemName').textContent = data.system_name;
             if (data.division_name) document.getElementById('divisionName').textContent = data.division_name;
-            if (data.mobile_dashboard_school_art) document.getElementById('schoolArt').src = data.mobile_dashboard_school_art;
+            if (Object.prototype.hasOwnProperty.call(data, 'mobile_dashboard_school_art')) {
+                document.getElementById('schoolArt').src = data.mobile_dashboard_school_art || '/uploads/logos/system-logo.png';
+            }
         } catch (e) {}
     }
     async function enableNotifications() {

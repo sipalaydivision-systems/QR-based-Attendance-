@@ -1034,9 +1034,13 @@ class ParentApi {
           .timeout(const Duration(seconds: 10));
       final data = _decode(res.body);
       final logo = '${data['system_logo'] ?? ''}'.trim();
-      if (logo.isNotEmpty) {
+      if (data.containsKey('system_logo')) {
         gSchoolLogo = logo;
-        await prefs.setString('parent_school_logo', logo);
+        if (logo.isEmpty) {
+          await prefs.remove('parent_school_logo');
+        } else {
+          await prefs.setString('parent_school_logo', logo);
+        }
       }
     } catch (_) {
       /* best-effort branding refresh */
@@ -2209,7 +2213,10 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     _timer?.cancel();
     _timer = Timer.periodic(
       const Duration(minutes: 5),
-      (_) => _load(silent: true),
+      (_) {
+        _load(silent: true);
+        _loadBranding();
+      },
     );
   }
 
@@ -2219,16 +2226,28 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     final art = '${b['mobile_dashboard_school_art'] ?? ''}';
     final logo = '${b['system_logo'] ?? ''}';
     setState(() {
-      if (art.isNotEmpty) _schoolArt = art;
-      if (logo.isNotEmpty) _schoolLogo = logo;
+      if (b.containsKey('mobile_dashboard_school_art')) {
+        _schoolArt = art.isEmpty ? null : art;
+      }
+      if (b.containsKey('system_logo')) {
+        _schoolLogo = logo.isEmpty ? null : logo;
+      }
     });
-    if (logo.isNotEmpty) {
+    if (b.containsKey('system_logo')) {
       gSchoolLogo = logo;
-      await widget.api.prefs.setString('parent_school_logo', logo);
+      if (logo.isEmpty) {
+        await widget.api.prefs.remove('parent_school_logo');
+      } else {
+        await widget.api.prefs.setString('parent_school_logo', logo);
+      }
     }
-    if (art.isNotEmpty) {
+    if (b.containsKey('mobile_dashboard_school_art')) {
       gSchoolArt = art;
-      await widget.api.prefs.setString('parent_school_art', art);
+      if (art.isEmpty) {
+        await widget.api.prefs.remove('parent_school_art');
+      } else {
+        await widget.api.prefs.setString('parent_school_art', art);
+      }
     }
   }
 
@@ -2246,6 +2265,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       widget.api.registerDeviceToken();
       _load(silent: true);
+      _loadBranding();
       _startDashboardRefresh();
     } else if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||

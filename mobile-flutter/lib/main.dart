@@ -23,7 +23,7 @@ class AppConfig {
   static const subtitle = 'Schools Division of Sipalay City';
   static const monitoringLabel = 'Secure Mobile Workspace';
   static const noInternetMessage =
-      "EduTrack can't reach the server right now. Check your internet connection, then try again.";
+      "EduTrack is reconnecting automatically. Check your internet connection if this continues.";
   static const serverWarmupMessage =
       'Railway may be waking the server. EduTrack will retry automatically.';
   static const logoAsset = 'assets/images/app_logo.png';
@@ -45,6 +45,9 @@ final ValueNotifier<String> brandName = ValueNotifier<String>(
 final ValueNotifier<String> brandSubtitle = ValueNotifier<String>(
   AppConfig.subtitle,
 );
+// Foreground Firebase messages refresh only the live dashboard/alerts view.
+// Other features keep their existing refresh behavior.
+final ValueNotifier<int> mainDashboardRefresh = ValueNotifier<int>(0);
 const MethodChannel nativeBridge = MethodChannel('edutrack/native');
 const String _mainViewedAlertKeysPreference = 'main_viewed_alert_keys_v1';
 
@@ -470,6 +473,7 @@ Future<void> _setupMainFcm(SharedPreferences prefs) async {
       // stable Android ID per report type so an update replaces the visible
       // notification instead of creating another copy.
       if (!await _rememberMainFcmMessage(prefs, message)) return;
+      mainDashboardRefresh.value++;
 
       // Daily-summary pushes carry the full breakdown so we can render the
       // rich design (robot icon + per-section stats) instead of the basic
@@ -693,7 +697,18 @@ class ApiService {
     Object? lastError;
     for (var attempt = 0; attempt <= retries; attempt++) {
       try {
-        return await runner().timeout(timeout);
+        final response = await runner().timeout(timeout);
+        final transientServerError =
+            response.statusCode == 502 ||
+            response.statusCode == 503 ||
+            response.statusCode == 504;
+        if (transientServerError && attempt < retries) {
+          await Future.delayed(
+            Duration(milliseconds: 900 + (attempt * 700)),
+          );
+          continue;
+        }
+        return response;
       } on SocketException catch (e) {
         lastError = e;
       } on TimeoutException catch (e) {
@@ -1769,10 +1784,12 @@ class _HomeShellState extends State<HomeShell>
   bool loading = true;
   String? error;
   Timer? timer;
+  Timer? retryTimer;
   late final AnimationController backgroundController;
   Map<String, dynamic>? alertIntent;
   bool headerCompact = false;
   bool dashboardRequestRunning = false;
+  int dashboardFailureCount = 0;
   Set<String> viewedAlertKeys = <String>{};
   bool viewedAlertKeysLoaded = false;
 
@@ -1789,6 +1806,7 @@ class _HomeShellState extends State<HomeShell>
       duration: const Duration(seconds: 9),
     )..repeat();
     _loadViewedAlertKeys();
+    mainDashboardRefresh.addListener(_refreshFromFirebase);
     load();
     // Keep the dashboard live without stacking requests when mobile data is
     // slow or Railway is waking up.
@@ -1803,6 +1821,22 @@ class _HomeShellState extends State<HomeShell>
     );
   }
 
+  void _refreshFromFirebase() {
+    load(silent: true);
+  }
+
+  void _scheduleDashboardRetry() {
+    retryTimer?.cancel();
+    const delays = <int>[5, 10, 20, 30];
+    final index = math.min(
+      math.max(dashboardFailureCount - 1, 0),
+      delays.length - 1,
+    );
+    retryTimer = Timer(Duration(seconds: delays[index]), () {
+      load(silent: dashboard.isNotEmpty);
+    });
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -1812,13 +1846,16 @@ class _HomeShellState extends State<HomeShell>
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       timer?.cancel();
+      retryTimer?.cancel();
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    mainDashboardRefresh.removeListener(_refreshFromFirebase);
     timer?.cancel();
+    retryTimer?.cancel();
     backgroundController.dispose();
     super.dispose();
   }
@@ -1900,6 +1937,8 @@ class _HomeShellState extends State<HomeShell>
       final fcmToken = widget.api.prefs.getString('fcm_token') ?? gMainFcmToken;
       unawaited(_registerMainDevice(widget.api.prefs, fcmToken));
       if (mounted) {
+        dashboardFailureCount = 0;
+        retryTimer?.cancel();
         setState(() {
           loading = false;
           error = null;
@@ -1915,14 +1954,21 @@ class _HomeShellState extends State<HomeShell>
         );
       }
     } catch (e) {
+      dashboardFailureCount++;
+      _scheduleDashboardRetry();
       if (mounted) {
-        setState(() {
-          loading = false;
-          error = readableError(
-            e,
-            fallback: 'Failed to sync dashboard data from the server.',
-          );
-        });
+        // Keep valid data visible during a short Railway handover and retry in
+        // the background. Show the reconnect message only before the first
+        // successful dashboard response.
+        if (dashboard.isEmpty) {
+          setState(() {
+            loading = false;
+            error = readableError(
+              e,
+              fallback: 'Failed to sync dashboard data from the server.',
+            );
+          });
+        }
       }
     } finally {
       dashboardRequestRunning = false;

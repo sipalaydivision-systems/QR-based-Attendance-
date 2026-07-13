@@ -16,6 +16,12 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 
+// Railway waits for this response before switching traffic from the previous
+// deployment, preventing the short 502 window mobile users previously saw.
+app.get('/health', (_req, res) => {
+    res.status(200).json({ status: 'healthy' });
+});
+
 if (isProduction) {
     app.set('trust proxy', 1);
 }
@@ -36,9 +42,9 @@ const DESKTOP_SCANNER_LATEST = {
 };
 
 const MOBILE_APP_LATEST = {
-    version: '2.1.46',
-    version_code: 77,
-    notes: 'Uses less mobile data while keeping attendance notifications immediate and school logos visible.'
+    version: '2.1.47',
+    version_code: 78,
+    notes: 'Adds zero-downtime reconnect handling, real-time Firebase dashboard refresh, and reliable logo updates.'
 };
 
 function mobileApkReleaseUrl() {

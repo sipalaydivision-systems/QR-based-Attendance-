@@ -1217,13 +1217,13 @@ router.post('/api/parent/profile', requireParentAuth, async (req, res) => {
 
 // Latest published parent-app version. Bump this (and the Flutter pubspec version)
 // whenever a new APK is released so the in-app updater offers the update.
-const PARENT_APP_LATEST = { version: '1.0.48', version_code: 50 };
+const PARENT_APP_LATEST = { version: '1.0.49', version_code: 51 };
 router.get('/api/parent/app-version', (req, res) => {
     return res.json({
         latest_version: PARENT_APP_LATEST.version,
         latest_version_code: PARENT_APP_LATEST.version_code,
         apk_url: `${req.protocol}://${req.get('host')}/download/parent-app?v=${PARENT_APP_LATEST.version_code}`,
-        notes: 'Push-triggered dashboard updates keep notifications immediate while greatly reducing background data use.'
+        notes: 'Keeps Firebase alerts immediate and reliably applies uploaded or removed branding.'
     });
 });
 
