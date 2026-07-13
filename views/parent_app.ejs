@@ -375,6 +375,10 @@
     var state = { children: [], notifications: [], parent: null, logo: '<%= branding.system_logo || "/uploads/logos/system-logo.png" %>' };
     var seenKey = 'edutrack-parent-seen-notifications';
     var firstLoad = true;
+    var latestNotificationId = 0;
+    var lastFullRefresh = 0;
+    var pollBusy = false;
+    var dashboardBusy = false;
 
     function esc(v) {
         return String(v == null ? '' : v)
@@ -584,22 +588,55 @@
         renderAdvisers();
     }
     async function loadDashboard() {
-        var date = document.getElementById('dateInput').value || todayString();
-        var res = await fetch('/api/parent/dashboard?date=' + encodeURIComponent(date), { headers: { 'Accept': 'application/json' } });
-        if (!res.ok) {
-            if (res.status === 401) location.href = '/parent-login';
-            return;
+        if (dashboardBusy) return;
+        dashboardBusy = true;
+        try {
+            var date = document.getElementById('dateInput').value || todayString();
+            var res = await fetch('/api/parent/dashboard?date=' + encodeURIComponent(date), { headers: { 'Accept': 'application/json' } });
+            if (!res.ok) {
+                if (res.status === 401) location.href = '/parent-login';
+                return;
+            }
+            var data = await res.json();
+            state.children = data.children || [];
+            state.notifications = data.notifications || [];
+            state.parent = data.parent || null;
+            latestNotificationId = state.notifications.reduce(function(max, note) {
+                return Math.max(max, Number(note.notification_id || note.id || 0));
+            }, 0);
+            lastFullRefresh = Date.now();
+            document.getElementById('parentName').textContent = state.parent && state.parent.guardian_name ? state.parent.guardian_name : '<%= parent.fullname || "Parent" %>';
+            renderAll();
+            maybeShowBrowserNotifications(state.notifications);
+            if (firstLoad) {
+                markSeen(state.notifications);
+                firstLoad = false;
+            }
+        } catch (e) {
+            // Keep the last successful dashboard visible during a brief outage.
+        } finally {
+            dashboardBusy = false;
         }
-        var data = await res.json();
-        state.children = data.children || [];
-        state.notifications = data.notifications || [];
-        state.parent = data.parent || null;
-        document.getElementById('parentName').textContent = state.parent && state.parent.guardian_name ? state.parent.guardian_name : '<%= parent.fullname || "Parent" %>';
-        renderAll();
-        maybeShowBrowserNotifications(state.notifications);
-        if (firstLoad) {
-            markSeen(state.notifications);
-            firstLoad = false;
+    }
+    async function pollDashboard() {
+        if (pollBusy || dashboardBusy || document.hidden) return;
+        if (Date.now() - lastFullRefresh >= 5 * 60 * 1000) return loadDashboard();
+        pollBusy = true;
+        try {
+            var res = await fetch('/api/parent/poll', { headers: { 'Accept': 'application/json' } });
+            if (res.status === 401) return location.href = '/parent-login';
+            if (!res.ok) return;
+            var update = await res.json();
+            var localUnread = state.notifications.filter(function(note) {
+                return note.is_read !== true && note.is_read !== 1 && String(note.is_read) !== '1';
+            }).length;
+            if (Number(update.latest_notification_id || 0) !== latestNotificationId || Number(update.unread_count || 0) !== localUnread) {
+                await loadDashboard();
+            }
+        } catch (e) {
+            // The five-minute full refresh remains the recovery path.
+        } finally {
+            pollBusy = false;
         }
     }
     async function loadBranding() {
@@ -641,7 +678,10 @@
     initDates();
     loadBranding();
     loadDashboard();
-    setInterval(loadDashboard, 15000);
+    setInterval(pollDashboard, 15000);
+    document.addEventListener('visibilitychange', function() {
+        if (!document.hidden) pollDashboard();
+    });
     </script>
 </body>
 </html>

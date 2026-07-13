@@ -355,6 +355,7 @@ CREATE TABLE IF NOT EXISTS parent_notifications (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     read_at TIMESTAMP NULL,
     UNIQUE KEY uk_parent_notification_source (parent_id, source_key),
+    INDEX idx_parent_notifications_parent_id (parent_id, id),
     INDEX idx_parent_notifications_parent_read (parent_id, is_read, created_at),
     INDEX idx_parent_notifications_student (student_id),
     INDEX idx_parent_notifications_scope (school_id, grade_level_id, section_id),

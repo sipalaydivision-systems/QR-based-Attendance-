@@ -1,5 +1,19 @@
 // Authentication middleware
 const db = require('../config/database');
+const accountValidationCache = new Map();
+const ACCOUNT_CACHE_TTL_MS = 30 * 1000;
+const ACCOUNT_CACHE_MAX = 25000;
+
+function accountCacheKey(user) {
+    return `${user.role || 'user'}:${user.parent_id || user.teacher_id || user.id || ''}`;
+}
+
+function rememberAccount(key, value) {
+    accountValidationCache.set(key, { value, checkedAt: Date.now() });
+    while (accountValidationCache.size > ACCOUNT_CACHE_MAX) {
+        accountValidationCache.delete(accountValidationCache.keys().next().value);
+    }
+}
 
 function wantsJson(req) {
     const originalUrl = req.originalUrl || '';
@@ -41,6 +55,17 @@ function sendAccountDisabled(req, res) {
 async function validateSessionAccount(req) {
     const user = req.session && req.session.user;
     if (!user) return false;
+    const cacheKey = accountCacheKey(user);
+    const cached = accountValidationCache.get(cacheKey);
+    if (cached && Date.now() - cached.checkedAt < ACCOUNT_CACHE_TTL_MS) {
+        if (user.role === 'adviser') {
+            req.session.user.teacher_id = cached.value.id;
+            req.session.user.school_id = cached.value.school_id || null;
+        } else if (user.role !== 'parent') {
+            Object.assign(req.session.user, cached.value);
+        }
+        return true;
+    }
     if (user.role === 'adviser') {
         const teacherId = user.teacher_id || user.id;
         if (!teacherId) return false;
@@ -51,6 +76,7 @@ async function validateSessionAccount(req) {
         if (!teacher || teacher.status === 'deleted') return false;
         req.session.user.teacher_id = teacher.id;
         req.session.user.school_id = teacher.school_id || null;
+        rememberAccount(cacheKey, { id: teacher.id, school_id: teacher.school_id || null });
         return true;
     }
     if (user.role === 'parent') {
@@ -60,7 +86,9 @@ async function validateSessionAccount(req) {
             "SELECT id, status FROM parents WHERE id = ? LIMIT 1",
             [parentId]
         );
-        return Boolean(parent && parent.status === 'active');
+        const active = Boolean(parent && parent.status === 'active');
+        if (active) rememberAccount(cacheKey, { id: parent.id });
+        return active;
     }
     const [[row]] = await db.query(
         'SELECT id, username, fullname, email, role, school_id, teacher_id, status FROM users WHERE id = ? LIMIT 1',
@@ -73,6 +101,14 @@ async function validateSessionAccount(req) {
     req.session.user.role = row.role;
     req.session.user.school_id = row.school_id;
     req.session.user.teacher_id = row.teacher_id || null;
+    rememberAccount(cacheKey, {
+        username: row.username,
+        fullname: row.fullname,
+        email: row.email,
+        role: row.role,
+        school_id: row.school_id,
+        teacher_id: row.teacher_id || null
+    });
     return true;
 }
 

@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const compression = require('compression');
 const session = require('express-session');
 const path = require('path');
 const fs = require('fs');
@@ -26,6 +27,7 @@ app.set('views', path.join(__dirname, 'views'));
 // Body parsing
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use(compression({ threshold: 1024 }));
 app.use(trackSystemTraffic);
 
 const DESKTOP_SCANNER_LATEST = {
@@ -453,6 +455,18 @@ async function ensureRuntimeSchema() {
         }
     }
 
+    async function ensureRuntimeIndex(tableName, indexName, columns) {
+        const [indexes] = await db.query(
+            `SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1`,
+            [tableName, indexName]
+        );
+        if (indexes.length === 0) {
+            await db.query(`ALTER TABLE ${tableName} ADD INDEX ${indexName} (${columns})`);
+            console.log(`Added missing ${tableName}.${indexName} index.`);
+        }
+    }
+
     // Schools map: optional GPS coordinates for the Sipalay City dashboard map.
     await ensureRuntimeColumn('schools', 'latitude', 'DECIMAL(10,8) NULL AFTER logo');
     await ensureRuntimeColumn('schools', 'longitude', 'DECIMAL(11,8) NULL AFTER latitude');
@@ -619,6 +633,8 @@ async function ensureRuntimeSchema() {
             FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE SET NULL
         ) ENGINE=InnoDB
     `);
+
+    await ensureRuntimeIndex('parent_notifications', 'idx_parent_notifications_parent_id', 'parent_id, id');
 
     // Section transfer / reassignment approval requests. The approver is always a
     // teacher (the receiving section's adviser for a student transfer, or the
@@ -898,6 +914,7 @@ app.get('/download/mobile-app', (req, res) => {
     if (String(req.query.v || '') !== String(MOBILE_APP_LATEST.version_code)) {
         return res.redirect(302, `/download/mobile-app?v=${MOBILE_APP_LATEST.version_code}`);
     }
+
     res.set('Cache-Control', 'public, max-age=31536000, immutable');
     return res.download(apkPath, `EduTrack-Mobile-${MOBILE_APP_LATEST.version}.apk`);
 });

@@ -27,7 +27,7 @@ if (isProduction) {
 const pool = mysql.createPool({
     ...dbConfig,
     waitForConnections: true,
-    connectionLimit: 10,
+    connectionLimit: Math.max(5, parseInt(process.env.DB_CONNECTION_LIMIT || '20', 10) || 20),
     queueLimit: 0,
     charset: 'utf8mb4',
     timezone: '+08:00',

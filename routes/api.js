@@ -1735,12 +1735,28 @@ async function checkOperationalSchoolDay(dateStr, schoolId) {
     return schoolDay;
 }
 
+const absenceCountingDecisionCache = new Map();
+
+function rememberAbsenceCountingDecision(key, value) {
+    absenceCountingDecisionCache.set(key, { value, timestamp: Date.now() });
+    while (absenceCountingDecisionCache.size > 500) {
+        absenceCountingDecisionCache.delete(absenceCountingDecisionCache.keys().next().value);
+    }
+}
+
 async function shouldCountComputedAbsences(dateStr, schoolId) {
+    const cacheKey = `${dateStr}:${schoolId || 'all'}`;
+    const cached = absenceCountingDecisionCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 15000) return cached.value;
     const today = todayDate();
-    if (dateStr > today) return false;
+    if (dateStr > today) {
+        rememberAbsenceCountingDecision(cacheKey, false);
+        return false;
+    }
     const schoolDay = await checkOperationalSchoolDay(dateStr, schoolId);
-    if (!schoolDay.isSchoolDay) return false;
-    return hasSchoolDayEnded(dateStr);
+    const value = schoolDay.isSchoolDay ? await hasSchoolDayEnded(dateStr) : false;
+    rememberAbsenceCountingDecision(cacheKey, value);
+    return value;
 }
 
 async function countStudentsWithoutTimeIn(dateStr, schoolId) {
@@ -2514,9 +2530,13 @@ router.post('/scan-attendance', requireAuthOrScannerKiosk, async (req, res) => {
 // =============================================
 // GET /api/dashboard-data
 // =============================================
-const dashboardCache = { data: null, timestamp: 0, key: '' };
+const dashboardCache = new Map();
+const dashboardCacheInFlight = new Map();
+const DASHBOARD_CACHE_MAX_KEYS = 500;
 
 router.get('/dashboard-data', requireAuth, async (req, res) => {
+    let cacheKey = '';
+    let finishSharedRequest = null;
     try {
         res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
         res.set('Pragma', 'no-cache');
@@ -2525,12 +2545,22 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
         const schoolId = applySchoolFilter(req);
         const canSeeDesktopScanners = req.session?.user?.role === 'super_admin';
         const absenceCountingActive = await shouldCountComputedAbsences(date, schoolId);
-        const cacheKey = `${date}-${schoolId || 'all'}-${absenceCountingActive ? 'absence-closed' : 'attendance-open'}-${canSeeDesktopScanners ? 'scanner-visible' : 'scanner-hidden'}`;
+        cacheKey = `${date}-${schoolId || 'all'}-${absenceCountingActive ? 'absence-closed' : 'attendance-open'}-${canSeeDesktopScanners ? 'scanner-visible' : 'scanner-hidden'}`;
+        const cacheTtlMs = canSeeDesktopScanners ? 3000 : 15000;
 
-        // Return cached if fresh (3 seconds)
-        if (!req.query._ && dashboardCache.key === cacheKey && (Date.now() - dashboardCache.timestamp) < 3000) {
-            return res.json(dashboardCache.data);
+        // A client cache-busting query parameter must not force duplicate MySQL
+        // work. Regular role/school summaries are shared for 15 seconds. Super
+        // Admin scanner visibility keeps its existing 3-second freshness.
+        const cached = dashboardCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp) < cacheTtlMs) {
+            return res.json(cached.data);
         }
+        const inFlight = dashboardCacheInFlight.get(cacheKey);
+        if (inFlight) {
+            const shared = await inFlight;
+            if (shared) return res.json(shared);
+        }
+        dashboardCacheInFlight.set(cacheKey, new Promise(resolve => { finishSharedRequest = resolve; }));
 
         const schoolFilter = schoolId ? ' AND school_id = ?' : '';
         const schoolParams = schoolId ? [schoolId] : [];
@@ -2727,13 +2757,17 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
             schools: breakdown
         };
 
-        // Cache result
-        dashboardCache.data = data;
-        dashboardCache.timestamp = Date.now();
-        dashboardCache.key = cacheKey;
+        dashboardCache.set(cacheKey, { data, timestamp: Date.now() });
+        while (dashboardCache.size > DASHBOARD_CACHE_MAX_KEYS) {
+            dashboardCache.delete(dashboardCache.keys().next().value);
+        }
+        finishSharedRequest(data);
+        dashboardCacheInFlight.delete(cacheKey);
 
         return res.json(data);
     } catch (err) {
+        if (finishSharedRequest) finishSharedRequest(null);
+        if (cacheKey) dashboardCacheInFlight.delete(cacheKey);
         console.error('Dashboard data error:', err);
         return res.status(500).json({ error: 'Failed to load dashboard data.' });
     }
@@ -2816,9 +2850,8 @@ router.get('/mobile-branding', requireAuth, async (req, res) => {
 const weeklyAbsenceCache = { data: null, timestamp: 0, key: '' };
 
 function invalidateLiveDashboardCaches() {
-    dashboardCache.data = null;
-    dashboardCache.timestamp = 0;
-    dashboardCache.key = '';
+    dashboardCache.clear();
+    absenceCountingDecisionCache.clear();
     weeklyAbsenceCache.data = null;
     weeklyAbsenceCache.timestamp = 0;
     weeklyAbsenceCache.key = '';

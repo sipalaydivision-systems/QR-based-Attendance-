@@ -4,6 +4,11 @@ const db = require('./database');
 class MySQLSessionStore extends session.Store {
     constructor() {
         super();
+        this.cache = new Map();
+        this.lastTouches = new Map();
+        this.cacheTtlMs = 60 * 1000;
+        this.touchIntervalMs = 5 * 60 * 1000;
+        this.maxCacheEntries = 25000;
         this.ready = this.ensureTable();
         this.cleanupTimer = setInterval(() => {
             this.clearExpired(() => {});
@@ -24,6 +29,15 @@ class MySQLSessionStore extends session.Store {
     }
 
     get(sid, callback) {
+        const now = Date.now();
+        const cached = this.cache.get(sid);
+        if (cached && cached.expiresAt > now && now - cached.cachedAt < this.cacheTtlMs) {
+            try {
+                return callback(null, JSON.parse(cached.serialized));
+            } catch (_) {
+                this.cache.delete(sid);
+            }
+        }
         this.ready
             .then(async () => {
                 const [rows] = await db.query(
@@ -32,6 +46,10 @@ class MySQLSessionStore extends session.Store {
                 );
                 if (!rows.length) return callback(null, null);
                 const data = typeof rows[0].data === 'string' ? JSON.parse(rows[0].data) : rows[0].data;
+                const expiresAt = data?.cookie?.expires
+                    ? new Date(data.cookie.expires).getTime()
+                    : now + 24 * 60 * 60 * 1000;
+                this.remember(sid, data, expiresAt);
                 return callback(null, data);
             })
             .catch(callback);
@@ -42,6 +60,7 @@ class MySQLSessionStore extends session.Store {
             ? new Date(sess.cookie.expires).getTime()
             : Date.now() + 24 * 60 * 60 * 1000;
 
+        this.remember(sid, sess, expiresAt);
         this.ready
             .then(async () => {
                 await db.query(
@@ -56,6 +75,8 @@ class MySQLSessionStore extends session.Store {
     }
 
     destroy(sid, callback) {
+        this.cache.delete(sid);
+        this.lastTouches.delete(sid);
         this.ready
             .then(async () => {
                 await db.query('DELETE FROM app_sessions WHERE sid = ?', [sid]);
@@ -69,6 +90,12 @@ class MySQLSessionStore extends session.Store {
             ? new Date(sess.cookie.expires).getTime()
             : Date.now() + 24 * 60 * 60 * 1000;
 
+        const now = Date.now();
+        this.remember(sid, sess, expiresAt, true);
+        if (now - (this.lastTouches.get(sid) || 0) < this.touchIntervalMs) {
+            return callback(null);
+        }
+        this.lastTouches.set(sid, now);
         this.ready
             .then(async () => {
                 await db.query('UPDATE app_sessions SET expires_at = ? WHERE sid = ?', [expiresAt, sid]);
@@ -78,12 +105,33 @@ class MySQLSessionStore extends session.Store {
     }
 
     clearExpired(callback) {
+        const now = Date.now();
+        for (const [sid, item] of this.cache) {
+            if (item.expiresAt <= now) {
+                this.cache.delete(sid);
+                this.lastTouches.delete(sid);
+            }
+        }
         this.ready
             .then(async () => {
                 await db.query('DELETE FROM app_sessions WHERE expires_at <= ?', [Date.now()]);
                 callback(null);
             })
             .catch(callback);
+    }
+
+    remember(sid, sess, expiresAt, preserveCacheAge = false) {
+        const existing = this.cache.get(sid);
+        this.cache.set(sid, {
+            serialized: JSON.stringify(sess),
+            expiresAt,
+            cachedAt: preserveCacheAge && existing ? existing.cachedAt : Date.now()
+        });
+        while (this.cache.size > this.maxCacheEntries) {
+            const oldest = this.cache.keys().next().value;
+            this.cache.delete(oldest);
+            this.lastTouches.delete(oldest);
+        }
     }
 }
 

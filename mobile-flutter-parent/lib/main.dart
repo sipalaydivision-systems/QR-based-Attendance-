@@ -389,6 +389,7 @@ Future<void> _setupFirebaseMessaging(ParentApi api) async {
         id: _latestFcmNotificationId,
         type: '${message.data['type'] ?? ''}',
       );
+      guardianDashboardRefresh.value++;
     });
   } catch (e) {
     debugPrint('FCM setup failed: $e');
@@ -404,6 +405,7 @@ const String _fcmDeliveredPreference = 'parent_fcm_delivered_notifications';
 const String _fcmQueueResetPreference = 'parent_fcm_queue_reset_v1';
 const String _workerReadyPreference = 'parent_notification_worker_ready';
 const int _latestFcmNotificationId = 731002;
+final ValueNotifier<int> guardianDashboardRefresh = ValueNotifier<int>(0);
 
 String _notificationKey(Map<String, dynamic> note) =>
     '${note['notification_id'] ?? note['key'] ?? note['created_at'] ?? note['title']}';
@@ -2195,13 +2197,18 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     widget.api.registerDeviceToken();
     _load();
     _loadBranding();
+    guardianDashboardRefresh.addListener(_refreshFromPush);
     _startDashboardRefresh();
+  }
+
+  void _refreshFromPush() {
+    _load(silent: true);
   }
 
   void _startDashboardRefresh() {
     _timer?.cancel();
     _timer = Timer.periodic(
-      const Duration(seconds: 30),
+      const Duration(minutes: 5),
       (_) => _load(silent: true),
     );
   }
@@ -2228,6 +2235,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    guardianDashboardRefresh.removeListener(_refreshFromPush);
     _timer?.cancel();
     _bannerTimer?.cancel();
     super.dispose();

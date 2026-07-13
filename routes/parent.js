@@ -996,6 +996,28 @@ router.get('/api/parent/dashboard', requireParentAuth, async (req, res) => {
     }
 });
 
+// Tiny change detector for the open web Guardian app. Native Android receives
+// the same changes instantly through FCM and uses a slow full-refresh fallback.
+router.get('/api/parent/poll', requireParentAuth, async (req, res) => {
+    try {
+        const parentId = req.session.user.parent_id || req.session.user.id;
+        const [[summary]] = await db.query(
+            `SELECT
+                (SELECT COALESCE(MAX(id), 0) FROM parent_notifications WHERE parent_id = ?) AS latest_notification_id,
+                (SELECT COUNT(*) FROM parent_notifications WHERE parent_id = ? AND is_read = 0) AS unread_count`,
+            [parentId, parentId]
+        );
+        res.set('Cache-Control', 'no-store');
+        return res.json({
+            latest_notification_id: Number(summary?.latest_notification_id || 0),
+            unread_count: Number(summary?.unread_count || 0)
+        });
+    } catch (err) {
+        console.error('Parent poll error:', err);
+        return res.status(500).json({ error: 'Failed to check for updates.' });
+    }
+});
+
 router.get('/api/parent/notifications', requireParentAuth, async (req, res) => {
     try {
         const date = req.query.date || todayDate();
@@ -1193,13 +1215,13 @@ router.post('/api/parent/profile', requireParentAuth, async (req, res) => {
 
 // Latest published parent-app version. Bump this (and the Flutter pubspec version)
 // whenever a new APK is released so the in-app updater offers the update.
-const PARENT_APP_LATEST = { version: '1.0.47', version_code: 49 };
+const PARENT_APP_LATEST = { version: '1.0.48', version_code: 50 };
 router.get('/api/parent/app-version', (req, res) => {
     return res.json({
         latest_version: PARENT_APP_LATEST.version,
         latest_version_code: PARENT_APP_LATEST.version_code,
         apk_url: `${req.protocol}://${req.get('host')}/download/parent-app?v=${PARENT_APP_LATEST.version_code}`,
-        notes: 'Uses less mobile data while keeping attendance notifications immediate and school logos visible.'
+        notes: 'Push-triggered dashboard updates keep notifications immediate while greatly reducing background data use.'
     });
 });
 
