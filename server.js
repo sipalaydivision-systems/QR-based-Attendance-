@@ -93,9 +93,9 @@ const DESKTOP_SCANNER_LATEST = {
 };
 
 const MOBILE_APP_LATEST = {
-    version: '2.1.49',
-    version_code: 80,
-    notes: 'Faster SDS/ASDS syncing with one bundled dashboard response, lower data usage, and immediate Firebase alerts.'
+    version: '2.1.50',
+    version_code: 81,
+    notes: 'Registers Firebase notifications reliably at login and confirms Android notification permission for absence alerts.'
 };
 
 function mobileApkReleaseUrl() {

@@ -9,6 +9,7 @@ on:
       - 'mobile-flutter/pubspec.yaml'
       - 'mobile-flutter/pubspec.lock'
       - 'mobile-flutter/android/**'
+      - '.github/workflows/build-flutter-apk.yml'
   workflow_dispatch:
 
 concurrency:
@@ -81,6 +82,10 @@ jobs:
           gh release upload "$tag" "$RUNNER_TEMP/$asset" --clobber
 
       - name: Commit and push updated APK
+        # GitHub Releases is the production download source. Keeping another
+        # 50+ MB copy in Git caused push races with the Guardian build and
+        # unnecessary Railway redeployments.
+        if: ${{ false }}
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

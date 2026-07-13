@@ -1287,13 +1287,13 @@ router.post('/api/parent/profile', requireParentAuth, async (req, res) => {
 
 // Latest published parent-app version. Bump this (and the Flutter pubspec version)
 // whenever a new APK is released so the in-app updater offers the update.
-const PARENT_APP_LATEST = { version: '1.0.50', version_code: 52 };
+const PARENT_APP_LATEST = { version: '1.0.51', version_code: 53 };
 router.get('/api/parent/app-version', (req, res) => {
     return res.json({
         latest_version: PARENT_APP_LATEST.version,
         latest_version_code: PARENT_APP_LATEST.version_code,
         apk_url: `${req.protocol}://${req.get('host')}/download/parent-app?v=${PARENT_APP_LATEST.version_code}`,
-        notes: 'Loads saved Guardian data immediately, prevents overlapping refreshes, and downloads uploaded branding only when it changes.'
+        notes: 'Registers notifications on every login, shows the newest unread announcement immediately, and restores new absence alerts.'
     });
 });
 
