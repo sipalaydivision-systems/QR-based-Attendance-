@@ -78,9 +78,9 @@ const DESKTOP_SCANNER_LATEST = {
 };
 
 const MOBILE_APP_LATEST = {
-    version: '2.1.48',
-    version_code: 79,
-    notes: 'Faster SDS/ASDS loading, cached reconnect recovery, and 90% less fallback dashboard polling while Firebase alerts remain immediate.'
+    version: '2.1.49',
+    version_code: 80,
+    notes: 'Faster SDS/ASDS syncing with one bundled dashboard response, lower data usage, and immediate Firebase alerts.'
 };
 
 function mobileApkReleaseUrl() {
