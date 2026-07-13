@@ -296,6 +296,7 @@ async function syncAttendanceNotificationsForParent(parent, children, date) {
         }
         if (child.is_school_day !== false && child.absence_final && !child.timeline?.length && child.today_status === 'Absent') {
             await insertParentNotification({
+                sendPush: true,
                 parentId,
                 studentId: child.id,
                 schoolId: child.school_id,
@@ -312,6 +313,7 @@ async function syncAttendanceNotificationsForParent(parent, children, date) {
         }
         if (child.is_school_day !== false && Number(child.consecutive_absences || 0) >= 2) {
             await insertParentNotification({
+                sendPush: true,
                 parentId,
                 studentId: child.id,
                 schoolId: child.school_id,
@@ -334,7 +336,11 @@ async function getTargetedAnnouncementRows(children) {
     const gradeIds = [...new Set((children || []).map(child => child.grade_level_id).filter(Boolean))];
     const sectionIds = [...new Set((children || []).map(child => child.section_id).filter(Boolean))];
     const studentIds = [...new Set((children || []).map(child => child.id).filter(Boolean))];
-    const clauses = ['(n.target_audience IS NULL AND n.school_id IS NULL AND n.grade_level_id IS NULL AND n.section_id IS NULL AND n.student_id IS NULL)'];
+    // A Super Admin "All / My School" announcement is stored with
+    // target_audience='school' and a NULL school_id. Include it for newly
+    // registered/logged-in guardians; the previous target_audience IS NULL
+    // condition accidentally hid this division-wide history on first login.
+    const clauses = ['(n.school_id IS NULL AND n.grade_level_id IS NULL AND n.section_id IS NULL AND n.student_id IS NULL)'];
     const params = [];
     if (schoolIds.length) {
         clauses.push('(n.school_id IN (?) AND n.grade_level_id IS NULL AND n.section_id IS NULL AND n.student_id IS NULL)');

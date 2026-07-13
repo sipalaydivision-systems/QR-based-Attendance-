@@ -244,6 +244,9 @@ Future<void> ensureLocalNotificationsInitialized({
       >();
   await androidPlugin?.createNotificationChannel(alertsChannel);
   await androidPlugin?.createNotificationChannel(dailySummaryChannel);
+  if (handleResponses) {
+    await androidPlugin?.requestNotificationsPermission();
+  }
 }
 
 Map<String, dynamic> absenceFlagRowFromFcmData(Map<String, dynamic> data) {
@@ -434,6 +437,25 @@ Future<void> _registerMainDevice(
   } finally {
     _registeringMainFcm = false;
   }
+}
+
+Future<void> _ensureMainDeviceRegistered(
+  SharedPreferences prefs, {
+  bool force = false,
+}) async {
+  var token = (prefs.getString('fcm_token') ?? gMainFcmToken).trim();
+  if (token.isEmpty) {
+    try {
+      token = (await FirebaseMessaging.instance.getToken() ?? '').trim();
+      if (token.isNotEmpty) {
+        gMainFcmToken = token;
+        await prefs.setString('fcm_token', token);
+      }
+    } catch (_) {
+      return;
+    }
+  }
+  await _registerMainDevice(prefs, token, force: force);
 }
 
 Future<void> _setupMainFcm(SharedPreferences prefs) async {
@@ -1489,8 +1511,9 @@ class _LoginScreenState extends State<LoginScreen>
     });
     try {
       await widget.api.login(username.text.trim(), password.text);
-      final fcmToken = widget.api.prefs.getString('fcm_token') ?? gMainFcmToken;
-      unawaited(_registerMainDevice(widget.api.prefs, fcmToken, force: true));
+      unawaited(
+        _ensureMainDeviceRegistered(widget.api.prefs, force: true),
+      );
       await showLocalNotification(
         'WELCOME',
         '${greeting()}, ${widget.api.fullname}',
@@ -1972,8 +1995,7 @@ class _HomeShellState extends State<HomeShell>
       await syncBranding(dashboard, widget.api);
       // Daily reports and 2-day flags are delivered by Railway FCM. They stay
       // visible in the UI here without generating a second local notification.
-      final fcmToken = widget.api.prefs.getString('fcm_token') ?? gMainFcmToken;
-      unawaited(_registerMainDevice(widget.api.prefs, fcmToken));
+      unawaited(_ensureMainDeviceRegistered(widget.api.prefs));
       if (mounted) {
         dashboardFailureCount = 0;
         retryTimer?.cancel();

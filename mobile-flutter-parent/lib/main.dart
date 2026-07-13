@@ -961,7 +961,17 @@ class ParentApi {
   }
 
   Future<void> registerDeviceToken({bool force = false}) async {
-    if (!isLoggedIn || gFcmToken.trim().isEmpty || _registeringDevice) return;
+    if (!isLoggedIn || _registeringDevice) return;
+    if (gFcmToken.trim().isEmpty) {
+      try {
+        final token = (await FirebaseMessaging.instance.getToken() ?? '').trim();
+        if (token.isEmpty) return;
+        gFcmToken = token;
+        await prefs.setString('parent_fcm_token', token);
+      } catch (_) {
+        return;
+      }
+    }
     final now = DateTime.now();
     if (!force &&
         _lastDeviceRegistration != null &&
@@ -1656,7 +1666,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (res['success'] == true) {
       try {
         await _initNotifications();
-        await widget.api.registerDeviceToken();
+        await widget.api.registerDeviceToken(force: true);
         await scheduleGuardianBackgroundSync();
       } catch (_) {}
       Navigator.of(context).pushReplacement(
@@ -1792,7 +1802,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (res['success'] == true) {
       try {
         await _initNotifications();
-        await widget.api.registerDeviceToken();
+        await widget.api.registerDeviceToken(force: true);
         await scheduleGuardianBackgroundSync();
       } catch (_) {}
       Navigator.of(context).pushAndRemoveUntil(
@@ -2199,7 +2209,6 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int _tab = 0;
   int _child = 0;
   bool _loading = true;
-  bool _firstDashboardLoad = true;
   bool _headerCompact = false;
   String? _error;
   String? _schoolArt = gSchoolArt.isNotEmpty ? gSchoolArt : null;
@@ -2356,9 +2365,11 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
           jsonEncode(data),
         ),
       );
-      await _processNotificationUpdates(data, showPopups: !_firstDashboardLoad);
+      // On a guardian's first successful login, show the newest unread
+      // announcement as an in-app banner. The notified-ID set below prevents
+      // history from replaying on later refreshes.
+      await _processNotificationUpdates(data, showPopups: true);
       unawaited(widget.api.registerDeviceToken());
-      _firstDashboardLoad = false;
     } catch (e) {
       if (!mounted) return;
       if ('$e'.contains('SESSION_EXPIRED')) {
@@ -2405,8 +2416,9 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       return unread && !notified.contains(_noteId(note));
     }).toList();
     if (showPopups) {
-      for (final note in fresh.take(4)) {
-        await _showNotificationPopup(note);
+      final announcements = fresh.where(_isAnnouncement);
+      if (announcements.isNotEmpty) {
+        await _showNotificationPopup(announcements.first);
       }
     }
     for (final note in notes.take(120)) {
