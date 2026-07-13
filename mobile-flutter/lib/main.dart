@@ -1762,7 +1762,7 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late int tab;
   Map<String, dynamic> dashboard = {};
   List<dynamic> flags = [];
@@ -1779,6 +1779,7 @@ class _HomeShellState extends State<HomeShell>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Upper bound grows with the extra Profile tab (+ role-specific tab);
     // build() re-clamps to the real page count for the current role.
     tab = widget.initialTab.clamp(0, 6).toInt();
@@ -1791,14 +1792,32 @@ class _HomeShellState extends State<HomeShell>
     load();
     // Keep the dashboard live without stacking requests when mobile data is
     // slow or Railway is waking up.
+    _startDashboardRefresh();
+  }
+
+  void _startDashboardRefresh() {
+    timer?.cancel();
     timer = Timer.periodic(
-      const Duration(seconds: 10),
+      const Duration(seconds: 30),
       (_) => load(silent: true),
     );
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      load(silent: true);
+      _startDashboardRefresh();
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      timer?.cancel();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     timer?.cancel();
     backgroundController.dispose();
     super.dispose();
@@ -2165,7 +2184,7 @@ class _SuperAdminControlPageState extends State<SuperAdminControlPage> {
     super.initState();
     load();
     timer = Timer.periodic(
-      const Duration(seconds: 12),
+      const Duration(seconds: 60),
       (_) => load(silent: true),
     );
   }

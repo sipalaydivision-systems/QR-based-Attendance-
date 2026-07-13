@@ -34,9 +34,9 @@ const DESKTOP_SCANNER_LATEST = {
 };
 
 const MOBILE_APP_LATEST = {
-    version: '2.1.45',
-    version_code: 76,
-    notes: 'Latest EduTrack mobile app update is ready to install from Profile.'
+    version: '2.1.46',
+    version_code: 77,
+    notes: 'Uses less mobile data while keeping attendance notifications immediate and school logos visible.'
 };
 
 app.get('/mobile-config.json', (req, res) => {
@@ -68,7 +68,7 @@ app.get('/api/mobile-app-version', (req, res) => {
     res.json({
         latest_version: MOBILE_APP_LATEST.version,
         latest_version_code: MOBILE_APP_LATEST.version_code,
-        apk_url: `${getPublicAppBaseUrl(req)}/download/mobile-app`,
+        apk_url: `${getPublicAppBaseUrl(req)}/download/mobile-app?v=${MOBILE_APP_LATEST.version_code}`,
         apk_available: apkSize !== null,
         apk_size: apkSize,
         apk_updated_at: apkUpdatedAt,
@@ -895,7 +895,11 @@ app.get('/download/mobile-app', (req, res) => {
             error: 'The APK file has not been uploaded yet.'
         });
     }
-    return res.download(apkPath, 'Edutrack-Mobile.apk');
+    if (String(req.query.v || '') !== String(MOBILE_APP_LATEST.version_code)) {
+        return res.redirect(302, `/download/mobile-app?v=${MOBILE_APP_LATEST.version_code}`);
+    }
+    res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    return res.download(apkPath, `EduTrack-Mobile-${MOBILE_APP_LATEST.version}.apk`);
 });
 
 app.get('/download/ios-app', (req, res) => {

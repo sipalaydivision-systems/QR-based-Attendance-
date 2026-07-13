@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const fs = require('fs');
 const path = require('path');
@@ -31,6 +32,12 @@ const {
 const schoolYears = require('../utils/schoolYear');
 
 const router = express.Router();
+
+function schoolLogoUrl(schoolId, logo) {
+    if (!schoolId || !logo) return '';
+    const version = crypto.createHash('md5').update(String(logo)).digest('hex').slice(0, 12);
+    return `/api/schools/${schoolId}/logo-image?v=${version}`;
+}
 
 function normalizeContact(value) {
     let digits = String(value || '').replace(/\D/g, '');
@@ -498,7 +505,7 @@ async function buildParentPayload(parent, date) {
             grade_level: child.grade_name || 'N/A',
             section: child.section_name || 'N/A',
             school_name: child.school_name || 'N/A',
-            school_logo: child.school_logo || '',
+            school_logo: schoolLogoUrl(child.school_id, child.school_logo),
             adviser_name: child.adviser_name || 'No adviser assigned',
             adviser_contact: child.adviser_contact || '',
             adviser_email: child.adviser_email || '',
@@ -667,10 +674,12 @@ router.get('/download-app', (req, res) => res.redirect('/Download-app'));
 router.get('/download/parent-app', (req, res) => {
     const parentApkPath = path.join(__dirname, '..', 'public', 'downloads', 'edutrack-parent.apk');
     if (!fs.existsSync(parentApkPath)) return res.redirect('/Download-app?missing=1');
-    // Never let a browser/CDN serve a stale APK — always hand back the freshly
-    // built file so "Download" reflects the latest published version.
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-    res.set('Pragma', 'no-cache');
+    // Redirect the stable web link to a versioned URL. The versioned APK can be
+    // cached safely without making a future release appear stale.
+    if (String(req.query.v || '') !== String(PARENT_APP_LATEST.version_code)) {
+        return res.redirect(302, `/download/parent-app?v=${PARENT_APP_LATEST.version_code}`);
+    }
+    res.set('Cache-Control', 'public, max-age=31536000, immutable');
     return res.download(parentApkPath, `EduTrack-Guardian-${PARENT_APP_LATEST.version}.apk`);
 });
 
@@ -1184,13 +1193,13 @@ router.post('/api/parent/profile', requireParentAuth, async (req, res) => {
 
 // Latest published parent-app version. Bump this (and the Flutter pubspec version)
 // whenever a new APK is released so the in-app updater offers the update.
-const PARENT_APP_LATEST = { version: '1.0.46', version_code: 48 };
+const PARENT_APP_LATEST = { version: '1.0.47', version_code: 49 };
 router.get('/api/parent/app-version', (req, res) => {
     return res.json({
         latest_version: PARENT_APP_LATEST.version,
         latest_version_code: PARENT_APP_LATEST.version_code,
-        apk_url: `${req.protocol}://${req.get('host')}/download/parent-app`,
-        notes: 'Attendance no longer marks students absent on weekends, holidays, suspensions, or declared no-class days.'
+        apk_url: `${req.protocol}://${req.get('host')}/download/parent-app?v=${PARENT_APP_LATEST.version_code}`,
+        notes: 'Uses less mobile data while keeping attendance notifications immediate and school logos visible.'
     });
 });
 

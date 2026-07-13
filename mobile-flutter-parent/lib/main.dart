@@ -2195,8 +2195,13 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     widget.api.registerDeviceToken();
     _load();
     _loadBranding();
+    _startDashboardRefresh();
+  }
+
+  void _startDashboardRefresh() {
+    _timer?.cancel();
     _timer = Timer.periodic(
-      const Duration(seconds: 15),
+      const Duration(seconds: 30),
       (_) => _load(silent: true),
     );
   }
@@ -2233,6 +2238,11 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       widget.api.registerDeviceToken();
       _load(silent: true);
+      _startDashboardRefresh();
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _timer?.cancel();
     }
   }
 

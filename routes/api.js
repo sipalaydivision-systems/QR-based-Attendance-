@@ -38,6 +38,42 @@ const {
 } = require('../utils/parentNotifications');
 const { sendPushToUsers } = require('../utils/firebasePush');
 
+function schoolLogoUrl(schoolId, logo) {
+    if (!logo) return '';
+    const version = crypto.createHash('md5').update(String(logo)).digest('hex').slice(0, 12);
+    return `/api/schools/${schoolId}/logo-image?v=${version}`;
+}
+
+// School logos are public branding assets. Serve them separately so frequently
+// refreshed dashboard JSON never retransmits large base64 image strings.
+router.get('/schools/:id/logo-image', async (req, res) => {
+    try {
+        const [[school]] = await db.query('SELECT logo FROM schools WHERE id = ? LIMIT 1', [req.params.id]);
+        const logo = String(school?.logo || '').trim();
+        if (!logo) return res.status(404).end();
+        const dataUrl = logo.match(/^data:(image\/(?:png|jpe?g|gif|webp));base64,(.+)$/i);
+        if (dataUrl) {
+            const bytes = Buffer.from(dataUrl[2], 'base64');
+            res.set('Content-Type', dataUrl[1].toLowerCase());
+            res.set('Cache-Control', 'public, max-age=31536000, immutable');
+            res.set('ETag', `"${crypto.createHash('md5').update(bytes).digest('hex')}"`);
+            return res.send(bytes);
+        }
+        if (logo.startsWith('/')) {
+            res.set('Cache-Control', 'public, max-age=3600');
+            return res.redirect(302, logo);
+        }
+        if (/^https?:\/\//i.test(logo)) {
+            res.set('Cache-Control', 'public, max-age=3600');
+            return res.redirect(302, logo);
+        }
+        return res.status(404).end();
+    } catch (err) {
+        console.error('School logo image error:', err);
+        return res.status(500).end();
+    }
+});
+
 function requireAuthOrScannerKiosk(req, res, next) {
     if (req.session && req.session.user) return requireAuth(req, res, next);
     if (isValidScannerKioskToken(getScannerKioskTokenFromRequest(req))) return next();
@@ -2558,7 +2594,7 @@ router.get('/dashboard-data', requireAuth, async (req, res) => {
             breakdown.push({
                 id: s.id,
                 name: s.name,
-                logo: s.logo,
+                logo: schoolLogoUrl(s.id, s.logo),
                 enrollment: s.enrollment,
                 attendance_eligible_students: Math.max(eligible, studentCounts.timed_in || 0),
                 present: studentCounts.present,
