@@ -43,6 +43,17 @@ function settingImageUrl(asset, value) {
     return `/brand/${asset}-image?v=${version}`;
 }
 
+function localPublicAssetPath(value) {
+    const rawPath = String(value || '').split(/[?#]/, 1)[0];
+    if (!rawPath.startsWith('/')) return null;
+    let decodedPath;
+    try { decodedPath = decodeURIComponent(rawPath); } catch (_) { return null; }
+    const publicRoot = path.resolve(__dirname, 'public');
+    const candidate = path.resolve(publicRoot, `.${decodedPath}`);
+    if (!candidate.startsWith(`${publicRoot}${path.sep}`)) return null;
+    try { return fs.statSync(candidate).isFile() ? candidate : null; } catch (_) { return null; }
+}
+
 function serveSettingImage(settingKey) {
     return async (_req, res) => {
         try {
@@ -56,6 +67,10 @@ function serveSettingImage(settingKey) {
                 res.set('Cache-Control', 'public, max-age=31536000, immutable');
                 res.set('ETag', `"${crypto.createHash('md5').update(bytes).digest('hex')}"`);
                 return res.send(bytes);
+            }
+            const localAsset = localPublicAssetPath(value);
+            if (localAsset) {
+                return res.sendFile(localAsset, { maxAge: 31536000000, immutable: true });
             }
             if (value.startsWith('/') || /^https?:\/\//i.test(value)) {
                 res.set('Cache-Control', 'public, max-age=3600');

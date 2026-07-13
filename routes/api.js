@@ -1,5 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
+const fs = require('fs');
 const bcrypt = require('bcrypt');
 const path = require('path');
 const multer = require('multer');
@@ -48,6 +49,17 @@ function systemLogoUrl(logo) {
     if (!logo) return '';
     const version = crypto.createHash('md5').update(String(logo)).digest('hex').slice(0, 12);
     return `/brand/system-logo-image?v=${version}`;
+}
+
+function localPublicAssetPath(value) {
+    const rawPath = String(value || '').split(/[?#]/, 1)[0];
+    if (!rawPath.startsWith('/')) return null;
+    let decodedPath;
+    try { decodedPath = decodeURIComponent(rawPath); } catch (_) { return null; }
+    const publicRoot = path.resolve(__dirname, '..', 'public');
+    const candidate = path.resolve(publicRoot, `.${decodedPath}`);
+    if (!candidate.startsWith(`${publicRoot}${path.sep}`)) return null;
+    try { return fs.statSync(candidate).isFile() ? candidate : null; } catch (_) { return null; }
 }
 
 const SCANNER_DESKTOP_CONFIG_CACHE_MS = 5000;
@@ -128,6 +140,10 @@ router.get('/schools/:id/logo-image', async (req, res) => {
             res.set('Cache-Control', 'public, max-age=31536000, immutable');
             res.set('ETag', `"${crypto.createHash('md5').update(bytes).digest('hex')}"`);
             return res.send(bytes);
+        }
+        const localAsset = localPublicAssetPath(logo);
+        if (localAsset) {
+            return res.sendFile(localAsset, { maxAge: 31536000000, immutable: true });
         }
         if (logo.startsWith('/')) {
             res.set('Cache-Control', 'public, max-age=3600');
