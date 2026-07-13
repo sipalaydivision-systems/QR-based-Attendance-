@@ -1,5 +1,5 @@
 {
-    "$schema": "https://railway.app/railway.schema.json",
+    "$schema": "https://railway.com/railway.schema.json",
     "build": {
         "builder": "NIXPACKS"
     },
@@ -7,8 +7,8 @@
         "startCommand": "node server.js",
         "healthcheckPath": "/health",
         "healthcheckTimeout": 900,
-        "overlapSeconds": "20",
-        "drainingSeconds": "10",
+        "overlapSeconds": 20,
+        "drainingSeconds": 10,
         "restartPolicyType": "ON_FAILURE",
         "restartPolicyMaxRetries": 10
     }
