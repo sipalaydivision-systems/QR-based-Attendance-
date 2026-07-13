@@ -73,8 +73,8 @@ app.get('/brand/system-logo-image', serveSettingImage('system_logo'));
 app.get('/brand/school-art-image', serveSettingImage('mobile_dashboard_school_art'));
 
 const DESKTOP_SCANNER_LATEST = {
-    version: '1.0.33',
-    notes: 'Pushes school calendar and class suspension updates to active desktop scanners faster.'
+    version: '1.0.34',
+    notes: 'Uses far less background data while keeping scans, offline sync, school updates, and remote controls responsive.'
 };
 
 const MOBILE_APP_LATEST = {
@@ -86,6 +86,11 @@ const MOBILE_APP_LATEST = {
 function mobileApkReleaseUrl() {
     const version = MOBILE_APP_LATEST.version;
     return `https://github.com/sipalaydivision-systems/QR-based-Attendance-/releases/download/mobile-v${version}/EduTrack-Mobile-${version}.apk`;
+}
+
+function desktopScannerReleaseUrl() {
+    const version = DESKTOP_SCANNER_LATEST.version;
+    return `https://github.com/sipalaydivision-systems/QR-based-Attendance-/releases/download/desktop-v${version}/Edutrack-Scanner-Setup-${version}.exe`;
 }
 
 app.get('/mobile-config.json', (req, res) => {
@@ -150,12 +155,8 @@ app.get('/api/desktop-scanner/version', (req, res) => {
 // Direct download for the desktop installer (used by the in-app auto-updater).
 // Mirrors the legacy /download/scanner-app behaviour but with a stable name.
 app.get('/download/desktop-installer', (req, res) => {
-    const installerPath = path.join(__dirname, 'public', 'downloads', 'Edutrack-Scanner-Setup.exe');
-    if (!fs.existsSync(installerPath)) {
-        return res.status(404).json({ error: 'Installer not yet available.' });
-    }
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-    return res.download(installerPath, `Edutrack-Scanner-Setup-${DESKTOP_SCANNER_LATEST.version}.exe`);
+    res.set('Cache-Control', 'public, max-age=300');
+    return res.redirect(302, desktopScannerReleaseUrl());
 });
 
 // Static files
@@ -1122,6 +1123,9 @@ function sendWindowsScannerLauncher(req, res) {
 }
 
 function sendWindowsScannerInstaller(req, res) {
+    if (process.env.DESKTOP_SCANNER_LOCAL_FALLBACK !== 'true') {
+        return res.redirect(302, desktopScannerReleaseUrl());
+    }
     const installerPath = path.join(__dirname, 'public', 'downloads', 'Edutrack-Scanner-Setup.exe');
     if (fs.existsSync(installerPath)) {
         return res.download(installerPath, 'Edutrack-Scanner-Setup.exe');
