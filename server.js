@@ -42,9 +42,9 @@ const DESKTOP_SCANNER_LATEST = {
 };
 
 const MOBILE_APP_LATEST = {
-    version: '2.1.47',
-    version_code: 78,
-    notes: 'Adds zero-downtime reconnect handling, real-time Firebase dashboard refresh, and reliable logo updates.'
+    version: '2.1.48',
+    version_code: 79,
+    notes: 'Faster SDS/ASDS loading, cached reconnect recovery, and 90% less fallback dashboard polling while Firebase alerts remain immediate.'
 };
 
 function mobileApkReleaseUrl() {
