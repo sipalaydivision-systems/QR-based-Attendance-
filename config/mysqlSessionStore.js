@@ -51,6 +51,13 @@ class MySQLSessionStore extends session.Store {
                 );
                 if (!rows.length) return callback(null, null);
                 const data = typeof rows[0].data === 'string' ? JSON.parse(rows[0].data) : rows[0].data;
+                // Upgrade still-valid sessions created under the former
+                // 24-hour policy. The normal throttled touch below persists
+                // the renewed expiry without forcing everyone to sign in again.
+                if (data?.cookie) {
+                    data.cookie.originalMaxAge = SESSION_MAX_AGE_MS;
+                    data.cookie.expires = new Date(now + SESSION_MAX_AGE_MS).toISOString();
+                }
                 const expiresAt = data?.cookie?.expires
                     ? new Date(data.cookie.expires).getTime()
                     : now + SESSION_MAX_AGE_MS;
