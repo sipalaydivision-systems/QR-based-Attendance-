@@ -94,9 +94,9 @@ const DESKTOP_SCANNER_LATEST = {
 };
 
 const MOBILE_APP_LATEST = {
-    version: '2.1.51',
-    version_code: 82,
-    notes: 'Keeps SDS and ASDS signed in and preserves the login during temporary server interruptions.'
+    version: '2.1.52',
+    version_code: 83,
+    notes: 'Checks for future updates from Home and shows an in-app update notice even when Android notifications are off.'
 };
 
 function mobileApkReleaseUrl() {

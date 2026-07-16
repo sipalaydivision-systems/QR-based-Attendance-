@@ -1820,6 +1820,7 @@ class _HomeShellState extends State<HomeShell>
   int dashboardFailureCount = 0;
   Set<String> viewedAlertKeys = <String>{};
   bool viewedAlertKeysLoaded = false;
+  bool updateCheckRunning = false;
 
   @override
   void initState() {
@@ -1837,6 +1838,9 @@ class _HomeShellState extends State<HomeShell>
     mainDashboardRefresh.addListener(_refreshFromFirebase);
     _restoreCachedDashboard();
     load(silent: dashboard.isNotEmpty);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_checkForAppUpdate());
+    });
     // Keep the dashboard live without stacking requests when mobile data is
     // slow or Railway is waking up.
     _startDashboardRefresh();
@@ -1848,6 +1852,112 @@ class _HomeShellState extends State<HomeShell>
       const Duration(minutes: 5),
       (_) => load(silent: true),
     );
+  }
+
+  bool _isNewerAppVersion(String latest, String current) {
+    List<int> parts(String value) => value
+        .split('.')
+        .map((part) => int.tryParse(part.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0)
+        .toList();
+    final next = parts(latest);
+    final installed = parts(current);
+    for (var i = 0; i < next.length; i++) {
+      final currentPart = i < installed.length ? installed[i] : 0;
+      if (next[i] != currentPart) return next[i] > currentPart;
+    }
+    return false;
+  }
+
+  int get _profileTabIndex {
+    var index = 4;
+    if (widget.api.isSuperAdmin) index++;
+    if (widget.api.role == 'superintendent' ||
+        widget.api.role == 'asst_superintendent') {
+      index++;
+    }
+    return index;
+  }
+
+  Future<void> _checkForAppUpdate() async {
+    if (updateCheckRunning) return;
+    updateCheckRunning = true;
+    try {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final lastCheck =
+          widget.api.prefs.getInt('main_update_last_check_time') ?? 0;
+      if (now - lastCheck < const Duration(hours: 6).inMilliseconds) return;
+      await widget.api.prefs.setInt('main_update_last_check_time', now);
+
+      final package = await PackageInfo.fromPlatform();
+      final latest = await widget.api.appVersion();
+      final latestVersion = '${latest['latest_version'] ?? ''}'.trim();
+      final latestCode = int.tryParse('${latest['latest_version_code'] ?? ''}');
+      final installedCode = int.tryParse(package.buildNumber);
+      final updateAvailable = latestCode != null && installedCode != null
+          ? latestCode > installedCode
+          : _isNewerAppVersion(latestVersion, package.version);
+      if (latestVersion.isEmpty || !updateAvailable) {
+        return;
+      }
+
+      final lastVersion =
+          widget.api.prefs.getString('main_update_prompt_version') ?? '';
+      final lastPrompt =
+          widget.api.prefs.getInt('main_update_prompt_time') ?? 0;
+      if (lastVersion == latestVersion &&
+          now - lastPrompt < const Duration(hours: 24).inMilliseconds) {
+        return;
+      }
+      await widget.api.prefs.setString(
+        'main_update_prompt_version',
+        latestVersion,
+      );
+      await widget.api.prefs.setInt('main_update_prompt_time', now);
+
+      try {
+        await showLocalNotification(
+          'EduTrack update available',
+          'Version $latestVersion is ready. Open EduTrack to install it.',
+          id: 99002,
+          showToast: false,
+        );
+        await widget.api.prefs.setString(
+          'main_last_update_notify_version',
+          latestVersion,
+        );
+      } catch (_) {
+        // The in-app dialog below remains visible even when Android blocks
+        // notification permission.
+      }
+
+      if (!mounted) return;
+      final viewUpdate = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('EduTrack update available'),
+          content: Text(
+            'Version $latestVersion is ready. Update now for the latest fixes and improvements.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Later'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('View update'),
+            ),
+          ],
+        ),
+      );
+      if (viewUpdate == true && mounted) {
+        setState(() => tab = _profileTabIndex);
+      }
+    } catch (_) {
+      // Update checks are best-effort and never block the dashboard.
+    } finally {
+      updateCheckRunning = false;
+    }
   }
 
   void _refreshFromFirebase() {
@@ -1893,6 +2003,7 @@ class _HomeShellState extends State<HomeShell>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       load(silent: true);
+      unawaited(_checkForAppUpdate());
       _startDashboardRefresh();
     } else if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||

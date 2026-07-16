@@ -2221,6 +2221,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   // the system push notification instead).
   Map<String, dynamic>? _bannerNote;
   Timer? _bannerTimer;
+  bool _updateCheckRunning = false;
 
   @override
   void initState() {
@@ -2231,6 +2232,9 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     _restoreCachedDashboard();
     _load(silent: _data.isNotEmpty);
     _loadBranding();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_checkForAppUpdate());
+    });
     guardianDashboardRefresh.addListener(_refreshFromPush);
     _startDashboardRefresh();
   }
@@ -2265,6 +2269,99 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         _loadBranding();
       },
     );
+  }
+
+  bool _isNewerAppVersion(String latest, String current) {
+    List<int> parts(String value) => value
+        .split('.')
+        .map((part) => int.tryParse(part.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0)
+        .toList();
+    final next = parts(latest);
+    final installed = parts(current);
+    for (var i = 0; i < next.length; i++) {
+      final currentPart = i < installed.length ? installed[i] : 0;
+      if (next[i] != currentPart) return next[i] > currentPart;
+    }
+    return false;
+  }
+
+  Future<void> _checkForAppUpdate() async {
+    if (_updateCheckRunning) return;
+    _updateCheckRunning = true;
+    try {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final lastCheck =
+          widget.api.prefs.getInt('parent_update_last_check_time') ?? 0;
+      if (now - lastCheck < const Duration(hours: 6).inMilliseconds) return;
+      await widget.api.prefs.setInt('parent_update_last_check_time', now);
+
+      final package = await PackageInfo.fromPlatform();
+      final latest = await widget.api.appVersion();
+      final latestVersion = '${latest['latest_version'] ?? ''}'.trim();
+      final latestCode = int.tryParse('${latest['latest_version_code'] ?? ''}');
+      final installedCode = int.tryParse(package.buildNumber);
+      final updateAvailable = latestCode != null && installedCode != null
+          ? latestCode > installedCode
+          : _isNewerAppVersion(latestVersion, package.version);
+      if (latestVersion.isEmpty || !updateAvailable) {
+        return;
+      }
+
+      final lastVersion =
+          widget.api.prefs.getString('parent_update_prompt_version') ?? '';
+      final lastPrompt =
+          widget.api.prefs.getInt('parent_update_prompt_time') ?? 0;
+      if (lastVersion == latestVersion &&
+          now - lastPrompt < const Duration(hours: 24).inMilliseconds) {
+        return;
+      }
+      await widget.api.prefs.setString(
+        'parent_update_prompt_version',
+        latestVersion,
+      );
+      await widget.api.prefs.setInt('parent_update_prompt_time', now);
+
+      try {
+        await showParentNotification(
+          'EduTrack Guardian update available',
+          'Version $latestVersion is ready. Open EduTrack Guardian to install it.',
+          id: 99001,
+          type: 'announcement_general',
+        );
+        await widget.api.prefs.setString(
+          'last_update_notify_version',
+          latestVersion,
+        );
+      } catch (_) {
+        // The in-app dialog below remains visible when notifications are off.
+      }
+
+      if (!mounted) return;
+      final viewUpdate = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Guardian update available'),
+          content: Text(
+            'Version $latestVersion is ready. Update now for the latest fixes and improvements.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Later'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('View update'),
+            ),
+          ],
+        ),
+      );
+      if (viewUpdate == true && mounted) setState(() => _tab = 4);
+    } catch (_) {
+      // Update checks are best-effort and never block Guardian data loading.
+    } finally {
+      _updateCheckRunning = false;
+    }
   }
 
   Future<void> _loadBranding() async {
@@ -2325,6 +2422,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       widget.api.registerDeviceToken();
       _load(silent: true);
       _loadBranding();
+      unawaited(_checkForAppUpdate());
       _startDashboardRefresh();
     } else if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
