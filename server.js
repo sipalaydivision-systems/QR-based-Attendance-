@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const compression = require('compression');
 const session = require('express-session');
+const { SESSION_MAX_AGE_MS } = require('./config/session');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -93,9 +94,9 @@ const DESKTOP_SCANNER_LATEST = {
 };
 
 const MOBILE_APP_LATEST = {
-    version: '2.1.50',
-    version_code: 81,
-    notes: 'Registers Firebase notifications reliably at login and confirms Android notification permission for absence alerts.'
+    version: '2.1.51',
+    version_code: 82,
+    notes: 'Keeps SDS and ASDS signed in and preserves the login during temporary server interruptions.'
 };
 
 function mobileApkReleaseUrl() {
@@ -183,11 +184,14 @@ app.use(session({
     secret: process.env.SESSION_SECRET || 'qr-attendance-secret-key',
     resave: false,
     saveUninitialized: false,
+    // Refresh the browser expiry while the account is actively used. The
+    // database store independently throttles its expiry writes.
+    rolling: true,
     cookie: {
         secure: isProduction,
         httpOnly: true,
         sameSite: 'lax',
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        maxAge: SESSION_MAX_AGE_MS
     }
 }));
 

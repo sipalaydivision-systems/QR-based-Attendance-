@@ -774,7 +774,10 @@ class ApiService {
     required String fallback,
   }) {
     if (_looksLikeHtml(response)) {
-      throw AuthExpired();
+      // Railway can return an HTML error page during a short deployment or
+      // gateway interruption. Only an explicit 401 is allowed to clear the
+      // saved login; an infrastructure error must remain retryable.
+      throw Exception(fallback);
     }
     try {
       final decoded = jsonDecode(response.body);
@@ -791,7 +794,7 @@ class ApiService {
     required String fallback,
   }) {
     if (_looksLikeHtml(response)) {
-      throw AuthExpired();
+      throw Exception(fallback);
     }
     try {
       final decoded = jsonDecode(response.body);

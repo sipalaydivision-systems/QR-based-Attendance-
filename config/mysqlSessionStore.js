@@ -1,13 +1,18 @@
 const session = require('express-session');
 const db = require('./database');
+const {
+    SESSION_MAX_AGE_MS,
+    SESSION_TOUCH_INTERVAL_MS,
+    SESSION_CACHE_TTL_MS
+} = require('./session');
 
 class MySQLSessionStore extends session.Store {
     constructor() {
         super();
         this.cache = new Map();
         this.lastTouches = new Map();
-        this.cacheTtlMs = 60 * 1000;
-        this.touchIntervalMs = 5 * 60 * 1000;
+        this.cacheTtlMs = SESSION_CACHE_TTL_MS;
+        this.touchIntervalMs = SESSION_TOUCH_INTERVAL_MS;
         this.maxCacheEntries = 25000;
         this.ready = this.ensureTable();
         this.cleanupTimer = setInterval(() => {
@@ -48,7 +53,7 @@ class MySQLSessionStore extends session.Store {
                 const data = typeof rows[0].data === 'string' ? JSON.parse(rows[0].data) : rows[0].data;
                 const expiresAt = data?.cookie?.expires
                     ? new Date(data.cookie.expires).getTime()
-                    : now + 24 * 60 * 60 * 1000;
+                    : now + SESSION_MAX_AGE_MS;
                 this.remember(sid, data, expiresAt);
                 return callback(null, data);
             })
@@ -58,7 +63,7 @@ class MySQLSessionStore extends session.Store {
     set(sid, sess, callback) {
         const expiresAt = sess.cookie && sess.cookie.expires
             ? new Date(sess.cookie.expires).getTime()
-            : Date.now() + 24 * 60 * 60 * 1000;
+            : Date.now() + SESSION_MAX_AGE_MS;
 
         this.remember(sid, sess, expiresAt);
         this.ready
@@ -69,6 +74,7 @@ class MySQLSessionStore extends session.Store {
                      ON DUPLICATE KEY UPDATE data = VALUES(data), expires_at = VALUES(expires_at)`,
                     [sid, JSON.stringify(sess), expiresAt]
                 );
+                this.lastTouches.set(sid, Date.now());
                 callback(null);
             })
             .catch(callback);
@@ -88,7 +94,7 @@ class MySQLSessionStore extends session.Store {
     touch(sid, sess, callback) {
         const expiresAt = sess.cookie && sess.cookie.expires
             ? new Date(sess.cookie.expires).getTime()
-            : Date.now() + 24 * 60 * 60 * 1000;
+            : Date.now() + SESSION_MAX_AGE_MS;
 
         const now = Date.now();
         this.remember(sid, sess, expiresAt, true);
