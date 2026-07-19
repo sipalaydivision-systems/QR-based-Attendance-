@@ -197,7 +197,7 @@
                 </a>
             </li>
             <% } %>
-            <% if (user.role !== 'superintendent' && user.role !== 'asst_superintendent' && user.role !== 'principal') { %>
+            <% if (user.role !== 'super_admin' && user.role !== 'superintendent' && user.role !== 'asst_superintendent' && user.role !== 'principal') { %>
             <li>
                 <a href="/admin/scanner" class="<%= page === 'scanner' ? 'active' : '' %>">
                     <i class="nav-icon fa-solid fa-camera"></i> QR Scanner
