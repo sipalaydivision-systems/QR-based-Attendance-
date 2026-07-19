@@ -4,6 +4,7 @@ const fs = require('fs');
 const bcrypt = require('bcrypt');
 const path = require('path');
 const multer = require('multer');
+const sharp = require('sharp');
 const router = express.Router();
 const db = require('../config/database');
 const { requireAuth, requireRole, applySchoolFilter } = require('../middleware/auth');
@@ -3820,16 +3821,69 @@ router.get('/school-map-data', requireRole('super_admin'), async (req, res) => {
     }
 });
 
-function uploadedFileToDataUrl(file) {
-    const ext = path.extname(file.originalname || '').toLowerCase();
-    const safeMime = {
-        '.jpg': 'image/jpeg',
-        '.jpeg': 'image/jpeg',
-        '.png': 'image/png',
-        '.gif': 'image/gif',
-        '.webp': 'image/webp'
-    }[ext];
-    return `data:${safeMime || file.mimetype};base64,${file.buffer.toString('base64')}`;
+async function optimizedImageToDataUrl(file, options = {}) {
+    const maxWidth = options.maxWidth || 512;
+    const maxHeight = options.maxHeight || 512;
+    const targetBytes = options.targetBytes || 120 * 1024;
+    const attempts = options.attempts || [
+        { scale: 1, quality: 82 },
+        { scale: 0.75, quality: 74 },
+        { scale: 0.5, quality: 66 }
+    ];
+    let optimized = null;
+
+    for (const attempt of attempts) {
+        optimized = await sharp(file.buffer, {
+            failOn: 'error',
+            limitInputPixels: 40_000_000
+        })
+            .rotate()
+            .resize({
+                width: Math.max(64, Math.round(maxWidth * attempt.scale)),
+                height: Math.max(64, Math.round(maxHeight * attempt.scale)),
+                fit: 'inside',
+                withoutEnlargement: true
+            })
+            .webp({
+                quality: attempt.quality,
+                alphaQuality: 88,
+                effort: 4,
+                smartSubsample: true
+            })
+            .toBuffer();
+        if (optimized.length <= targetBytes) break;
+    }
+
+    return `data:image/webp;base64,${optimized.toString('base64')}`;
+}
+
+function optimizedLogoToDataUrl(file) {
+    return optimizedImageToDataUrl(file, {
+        maxWidth: 512,
+        maxHeight: 512,
+        targetBytes: 120 * 1024
+    });
+}
+
+function optimizedIconToDataUrl(file) {
+    return optimizedImageToDataUrl(file, {
+        maxWidth: 256,
+        maxHeight: 256,
+        targetBytes: 60 * 1024
+    });
+}
+
+function optimizedDashboardArtToDataUrl(file) {
+    return optimizedImageToDataUrl(file, {
+        maxWidth: 1280,
+        maxHeight: 720,
+        targetBytes: 300 * 1024,
+        attempts: [
+            { scale: 1, quality: 82 },
+            { scale: 0.75, quality: 74 },
+            { scale: 0.5625, quality: 68 }
+        ]
+    });
 }
 
 router.delete('/schools/:id', requireRole('super_admin'), async (req, res) => {
@@ -4351,7 +4405,7 @@ router.post('/settings/logo', requireRole('super_admin'), (req, res) => {
         if (err) return res.status(400).json({ error: err.message });
         if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
         try {
-            const logoPath = uploadedFileToDataUrl(req.file);
+            const logoPath = await optimizedLogoToDataUrl(req.file);
             await db.query(
                 "INSERT INTO settings (setting_key, setting_value) VALUES ('system_logo', ?) ON DUPLICATE KEY UPDATE setting_value = ?",
                 [logoPath, logoPath]
@@ -4386,7 +4440,7 @@ router.post('/settings/mobile-dashboard-art', requireRole('super_admin'), (req, 
         if (err) return res.status(400).json({ error: err.message });
         if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
         try {
-            const art = uploadedFileToDataUrl(req.file);
+            const art = await optimizedDashboardArtToDataUrl(req.file);
             await db.query(
                 "INSERT INTO settings (setting_key, setting_value) VALUES ('mobile_dashboard_school_art', ?) ON DUPLICATE KEY UPDATE setting_value = ?",
                 [art, art]
@@ -4418,7 +4472,7 @@ router.post('/settings/ai-report-icon', requireRole('super_admin'), (req, res) =
         if (err) return res.status(400).json({ error: err.message });
         if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
         try {
-            const icon = uploadedFileToDataUrl(req.file);
+            const icon = await optimizedIconToDataUrl(req.file);
             await db.query(
                 "INSERT INTO settings (setting_key, setting_value) VALUES ('ai_report_icon', ?) ON DUPLICATE KEY UPDATE setting_value = ?",
                 [icon, icon]
@@ -4457,7 +4511,7 @@ router.post('/settings/platform-logo/:platform', requireRole('super_admin'), (re
         if (err) return res.status(400).json({ error: err.message });
         if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
         try {
-            const logoPath = uploadedFileToDataUrl(req.file);
+            const logoPath = await optimizedIconToDataUrl(req.file);
             await db.query(
                 'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
                 [settingKey, logoPath, logoPath]
@@ -6145,7 +6199,7 @@ router.post('/schools/:id/logo', requireAuth, function(req, res) {
         if (err) return res.status(400).json({ error: err.message });
         if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
         try {
-            const logoPath = uploadedFileToDataUrl(req.file);
+            const logoPath = await optimizedLogoToDataUrl(req.file);
             await db.query('UPDATE schools SET logo = ? WHERE id = ?', [logoPath, req.params.id]);
             invalidateLiveDashboardCaches();
             return res.json({ success: true, logo: logoPath });
