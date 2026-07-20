@@ -6221,6 +6221,410 @@ router.delete('/schools/:id/logo', requireAuth, async (req, res) => {
     }
 });
 
+// ---------------------------------------------------------------------------
+// SDS / ASDS Teacher Attendance workspace
+// ---------------------------------------------------------------------------
+async function loadTeacherAttendancePolicy(startDate, endDate) {
+    const [schoolDayResult, holidayResult, activeYear] = await Promise.all([
+        db.query(
+            'SELECT date, is_school_day, reason FROM school_days WHERE date BETWEEN ? AND ?',
+            [startDate, endDate]
+        ),
+        db.query(
+            `SELECT holiday_date, name, school_id, is_national
+             FROM holidays
+             WHERE holiday_date BETWEEN ? AND ?`,
+            [startDate, endDate]
+        ),
+        schoolYears.getActiveSchoolYear().catch(() => null)
+    ]);
+
+    const manualDays = new Map();
+    schoolDayResult[0].forEach(row => {
+        manualDays.set(dateOnly(row.date), {
+            isSchoolDay: !!row.is_school_day,
+            reason: row.reason || (row.is_school_day ? null : 'Non-school day'),
+            type: row.is_school_day ? null : 'Non-school Day'
+        });
+    });
+
+    const globalHolidays = new Map();
+    const schoolHolidays = new Map();
+    holidayResult[0].forEach(row => {
+        const day = dateOnly(row.holiday_date);
+        const value = {
+            isSchoolDay: false,
+            reason: row.name || holidayTypeLabel(row.is_national),
+            type: holidayTypeLabel(row.is_national)
+        };
+        if (row.school_id == null) {
+            if (!globalHolidays.has(day)) globalHolidays.set(day, value);
+        } else {
+            schoolHolidays.set(`${day}:${row.school_id}`, value);
+        }
+    });
+
+    const schoolYearStart = activeYear ? dateOnly(activeYear.start_date) : null;
+    const schoolYearEnd = activeYear ? dateOnly(activeYear.end_date) : null;
+    const schoolYearLabel = activeYear && activeYear.label ? ` ${activeYear.label}` : '';
+
+    return function attendancePolicy(dateStr, schoolId) {
+        const manual = manualDays.get(dateStr);
+        if (manual && !manual.isSchoolDay) return manual;
+
+        if (schoolYearStart && dateStr < schoolYearStart) {
+            return {
+                isSchoolDay: false,
+                reason: `School year${schoolYearLabel} has not started yet.`,
+                type: 'School Year'
+            };
+        }
+        if (schoolYearEnd && dateStr > schoolYearEnd) {
+            return {
+                isSchoolDay: false,
+                reason: `School year${schoolYearLabel} has ended.`,
+                type: 'School Year'
+            };
+        }
+
+        // A manual school-day override wins over weekends and holidays, just as
+        // it does in the scanner's operational-day decision.
+        if (manual && manual.isSchoolDay) return manual;
+
+        const dow = new Date(`${dateStr}T00:00:00`).getDay();
+        if (dow === 0 || dow === 6) {
+            return {
+                isSchoolDay: false,
+                reason: dow === 0 ? 'Sunday' : 'Saturday',
+                type: 'Weekend'
+            };
+        }
+
+        const globalHoliday = globalHolidays.get(dateStr);
+        if (globalHoliday) return globalHoliday;
+        const schoolHoliday = schoolHolidays.get(`${dateStr}:${schoolId}`);
+        if (schoolHoliday) return schoolHoliday;
+        return { isSchoolDay: true, reason: null, type: null };
+    };
+}
+
+function teacherAttendanceRole(req, res, next) {
+    return requireRole('superintendent', 'asst_superintendent')(req, res, next);
+}
+
+router.get('/teacher-attendance/monthly', teacherAttendanceRole, async (req, res) => {
+    try {
+        const now = new Date();
+        const requestedYear = Number.parseInt(req.query.year, 10);
+        const requestedMonth = Number.parseInt(req.query.month, 10);
+        const year = requestedYear >= 2000 && requestedYear <= 2100
+            ? requestedYear
+            : now.getFullYear();
+        const month = requestedMonth >= 1 && requestedMonth <= 12
+            ? requestedMonth
+            : now.getMonth() + 1;
+        const requestedSchool = Number.parseInt(req.query.school, 10);
+        const schoolId = requestedSchool > 0 ? requestedSchool : null;
+        const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+        const endDate = new Date(year, month, 0).toISOString().slice(0, 10);
+
+        let teacherQuery = `SELECT t.school_id,
+                DATE_FORMAT(COALESCE(t.active_from, DATE(t.created_at)), '%Y-%m-%d') AS activation_date
+            FROM teachers t
+            WHERE t.status = 'active'`;
+        const teacherParams = [];
+        if (schoolId) {
+            teacherQuery += ' AND t.school_id = ?';
+            teacherParams.push(schoolId);
+        }
+
+        let attendanceQuery = `SELECT DATE_FORMAT(a.date, '%Y-%m-%d') AS day,
+                t.school_id,
+                COUNT(DISTINCT CASE WHEN a.time_in IS NOT NULL THEN a.person_id END) AS attended,
+                COUNT(DISTINCT CASE WHEN a.status = 'present' THEN a.person_id END) AS present,
+                COUNT(DISTINCT CASE WHEN a.status = 'late' THEN a.person_id END) AS late,
+                COUNT(DISTINCT CASE WHEN a.status = 'half_day' THEN a.person_id END) AS half_day,
+                COUNT(DISTINCT CASE WHEN a.time_out IS NOT NULL THEN a.person_id END) AS timed_out
+            FROM attendance a
+            INNER JOIN teachers t
+                ON t.id = a.person_id
+               AND a.person_type = 'teacher'
+               AND t.status = 'active'
+            WHERE a.date BETWEEN ? AND ?`;
+        const attendanceParams = [startDate, endDate];
+        if (schoolId) {
+            attendanceQuery += ' AND t.school_id = ?';
+            attendanceParams.push(schoolId);
+        }
+        attendanceQuery += ' GROUP BY DATE(a.date), t.school_id';
+
+        const [teacherResult, attendanceResult, policy] = await Promise.all([
+            db.query(teacherQuery, teacherParams),
+            db.query(attendanceQuery, attendanceParams),
+            loadTeacherAttendancePolicy(startDate, endDate)
+        ]);
+
+        const teachersBySchool = new Map();
+        teacherResult[0].forEach(row => {
+            const key = String(row.school_id || 0);
+            if (!teachersBySchool.has(key)) teachersBySchool.set(key, []);
+            teachersBySchool.get(key).push(row.activation_date);
+        });
+        if (schoolId && !teachersBySchool.has(String(schoolId))) {
+            teachersBySchool.set(String(schoolId), []);
+        }
+
+        const attendanceByDaySchool = new Map();
+        attendanceResult[0].forEach(row => {
+            attendanceByDaySchool.set(`${row.day}:${row.school_id || 0}`, {
+                attended: Number(row.attended || 0),
+                present: Number(row.present || 0),
+                late: Number(row.late || 0),
+                half_day: Number(row.half_day || 0),
+                timed_out: Number(row.timed_out || 0)
+            });
+        });
+
+        const today = todayDate();
+        const todayEnded = today >= startDate && today <= endDate
+            ? await hasSchoolDayEnded(today)
+            : false;
+        const days = [];
+        let cursor = new Date(`${startDate}T00:00:00`);
+        const end = new Date(`${endDate}T00:00:00`);
+        while (cursor <= end) {
+            const date = cursor.toISOString().slice(0, 10);
+            const isWeekend = cursor.getDay() === 0 || cursor.getDay() === 6;
+            const canFinalizeAbsence = date < today || (date === today && todayEnded);
+            let total = 0;
+            let attended = 0;
+            let present = 0;
+            let late = 0;
+            let halfDay = 0;
+            let timedOut = 0;
+            let operatingSchools = 0;
+            let closedSchools = 0;
+            let firstReason = null;
+
+            for (const [schoolKey, activationDates] of teachersBySchool.entries()) {
+                const decision = policy(date, schoolKey);
+                if (!decision.isSchoolDay) {
+                    closedSchools++;
+                    if (!firstReason) firstReason = decision.reason || decision.type;
+                    continue;
+                }
+                operatingSchools++;
+                const eligible = activationDates.filter(value => value && value < date).length;
+                const metrics = attendanceByDaySchool.get(`${date}:${schoolKey}`) || {
+                    attended: 0, present: 0, late: 0, half_day: 0, timed_out: 0
+                };
+                total += Math.max(eligible, metrics.attended);
+                attended += metrics.attended;
+                present += metrics.present;
+                late += metrics.late;
+                halfDay += metrics.half_day;
+                timedOut += metrics.timed_out;
+            }
+
+            const absent = canFinalizeAbsence && operatingSchools > 0
+                ? Math.max(total - attended, 0)
+                : 0;
+            days.push({
+                date,
+                total,
+                attended,
+                present,
+                late,
+                half_day: halfDay,
+                absent,
+                timed_out: timedOut,
+                rate: total > 0 ? Math.round((attended / total) * 100) : 0,
+                is_weekend: isWeekend,
+                is_school_day: operatingSchools > 0,
+                operating_schools: operatingSchools,
+                closed_schools: closedSchools,
+                reason: operatingSchools > 0 && closedSchools > 0
+                    ? `${closedSchools} school${closedSchools === 1 ? '' : 's'} with no classes`
+                    : firstReason
+            });
+            cursor.setDate(cursor.getDate() + 1);
+        }
+
+        return res.json({
+            year,
+            month,
+            school_id: schoolId,
+            total_teachers: Math.max(0, ...days.map(day => day.total)),
+            totals: {
+                attended: days.reduce((sum, day) => sum + day.attended, 0),
+                absent: days.reduce((sum, day) => sum + day.absent, 0),
+                timed_out: days.reduce((sum, day) => sum + day.timed_out, 0)
+            },
+            days
+        });
+    } catch (err) {
+        console.error('Teacher monthly attendance error:', err);
+        return res.status(500).json({ error: 'Failed to load teacher attendance calendar.' });
+    }
+});
+
+// Deliberately excludes QR codes, contact details and other large/private fields.
+// The directory is loaded only when the user opens the Teacher List tab.
+router.get('/teacher-attendance/directory', teacherAttendanceRole, async (req, res) => {
+    try {
+        const requestedSchool = Number.parseInt(req.query.school, 10);
+        const schoolId = requestedSchool > 0 ? requestedSchool : null;
+        let query = `SELECT t.id, t.employee_id, t.firstname, t.middlename, t.lastname,
+                t.category, t.department, t.subject, t.school_id,
+                sc.name AS school_name, gl.name AS grade_name, sec.name AS section_name
+            FROM teachers t
+            LEFT JOIN schools sc ON sc.id = t.school_id
+            LEFT JOIN grade_levels gl ON gl.id = t.grade_level_id
+            LEFT JOIN sections sec ON sec.id = t.section_id
+            WHERE t.status = 'active'`;
+        const params = [];
+        if (schoolId) {
+            query += ' AND t.school_id = ?';
+            params.push(schoolId);
+        }
+        query += ' ORDER BY sc.name, t.lastname, t.firstname';
+        const [rows] = await db.query(query, params);
+        return res.json(rows);
+    } catch (err) {
+        console.error('Teacher attendance directory error:', err);
+        return res.status(500).json({ error: 'Failed to load the teacher list.' });
+    }
+});
+
+router.get('/teacher-attendance/day', teacherAttendanceRole, async (req, res) => {
+    try {
+        const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || ''))
+            ? String(req.query.date)
+            : todayDate();
+        const requestedSchool = Number.parseInt(req.query.school, 10);
+        const schoolId = requestedSchool > 0 ? requestedSchool : null;
+
+        let query = `SELECT t.id, t.employee_id, t.firstname, t.middlename, t.lastname,
+                t.category, t.department, t.subject, t.school_id,
+                sc.name AS school_name, gl.name AS grade_name, sec.name AS section_name,
+                a.id AS attendance_id, a.status AS stored_status, a.time_in, a.time_out,
+                a.last_time_in, a.monitoring_status
+            FROM teachers t
+            LEFT JOIN schools sc ON sc.id = t.school_id
+            LEFT JOIN grade_levels gl ON gl.id = t.grade_level_id
+            LEFT JOIN sections sec ON sec.id = t.section_id
+            LEFT JOIN attendance a ON a.id = (
+                SELECT MAX(a2.id)
+                FROM attendance a2
+                WHERE a2.person_type = 'teacher'
+                  AND a2.person_id = t.id
+                  AND a2.date = ?
+            )
+            WHERE t.status = 'active'
+              AND COALESCE(t.active_from, DATE(t.created_at)) < ?`;
+        const params = [date, date];
+        if (schoolId) {
+            query += ' AND t.school_id = ?';
+            params.push(schoolId);
+        }
+        query += ' ORDER BY sc.name, t.lastname, t.firstname';
+
+        const [rows, policy, schedule, teacherLateThreshold] = await Promise.all([
+            db.query(query, params).then(result => result[0]),
+            loadTeacherAttendancePolicy(date, date),
+            getAttendanceScheduleTimes(date),
+            getAttendanceLateThreshold('teacher', date)
+        ]);
+        const eventsByAttendance = await getAttendanceEventsByIds(
+            rows.map(row => row.attendance_id).filter(Boolean)
+        );
+        const today = todayDate();
+        const canFinalize = date < today || (date === today && await hasSchoolDayEnded(date));
+
+        const records = rows.map(row => {
+            const decision = policy(date, String(row.school_id || 0));
+            const storedEvents = row.attendance_id
+                ? (eventsByAttendance.get(row.attendance_id) || [])
+                : [];
+            const attendanceRow = {
+                ...row,
+                id: row.attendance_id,
+                status: row.stored_status
+            };
+            let status = 'pending';
+            let label = date > today ? 'Upcoming' : 'Pending';
+            let remarks = '';
+            let halfDayType = null;
+            let lateHalfDay = false;
+            let scanSummary = {
+                am_time_in: [], am_time_out: [], pm_time_in: [], pm_time_out: [], scan_statuses: []
+            };
+
+            if (row.time_in) {
+                const resolved = resolveAttendanceStatusFromLoadedEvents({
+                    firstTimeIn: row.time_in,
+                    lateThreshold: teacherLateThreshold,
+                    schedule,
+                    storedEvents
+                });
+                status = resolved.status || row.stored_status || 'present';
+                label = resolved.label || statusLabel(status);
+                remarks = resolved.remarks || '';
+                halfDayType = resolved.halfDayType || null;
+                lateHalfDay = !!resolved.lateHalfDay;
+                scanSummary = buildAttendanceScanSummary(attendanceRow, date, schedule, storedEvents);
+            } else if (!decision.isSchoolDay) {
+                status = 'not_required';
+                label = 'No Classes';
+                remarks = decision.reason || decision.type || 'Non-school day';
+            } else if (canFinalize) {
+                status = 'absent';
+                label = 'Absent';
+            }
+
+            return {
+                id: row.id,
+                employee_id: row.employee_id,
+                name: displayPersonName(row.firstname, row.lastname, row.middlename),
+                category: row.category,
+                department: row.department,
+                subject: row.subject,
+                school_id: row.school_id,
+                school_name: row.school_name,
+                grade_name: row.grade_name,
+                section_name: row.section_name,
+                attendance_id: row.attendance_id,
+                time_in: row.time_in,
+                time_out: row.time_out,
+                status,
+                attendance_status: label,
+                remarks,
+                half_day_type: halfDayType,
+                late_half_day: lateHalfDay,
+                monitoring_status: row.monitoring_status,
+                scan_summary: scanSummary
+            };
+        });
+
+        const totals = {
+            teachers: records.length,
+            attended: records.filter(row => row.time_in).length,
+            present: records.filter(row => row.status === 'present').length,
+            late: records.filter(row => row.status === 'late').length,
+            half_day: records.filter(row => row.status === 'half_day').length,
+            absent: records.filter(row => row.status === 'absent').length,
+            pending: records.filter(row => row.status === 'pending').length,
+            not_required: records.filter(row => row.status === 'not_required').length,
+            timed_out: records.filter(row => row.time_out).length
+        };
+
+        return res.json({ date, school_id: schoolId, totals, records });
+    } catch (err) {
+        console.error('Teacher day attendance error:', err);
+        return res.status(500).json({ error: 'Failed to load teacher attendance details.' });
+    }
+});
+
 // =============================================
 // GET /api/monthly-attendance
 // Returns per-day absent count for a given month

@@ -17,7 +17,7 @@
     <link rel="stylesheet" href="/css/style.css?v=super-admin-ui-20260701-layout3">
     <script src="/js/status-labels.js"></script>
 </head>
-<body class="<%= (typeof user !== 'undefined' && user && user.role === 'super_admin') ? 'theme-clean' : '' %>">
+<body class="<%= (typeof user !== 'undefined' && user && user.role === 'super_admin') ? 'theme-clean' : ((typeof user !== 'undefined' && user && (user.role === 'superintendent' || user.role === 'asst_superintendent')) ? 'theme-division' : '') %>">
     <% if (typeof user !== 'undefined' && user) { %>
     <nav class="sidebar<%= (typeof user !== 'undefined' && user && (user.role === 'adviser' || user.role === 'principal')) ? ' sidebar-blue' : '' %>" id="sidebar">
         <!-- Brand -->
@@ -104,6 +104,13 @@
             <% } %>
 
             <li class="nav-section"><span class="nav-section-label">Attendance</span></li>
+            <% if (user.role === 'superintendent' || user.role === 'asst_superintendent') { %>
+            <li>
+                <a href="/admin/teacher-attendance" class="<%= page === 'teacher_attendance' ? 'active' : '' %>">
+                    <i class="nav-icon fa-solid fa-person-chalkboard"></i> Teacher Attendance
+                </a>
+            </li>
+            <% } %>
             <li>
                 <a href="/admin/attendance" class="<%= page === 'attendance' ? 'active' : '' %>">
                     <i class="nav-icon fa-solid fa-clipboard-list"></i> Attendance
@@ -672,6 +679,8 @@
                 <span>
                     <% if (page === 'dashboard') { %>
                     Overview of all schools and attendance in Sipalay City
+                    <% } else if (page === 'teacher_attendance') { %>
+                    Monitor teacher time-in and time-out records across schools
                     <% } else if (user.role === 'super_admin') { %>
                     Manage <%= String(title || 'records').toLowerCase() %> across the EduTrack system
                     <% } else { %>

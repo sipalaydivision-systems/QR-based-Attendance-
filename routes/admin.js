@@ -1738,6 +1738,15 @@ async function schoolsForUser(req) {
 }
 
 // ---- Attendance ----
+router.get('/teacher-attendance', requireRole('superintendent', 'asst_superintendent'), async (req, res) => {
+    const schools = await schoolsForUser(req);
+    res.render('teacher_attendance', {
+        title: 'Teacher Attendance',
+        page: 'teacher_attendance',
+        schools
+    });
+});
+
 router.get('/attendance', async (req, res) => {
     const schools = await schoolsForUser(req);
     res.render('attendance', { title: 'Attendance', page: 'attendance', schools });

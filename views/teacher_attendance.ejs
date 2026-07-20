@@ -1,0 +1,326 @@
+<%- include('partials/header') %>
+
+<style>
+.ta-page { --ta-green:#059669; --ta-dark:#0f172a; --ta-border:#e2e8f0; display:grid; gap:1rem; }
+.ta-toolbar,.ta-panel,.ta-stat { background:#fff; border:1px solid var(--ta-border); border-radius:16px; box-shadow:0 2px 8px rgba(15,23,42,.04); }
+.ta-toolbar { display:flex; align-items:end; gap:.85rem; padding:1rem; flex-wrap:wrap; }
+.ta-field { display:grid; gap:.38rem; min-width:210px; }
+.ta-field label { color:#475569; font-size:.75rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
+.ta-field select,.ta-field input { height:42px; border:1px solid #cbd5e1; border-radius:10px; padding:0 .75rem; background:#fff; color:var(--ta-dark); font:inherit; }
+.ta-field select:focus,.ta-field input:focus { outline:3px solid rgba(5,150,105,.13); border-color:var(--ta-green); }
+.ta-toolbar-spacer { flex:1; }
+.ta-btn { height:42px; display:inline-flex; align-items:center; justify-content:center; gap:.45rem; padding:0 .9rem; border-radius:10px; border:1px solid #cbd5e1; background:#fff; color:#334155; font-weight:750; cursor:pointer; }
+.ta-btn:hover { border-color:#94a3b8; background:#f8fafc; }
+.ta-btn-primary { background:var(--ta-green); color:#fff; border-color:var(--ta-green); }
+.ta-btn-primary:hover { background:#047857; border-color:#047857; }
+.ta-tabs { display:flex; gap:.4rem; padding:.32rem; background:#eef2f7; border-radius:12px; }
+.ta-tab { height:36px; border:0; border-radius:9px; padding:0 .85rem; background:transparent; color:#64748b; font-weight:750; cursor:pointer; }
+.ta-tab.active { background:#fff; color:#047857; box-shadow:0 1px 4px rgba(15,23,42,.1); }
+.ta-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.8rem; }
+.ta-stat { padding:1rem; display:flex; gap:.8rem; align-items:center; min-width:0; }
+.ta-stat-icon { width:42px; height:42px; flex:none; display:grid; place-items:center; border-radius:12px; background:#ecfdf5; color:#059669; font-size:1.05rem; }
+.ta-stat:nth-child(2) .ta-stat-icon { background:#eff6ff; color:#2563eb; }
+.ta-stat:nth-child(3) .ta-stat-icon { background:#fff1f2; color:#dc2626; }
+.ta-stat:nth-child(4) .ta-stat-icon { background:#f5f3ff; color:#7c3aed; }
+.ta-stat-copy { min-width:0; }
+.ta-stat-copy span { color:#64748b; font-size:.78rem; font-weight:650; display:block; }
+.ta-stat-copy strong { display:block; color:var(--ta-dark); font-size:1.35rem; margin-top:.12rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ta-panel { overflow:hidden; }
+.ta-panel-head { min-height:68px; padding:.9rem 1rem; display:flex; align-items:center; justify-content:space-between; gap:1rem; border-bottom:1px solid #eef2f7; }
+.ta-panel-title { min-width:0; }
+.ta-panel-title h2 { margin:0; color:var(--ta-dark); font-size:1rem; display:flex; align-items:center; gap:.5rem; }
+.ta-panel-title h2 i { color:var(--ta-green); }
+.ta-panel-title p { margin:.25rem 0 0; color:#64748b; font-size:.78rem; }
+.ta-month-nav { display:flex; align-items:center; gap:.65rem; }
+.ta-month-nav strong { width:150px; text-align:center; color:var(--ta-dark); }
+.ta-icon-btn { width:38px; height:38px; display:grid; place-items:center; border:1px solid #dbe3ee; border-radius:10px; background:#f8fafc; color:#0f172a; cursor:pointer; }
+.ta-icon-btn:hover { border-color:#94a3b8; }
+.ta-legend { display:flex; align-items:center; gap:.85rem; flex-wrap:wrap; padding:.7rem 1rem; color:#64748b; font-size:.75rem; border-bottom:1px solid #eef2f7; }
+.ta-legend span { display:flex; align-items:center; gap:.35rem; }
+.ta-dot { width:13px; height:13px; border-radius:4px; border:1px solid transparent; }
+.ta-dot.low { background:#dcfce7; border-color:#86efac; }.ta-dot.medium { background:#fef3c7; border-color:#fcd34d; }.ta-dot.high { background:#fee2e2; border-color:#fca5a5; }.ta-dot.closed { background:#f1f5f9; border-color:#cbd5e1; }
+.ta-calendar-wrap { padding:.85rem 1rem 1.05rem; overflow-x:auto; }
+.ta-weekdays,.ta-calendar { display:grid; grid-template-columns:repeat(7,minmax(92px,1fr)); min-width:680px; gap:5px; }
+.ta-weekdays { margin-bottom:5px; }
+.ta-weekdays div { text-align:center; padding:.45rem; color:#94a3b8; font-size:.72rem; font-weight:800; }
+.ta-day { position:relative; min-height:100px; border:1px solid #e5eaf1; border-radius:10px; background:#fff; padding:.65rem; text-align:left; cursor:pointer; transition:transform .12s,border-color .12s,box-shadow .12s; }
+.ta-day:not(.blank):hover { transform:translateY(-1px); border-color:#10b981; box-shadow:0 5px 14px rgba(15,23,42,.08); }
+.ta-day.blank { visibility:hidden; cursor:default; }
+.ta-day.closed { background:#f8fafc; color:#94a3b8; }
+.ta-day.low { background:#f0fdf4; border-color:#bbf7d0; }.ta-day.medium { background:#fffbeb; border-color:#fde68a; }.ta-day.high { background:#fff1f2; border-color:#fecaca; }
+.ta-day.today { box-shadow:inset 0 0 0 2px #10b981; }
+.ta-day-num { font-weight:800; font-size:.82rem; color:#334155; }
+.ta-day.closed .ta-day-num { color:#94a3b8; }
+.ta-day-main { margin-top:.8rem; font-size:.82rem; font-weight:800; color:#0f172a; }
+.ta-day-sub { margin-top:.22rem; color:#64748b; font-size:.68rem; line-height:1.3; }
+.ta-day.closed .ta-day-main { color:#64748b; }
+.ta-loading,.ta-empty { min-height:240px; display:grid; place-items:center; color:#64748b; padding:2rem; text-align:center; }
+.ta-spinner { width:30px; height:30px; border:3px solid #dbeafe; border-top-color:#059669; border-radius:50%; animation:taSpin .8s linear infinite; margin:0 auto .7rem; }
+@keyframes taSpin { to { transform:rotate(360deg); } }
+.ta-table-tools { padding:.8rem 1rem; display:flex; align-items:center; gap:.7rem; border-bottom:1px solid #eef2f7; }
+.ta-search { position:relative; max-width:390px; flex:1; }
+.ta-search i { position:absolute; left:.8rem; top:50%; transform:translateY(-50%); color:#94a3b8; }
+.ta-search input { width:100%; height:40px; border:1px solid #cbd5e1; border-radius:10px; padding:0 .75rem 0 2.25rem; font:inherit; }
+.ta-table-wrap { overflow:auto; }
+.ta-table { width:100%; border-collapse:collapse; min-width:850px; }
+.ta-table th { background:#f8fafc; color:#64748b; font-size:.68rem; text-transform:uppercase; letter-spacing:.05em; text-align:left; padding:.72rem .85rem; border-bottom:1px solid #e2e8f0; }
+.ta-table td { padding:.78rem .85rem; border-bottom:1px solid #eef2f7; color:#334155; font-size:.8rem; vertical-align:middle; }
+.ta-table tbody tr:hover { background:#fafdfc; }
+.ta-person { display:flex; align-items:center; gap:.65rem; min-width:190px; }
+.ta-avatar { width:34px; height:34px; flex:none; display:grid; place-items:center; border-radius:10px; background:#ecfdf5; color:#047857; font-weight:800; }
+.ta-person strong { display:block; color:#0f172a; font-size:.8rem; }.ta-person small { color:#94a3b8; }
+.ta-muted { color:#94a3b8; }
+.ta-status { display:inline-flex; align-items:center; gap:.3rem; padding:.3rem .55rem; border-radius:999px; font-size:.7rem; font-weight:800; white-space:nowrap; }
+.ta-status.present { background:#dcfce7;color:#15803d }.ta-status.late { background:#fef3c7;color:#b45309 }.ta-status.half_day { background:#ffedd5;color:#c2410c }.ta-status.absent { background:#fee2e2;color:#dc2626 }.ta-status.pending { background:#e0f2fe;color:#0369a1 }.ta-status.not_required { background:#f1f5f9;color:#64748b }
+.ta-scans { display:grid; gap:.18rem; min-width:86px; }.ta-scan { white-space:nowrap; color:#334155; }.ta-scan small { color:#94a3b8; margin-left:.2rem; }
+.ta-modal { position:fixed; inset:0; z-index:3000; background:rgba(15,23,42,.55); display:none; align-items:center; justify-content:center; padding:1rem; backdrop-filter:blur(2px); }
+.ta-modal.open { display:flex; }
+.ta-modal-card { width:min(1180px,96vw); max-height:90vh; background:#fff; border-radius:18px; box-shadow:0 28px 70px rgba(15,23,42,.28); overflow:hidden; display:flex; flex-direction:column; }
+.ta-modal-head { padding:1rem 1.15rem; display:flex; justify-content:space-between; align-items:start; gap:1rem; border-bottom:1px solid #e2e8f0; }
+.ta-modal-head h2 { margin:0; color:#0f172a; font-size:1.1rem; }.ta-modal-head p { margin:.22rem 0 0;color:#64748b;font-size:.8rem; }
+.ta-modal-summary { padding:.75rem 1rem; display:flex; gap:.5rem; flex-wrap:wrap; border-bottom:1px solid #eef2f7; }
+.ta-modal-summary .ta-status { font-size:.76rem; padding:.42rem .68rem; }
+.ta-modal-body { overflow:auto; min-height:240px; }
+.ta-modal-filters { padding:.75rem 1rem; display:flex; gap:.6rem; border-bottom:1px solid #eef2f7; }
+.ta-modal-filters .ta-search { max-width:none; }.ta-modal-filters select { height:40px; border:1px solid #cbd5e1; border-radius:10px; padding:0 .7rem; background:#fff; }
+.ta-table-note { padding:.75rem 1rem; color:#64748b; font-size:.74rem; background:#f8fafc; border-top:1px solid #e2e8f0; }
+.ta-hidden { display:none !important; }
+@media(max-width:900px){.ta-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.ta-field{flex:1}.ta-toolbar-spacer{display:none}}
+@media(max-width:600px){.ta-stats{grid-template-columns:1fr}.ta-toolbar{align-items:stretch}.ta-field{min-width:100%}.ta-tabs{width:100%}.ta-tab{flex:1}.ta-panel-head{align-items:flex-start;flex-direction:column}.ta-month-nav{width:100%;justify-content:space-between}.ta-modal{padding:.35rem}.ta-modal-card{width:100%;max-height:96vh;border-radius:14px}.ta-modal-filters{flex-direction:column}.ta-calendar-wrap{padding:.65rem}.ta-weekdays,.ta-calendar{min-width:650px}}
+</style>
+
+<div class="ta-page">
+    <section class="ta-toolbar" aria-label="Teacher attendance filters">
+        <div class="ta-field">
+            <label for="taSchool">School</label>
+            <select id="taSchool">
+                <option value="">All Schools</option>
+                <% (schools || []).forEach(function(school) { %>
+                <option value="<%= school.id %>"><%= school.name %></option>
+                <% }) %>
+            </select>
+        </div>
+        <div class="ta-field">
+            <label for="taMonth">Month</label>
+            <input id="taMonth" type="month">
+        </div>
+        <button class="ta-btn ta-btn-primary" id="taApply" type="button"><i class="fa-solid fa-filter"></i> Apply</button>
+        <button class="ta-btn" id="taRefresh" type="button"><i class="fa-solid fa-rotate"></i> Refresh</button>
+        <div class="ta-toolbar-spacer"></div>
+        <div class="ta-tabs" role="tablist">
+            <button class="ta-tab active" type="button" data-view="calendar"><i class="fa-regular fa-calendar-days"></i> Calendar</button>
+            <button class="ta-tab" type="button" data-view="directory"><i class="fa-solid fa-users"></i> Teacher List</button>
+        </div>
+    </section>
+
+    <section class="ta-stats" aria-label="Monthly teacher attendance summary">
+        <article class="ta-stat"><span class="ta-stat-icon"><i class="fa-solid fa-users"></i></span><div class="ta-stat-copy"><span>Active Teachers</span><strong id="statTeachers">—</strong></div></article>
+        <article class="ta-stat"><span class="ta-stat-icon"><i class="fa-solid fa-fingerprint"></i></span><div class="ta-stat-copy"><span>Monthly Check-ins</span><strong id="statAttended">—</strong></div></article>
+        <article class="ta-stat"><span class="ta-stat-icon"><i class="fa-solid fa-user-xmark"></i></span><div class="ta-stat-copy"><span>Recorded Absences</span><strong id="statAbsent">—</strong></div></article>
+        <article class="ta-stat"><span class="ta-stat-icon"><i class="fa-solid fa-person-walking-arrow-right"></i></span><div class="ta-stat-copy"><span>Time-outs Recorded</span><strong id="statTimedOut">—</strong></div></article>
+    </section>
+
+    <section class="ta-panel" id="calendarView">
+        <div class="ta-panel-head">
+            <div class="ta-panel-title"><h2><i class="fa-regular fa-calendar-check"></i> Monthly Teacher Attendance</h2><p>Choose a day to view each teacher's time-in and time-out records.</p></div>
+            <div class="ta-month-nav"><button class="ta-icon-btn" id="prevMonth" type="button" aria-label="Previous month"><i class="fa-solid fa-chevron-left"></i></button><strong id="monthTitle">—</strong><button class="ta-icon-btn" id="nextMonth" type="button" aria-label="Next month"><i class="fa-solid fa-chevron-right"></i></button></div>
+        </div>
+        <div class="ta-legend"><span><i class="ta-dot low"></i> Low absence</span><span><i class="ta-dot medium"></i> Medium</span><span><i class="ta-dot high"></i> High absence</span><span><i class="ta-dot closed"></i> Weekend / no classes</span></div>
+        <div class="ta-calendar-wrap">
+            <div class="ta-weekdays"><div>SUN</div><div>MON</div><div>TUE</div><div>WED</div><div>THU</div><div>FRI</div><div>SAT</div></div>
+            <div id="taCalendar" class="ta-calendar"><div class="ta-loading" style="grid-column:1/-1"><div><div class="ta-spinner"></div>Loading teacher attendance…</div></div></div>
+        </div>
+    </section>
+
+    <section class="ta-panel ta-hidden" id="directoryView">
+        <div class="ta-panel-head"><div class="ta-panel-title"><h2><i class="fa-solid fa-address-book"></i> Teacher List</h2><p id="directorySubtitle">Active teachers across all schools</p></div><span class="ta-status present" id="directoryCount">0 teachers</span></div>
+        <div class="ta-table-tools"><label class="ta-search"><i class="fa-solid fa-magnifying-glass"></i><input id="directorySearch" type="search" placeholder="Search teacher, employee ID, school or assignment"></label></div>
+        <div class="ta-table-wrap"><table class="ta-table"><thead><tr><th>Teacher</th><th>Employee ID</th><th>School</th><th>Type</th><th>Assignment</th><th>Department / Subject</th></tr></thead><tbody id="directoryBody"><tr><td colspan="6"><div class="ta-loading"><div><div class="ta-spinner"></div>Loading teachers…</div></div></td></tr></tbody></table></div>
+    </section>
+</div>
+
+<div class="ta-modal" id="dayModal" role="dialog" aria-modal="true" aria-labelledby="dayModalTitle">
+    <div class="ta-modal-card">
+        <div class="ta-modal-head"><div><h2 id="dayModalTitle">Teacher Attendance Details</h2><p id="dayModalDate">—</p></div><button class="ta-icon-btn" type="button" id="closeDayModal" aria-label="Close"><i class="fa-solid fa-xmark"></i></button></div>
+        <div class="ta-modal-summary" id="daySummary"></div>
+        <div class="ta-modal-filters"><label class="ta-search"><i class="fa-solid fa-magnifying-glass"></i><input id="daySearch" type="search" placeholder="Search teacher, employee ID or school"></label><select id="dayStatus"><option value="">All statuses</option><option value="present">Present</option><option value="late">Late</option><option value="half_day">Half-Day</option><option value="absent">Absent</option><option value="pending">Pending</option><option value="not_required">No Classes</option></select></div>
+        <div class="ta-modal-body"><table class="ta-table"><thead><tr><th>Teacher</th><th>School</th><th>AM In</th><th>AM Out</th><th>PM In</th><th>PM Out</th><th>Status</th></tr></thead><tbody id="dayBody"></tbody></table></div>
+        <div class="ta-table-note">Times are based on the recorded scanner events and the attendance schedule configured for the selected date.</div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var state = { monthly: null, directory: [], directoryLoaded: false, dayRecords: [], selectedDate: null };
+    var school = document.getElementById('taSchool');
+    var monthInput = document.getElementById('taMonth');
+    var now = new Date();
+    monthInput.value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+
+    function escapeHtml(value) {
+        return String(value == null ? '' : value).replace(/[&<>'"]/g, function (char) {
+            return { '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[char];
+        });
+    }
+    function apiUrl(path, params) {
+        var query = new URLSearchParams(params);
+        Array.from(query.entries()).forEach(function (entry) { if (!entry[1]) query.delete(entry[0]); });
+        return path + '?' + query.toString();
+    }
+    async function getJson(url) {
+        var response = await fetch(url, { headers: { Accept: 'application/json' } });
+        var data = await response.json().catch(function () { return {}; });
+        if (!response.ok) throw new Error(data.error || 'Unable to load data.');
+        return data;
+    }
+    function selectedMonth() {
+        var parts = monthInput.value.split('-');
+        return { year:Number(parts[0]), month:Number(parts[1]) };
+    }
+    function schoolName() { return school.options[school.selectedIndex] ? school.options[school.selectedIndex].text : 'All Schools'; }
+    function monthLabel(year, month) { return new Date(year, month - 1, 1).toLocaleDateString('en-US', { month:'long', year:'numeric' }); }
+    function formatDate(date) { return new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' }); }
+    function statusClass(status) { return ['present','late','half_day','absent','pending','not_required'].indexOf(status) >= 0 ? status : 'pending'; }
+    function initials(name) { return String(name || '?').split(/\s+/).filter(Boolean).slice(0,2).map(function(part){ return part.charAt(0); }).join('').toUpperCase(); }
+
+    async function loadMonthly() {
+        var target = document.getElementById('taCalendar');
+        var value = selectedMonth();
+        target.innerHTML = '<div class="ta-loading" style="grid-column:1/-1"><div><div class="ta-spinner"></div>Loading teacher attendance…</div></div>';
+        document.getElementById('monthTitle').textContent = monthLabel(value.year, value.month);
+        try {
+            state.monthly = await getJson(apiUrl('/api/teacher-attendance/monthly', { year:value.year, month:value.month, school:school.value }));
+            renderCalendar();
+            document.getElementById('statTeachers').textContent = Number(state.monthly.total_teachers || 0).toLocaleString();
+            document.getElementById('statAttended').textContent = Number(state.monthly.totals.attended || 0).toLocaleString();
+            document.getElementById('statAbsent').textContent = Number(state.monthly.totals.absent || 0).toLocaleString();
+            document.getElementById('statTimedOut').textContent = Number(state.monthly.totals.timed_out || 0).toLocaleString();
+        } catch (error) {
+            target.innerHTML = '<div class="ta-empty" style="grid-column:1/-1"><div><i class="fa-solid fa-triangle-exclamation"></i><br>' + escapeHtml(error.message) + '</div></div>';
+        }
+    }
+    function renderCalendar() {
+        var target = document.getElementById('taCalendar');
+        var days = state.monthly && state.monthly.days ? state.monthly.days : [];
+        if (!days.length) { target.innerHTML = '<div class="ta-empty" style="grid-column:1/-1">No attendance calendar is available.</div>'; return; }
+        var firstOffset = new Date(days[0].date + 'T00:00:00').getDay();
+        var html = '';
+        for (var blank = 0; blank < firstOffset; blank++) html += '<button type="button" class="ta-day blank" tabindex="-1"></button>';
+        var today = new Date();
+        var todayString = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+        days.forEach(function (day) {
+            var absenceRate = day.total ? (day.absent / day.total) : 0;
+            var level = !day.is_school_day ? 'closed' : (day.absent === 0 ? 'low' : (absenceRate < .1 ? 'low' : (absenceRate < .25 ? 'medium' : 'high')));
+            var main = !day.is_school_day ? (day.reason || 'No classes') : (day.absent + ' absent');
+            var sub = !day.is_school_day ? 'Not counted as absence' : (day.attended + ' of ' + day.total + ' checked in');
+            if (day.is_school_day && day.closed_schools) sub += ' · ' + day.closed_schools + ' closed';
+            html += '<button type="button" class="ta-day ' + level + (day.date === todayString ? ' today' : '') + '" data-date="' + day.date + '" title="View attendance for ' + escapeHtml(formatDate(day.date)) + '">' +
+                '<span class="ta-day-num">' + Number(day.date.slice(-2)) + '</span><div class="ta-day-main">' + escapeHtml(main) + '</div><div class="ta-day-sub">' + escapeHtml(sub) + '</div></button>';
+        });
+        target.innerHTML = html;
+        target.querySelectorAll('.ta-day[data-date]').forEach(function (button) { button.addEventListener('click', function () { openDay(button.dataset.date); }); });
+    }
+
+    async function loadDirectory() {
+        var body = document.getElementById('directoryBody');
+        body.innerHTML = '<tr><td colspan="6"><div class="ta-loading"><div><div class="ta-spinner"></div>Loading teachers…</div></div></td></tr>';
+        try {
+            var data = await getJson(apiUrl('/api/teacher-attendance/directory', { school:school.value }));
+            state.directory = Array.isArray(data) ? data : [];
+            state.directoryLoaded = true;
+            document.getElementById('directorySubtitle').textContent = school.value ? ('Active teachers at ' + schoolName()) : 'Active teachers across all schools';
+            renderDirectory();
+        } catch (error) {
+            body.innerHTML = '<tr><td colspan="6"><div class="ta-empty">' + escapeHtml(error.message) + '</div></td></tr>';
+        }
+    }
+    function teacherFullName(row) { return row.name || [row.firstname,row.middlename,row.lastname].filter(Boolean).join(' ') || 'Unnamed teacher'; }
+    function renderDirectory() {
+        var term = document.getElementById('directorySearch').value.trim().toLowerCase();
+        var rows = state.directory.filter(function(row) { return JSON.stringify(row).toLowerCase().indexOf(term) >= 0; });
+        document.getElementById('directoryCount').textContent = rows.length.toLocaleString() + ' teacher' + (rows.length === 1 ? '' : 's');
+        var body = document.getElementById('directoryBody');
+        if (!rows.length) { body.innerHTML = '<tr><td colspan="6"><div class="ta-empty">No matching teachers found.</div></td></tr>'; return; }
+        body.innerHTML = rows.map(function (row) {
+            var name = teacherFullName(row);
+            var assignment = [row.grade_name,row.section_name].filter(Boolean).join(' · ') || row.assignment || '—';
+            var expertise = [row.department,row.subject].filter(Boolean).join(' · ') || '—';
+            return '<tr><td><div class="ta-person"><span class="ta-avatar">' + escapeHtml(initials(name)) + '</span><div><strong>' + escapeHtml(name) + '</strong><small>Active teacher</small></div></div></td>' +
+                '<td>' + escapeHtml(row.employee_id || '—') + '</td><td>' + escapeHtml(row.school_name || 'Unassigned') + '</td><td>' + escapeHtml(row.category || 'Teacher') + '</td><td>' + escapeHtml(assignment) + '</td><td>' + escapeHtml(expertise) + '</td></tr>';
+        }).join('');
+    }
+
+    async function openDay(date) {
+        state.selectedDate = date;
+        var modal = document.getElementById('dayModal');
+        modal.classList.add('open'); document.body.style.overflow = 'hidden';
+        document.getElementById('dayModalDate').textContent = formatDate(date) + (school.value ? ' · ' + schoolName() : ' · All Schools');
+        document.getElementById('daySummary').innerHTML = '<span class="ta-status pending"><i class="fa-solid fa-spinner fa-spin"></i> Loading attendance</span>';
+        document.getElementById('dayBody').innerHTML = '<tr><td colspan="7"><div class="ta-loading"><div><div class="ta-spinner"></div>Loading scan records…</div></div></td></tr>';
+        try {
+            var data = await getJson(apiUrl('/api/teacher-attendance/day', { date:date, school:school.value }));
+            state.dayRecords = data.records || [];
+            var total = data.totals || {};
+            document.getElementById('daySummary').innerHTML =
+                '<span class="ta-status present"><i class="fa-solid fa-check"></i> ' + (total.present || 0) + ' Present</span>' +
+                '<span class="ta-status late"><i class="fa-solid fa-clock"></i> ' + (total.late || 0) + ' Late</span>' +
+                '<span class="ta-status half_day"><i class="fa-solid fa-circle-half-stroke"></i> ' + (total.half_day || 0) + ' Half-Day</span>' +
+                '<span class="ta-status absent"><i class="fa-solid fa-xmark"></i> ' + (total.absent || 0) + ' Absent</span>' +
+                '<span class="ta-status pending"><i class="fa-solid fa-hourglass-half"></i> ' + (total.pending || 0) + ' Pending</span>' +
+                (total.not_required ? '<span class="ta-status not_required"><i class="fa-regular fa-calendar-xmark"></i> ' + total.not_required + ' No Classes</span>' : '');
+            renderDay();
+        } catch (error) {
+            document.getElementById('daySummary').innerHTML = '';
+            document.getElementById('dayBody').innerHTML = '<tr><td colspan="7"><div class="ta-empty">' + escapeHtml(error.message) + '</div></td></tr>';
+        }
+    }
+    function renderScans(summary, key) {
+        var values = summary && Array.isArray(summary[key]) ? summary[key] : [];
+        if (!values.length) return '<span class="ta-muted">—</span>';
+        return '<div class="ta-scans">' + values.map(function(scan){ return '<span class="ta-scan">' + escapeHtml(scan.time_display || scan.time || '—') + (scan.label ? '<small>' + escapeHtml(scan.label) + '</small>' : '') + '</span>'; }).join('') + '</div>';
+    }
+    function renderDay() {
+        var term = document.getElementById('daySearch').value.trim().toLowerCase();
+        var status = document.getElementById('dayStatus').value;
+        var rows = state.dayRecords.filter(function(row) {
+            var matchesTerm = JSON.stringify([row.name,row.employee_id,row.school_name,row.department,row.subject]).toLowerCase().indexOf(term) >= 0;
+            return matchesTerm && (!status || row.status === status);
+        });
+        var body = document.getElementById('dayBody');
+        if (!rows.length) { body.innerHTML = '<tr><td colspan="7"><div class="ta-empty">No teacher attendance records match these filters.</div></td></tr>'; return; }
+        body.innerHTML = rows.map(function(row) {
+            var summary = row.scan_summary || {};
+            return '<tr><td><div class="ta-person"><span class="ta-avatar">' + escapeHtml(initials(row.name)) + '</span><div><strong>' + escapeHtml(row.name) + '</strong><small>' + escapeHtml(row.employee_id || 'No employee ID') + '</small></div></div></td>' +
+                '<td>' + escapeHtml(row.school_name || 'Unassigned') + '</td><td>' + renderScans(summary,'am_time_in') + '</td><td>' + renderScans(summary,'am_time_out') + '</td><td>' + renderScans(summary,'pm_time_in') + '</td><td>' + renderScans(summary,'pm_time_out') + '</td>' +
+                '<td><span class="ta-status ' + statusClass(row.status) + '">' + escapeHtml(row.attendance_status || row.status) + '</span>' + (row.remarks ? '<div class="ta-day-sub">' + escapeHtml(row.remarks) + '</div>' : '') + '</td></tr>';
+        }).join('');
+    }
+    function closeModal() { document.getElementById('dayModal').classList.remove('open'); document.body.style.overflow = ''; }
+    function moveMonth(delta) { var value=selectedMonth(); var date=new Date(value.year,value.month-1+delta,1); monthInput.value=date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0'); loadMonthly(); }
+    function directoryIsOpen() { return document.querySelector('.ta-tab[data-view="directory"]').classList.contains('active'); }
+    function reloadAll() {
+        loadMonthly();
+        state.directoryLoaded = false;
+        state.directory = [];
+        if (directoryIsOpen()) loadDirectory();
+    }
+
+    document.getElementById('taApply').addEventListener('click', reloadAll);
+    document.getElementById('taRefresh').addEventListener('click', reloadAll);
+    document.getElementById('prevMonth').addEventListener('click', function(){ moveMonth(-1); });
+    document.getElementById('nextMonth').addEventListener('click', function(){ moveMonth(1); });
+    monthInput.addEventListener('change', loadMonthly);
+    school.addEventListener('change', reloadAll);
+    document.getElementById('directorySearch').addEventListener('input', renderDirectory);
+    document.getElementById('daySearch').addEventListener('input', renderDay);
+    document.getElementById('dayStatus').addEventListener('change', renderDay);
+    document.getElementById('closeDayModal').addEventListener('click', closeModal);
+    document.getElementById('dayModal').addEventListener('click', function(event){ if(event.target === this) closeModal(); });
+    document.addEventListener('keydown', function(event){ if(event.key === 'Escape') closeModal(); });
+    document.querySelectorAll('.ta-tab').forEach(function(tab){ tab.addEventListener('click', function(){ document.querySelectorAll('.ta-tab').forEach(function(item){ item.classList.remove('active'); }); tab.classList.add('active'); var directory=tab.dataset.view==='directory'; document.getElementById('calendarView').classList.toggle('ta-hidden',directory); document.getElementById('directoryView').classList.toggle('ta-hidden',!directory); if (directory && !state.directoryLoaded) loadDirectory(); }); });
+
+    reloadAll();
+})();
+</script>
+
+<%- include('partials/footer') %>
