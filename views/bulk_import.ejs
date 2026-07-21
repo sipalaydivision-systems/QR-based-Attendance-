@@ -2,40 +2,45 @@
 
 <div class="page-header">
     <div class="page-header-left">
-        <h1><i class="fa-solid fa-file-import"></i> Bulk Import</h1>
-        <p style="color:var(--gray-500);margin:0;">Import students or teachers from Excel (.xlsx) or CSV file</p>
+        <h1><i class="fa-solid fa-file-import"></i> <%= principalTeacherOnly ? 'Import Teachers' : 'Bulk Import' %></h1>
+        <p style="color:var(--gray-500);margin:0;"><%= principalTeacherOnly ? 'Import teachers into your assigned school from Excel (.xlsx) or CSV' : 'Import students or teachers from Excel (.xlsx) or CSV file' %></p>
     </div>
 </div>
 
 <!-- STEP 1: Upload Form -->
 <div id="uploadStep">
     <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('students')"><i class="fa-solid fa-user-graduate"></i> Students</button>
-        <button class="tab-btn" onclick="switchTab('shs_students')"><i class="fa-solid fa-graduation-cap"></i> SHS Students</button>
-        <button class="tab-btn" onclick="switchTab('teachers')"><i class="fa-solid fa-chalkboard-user"></i> Teachers</button>
-        <button class="tab-btn" onclick="switchTab('shs_teachers')"><i class="fa-solid fa-person-chalkboard"></i> SHS Teachers</button>
+        <% if (!principalTeacherOnly) { %>
+        <button class="tab-btn active" data-category="students" onclick="switchTab('students')"><i class="fa-solid fa-user-graduate"></i> Students</button>
+        <button class="tab-btn" data-category="shs_students" onclick="switchTab('shs_students')"><i class="fa-solid fa-graduation-cap"></i> SHS Students</button>
+        <% } %>
+        <button class="tab-btn <%= principalTeacherOnly ? 'active' : '' %>" data-category="teachers" onclick="switchTab('teachers')"><i class="fa-solid fa-chalkboard-user"></i> Teachers</button>
+        <button class="tab-btn" data-category="shs_teachers" onclick="switchTab('shs_teachers')"><i class="fa-solid fa-person-chalkboard"></i> SHS Teachers</button>
     </div>
 
     <div style="display:grid; grid-template-columns:1fr 350px; gap:1.5rem;">
         <div class="card">
-            <h3 id="importTitle"><i class="fa-solid fa-file-import"></i> Import Students</h3>
+            <h3 id="importTitle"><i class="fa-solid fa-file-import"></i> Import <%= principalTeacherOnly ? 'Teachers' : 'Students' %></h3>
             <form id="importForm" onsubmit="doPreview(event)">
                 <div class="form-group">
-                    <label>Default School</label>
-                    <select id="importSchool" class="form-control">
+                    <label><%= principalTeacherOnly ? 'Assigned School' : 'Default School' %></label>
+                    <select id="importSchool" class="form-control" <%= principalTeacherOnly ? 'disabled' : '' %>>
+                        <% if (!principalTeacherOnly) { %>
                         <option value="">Select School (use file data)</option>
+                        <% } %>
                         <% schools.forEach(s => { %>
-                        <option value="<%= s.id %>"><%= s.name %></option>
+                        <option value="<%= s.id %>" <%= principalTeacherOnly ? 'selected' : '' %>><%= s.name %></option>
                         <% }) %>
                     </select>
+                    <% if (principalTeacherOnly) { %><small style="color:var(--gray-500);">Locked to your school. Rows naming a different school will be rejected.</small><% } %>
                 </div>
-                <div id="gradeField" class="form-group">
+                <div id="gradeField" class="form-group" <%= principalTeacherOnly ? 'style="display:none;"' : '' %>>
                     <label>Default Grade Level</label>
                     <select id="importGrade" class="form-control">
                         <option value="">Select Grade Level</option>
                     </select>
                 </div>
-                <div id="sectionField" class="form-group">
+                <div id="sectionField" class="form-group" <%= principalTeacherOnly ? 'style="display:none;"' : '' %>>
                     <label>Default Section</label>
                     <select id="importSection" class="form-control">
                         <option value="">Select Section</option>
@@ -54,7 +59,7 @@
                 <div class="form-group">
                     <label>Attendance Effective Date</label>
                     <input type="date" id="importDate" class="form-control">
-                    <small style="color:var(--gray-500);">Newly imported students are excluded from absence counting on this date to prevent false same-day absences.</small>
+                    <small style="color:var(--gray-500);"><%= principalTeacherOnly ? 'New teachers remain inactive until activated, preventing false same-day absences.' : 'Newly imported students are excluded from absence counting on this date to prevent false same-day absences.' %></small>
                 </div>
                 <div style="display:flex;gap:0.5rem;">
                     <button type="submit" class="btn btn-primary" id="previewBtn" style="flex:1;"><i class="fa-solid fa-magnifying-glass"></i> Preview Data</button>
@@ -65,7 +70,7 @@
         </div>
 
         <div>
-            <div class="info-card" id="infoStudents">
+            <div class="info-card" id="infoStudents" <%= principalTeacherOnly ? 'style="display:none;"' : '' %>>
                 <h4><i class="fa-solid fa-file-lines"></i> Student File Format</h4>
                 <div class="code-preview">LRN, Student Name, Sex, School, Grade, Section, Guardian Contact</div>
                 <ul class="info-list">
@@ -161,15 +166,17 @@
 </style>
 
 <script>
-var currentCategory = 'students';
+var principalTeacherOnly = <%- JSON.stringify(!!principalTeacherOnly) %>;
+var currentCategory = principalTeacherOnly ? 'teachers' : 'students';
 var previewData = null;
 var savedFormData = null;
 
 function switchTab(cat) {
     currentCategory = cat;
-    var tabOrder = ['students', 'shs_students', 'teachers', 'shs_teachers'];
-    document.querySelectorAll('.tab-btn').forEach(function(b, i) {
-        b.classList.toggle('active', tabOrder[i] === cat);
+    if (principalTeacherOnly && cat !== 'teachers' && cat !== 'shs_teachers') cat = 'teachers';
+    currentCategory = cat;
+    document.querySelectorAll('.tab-btn').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.category === cat);
     });
     document.getElementById('infoStudents').style.display = cat==='students' ? 'block' : 'none';
     document.getElementById('infoShs').style.display = cat==='shs_students' ? 'block' : 'none';
@@ -412,6 +419,7 @@ function localDateString(date) {
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 document.getElementById('importDate').value = localDateString();
+switchTab(currentCategory);
 
 // Drag and drop support for the upload area
 (function() {

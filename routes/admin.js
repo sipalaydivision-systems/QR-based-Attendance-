@@ -400,14 +400,14 @@ async function createSchoolRecord(rawName) {
 
 async function findTeacherMatch(empId, firstname, lastname, middlename, schoolId) {
     if (empId) {
-        const [byEmployeeId] = await db.query('SELECT id, status, active_from, section_id FROM teachers WHERE employee_id = ?', [empId]);
+        const [byEmployeeId] = await db.query('SELECT id, status, active_from, section_id, school_id FROM teachers WHERE employee_id = ?', [empId]);
         if (byEmployeeId.length > 0) return byEmployeeId[0];
     }
 
     const incomingName = normalizePersonName(fullName(firstname, lastname, middlename));
     if (!incomingName || !schoolId) return null;
     const [teachers] = await db.query(
-        'SELECT id, firstname, lastname, middlename, status, active_from, section_id FROM teachers WHERE school_id = ? AND status != ?',
+        'SELECT id, firstname, lastname, middlename, status, active_from, section_id, school_id FROM teachers WHERE school_id = ? AND status != ?',
         [schoolId, 'deleted']
     );
     return teachers.find(teacher =>
@@ -1969,19 +1969,45 @@ router.post('/school-years/:id/update-dates', requireRole('super_admin'), expres
 });
 
 // ---- Bulk Import ----
-router.get('/bulk-import', requireRole('super_admin'), async (req, res) => {
-    const [schools] = await db.query("SELECT * FROM schools WHERE status = 'active' ORDER BY name");
-    res.render('bulk_import', { title: 'Bulk Import', page: 'bulk_import', schools });
+router.get('/bulk-import', requireRole('super_admin', 'principal'), async (req, res) => {
+    const principalTeacherOnly = req.session.user.role === 'principal';
+    const schoolId = principalTeacherOnly ? Number(req.session.user.school_id || 0) : null;
+    const [schools] = principalTeacherOnly
+        ? await db.query("SELECT * FROM schools WHERE id = ? AND status = 'active'", [schoolId])
+        : await db.query("SELECT * FROM schools WHERE status = 'active' ORDER BY name");
+    if (principalTeacherOnly && !schools.length) {
+        return res.status(403).render('error', {
+            title: 'School Assignment Required',
+            message: 'Your principal account must be assigned to an active school before importing teachers.',
+            user: req.session.user
+        });
+    }
+    res.render('bulk_import', {
+        title: principalTeacherOnly ? 'Import Teachers' : 'Bulk Import',
+        page: 'bulk_import',
+        schools,
+        principalTeacherOnly
+    });
 });
 
 // ---- Bulk Import Preview ----
-router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('file'), async (req, res) => {
+router.post('/bulk-import-preview', requireRole('super_admin', 'principal'), upload.single('file'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded.' });
     }
-    const category = req.body.category || 'student';
+    const principalTeacherOnly = req.session.user.role === 'principal';
+    const category = req.body.category || (principalTeacherOnly ? 'teacher' : 'student');
+    if (principalTeacherOnly && !['teacher', 'shs_teacher'].includes(category)) {
+        return res.status(403).json({ error: 'Principals can bulk import teachers only.' });
+    }
+    const principalSchoolId = principalTeacherOnly ? Number(req.session.user.school_id || 0) : null;
+    if (principalTeacherOnly && !principalSchoolId) {
+        return res.status(403).json({ error: 'Your principal account is not assigned to a school.' });
+    }
     const parsedDefaultSchoolId = parseInt(req.body.school_id, 10);
-    const defaultSchoolId = Number.isFinite(parsedDefaultSchoolId) ? parsedDefaultSchoolId : null;
+    const defaultSchoolId = principalTeacherOnly
+        ? principalSchoolId
+        : (Number.isFinite(parsedDefaultSchoolId) ? parsedDefaultSchoolId : null);
     let rows = [];
 
     try {
@@ -2039,9 +2065,17 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
             return { firstname: words[0], lastname: words[words.length - 1], middlename: words.slice(1, -1).join(' ') };
         }
 
-        const [schools] = await db.query("SELECT id, name, school_id_code, school_code, status FROM schools WHERE status IS NULL OR status != 'deleted' ORDER BY name");
+        const [schools] = principalTeacherOnly
+            ? await db.query(
+                "SELECT id, name, school_id_code, school_code, status FROM schools WHERE id = ? AND status = 'active'",
+                [principalSchoolId]
+            )
+            : await db.query("SELECT id, name, school_id_code, school_code, status FROM schools WHERE status IS NULL OR status != 'deleted' ORDER BY name");
         const fallbackSchool = defaultSchoolId ? schools.find(s => Number(s.id) === Number(defaultSchoolId)) : null;
         const impliedDefaultSchool = fallbackSchool || (schools.length === 1 ? schools[0] : null);
+        if (principalTeacherOnly && !impliedDefaultSchool) {
+            return res.status(403).json({ error: 'Your assigned school is unavailable or inactive.' });
+        }
 
         async function resolveSchoolPreview(schoolName, options = {}) {
             const { allowCreate = false } = options;
@@ -2054,6 +2088,13 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
             const matchedSchool = findSchoolMatch(schools, rawSchoolName);
             if (matchedSchool) return { id: matchedSchool.id, name: matchedSchool.name };
 
+            if (principalTeacherOnly) {
+                return {
+                    id: null,
+                    name: rawSchoolName,
+                    error: `School must match your assigned school: ${impliedDefaultSchool.name}`
+                };
+            }
             if (!allowCreate) return { id: null, name: rawSchoolName, error: 'School not found' };
             return { id: null, name: rawSchoolName, willCreate: true };
         }
@@ -2132,7 +2173,12 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
                 // Check if existing
                 if (entry.status !== 'error') {
                     const existing = await findTeacherMatch(empId, fn, ln, middlename, school.id);
-                    if (existing) entry.status = existing.status === 'deleted' ? 'restore' : 'update';
+                    if (principalTeacherOnly && existing && Number(existing.school_id) !== principalSchoolId) {
+                        entry.status = 'error';
+                        entry.error = 'Employee ID already belongs to a teacher in another school';
+                    } else if (existing) {
+                        entry.status = existing.status === 'deleted' ? 'restore' : 'update';
+                    }
                 }
 
                 entry.empId = empId;
@@ -2211,13 +2257,23 @@ router.post('/bulk-import-preview', requireRole('super_admin'), upload.single('f
     }
 });
 
-router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), async (req, res) => {
+router.post('/bulk-import', requireRole('super_admin', 'principal'), upload.single('file'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded.' });
     }
-    const category = req.body.category || 'student'; // student, teacher, shs_student
+    const principalTeacherOnly = req.session.user.role === 'principal';
+    const category = req.body.category || (principalTeacherOnly ? 'teacher' : 'student'); // student, teacher, shs_student
+    if (principalTeacherOnly && !['teacher', 'shs_teacher'].includes(category)) {
+        return res.status(403).json({ error: 'Principals can bulk import teachers only.' });
+    }
+    const principalSchoolId = principalTeacherOnly ? Number(req.session.user.school_id || 0) : null;
+    if (principalTeacherOnly && !principalSchoolId) {
+        return res.status(403).json({ error: 'Your principal account is not assigned to a school.' });
+    }
     const parsedDefaultSchoolId = parseInt(req.body.school_id, 10);
-    const defaultSchoolId = Number.isFinite(parsedDefaultSchoolId) ? parsedDefaultSchoolId : null;
+    const defaultSchoolId = principalTeacherOnly
+        ? principalSchoolId
+        : (Number.isFinite(parsedDefaultSchoolId) ? parsedDefaultSchoolId : null);
     const requestedActiveFrom = String(req.body.active_from || '').trim();
     const importActiveFrom = /^\d{4}-\d{2}-\d{2}$/.test(requestedActiveFrom)
         ? requestedActiveFrom
@@ -2287,9 +2343,17 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
         const importedTeacherStatus = 'inactive';
         const defaultImportedStudentStatus = 'inactive';
 
-        const [schools] = await db.query("SELECT id, name, school_id_code, school_code, status FROM schools WHERE status IS NULL OR status != 'deleted' ORDER BY name");
+        const [schools] = principalTeacherOnly
+            ? await db.query(
+                "SELECT id, name, school_id_code, school_code, status FROM schools WHERE id = ? AND status = 'active'",
+                [principalSchoolId]
+            )
+            : await db.query("SELECT id, name, school_id_code, school_code, status FROM schools WHERE status IS NULL OR status != 'deleted' ORDER BY name");
         const fallbackSchool = defaultSchoolId ? schools.find(s => Number(s.id) === Number(defaultSchoolId)) : null;
         const impliedDefaultSchool = fallbackSchool || (schools.length === 1 ? schools[0] : null);
+        if (principalTeacherOnly && !impliedDefaultSchool) {
+            return res.status(403).json({ error: 'Your assigned school is unavailable or inactive.' });
+        }
 
         // Helper: resolve school_id by name
         async function resolveSchool(schoolName, options = {}) {
@@ -2303,6 +2367,13 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
             const matchedSchool = findSchoolMatch(schools, rawSchoolName);
             if (matchedSchool) return { id: matchedSchool.id, name: matchedSchool.name };
 
+            if (principalTeacherOnly) {
+                return {
+                    id: null,
+                    name: rawSchoolName,
+                    error: `School must match your assigned school: ${impliedDefaultSchool.name}`
+                };
+            }
             if (!allowCreate) return { id: null, name: rawSchoolName, error: 'School not found' };
             const createdSchool = await createSchoolRecord(rawSchoolName);
             schools.push(createdSchool);
@@ -2408,6 +2479,10 @@ router.post('/bulk-import', requireRole('super_admin'), upload.single('file'), a
                     const adviserName = displayName(fn, ln, mn);
 
                     const existing = await findTeacherMatch(empId, fn, ln, mn, schoolId);
+                    if (principalTeacherOnly && existing && Number(existing.school_id) !== principalSchoolId) {
+                        errors.push({ row: rn, message: 'Employee ID already belongs to a teacher in another school.' });
+                        continue;
+                    }
                     if (existing) {
                         const existingStatus = existing.status || importedTeacherStatus;
                         const nextStatus = existingStatus === 'deleted' ? importedTeacherStatus : existingStatus;

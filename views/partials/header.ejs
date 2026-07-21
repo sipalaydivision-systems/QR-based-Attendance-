@@ -89,10 +89,10 @@
                     <i class="nav-icon fa-solid fa-layer-group"></i> Sections
                 </a>
             </li>
-            <% if (user.role === 'super_admin') { %>
+            <% if (user.role === 'super_admin' || user.role === 'principal') { %>
             <li>
                 <a href="/admin/bulk-import" class="<%= page === 'bulk_import' ? 'active' : '' %>">
-                    <i class="nav-icon fa-solid fa-file-arrow-up"></i> Bulk Import
+                    <i class="nav-icon fa-solid fa-file-arrow-up"></i> <%= user.role === 'principal' ? 'Import Teachers' : 'Bulk Import' %>
                 </a>
             </li>
             <% } %>
