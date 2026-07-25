@@ -6,8 +6,10 @@ on:
       - main
     paths:
       - 'desktop-scanner/src/**'
+      - 'desktop-scanner/build/**'
       - 'desktop-scanner/package.json'
       - 'desktop-scanner/package-lock.json'
+      - '.github/workflows/build-desktop-installer.yml'
   workflow_dispatch:
 
 # Prevent infinite loop — ignore commits that only update the installer binary
@@ -62,7 +64,7 @@ jobs:
           Copy-Item 'public\downloads\Edutrack-Scanner-Setup.exe' $asset -Force
           gh release view $tag *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag $asset --title "EduTrack Scanner $version" --notes "Optimized background data use with responsive remote controls and unchanged attendance scanning."
+            gh release create $tag $asset --title "EduTrack Scanner $version" --notes "Starts automatically in fullscreen after installation, Windows sign-in, restart, or power recovery. Attendance scanning behavior is unchanged."
           } else {
             gh release upload $tag $asset --clobber
           }

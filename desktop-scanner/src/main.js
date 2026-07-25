@@ -30,6 +30,7 @@ const {
 const APP_TITLE = 'EduTrack Scanner';
 const APP_USER_MODEL_ID = 'ph.gov.sipalay.edutrack.scanner';
 const APP_ICON_PNG = path.join(__dirname, 'assets', 'edutrack-scanner.png');
+const STARTUP_POLICY_VERSION = 1;
 const DEFAULT_SERVER_URL = 'https://sdo-sipalay-edutrack.up.railway.app';
 // Retired server domains. Any saved serverUrl pointing at one of these is
 // auto-migrated to DEFAULT_SERVER_URL on load, so existing installs (whose
@@ -117,7 +118,8 @@ function defaultSettings() {
     duplicateIntervalSeconds: 5,
     offlineSync: true,
     autoStart: true,
-    startFullscreen: false,
+    startFullscreen: true,
+    startupPolicyVersion: STARTUP_POLICY_VERSION,
     minimizeToTray: true,
     scannerId: '',
     kioskToken: '',
@@ -715,8 +717,18 @@ function nonSchoolDayScanMessage(schoolDay) {
 }
 
 function loadSettings() {
-  const merged = { ...defaultSettings(), ...readJson(settingsPath(), {}) };
+  const savedSettings = readJson(settingsPath(), {});
+  const merged = { ...defaultSettings(), ...savedSettings };
   let shouldPersist = false;
+  // One-time migration for scanners installed before fullscreen/autostart became
+  // the attendance-station default. This also repairs an old saved "off" value
+  // after an application update, while still allowing a later manual change.
+  if (Number(savedSettings.startupPolicyVersion || 0) < STARTUP_POLICY_VERSION) {
+    merged.autoStart = true;
+    merged.startFullscreen = true;
+    merged.startupPolicyVersion = STARTUP_POLICY_VERSION;
+    shouldPersist = true;
+  }
   if (!merged.scannerId) {
     merged.scannerId = createId();
     shouldPersist = true;
@@ -786,7 +798,9 @@ function showWindow() {
 function createWindow() {
   const settings = loadSettings();
   const launchedFromAutoStart = process.argv.includes('--autostart');
-  const shouldFullscreen = !!settings.startFullscreen;
+  // A Windows restart/power recovery always returns an attendance station to
+  // fullscreen. Manual launches continue to respect the saved preference.
+  const shouldFullscreen = launchedFromAutoStart || !!settings.startFullscreen;
   // Autostart is for attendance stations: after a reboot/sign-in, the scanner
   // must appear immediately. Keep minimize-to-tray only for manual close/minimize
   // behavior, not for Windows startup.

@@ -89,8 +89,8 @@ app.get('/brand/system-logo-image', serveSettingImage('system_logo'));
 app.get('/brand/school-art-image', serveSettingImage('mobile_dashboard_school_art'));
 
 const DESKTOP_SCANNER_LATEST = {
-    version: '1.0.34',
-    notes: 'Uses far less background data while keeping scans, offline sync, school updates, and remote controls responsive.'
+    version: '1.0.35',
+    notes: 'Starts automatically in fullscreen after installation, Windows sign-in, restart, or power recovery.'
 };
 
 const MOBILE_APP_LATEST = {
