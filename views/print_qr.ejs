@@ -1,6 +1,7 @@
 <%- include('partials/header') %>
 <% const qrFilters = typeof filters !== 'undefined' ? filters : { type: type || 'student', school_id: '', grade_level_id: '', section_id: '', layout: '4' }; %>
 <% const isAdviser = typeof adviserScope !== 'undefined' && adviserScope !== null; %>
+<% const isPrincipal = typeof principalSchoolOnly !== 'undefined' && principalSchoolOnly; %>
 
 <div class="page-header">
     <div class="page-header-left">
@@ -22,8 +23,11 @@
     </div>
     <div class="filter-item">
         <label>School</label>
-        <select id="qrSchool">
-            <option value="">All Schools</option>
+        <select id="qrSchool" <%= isPrincipal ? 'disabled' : '' %>>
+            <% if (!isPrincipal) { %><option value="">All Schools</option><% } %>
+            <% if (isPrincipal) { schools.forEach(function(s) { %>
+            <option value="<%= s.id %>" selected><%= s.name %></option>
+            <% }); } %>
         </select>
     </div>
     <div class="filter-item">
@@ -337,6 +341,7 @@
 <script>
 var initialQrFilters = <%- JSON.stringify(qrFilters).replace(/</g, '\\u003c') %>;
 var isAdviserMode = <%= typeof adviserScope !== 'undefined' && adviserScope !== null ? 'true' : 'false' %>;
+var isPrincipalMode = <%= isPrincipal ? 'true' : 'false' %>;
 var dropdownsReady = false;
 var reloadTimer = null;
 var allQrGrades = [];
@@ -412,6 +417,7 @@ async function loadDropdowns() {
         fetch('/api/sections').then(function(r){return r.json();})
     ]);
     var sSel = document.getElementById('qrSchool');
+    if (isPrincipalMode) sSel.innerHTML = '';
     schools.forEach(function(s) {
         appendOption(sSel, s.id, s.name);
     });

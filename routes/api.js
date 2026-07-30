@@ -3719,11 +3719,21 @@ router.delete('/teachers/:id', requireAuth, async (req, res) => {
 // ---- Schools ----
 router.get('/schools', requireAuth, async (req, res) => {
     try {
-        const [rows] = await db.query(`SELECT s.*,
+        const scopedSchool = applySchoolFilter(req);
+        const requestedSchool = req.query.school_id || req.query.school || null;
+        const schoolId = scopedSchool || requestedSchool;
+        const params = [];
+        let query = `SELECT s.*,
             (SELECT COUNT(*) FROM students st WHERE st.school_id = s.id AND st.status = 'active') as student_count,
             (SELECT COUNT(*) FROM teachers t WHERE t.school_id = s.id AND t.status = 'active') as teacher_count,
             (SELECT COUNT(*) FROM sections sec WHERE sec.school_id = s.id) as section_count
-            FROM schools s ORDER BY s.name`);
+            FROM schools s WHERE s.status = 'active'`;
+        if (schoolId) {
+            query += ' AND s.id = ?';
+            params.push(schoolId);
+        }
+        query += ' ORDER BY s.name';
+        const [rows] = await db.query(query, params);
         return res.json(rows);
     } catch (err) {
         return res.status(500).json({ error: 'Failed to fetch schools.' });
@@ -3907,7 +3917,20 @@ router.delete('/schools/:id', requireRole('super_admin'), async (req, res) => {
 // ---- Grade Levels ----
 router.get('/grade-levels', requireAuth, async (req, res) => {
     try {
-        const [rows] = await db.query('SELECT gl.*, s.name as school_name FROM grade_levels gl LEFT JOIN schools s ON gl.school_id = s.id ORDER BY gl.name');
+        const scopedSchool = applySchoolFilter(req);
+        const requestedSchool = req.query.school_id || req.query.school || null;
+        const schoolId = scopedSchool || requestedSchool;
+        const params = [];
+        let query = `SELECT gl.*, s.name as school_name
+            FROM grade_levels gl
+            LEFT JOIN schools s ON gl.school_id = s.id
+            WHERE 1=1`;
+        if (schoolId) {
+            query += ' AND gl.school_id = ?';
+            params.push(schoolId);
+        }
+        query += ' ORDER BY gl.name';
+        const [rows] = await db.query(query, params);
         return res.json(rows);
     } catch (err) {
         return res.status(500).json({ error: 'Failed to fetch grade levels.' });
@@ -3934,17 +3957,24 @@ router.get('/sections', requireAuth, async (req, res) => {
                 at.contact as adviser_contact,
                 at.email as adviser_email,
                 gl.name as grade_name,
-                s.name as school_name
+                s.name as school_name,
+                (SELECT COUNT(*) FROM students st WHERE st.section_id = sec.id AND st.status = 'active') AS active_student_count,
+                (SELECT COUNT(*) FROM students st WHERE st.section_id = sec.id AND st.status = 'inactive') AS inactive_student_count
             FROM sections sec
             LEFT JOIN grade_levels gl ON sec.grade_level_id = gl.id
             LEFT JOIN teachers at ON sec.adviser_teacher_id = at.id
-            LEFT JOIN schools s ON sec.school_id = s.id WHERE 1=1`;
+            LEFT JOIN schools s ON sec.school_id = s.id
+            WHERE (sec.status IS NULL OR sec.status != 'deleted')`;
         const params = [];
         // Principals are hard-scoped to their own school; everyone else may filter by param.
         const scopedSchool = applySchoolFilter(req);
         const schoolId = scopedSchool || req.query.school_id || null;
         if (schoolId) { query += ' AND sec.school_id = ?'; params.push(schoolId); }
         if (req.query.grade_level_id) { query += ' AND sec.grade_level_id = ?'; params.push(req.query.grade_level_id); }
+        if (req.query.grade_name) {
+            query += ' AND LOWER(TRIM(gl.name)) = LOWER(TRIM(?))';
+            params.push(req.query.grade_name);
+        }
         query += ' ORDER BY sec.name';
         const [rows] = await db.query(query, params);
         return res.json(rows);

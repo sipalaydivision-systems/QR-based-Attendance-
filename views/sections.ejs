@@ -27,8 +27,8 @@
         <label>Grade Level</label>
         <select id="filterGrade">
             <option value="">All Grades</option>
-            <% gradeLevels.forEach(g => { %>
-            <option value="<%= g.id %>"><%= g.name %></option>
+            <% gradeFilters.forEach(g => { %>
+            <option value="<%= g.name %>"><%= g.name %></option>
             <% }) %>
         </select>
     </div>
@@ -97,7 +97,7 @@
 </div>
 
 <script>
-var allSections = [], allStudents = [];
+var allSections = [];
 
 function splitTrackSection(sectionName) {
     var name = String(sectionName || '').trim();
@@ -125,21 +125,21 @@ async function loadSections() {
     var school = document.getElementById('filterSchool').value;
     var grade = document.getElementById('filterGrade').value;
     try {
-        var [secRes, stuRes] = await Promise.all([
-            fetch('/api/sections').then(function(r){return r.json();}),
-            fetch('/api/students').then(function(r){return r.json();})
-        ]);
-        allSections = secRes; allStudents = stuRes;
+        var query = new URLSearchParams();
+        if (school) query.set('school_id', school);
+        if (grade) query.set('grade_name', grade);
+        var secRes = await fetch('/api/sections?' + query.toString()).then(function(r){return r.json();});
+        allSections = Array.isArray(secRes) ? secRes : [];
         var filtered = allSections;
         if (school) filtered = filtered.filter(function(s){return String(s.school_id)===school;});
-        if (grade) filtered = filtered.filter(function(s){return String(s.grade_level_id)===grade;});
+        if (grade) filtered = filtered.filter(function(s){return String(s.grade_name || '').trim().toLowerCase()===grade.trim().toLowerCase();});
         document.getElementById('sectionCount').textContent = filtered.length + ' section(s) found';
         document.getElementById('sectionsBody').innerHTML = filtered.map(function(s) {
             var sectionParts = splitTrackSection(s.name);
             var trackLabel = s.track_strand || s.track || sectionParts.track || '-';
             var sectionLabel = sectionParts.section || s.name || '-';
-            var activeCount = allStudents.filter(function(st){return st.section_id===s.id && st.status==='active';}).length;
-            var inactiveCount = allStudents.filter(function(st){return st.section_id===s.id && st.status==='inactive';}).length;
+            var activeCount = Number(s.active_student_count || 0);
+            var inactiveCount = Number(s.inactive_student_count || 0);
             var stuLabel = activeCount + (inactiveCount > 0 ? ' <span style="color:var(--gray-400);font-size:0.75rem;">(' + inactiveCount + ' inactive)</span>' : '');
             var isInactive = s.status === 'inactive';
             var rowClass = isInactive ? ' class="row-inactive"' : '';
@@ -220,7 +220,9 @@ async function deleteSection(id) {
 }
 
 loadSections();
-setInterval(function() { if (document.getElementById('sectionModal').style.display !== 'flex') loadSections(); }, 5000);
+setInterval(function() {
+    if (!document.hidden && document.getElementById('sectionModal').style.display !== 'flex') loadSections();
+}, 30000);
 </script>
 
 <div class="live-indicator"><div class="live-dot"></div> Live</div>

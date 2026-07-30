@@ -7,7 +7,7 @@ const { Readable } = require('stream');
 const crypto = require('crypto');
 const router = express.Router();
 const db = require('../config/database');
-const { requireAuth, requireRole } = require('../middleware/auth');
+const { requireAuth, requireRole, applySchoolFilter } = require('../middleware/auth');
 const { getScannerKioskToken } = require('../utils/scannerKiosk');
 const { todayDate, currentMonth, nowDateTime, normalizeTime, sqlDateTime, compareDateTime } = require('../utils/appTime');
 const schoolYears = require('../utils/schoolYear');
@@ -1821,8 +1821,56 @@ router.get('/shs-students', async (req, res) => {
 // ---- Sections ----
 router.get('/sections', async (req, res) => {
     const schools = await schoolsForUser(req);
-    const [gradeLevels] = await db.query('SELECT * FROM grade_levels ORDER BY name');
-    res.render('sections', { title: 'Sections', page: 'sections', schools, gradeLevels });
+    const user = req.session.user;
+    const scopedSchoolId = user && (user.role === 'principal' || user.role === 'adviser')
+        ? applySchoolFilter(req)
+        : null;
+
+    let gradeQuery = 'SELECT * FROM grade_levels';
+    const gradeParams = [];
+    if (scopedSchoolId) {
+        gradeQuery += ' WHERE school_id = ?';
+        gradeParams.push(scopedSchoolId);
+    }
+    gradeQuery += ' ORDER BY name';
+    const [gradeRows] = await db.query(gradeQuery, gradeParams);
+
+    // Keep school-owned grade options for creating/editing a section, but only
+    // show grades that have real sections in the page filter.
+    let filterQuery = `SELECT DISTINCT TRIM(gl.name) AS name
+        FROM sections sec
+        INNER JOIN grade_levels gl ON gl.id = sec.grade_level_id
+        WHERE (sec.status IS NULL OR sec.status != 'deleted')`;
+    const filterParams = [];
+    if (scopedSchoolId) {
+        filterQuery += ' AND sec.school_id = ?';
+        filterParams.push(scopedSchoolId);
+    }
+    filterQuery += ' ORDER BY name';
+    const [gradeFilters] = await db.query(filterQuery, filterParams);
+    const byGradeName = (left, right) => String(left.name || '').localeCompare(
+        String(right.name || ''),
+        undefined,
+        { numeric: true, sensitivity: 'base' }
+    );
+    gradeRows.sort(byGradeName);
+    gradeFilters.sort(byGradeName);
+
+    const seenGrades = new Set();
+    const gradeLevels = gradeRows.filter((grade) => {
+        const key = String(grade.name || '').trim().toLowerCase();
+        if (!key || seenGrades.has(key)) return false;
+        seenGrades.add(key);
+        return true;
+    });
+
+    res.render('sections', {
+        title: 'Sections',
+        page: 'sections',
+        schools,
+        gradeLevels,
+        gradeFilters
+    });
 });
 
 // ---- Users ----
@@ -2624,6 +2672,35 @@ function getPrintQrFilters(query) {
     };
 }
 
+async function enforcePrintQrScope(req) {
+    const user = req.session.user;
+    if (user.role === 'principal') {
+        const schoolId = applySchoolFilter(req);
+        req.query.school_id = String(schoolId);
+        return { schoolId, adviserScope: null };
+    }
+
+    if (user.role === 'adviser') {
+        const teacher = user.teacher_id ? await loadAdviserTeacher(user.teacher_id) : null;
+        req.query.type = 'student';
+        req.query.school_id = String(teacher && teacher.school_id ? teacher.school_id : -1);
+        req.query.grade_level_id = String(teacher && teacher.grade_level_id ? teacher.grade_level_id : -1);
+        req.query.section_id = String(teacher && teacher.section_id ? teacher.section_id : -1);
+        return {
+            schoolId: teacher && teacher.school_id ? teacher.school_id : -1,
+            adviserScope: teacher && teacher.section_id
+                ? {
+                    school_id: teacher.school_id,
+                    grade_level_id: teacher.grade_level_id,
+                    section_id: teacher.section_id
+                }
+                : { school_id: -1, grade_level_id: -1, section_id: -1 }
+        };
+    }
+
+    return { schoolId: null, adviserScope: null };
+}
+
 async function getPrintQrPeople(filters) {
     let people = [];
 
@@ -2662,16 +2739,7 @@ async function getPrintQrPeople(filters) {
 
 router.get('/print-qr/data', async (req, res) => {
     try {
-        const user = req.session.user;
-        if (user.role === 'adviser' && user.teacher_id) {
-            const t = await loadAdviserTeacher(user.teacher_id);
-            if (t && t.section_id) {
-                req.query.type = 'student';
-                req.query.school_id = String(t.school_id);
-                req.query.grade_level_id = String(t.grade_level_id);
-                req.query.section_id = String(t.section_id);
-            }
-        }
+        await enforcePrintQrScope(req);
         const filters = getPrintQrFilters(req.query);
         const people = await getPrintQrPeople(filters);
         return res.json({ success: true, people, filters: filters.viewFilters });
@@ -2687,15 +2755,10 @@ router.get('/print-qr', async (req, res) => {
         let adviserScope = null;
         let teacherQr = null;
 
+        const printScope = await enforcePrintQrScope(req);
+        adviserScope = printScope.adviserScope;
+
         if (user.role === 'adviser' && user.teacher_id) {
-            const t = await loadAdviserTeacher(user.teacher_id);
-            if (t && t.section_id) {
-                adviserScope = { school_id: t.school_id, grade_level_id: t.grade_level_id, section_id: t.section_id };
-                req.query.type = 'student';
-                req.query.school_id = String(t.school_id);
-                req.query.grade_level_id = String(t.grade_level_id);
-                req.query.section_id = String(t.section_id);
-            }
             // fetch teacher's own QR card
             const [[tData]] = await db.query(
                 `SELECT t.id, t.firstname, t.lastname, t.middlename, t.employee_id, t.qr_code,
@@ -2715,7 +2778,7 @@ router.get('/print-qr', async (req, res) => {
         const filters = getPrintQrFilters(req.query);
         const peopleWithQR = await getPrintQrPeople(filters);
 
-        const [schools] = await db.query("SELECT * FROM schools WHERE status = 'active' ORDER BY name");
+        const schools = await schoolsForUser(req);
         res.render('print_qr', {
             title: 'Print QR Codes',
             page: 'print_qr',
@@ -2724,7 +2787,8 @@ router.get('/print-qr', async (req, res) => {
             schools,
             filters: filters.viewFilters,
             adviserScope: adviserScope,
-            teacherQr: teacherQr
+            teacherQr: teacherQr,
+            principalSchoolOnly: user.role === 'principal'
         });
     } catch (err) {
         console.error('Print QR error:', err);
